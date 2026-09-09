@@ -232,7 +232,7 @@ export default function UserDetailPage() {
                 Businesses Managed by Dr. Sarah Wilson
               </h2>
               <p className="text-[13px] text-[#475569] mt-0.5">
-                All platform tenants and businesses linked to this user's administrative authority.
+                All platform tenants and businesses linked to this user&apos;s administrative authority.
               </p>
             </div>
             <button className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-[#E2E8F0] hover:bg-gray-50 text-[#0F172A] rounded-lg text-[12px] font-semibold shadow-sm transition-colors">

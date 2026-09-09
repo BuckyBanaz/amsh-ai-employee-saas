@@ -128,12 +128,12 @@ const seedPermissions: Record<AdminRole, RolePermissions> = {
 };
 
 const seedAdmins: AdminUser[] = [
-  { id: 'adm-1', name: 'Parikshit Arora', email: 'parikshit@aurahealth.ai', role: 'Super Admin', status: 'Active', lastActive: 'Just now', isCurrentUser: true },
-  { id: 'adm-2', name: 'Aria de Vries', email: 'aria@aurahealth.ai', role: 'Admin', status: 'Active', lastActive: '10 mins ago' },
-  { id: 'adm-3', name: 'Lars Janssen', email: 'lars.j@aurahealth.ai', role: 'Support', status: 'Active', lastActive: '2 hours ago' },
-  { id: 'adm-4', name: 'Sophie Dubois', email: 's.dubois@aurahealth.ai', role: 'Finance', status: 'Active', lastActive: 'Yesterday' },
-  { id: 'adm-5', name: 'Dieter Weber', email: 'd.weber@aurahealth.ai', role: 'Operations', status: 'Inactive', lastActive: '3 days ago' },
-  { id: 'adm-6', name: 'Jan de Jong', email: 'jan.dejong@aurahealth.ai', role: 'Developer', status: 'Active', lastActive: '5 mins ago' },
+  { id: 'adm-1', name: 'Parikshit Arora', email: 'parikshit@amsh.ai', role: 'Super Admin', status: 'Active', lastActive: 'Just now', isCurrentUser: true },
+  { id: 'adm-2', name: 'Aria de Vries', email: 'aria@amsh.ai', role: 'Admin', status: 'Active', lastActive: '10 mins ago' },
+  { id: 'adm-3', name: 'Lars Janssen', email: 'lars.j@amsh.ai', role: 'Support', status: 'Active', lastActive: '2 hours ago' },
+  { id: 'adm-4', name: 'Sophie Dubois', email: 's.dubois@amsh.ai', role: 'Finance', status: 'Active', lastActive: 'Yesterday' },
+  { id: 'adm-5', name: 'Dieter Weber', email: 'd.weber@amsh.ai', role: 'Operations', status: 'Inactive', lastActive: '3 days ago' },
+  { id: 'adm-6', name: 'Jan de Jong', email: 'jan.dejong@amsh.ai', role: 'Developer', status: 'Active', lastActive: '5 mins ago' },
 ];
 
 const inputClass =
@@ -183,9 +183,6 @@ interface AdminFormProps {
 }
 
 function AdminForm({ draft, isNew, error, onChange, onSave, onClose }: AdminFormProps) {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -194,7 +191,7 @@ function AdminForm({ draft, isNew, error, onChange, onSave, onClose }: AdminForm
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  if (!mounted) return null;
+  if (typeof document === 'undefined') return null;
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
@@ -207,7 +204,7 @@ function AdminForm({ draft, isNew, error, onChange, onSave, onClose }: AdminForm
       >
         <div className="p-5 border-b border-[#E2E8F0]">
           <h2 className="text-[16px] font-bold text-[#0F172A]">{isNew ? 'Add Admin' : `Edit ${draft.name}`}</h2>
-          <p className="text-[12px] text-[#64748B] mt-0.5">Internal AuraHealth administrator account.</p>
+          <p className="text-[12px] text-[#64748B] mt-0.5">Internal Amsh administrator account.</p>
         </div>
 
         <div className="p-5 space-y-4">
@@ -234,7 +231,7 @@ function AdminForm({ draft, isNew, error, onChange, onSave, onClose }: AdminForm
               type="email"
               value={draft.email}
               onChange={(e) => onChange({ ...draft, email: e.target.value })}
-              placeholder="name@aurahealth.ai"
+              placeholder="name@amsh.ai"
               className={`${inputClass} mt-1`}
             />
           </label>
@@ -379,7 +376,7 @@ export default function AdminUsersPage() {
       <header className="mb-6 flex flex-wrap justify-between items-center gap-3">
         <div>
           <h1 className="text-[24px] font-bold text-[#0F172A] tracking-tight leading-tight">Admin Users</h1>
-          <p className="text-[14px] text-[#475569] mt-1 font-normal">Manage internal AuraHealth administrators.</p>
+          <p className="text-[14px] text-[#475569] mt-1 font-normal">Manage internal Amsh administrators.</p>
         </div>
         <div className="flex items-center gap-3">
           <button

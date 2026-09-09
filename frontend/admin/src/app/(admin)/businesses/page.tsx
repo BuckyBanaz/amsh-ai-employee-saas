@@ -108,7 +108,6 @@ const businessesData: BusinessItem[] = [
 const countries = ['All', ...Array.from(new Set(businessesData.map(b => b.country)))];
 const plans = ['All', ...Array.from(new Set(businessesData.map(b => b.plan)))];
 const statuses = ['All', 'Active', 'Suspended', 'Pending'];
-const aiStatuses = ['All', 'Active', 'Paused'];
 const businessTypes = ['All', ...Array.from(new Set(businessesData.map(b => b.type)))];
 
 const selectClass = "px-2.5 py-1.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg text-[12px] font-semibold text-[#475569] hover:bg-gray-100/80 transition-colors focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 cursor-pointer";

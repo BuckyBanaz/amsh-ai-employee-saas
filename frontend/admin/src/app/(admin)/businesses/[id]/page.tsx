@@ -535,8 +535,13 @@ export default function BusinessDetailPage() {
               <div className="space-y-3">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Telephony & AI Routing</span>
                 <div>
-                  <div className="text-[11px] text-gray-400">Public Inbound Number (Twilio)</div>
+                  <div className="text-[11px] text-gray-400">Business Public Number</div>
                   <div className="text-[13px] font-mono font-bold text-gray-900">+31 20 894 3400</div>
+                </div>
+                <div>
+                  <div className="text-[11px] text-gray-400">AI Receptionist Number (Twilio)</div>
+                  <div className="text-[13px] font-mono font-bold text-gray-900">+31 20 808 1922</div>
+                  <div className="text-[11px] text-gray-400 mt-0.5">MVP: business number call-forwards here. Future: business number moves directly to this number.</div>
                 </div>
                 <div>
                   <div className="text-[11px] text-gray-400">Reception General Email</div>
@@ -1300,7 +1305,7 @@ export default function BusinessDetailPage() {
               <span className="font-bold text-gray-900">Twilio SIP Trunk Gateway</span>
               <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded text-[11px] font-bold">Active</span>
             </div>
-            <p className="text-[12px] text-gray-500">Number: +31 20 894 3400 (Media Stream WebSocket live).</p>
+            <p className="text-[12px] text-gray-500">AI Number: +31 20 808 1922 (Media Stream WebSocket live) — forwarded from business number +31 20 894 3400.</p>
           </div>
 
           <div className="bg-white border border-gray-200 p-5 rounded-xl shadow-y-2">

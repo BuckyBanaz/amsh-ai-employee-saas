@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { STRINGS } from '../../../../utils/strings/en';
+import { STRINGS } from '../../../utils/strings/en';
 
 const personalities = [
   { id: 'professional', name: 'Professional', desc: 'Polite, clinical, focused on scheduling accuracy', selected: true },

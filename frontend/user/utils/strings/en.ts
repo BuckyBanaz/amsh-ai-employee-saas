@@ -437,6 +437,12 @@ export const STRINGS = {
       FINISH_BTN: "Finish Setup"
     }
   },
+  PAGES: {
+    DASHBOARD: {
+      GREETING: "Good morning, Sarah",
+      SUBTITLE: "Here is what is happening at Smile Dental Clinic today."
+    }
+  },
   DASHBOARD: {
     SETTINGS: {
       TITLE: "Settings",
@@ -641,8 +647,9 @@ export const STRINGS = {
       TEAM: {
         TITLE: "Team & Permissions",
         SUBTITLE: "Manage your clinic's team members and their permission levels."
-      },
-      COMPONENTS: {
+      }
+    },
+    COMPONENTS: {
         AI_BANNER: {
           STATUS: "AI ONLINE",
           STATUS_TEXT: "Sarah is active",
@@ -806,6 +813,18 @@ export const STRINGS = {
           CALL_HANDLING: {
             TITLE: "Call Handling Rules",
             DESCRIPTION: "Define how inbound and outbound calls are initiated and constrained.",
+            PHONE_NUMBER: {
+              TITLE: "AI Phone Number",
+              STATUS_PENDING: "Not set up yet",
+              STATUS_ACTIVE: "Call forwarding active",
+              FORWARD_TITLE: "Forward your existing number (start here)",
+              FORWARD_DESCRIPTION: "Keep your current clinic number. Forward it to your AI's number below to go live — no new number to give out yet.",
+              FORWARD_HINT: "Ask your phone carrier or check your PBX/VoIP dashboard for how to set up call forwarding to this number.",
+              COPY_BTN: "Copy Number",
+              DEDICATED_TITLE: "Get a dedicated AI number (optional, later)",
+              DEDICATED_DESCRIPTION: "Once you're ready, request a number you can advertise directly as your AI receptionist's own line.",
+              DEDICATED_BTN: "Request a Number"
+            },
             GREETING: {
               LABEL: "Default Inbound Greeting",
               PLACEHOLDER: "Hello! Thank you for calling Smile Dental Clinic. How can I assist you today?",
@@ -896,6 +915,28 @@ export const STRINGS = {
             SAVE: "Save Voice Settings"
           }
         },
+        APPOINTMENTS_TABLE: {
+          TITLE: "Today's Appointments",
+          VIEW_ALL: "View All",
+          HEADERS: {
+            TIME: "Time",
+            PATIENT: "Patient",
+            SERVICE: "Service",
+            PROVIDER: "Provider",
+            STATUS: "Status",
+            SOURCE: "Source"
+          },
+          STATUS: {
+            CONFIRMED: "Confirmed",
+            PENDING: "Pending"
+          },
+          MOCK_DATA: [
+            { time: '09:00 AM', patient: 'Rahul Sharma', service: 'Consultation', doctor: 'Dr. Sarah', status: 'Confirmed', source: 'AI' },
+            { time: '10:30 AM', patient: 'Emma Wilson', service: 'Cleaning', doctor: 'Dr. John', status: 'Confirmed', source: 'AI' },
+            { time: '11:15 AM', patient: 'Lucas Garcia', service: 'X-Ray', doctor: 'Dr. John', status: 'Pending', source: 'Manual' },
+            { time: '01:00 PM', patient: 'Sophie Adams', service: 'Whitening', doctor: 'Dr. Emily', status: 'Confirmed', source: 'AI' }
+          ]
+        },
         PAYMENT_METHOD_CARD: {
           BADGE: "VISA",
           DETAILS: "Visa ending in 4242",
@@ -952,6 +993,82 @@ export const STRINGS = {
             EDIT: "Edit"
           }
         },
+        TEST_PLAYGROUND: {
+          TITLE: "AI Test Playground",
+          SUBTITLE: "Simulate a call before publishing changes live. Nothing here affects real patients or bookings.",
+          BADGE: "Test Mode — isolated from live calls",
+          SCENARIOS_LABEL: "Test Scenario",
+          SCENARIOS: [
+            { id: 'booking', label: 'Book Appointment' },
+            { id: 'reschedule', label: 'Reschedule' },
+            { id: 'emergency', label: 'Emergency Keyword' },
+            { id: 'faq', label: 'Pricing FAQ' },
+          ],
+          RUN_BTN: "Run Test Call",
+          RUNNING_BTN: "Running Simulation...",
+          RESET_BTN: "Reset",
+          TRANSCRIPTS: {
+            booking: [
+              { speaker: 'AI', text: 'Good day, thank you for calling. I am your AI assistant. How may I help you today?' },
+              { speaker: 'User', text: 'I would like to book a routine cleaning for next Tuesday morning.' },
+              { speaker: 'AI', text: 'I have an opening at 10:00 AM on Tuesday. Shall I lock that in for you?' },
+              { speaker: 'User', text: 'Yes please, that works.' },
+              { speaker: 'AI', text: 'Booked! You will receive an SMS confirmation shortly.' },
+            ],
+            reschedule: [
+              { speaker: 'AI', text: 'Hello, thank you for calling. How can I assist you?' },
+              { speaker: 'User', text: 'I need to move my Thursday appointment to Friday afternoon.' },
+              { speaker: 'AI', text: 'No problem, I have 3:30 PM open on Friday. Shall I update your booking?' },
+              { speaker: 'User', text: 'Yes, thank you.' },
+            ],
+            emergency: [
+              { speaker: 'AI', text: 'Hello, thank you for calling. How can I help you today?' },
+              { speaker: 'User', text: 'I am in severe pain and need to be seen right now!' },
+              { speaker: 'AI', text: 'I understand this is urgent. I am escalating you to our emergency line immediately.' },
+            ],
+            faq: [
+              { speaker: 'AI', text: 'Hello, thank you for calling. How can I help you today?' },
+              { speaker: 'User', text: 'What is the price for a teeth whitening session?' },
+              { speaker: 'AI', text: 'Our teeth whitening session is priced at €150 and takes about 60 minutes.' },
+            ],
+          },
+          CONFIG_TITLE: "Configuration Being Tested",
+          CONFIG: {
+            GREETING: "Greeting Message",
+            VOICE: "Voice",
+            KNOWLEDGE: "Knowledge Sources",
+          },
+          RESULTS_TITLE: "Test Evaluation",
+          RESULTS: {
+            booking: [
+              { label: 'Correctly identified intent', pass: true },
+              { label: 'Collected all required fields', pass: true },
+              { label: 'Completed booking action', pass: true },
+              { label: 'Response latency under 800ms', pass: true },
+            ],
+            reschedule: [
+              { label: 'Correctly identified intent', pass: true },
+              { label: 'Located existing appointment', pass: true },
+              { label: 'Completed reschedule action', pass: true },
+              { label: 'Response latency under 800ms', pass: true },
+            ],
+            emergency: [
+              { label: 'Detected emergency keyword', pass: true },
+              { label: 'Skipped normal booking flow', pass: true },
+              { label: 'Escalated to human line', pass: true },
+              { label: 'Response latency under 800ms', pass: false },
+            ],
+            faq: [
+              { label: 'Correctly identified intent', pass: true },
+              { label: 'Answered from knowledge base', pass: true },
+              { label: 'No hallucinated pricing', pass: true },
+              { label: 'Response latency under 800ms', pass: true },
+            ],
+          },
+          CLOSE_BTN: "Close",
+          SAVE_DRAFT_BTN: "Save as Draft",
+          PUBLISH_BTN: "Looks Good — Publish Changes",
+        },
         WEEKLY_CALENDAR: {
           DAYS: [
             { day: 'Mon', date: '10' },
@@ -972,6 +1089,5 @@ export const STRINGS = {
           }
         }
       }
-    }
   }
 };

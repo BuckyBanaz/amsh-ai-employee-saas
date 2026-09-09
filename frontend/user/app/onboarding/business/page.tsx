@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { STRINGS } from '../../../../utils/strings/en';
+import { STRINGS } from '../../../utils/strings/en';
 
 export default function BusinessOnboardingPage() {
   const router = useRouter();

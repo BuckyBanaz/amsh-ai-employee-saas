@@ -174,7 +174,7 @@ export default function AppointmentsPage() {
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5 mb-6">
         <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 shadow-sm">
           <div className="text-[11px] font-bold text-[#94A3B8] uppercase tracking-wider mb-2">
-            TODAY'S APPOINTMENTS
+            TODAY&apos;S APPOINTMENTS
           </div>
           <div className="text-[24px] font-bold text-[#0F172A] leading-none mb-1">
             1,284

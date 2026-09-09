@@ -192,7 +192,7 @@ export default function ConversationDetailPage() {
                     <span className="font-bold text-[#2563EB]">Sarah (AI Receptionist)</span>
                     <span className="text-[10px] text-[#94A3B8]">10:24:02 AM · Latency 210ms</span>
                   </div>
-                  "Good morning, thank you for calling Smile Dental Clinic. I am Sarah, your AI assistant. How may I help you today?"
+                  &quot;Good morning, thank you for calling Smile Dental Clinic. I am Sarah, your AI assistant. How may I help you today?&quot;
                 </div>
               </div>
 
@@ -206,7 +206,7 @@ export default function ConversationDetailPage() {
                     <span className="font-bold text-[#0F172A]">Sarah Wilson (Caller)</span>
                     <span className="text-[10px] text-[#94A3B8]">10:24:08 AM</span>
                   </div>
-                  "Hi Sarah, I would like to book a routine teeth cleaning for next Tuesday morning if possible."
+                  &quot;Hi Sarah, I would like to book a routine teeth cleaning for next Tuesday morning if possible.&quot;
                 </div>
               </div>
 
@@ -216,7 +216,7 @@ export default function ConversationDetailPage() {
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-700">
                     <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
                   </svg>
-                  <span><strong>Tool Invoked:</strong> <code>check_doctor_availability(date="2026-02-03", service="teeth_cleaning")</code></span>
+                  <span><strong>Tool Invoked:</strong> <code>{'check_doctor_availability(date="2026-02-03", service="teeth_cleaning")'}</code></span>
                 </div>
                 <span className="font-semibold text-emerald-700">Returned 2 slots (80ms)</span>
               </div>
@@ -231,7 +231,7 @@ export default function ConversationDetailPage() {
                     <span className="font-bold text-[#2563EB]">Sarah (AI Receptionist)</span>
                     <span className="text-[10px] text-[#94A3B8]">10:24:14 AM · Latency 240ms</span>
                   </div>
-                  "Certainly! I have an opening at 10:00 AM on Tuesday with Dr. Evans. Would that work for you?"
+                  &quot;Certainly! I have an opening at 10:00 AM on Tuesday with Dr. Evans. Would that work for you?&quot;
                 </div>
               </div>
 
@@ -245,7 +245,7 @@ export default function ConversationDetailPage() {
                     <span className="font-bold text-[#0F172A]">Sarah Wilson (Caller)</span>
                     <span className="text-[10px] text-[#94A3B8]">10:24:19 AM</span>
                   </div>
-                  "Yes, 10:00 AM is perfect, thank you!"
+                  &quot;Yes, 10:00 AM is perfect, thank you!&quot;
                 </div>
               </div>
 
@@ -255,7 +255,7 @@ export default function ConversationDetailPage() {
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-700">
                     <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
                   </svg>
-                  <span><strong>Tool Invoked:</strong> <code>create_appointment(slot="10:00", patient="Sarah Wilson")</code></span>
+                  <span><strong>Tool Invoked:</strong> <code>{'create_appointment(slot="10:00", patient="Sarah Wilson")'}</code></span>
                 </div>
                 <span className="font-semibold text-emerald-700">Booking ID: APT-8921 (110ms)</span>
               </div>
@@ -270,7 +270,7 @@ export default function ConversationDetailPage() {
                     <span className="font-bold text-[#2563EB]">Sarah (AI Receptionist)</span>
                     <span className="text-[10px] text-[#94A3B8]">10:24:26 AM · Latency 220ms</span>
                   </div>
-                  "Splendid! Your appointment is locked in for Tuesday at 10:00 AM with Dr. Evans. I have sent an SMS confirmation to your number."
+                  &quot;Splendid! Your appointment is locked in for Tuesday at 10:00 AM with Dr. Evans. I have sent an SMS confirmation to your number.&quot;
                 </div>
               </div>
             </div>

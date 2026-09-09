@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { SettingsSidebar, SettingsTab } from '../../../components/dashboard/settings/SettingsSidebar';
 import { BusinessSettings } from '../../../components/dashboard/settings/BusinessSettings';
-import { STRINGS } from '../../../../utils/strings/en';
+import { STRINGS } from '../../../utils/strings/en';
 import { ProfileSettings } from '../../../components/dashboard/settings/ProfileSettings';
 import { SecuritySettings } from '../../../components/dashboard/settings/SecuritySettings';
 import { NotificationSettings } from '../../../components/dashboard/settings/NotificationSettings';

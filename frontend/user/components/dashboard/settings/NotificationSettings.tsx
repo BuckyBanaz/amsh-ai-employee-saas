@@ -11,7 +11,7 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void 
     </button>
   );
 }
-import { STRINGS } from '../../../../utils/strings/en';
+import { STRINGS } from '../../../utils/strings/en';
 
 export function NotificationSettings() {
   const [emailAppt, setEmailAppt] = useState(true);

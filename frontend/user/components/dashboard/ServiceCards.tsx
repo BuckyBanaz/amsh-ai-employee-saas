@@ -1,6 +1,6 @@
 "use client";
 import React from 'react';
-import { STRINGS } from '../../../../utils/strings/en';
+import { STRINGS } from '../../utils/strings/en';
 
 const services = STRINGS.DASHBOARD.COMPONENTS.SERVICE_CARDS.MOCK_DATA;
 

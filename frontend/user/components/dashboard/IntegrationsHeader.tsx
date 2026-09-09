@@ -1,6 +1,6 @@
 "use client";
 import React from 'react';
-import { STRINGS } from '../../../../utils/strings/en';
+import { STRINGS } from '../../utils/strings/en';
 
 export const INTEGRATION_TABS = [
   'All Integrations', // Kept generic in component state for simplicity, we map UI labels below

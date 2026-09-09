@@ -299,10 +299,6 @@ function PlanEditor({ draft, isNew, onChange, onSave, onClose, error }: PlanEdit
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  // Portal target only exists after mount, so the first client render matches SSR.
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-
   useEffect(() => {
     const previous = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -322,7 +318,7 @@ function PlanEditor({ draft, isNew, onChange, onSave, onClose, error }: PlanEdit
         : [...draft.features, key],
     });
 
-  if (!mounted) return null;
+  if (typeof document === 'undefined') return null;
 
   return createPortal(
     <div

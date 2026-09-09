@@ -1,6 +1,6 @@
 "use client";
 import React from 'react';
-import { STRINGS } from '../../../../utils/strings/en';
+import { STRINGS } from '../../../utils/strings/en';
 
 export function ProfileSettings() {
   const content = STRINGS.DASHBOARD.SETTINGS.PROFILE;

@@ -1,5 +1,5 @@
 import React from 'react';
-import { STRINGS } from '../../../utils/strings/en';
+import { STRINGS } from '../../utils/strings/en';
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   const content = STRINGS.AUTH.LAYOUT;

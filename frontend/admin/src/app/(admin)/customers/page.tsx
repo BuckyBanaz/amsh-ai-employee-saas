@@ -127,7 +127,6 @@ export default function CustomersPage() {
   const [selectedType, setSelectedType] = useState<string>('All');
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerRecord | null>(null);
 
-  const businessOptions = ['All', ...Array.from(new Set(mockCustomers.map(c => c.businessName)))];
   const typeOptions = ['All', ...Array.from(new Set(mockCustomers.map(c => c.businessType)))];
 
   const hasActiveFilters = selectedBusiness !== 'All' || selectedCountry !== 'All' || selectedStatus !== 'All' || selectedType !== 'All' || searchQuery !== '';

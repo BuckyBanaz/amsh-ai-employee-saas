@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { TeamHeader } from '../../../components/dashboard/TeamHeader';
 import { TeamTable } from '../../../components/dashboard/TeamTable';
-import { STRINGS } from '../../../../utils/strings/en';
+import { STRINGS } from '../../../utils/strings/en';
 import { InviteMemberModal } from '../../../components/dashboard/InviteMemberModal';
 
 export default function TeamPage() {

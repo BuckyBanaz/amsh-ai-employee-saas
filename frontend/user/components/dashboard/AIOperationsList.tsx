@@ -1,6 +1,6 @@
 "use client";
 import React from 'react';
-import { STRINGS } from '../../../../utils/strings/en';
+import { STRINGS } from '../../utils/strings/en';
 
 const operations = STRINGS.DASHBOARD.COMPONENTS.AI_OPERATIONS.LIST;
 

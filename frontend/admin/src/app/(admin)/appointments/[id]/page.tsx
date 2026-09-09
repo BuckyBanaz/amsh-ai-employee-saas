@@ -1,10 +1,8 @@
 "use client";
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
 
 export default function AppointmentDetailPage() {
-  const params = useParams();
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [status, setStatus] = useState<'Confirmed' | 'Completed' | 'Cancelled' | 'No-show'>('Confirmed');
 
@@ -217,7 +215,7 @@ export default function AppointmentDetailPage() {
                   </svg>
                   Sarah (AI Receptionist):
                 </span>
-                "Hello, thank you for calling Smile Dental Clinic. My name is Sarah. Are you looking to schedule an appointment today?"
+                &quot;Hello, thank you for calling Smile Dental Clinic. My name is Sarah. Are you looking to schedule an appointment today?&quot;
               </div>
 
               <div className="p-3 rounded-lg bg-gray-50 text-[13px] border border-[#E2E8F0]">
@@ -228,7 +226,7 @@ export default function AppointmentDetailPage() {
                   </svg>
                   Patient (Sarah Wilson):
                 </span>
-                "Yes please! I need a routine teeth cleaning and oral check-up. Do you have anything available on Friday morning around 11:30?"
+                &quot;Yes please! I need a routine teeth cleaning and oral check-up. Do you have anything available on Friday morning around 11:30?&quot;
               </div>
 
               <div className="p-3 rounded-lg bg-[#EFF6FF] text-[13px] border border-[#BFDBFE]/60">
@@ -239,7 +237,7 @@ export default function AppointmentDetailPage() {
                   </svg>
                   Sarah (AI Receptionist):
                 </span>
-                "Let me check our schedule... Yes, Dr. Michael Evans has an opening for a Teeth Cleaning session at 11:30 AM this morning. Shall I lock that in for you?"
+                &quot;Let me check our schedule... Yes, Dr. Michael Evans has an opening for a Teeth Cleaning session at 11:30 AM this morning. Shall I lock that in for you?&quot;
               </div>
 
               <div className="p-3 rounded-lg bg-gray-50 text-[13px] border border-[#E2E8F0]">
@@ -250,7 +248,7 @@ export default function AppointmentDetailPage() {
                   </svg>
                   Patient (Sarah Wilson):
                 </span>
-                "That works great! Please book it under Sarah Wilson."
+                &quot;That works great! Please book it under Sarah Wilson.&quot;
               </div>
 
               <div className="p-3 rounded-lg bg-[#EFF6FF] text-[13px] border border-[#BFDBFE]/60">
@@ -261,7 +259,7 @@ export default function AppointmentDetailPage() {
                   </svg>
                   Sarah (AI Receptionist):
                 </span>
-                "Perfect, your appointment with Dr. Evans is confirmed for today at 11:30 AM. I have sent a confirmation message to your phone. See you soon!"
+                &quot;Perfect, your appointment with Dr. Evans is confirmed for today at 11:30 AM. I have sent a confirmation message to your phone. See you soon!&quot;
               </div>
             </div>
           </div>
@@ -293,7 +291,7 @@ export default function AppointmentDetailPage() {
                 <div className="w-2 h-2 rounded-full bg-[#2563EB] mt-1.5 flex-shrink-0"></div>
                 <div>
                   <div className="font-semibold text-[#0F172A]">Patient Confirmed Attendance via WhatsApp</div>
-                  <div className="text-[11px] text-[#94A3B8]">Today at 09:45 AM ("Yes, I will be there!")</div>
+                  <div className="text-[11px] text-[#94A3B8]">Today at 09:45 AM (&quot;Yes, I will be there!&quot;)</div>
                 </div>
               </div>
             </div>

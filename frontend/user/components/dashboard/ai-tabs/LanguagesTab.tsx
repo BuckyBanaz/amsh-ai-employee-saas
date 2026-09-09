@@ -1,12 +1,11 @@
 "use client";
 import React from 'react';
-import { STRINGS } from '../../../../utils/strings/en';
+import { STRINGS } from '../../../utils/strings/en';
 
 export function LanguagesTab() {
   const content = STRINGS.DASHBOARD.COMPONENTS.AI_TABS_CONTENT.LANGUAGES;
   const languages = content.SUPPORTED.OPTIONS;
 
-export function LanguagesTab() {
   return (
     <div className="animate-in fade-in duration-500 bg-white border border-gray-100 rounded-2xl p-8 shadow-sm">
       <div className="max-w-3xl">

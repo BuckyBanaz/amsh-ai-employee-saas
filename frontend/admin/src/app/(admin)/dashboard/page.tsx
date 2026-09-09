@@ -67,7 +67,7 @@ export default function AdminDashboard() {
             </svg>
           </h1>
           <p className="text-[14px] text-gray-500 mt-1 font-medium">
-            Here's what's happening across your platform.
+            Here&apos;s what&apos;s happening across your platform.
           </p>
         </div>
         <div className="flex items-center gap-3">

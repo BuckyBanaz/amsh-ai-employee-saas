@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
 
 interface CallRecord {
@@ -12,16 +12,57 @@ interface CallRecord {
   time: string;
   duration: string;
   intent: string;
-  outcome: 'Resolved' | 'Transferred' | 'Failed';
+  outcome: 'Live' | 'Resolved' | 'Transferred' | 'Failed';
   outcomeColor: { bg: string; text: string };
   aiReceptionist: string;
   engine: string;
   latency: string;
   summary: string;
-  transcript: { speaker: 'AI' | 'User'; text: string }[];
+  transcript: { speaker: 'AI' | 'User'; text: string; sentiment?: 'Positive' | 'Neutral' | 'Negative' }[];
+}
+
+const SENTIMENT_STYLES: Record<string, { bg: string; text: string }> = {
+  Positive: { bg: 'bg-[#D1FAE5]', text: 'text-[#065F46]' },
+  Neutral: { bg: 'bg-gray-100', text: 'text-[#475569]' },
+  Negative: { bg: 'bg-[#FEE2E2]', text: 'text-[#991B1B]' },
+};
+
+// Deterministic pseudo-random waveform bar heights, seeded by call id so they
+// stay stable across re-renders instead of reshuffling on every keystroke.
+function getWaveformBars(seed: string, count = 40): number[] {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
+  const bars: number[] = [];
+  for (let i = 0; i < count; i++) {
+    bars.push(4 + Math.round(Math.abs(Math.sin(hash * 0.017 + i * 1.7)) * 16));
+  }
+  return bars;
 }
 
 const callsData: CallRecord[] = [
+  {
+    id: 'call-0',
+    businessId: 'b-1',
+    businessName: 'Smile Dental Clinic',
+    businessType: 'Dental Clinic',
+    callerNumber: '+31 6 5566 7788',
+    callerName: 'Tom Bakker',
+    time: 'Just now',
+    duration: '2:18',
+    intent: 'Booking',
+    outcome: 'Live',
+    outcomeColor: { bg: 'bg-red-50', text: 'text-red-600' },
+    aiReceptionist: 'Sarah',
+    engine: 'ElevenLabs V2 (Rachel)',
+    latency: '210ms',
+    summary: 'Caller is asking about emergency walk-in availability today. AI is checking the schedule now — a good candidate to monitor or take over.',
+    transcript: [
+      { speaker: 'AI', text: 'Good afternoon, thank you for calling Smile Dental Clinic. I am Sarah, your AI assistant. How may I help you today?', sentiment: 'Neutral' },
+      { speaker: 'User', text: 'Hi, I broke a tooth and I am in a lot of pain, can someone see me today?', sentiment: 'Negative' },
+      { speaker: 'AI', text: 'I am very sorry to hear that. Let me check today\'s emergency slots for you right now, one moment please.', sentiment: 'Neutral' },
+      { speaker: 'User', text: 'Okay, please hurry, it really hurts.', sentiment: 'Negative' },
+    ],
+  },
   {
     id: 'call-1',
     businessId: 'b-1',
@@ -167,7 +208,9 @@ export default function CallsMonitoringPage() {
   const [selectedType, setSelectedType] = useState<string>('All');
   const [selectedCall, setSelectedCall] = useState<CallRecord>(callsData[0]);
   const [isPlayingRecording, setIsPlayingRecording] = useState(false);
-  const [activeCallDetails, setActiveCallDetails] = useState<CallRecord | null>(null);
+  const [takenOver, setTakenOver] = useState(false);
+  const waveformBars = useMemo(() => getWaveformBars(selectedCall.id), [selectedCall.id]);
+  const playedFraction = isPlayingRecording ? 0.35 : 0;
 
   const businessOptions = ['All', ...Array.from(new Set(callsData.map(c => c.businessName)))];
   const typeOptions = ['All', ...Array.from(new Set(callsData.map(c => c.businessType)))];
@@ -329,6 +372,7 @@ export default function CallsMonitoringPage() {
             className="px-2.5 py-1.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg text-[11px] font-semibold text-[#475569] hover:bg-gray-100/80 transition-colors focus:outline-none"
           >
             <option value="All">Outcome: All</option>
+            <option value="Live">Live</option>
             <option value="Resolved">Resolved</option>
             <option value="Transferred">Transferred</option>
             <option value="Failed">Failed</option>
@@ -411,6 +455,7 @@ export default function CallsMonitoringPage() {
                       onClick={() => {
                         setSelectedCall(call);
                         setIsPlayingRecording(false);
+                        setTakenOver(false);
                       }}
                       className={`cursor-pointer transition-colors text-[12px] ${
                         isSelected ? 'bg-[#EFF6FF]/70' : 'hover:bg-[#F8FAFC]/70'
@@ -463,9 +508,16 @@ export default function CallsMonitoringPage() {
 
                       {/* AI Outcome */}
                       <td className="px-2.5 py-2.5 whitespace-nowrap">
-                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold ${call.outcomeColor.bg} ${call.outcomeColor.text}`}>
-                          {call.outcome}
-                        </span>
+                        {call.outcome === 'Live' ? (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-50 text-red-600">
+                            <span className="w-1.5 h-1.5 rounded-full bg-red-600 animate-pulse"></span>
+                            Live
+                          </span>
+                        ) : (
+                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold ${call.outcomeColor.bg} ${call.outcomeColor.text}`}>
+                            {call.outcome}
+                          </span>
+                        )}
                       </td>
 
                       {/* Action */}
@@ -475,14 +527,17 @@ export default function CallsMonitoringPage() {
                             e.stopPropagation();
                             setSelectedCall(call);
                             setIsPlayingRecording(false);
+                            setTakenOver(false);
                           }}
                           className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-colors ${
-                            isSelected
+                            call.outcome === 'Live'
+                              ? 'bg-red-600 text-white hover:bg-red-700'
+                              : isSelected
                               ? 'bg-[#2563EB] text-white'
                               : 'bg-white border border-[#E2E8F0] text-[#2563EB] hover:bg-blue-50'
                           }`}
                         >
-                          View
+                          {call.outcome === 'Live' ? 'Take Over' : 'View'}
                         </button>
                       </td>
                     </tr>
@@ -506,10 +561,41 @@ export default function CallsMonitoringPage() {
                   Caller: {selectedCall.callerNumber}
                 </span>
               </div>
-              <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${selectedCall.outcomeColor.bg} ${selectedCall.outcomeColor.text}`}>
-                {selectedCall.outcome}
-              </span>
+              {selectedCall.outcome === 'Live' ? (
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-bold bg-red-50 text-red-600">
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-600 animate-pulse"></span>
+                  LIVE
+                </span>
+              ) : (
+                <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${selectedCall.outcomeColor.bg} ${selectedCall.outcomeColor.text}`}>
+                  {selectedCall.outcome}
+                </span>
+              )}
             </div>
+
+            {/* Live Call Take Over */}
+            {selectedCall.outcome === 'Live' && (
+              takenOver ? (
+                <div className="p-2.5 bg-[#D1FAE5] border border-emerald-300 rounded-lg flex items-center gap-2">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-[#065F46] flex-shrink-0">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
+                  <span className="text-[11px] font-bold text-[#065F46]">
+                    You are now connected — AI has handed off this call.
+                  </span>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setTakenOver(true)}
+                  className="w-full flex items-center justify-center gap-2 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-[12px] font-bold shadow-sm transition-colors"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                  </svg>
+                  Take Over Call
+                </button>
+              )
+            )}
 
             {/* AI Summary & Intent */}
             <div className="p-2.5 bg-[#EFF6FF] border border-[#BFDBFE] rounded-lg">
@@ -544,14 +630,21 @@ export default function CallsMonitoringPage() {
                   <span>{isPlayingRecording ? '0:34' : '0:00'} / {selectedCall.duration}</span>
                   <span>Twilio Voice Stream</span>
                 </div>
-                <div className="w-full h-1.5 bg-[#E2E8F0] rounded-full overflow-hidden">
-                  <div
-                    className={`h-full bg-[#2563EB] rounded-full transition-all duration-300 ${
-                      isPlayingRecording ? 'w-1/3' : 'w-0'
-                    }`}
-                  />
+                <div className="flex items-end gap-[2px] h-6">
+                  {waveformBars.map((h, i) => (
+                    <div
+                      key={i}
+                      className={`flex-1 rounded-sm transition-colors duration-300 ${
+                        i / waveformBars.length < playedFraction ? 'bg-[#2563EB]' : 'bg-[#E2E8F0]'
+                      }`}
+                      style={{ height: `${h}px` }}
+                    />
+                  ))}
                 </div>
               </div>
+              <button className="text-[10px] font-semibold text-[#2563EB] hover:underline flex-shrink-0">
+                Download
+              </button>
             </div>
 
             {/* Conversation Transcript Excerpt */}
@@ -569,10 +662,15 @@ export default function CallsMonitoringPage() {
                         : 'bg-gray-50 border border-[#E2E8F0] text-[#0F172A]'
                     }`}
                   >
-                    <span className={`font-bold block mb-0.5 ${
+                    <span className={`font-bold mb-0.5 flex items-center gap-1.5 ${
                       item.speaker === 'AI' ? 'text-[#2563EB]' : 'text-[#475569]'
                     }`}>
                       {item.speaker === 'AI' ? `${selectedCall.aiReceptionist} (AI Receptionist)` : 'Caller'}:
+                      {item.sentiment && (
+                        <span className={`px-1 py-[1px] rounded text-[9px] font-bold ${SENTIMENT_STYLES[item.sentiment].bg} ${SENTIMENT_STYLES[item.sentiment].text}`}>
+                          {item.sentiment}
+                        </span>
+                      )}
                     </span>
                     {item.text}
                   </div>

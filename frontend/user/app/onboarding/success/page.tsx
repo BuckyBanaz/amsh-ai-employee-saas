@@ -1,6 +1,6 @@
 import React from 'react';
 import Link from 'next/link';
-import { STRINGS } from '../../../../utils/strings/en';
+import { STRINGS } from '../../../utils/strings/en';
 
 export default function OnboardingSuccessPage() {
   return (

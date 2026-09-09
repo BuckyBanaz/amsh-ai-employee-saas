@@ -1,6 +1,6 @@
 "use client";
 import React from 'react';
-import { STRINGS } from '../../../../utils/strings/en';
+import { STRINGS } from '../../utils/strings/en';
 
 const DAYS = STRINGS.DASHBOARD.COMPONENTS.WEEKLY_CALENDAR.DAYS;
 const HOURS = STRINGS.DASHBOARD.COMPONENTS.WEEKLY_CALENDAR.HOURS;

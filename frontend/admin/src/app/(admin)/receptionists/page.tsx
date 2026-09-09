@@ -17,6 +17,10 @@ interface ReceptionistItem {
   status: 'Active' | 'Paused' | 'Testing';
   lastCall: string;
   greetingText: string;
+  /** The Twilio number the AI actually answers on (MVP: business's own number
+   *  call-forwards here; later this becomes the business's number directly). */
+  aiNumber: string;
+  forwardedFrom: string;
 }
 
 const receptionistsData: ReceptionistItem[] = [
@@ -35,6 +39,8 @@ const receptionistsData: ReceptionistItem[] = [
     status: 'Active',
     lastCall: '2 min ago',
     greetingText: 'Good day, thank you for calling Smile Dental Clinic. I am Sarah, your AI assistant. How may I help you today?',
+    aiNumber: '+31 20 808 1922',
+    forwardedFrom: '+31 20 894 3400',
   },
   {
     id: 'r-2',
@@ -51,6 +57,8 @@ const receptionistsData: ReceptionistItem[] = [
     status: 'Active',
     lastCall: '18 min ago',
     greetingText: 'Welcome to Amsterdam Dental Care, this is Anna. Are you calling to book or reschedule an appointment?',
+    aiNumber: '+31 20 808 2217',
+    forwardedFrom: '+31 20 662 5510',
   },
   {
     id: 'r-3',
@@ -67,6 +75,8 @@ const receptionistsData: ReceptionistItem[] = [
     status: 'Paused',
     lastCall: 'Never',
     greetingText: 'Guten Tag, Sie sind mit dem Berlin Health Center verbunden. Mein Name ist Dieter.',
+    aiNumber: '+49 30 555 0148',
+    forwardedFrom: '+49 30 212 4477',
   },
   {
     id: 'r-4',
@@ -83,6 +93,8 @@ const receptionistsData: ReceptionistItem[] = [
     status: 'Active',
     lastCall: '34 min ago',
     greetingText: 'Buongiorno e benvenuti a Bella Rosa Ristorante. I am Sofia, how many guests may I reserve a table for?',
+    aiNumber: '+39 06 8901 3345',
+    forwardedFrom: '+39 06 4471 2280',
   },
   {
     id: 'r-5',
@@ -99,6 +111,8 @@ const receptionistsData: ReceptionistItem[] = [
     status: 'Active',
     lastCall: '1 hour ago',
     greetingText: 'Bonjour! Bienvenue chez Glow & Shine Salon. Je suis Chloé, pour quelle prestation souhaitez-vous prendre rendez-vous?',
+    aiNumber: '+33 1 8934 7712',
+    forwardedFrom: '+33 1 4523 6690',
   },
   {
     id: 'r-6',
@@ -115,6 +129,8 @@ const receptionistsData: ReceptionistItem[] = [
     status: 'Testing',
     lastCall: '5 hours ago',
     greetingText: 'Hi there! Thanks for calling FitLife Studio. I am Oliver, ready to book your next class or personal training session.',
+    aiNumber: '+44 20 3966 5581',
+    forwardedFrom: '+44 20 7946 0891',
   },
 ];
 
@@ -319,6 +335,9 @@ export default function ReceptionistsPage() {
                 <th className="px-4 py-3 text-[12px] font-bold text-[#475569] uppercase tracking-wider min-w-[180px]">
                   Voice & Provider
                 </th>
+                <th className="px-4 py-3 text-[12px] font-bold text-[#475569] uppercase tracking-wider min-w-[160px]">
+                  AI Number
+                </th>
                 <th className="px-4 py-3 text-[12px] font-bold text-[#475569] uppercase tracking-wider min-w-[130px]">
                   Languages
                 </th>
@@ -387,6 +406,16 @@ export default function ReceptionistsPage() {
                     <span className="text-[11px] font-semibold text-[#2563EB]">
                       {agent.voiceProvider}
                     </span>
+                  </td>
+
+                  {/* AI Number (Twilio) — where the AI actually answers; forwarded from the business's own number for now */}
+                  <td className="px-4 py-3.5 whitespace-nowrap">
+                    <div className="text-[13px] font-mono font-bold text-[#0F172A]">
+                      {agent.aiNumber}
+                    </div>
+                    <div className="text-[11px] text-[#94A3B8]">
+                      Forwarded from {agent.forwardedFrom}
+                    </div>
                   </td>
 
                   {/* Languages */}
@@ -510,6 +539,14 @@ export default function ReceptionistsPage() {
                 <span className="text-[#94A3B8]">Average Latency:</span>
                 <span className="font-semibold text-[#10B981]">~340ms (Ultra-Low)</span>
               </div>
+              <div className="flex justify-between">
+                <span className="text-[#94A3B8]">AI Number (Twilio):</span>
+                <span className="font-mono font-semibold text-[#0F172A]">{activeModalAgent.aiNumber}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#94A3B8]">Forwarded From:</span>
+                <span className="font-mono font-semibold text-[#0F172A]">{activeModalAgent.forwardedFrom}</span>
+              </div>
             </div>
 
             {/* Greeting Audio Player Simulation */}
@@ -518,7 +555,7 @@ export default function ReceptionistsPage() {
                 Active Greeting Prompt
               </div>
               <p className="text-[13px] italic text-[#0F172A] mb-3">
-                "{activeModalAgent.greetingText}"
+                &quot;{activeModalAgent.greetingText}&quot;
               </p>
 
               <button

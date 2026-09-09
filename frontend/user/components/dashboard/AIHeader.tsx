@@ -1,8 +1,17 @@
 "use client";
 import React from 'react';
-import { STRINGS } from '../../../../utils/strings/en';
+import { STRINGS } from '../../utils/strings/en';
 
-export function AIHeader() {
+interface AIHeaderProps {
+  onTestClick?: () => void;
+}
+
+// Mock — mirrors CallHandlingTab's MOCK_AI_NUMBER; the AI's Twilio number
+// doesn't exist yet (no phone_number model/API wired up). Surfaced here too
+// so it isn't only visible when someone opens the Call Handling sub-tab.
+const MOCK_AI_NUMBER = '+1 (555) 018-2947';
+
+export function AIHeader({ onTestClick }: AIHeaderProps = {}) {
   return (
     <header className="flex items-center justify-between mb-4">
       <div>
@@ -15,7 +24,13 @@ export function AIHeader() {
       </div>
 
       <div className="flex items-center gap-4">
-        
+
+        {/* AI Number (Twilio) — call-forwarding target for now */}
+        <div className="hidden md:flex items-center gap-2 px-3 py-2 border border-gray-200 bg-white rounded-lg shadow-sm">
+          <span className="text-[11px] text-gray-400 font-semibold">AI Number</span>
+          <span className="text-[13px] font-mono font-bold text-gray-900">{MOCK_AI_NUMBER}</span>
+        </div>
+
         {/* Status Indicator */}
         <div className="flex items-center gap-2 px-4 py-2 border border-gray-200 bg-white rounded-lg text-[11px] font-extrabold tracking-widest text-[#10B981] shadow-sm uppercase">
           <div className="w-2 h-2 rounded-full bg-[#10B981]"></div>
@@ -23,7 +38,10 @@ export function AIHeader() {
         </div>
 
         {/* Test AI Button */}
-        <button className="flex items-center gap-2 px-5 py-2 bg-[#0066FF] text-white rounded-lg text-[13px] font-bold shadow-sm hover:bg-[#0052cc] transition-colors">
+        <button
+          onClick={onTestClick}
+          className="flex items-center gap-2 px-5 py-2 bg-[#0066FF] text-white rounded-lg text-[13px] font-bold shadow-sm hover:bg-[#0052cc] transition-colors"
+        >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
             <polygon points="5 3 19 12 5 21 5 3"></polygon>
           </svg>

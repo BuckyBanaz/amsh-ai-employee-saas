@@ -1,6 +1,6 @@
 "use client";
 import React from 'react';
-import { STRINGS } from '../../../../utils/strings/en';
+import { STRINGS } from '../../utils/strings/en';
 
 const plans = STRINGS.DASHBOARD.COMPONENTS.PRICING_TIERS.map((plan, idx) => ({
   ...plan,

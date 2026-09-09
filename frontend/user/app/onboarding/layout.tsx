@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { usePathname } from 'next/navigation';
-import { STRINGS } from '../../../utils/strings/en';
+import { STRINGS } from '../../utils/strings/en';
 
 const ALL_STEPS = [
   { id: 1, name: 'Account', href: '/onboarding/account' },

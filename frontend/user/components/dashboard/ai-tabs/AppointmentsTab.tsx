@@ -1,6 +1,6 @@
 "use client";
 import React from 'react';
-import { STRINGS } from '../../../../utils/strings/en';
+import { STRINGS } from '../../../utils/strings/en';
 
 export function AppointmentsTab() {
   const content = STRINGS.DASHBOARD.COMPONENTS.AI_TABS_CONTENT.APPOINTMENTS;
