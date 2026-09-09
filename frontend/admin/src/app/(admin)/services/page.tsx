@@ -9,6 +9,7 @@ interface ServiceItem {
   category: string;
   businessId: string;
   businessName: string;
+  businessType: string;
   duration: string;
   price: string;
   currency: string;
@@ -26,6 +27,7 @@ const mockServices: ServiceItem[] = [
     category: 'Diagnostic & Preventive',
     businessId: 'biz-01',
     businessName: 'Smile Dental Business',
+    businessType: 'Dental Clinic',
     duration: '30 min',
     price: '€45.00',
     currency: 'EUR',
@@ -41,6 +43,7 @@ const mockServices: ServiceItem[] = [
     category: 'Hygiene & Care',
     businessId: 'biz-01',
     businessName: 'Amsterdam Dental Care',
+    businessType: 'Dental Clinic',
     duration: '45 min',
     price: '€75.00',
     currency: 'EUR',
@@ -56,6 +59,7 @@ const mockServices: ServiceItem[] = [
     category: 'Radiology',
     businessId: 'biz-02',
     businessName: 'Berlin Health Center',
+    businessType: 'Medical Center',
     duration: '15 min',
     price: '€60.00',
     currency: 'EUR',
@@ -71,6 +75,7 @@ const mockServices: ServiceItem[] = [
     category: 'Restorative Care',
     businessId: 'biz-02',
     businessName: 'Bella Rosa Ristorante',
+    businessType: 'Restaurant',
     duration: '45 min',
     price: '€95.00',
     currency: 'EUR',
@@ -86,6 +91,7 @@ const mockServices: ServiceItem[] = [
     category: 'Endodontics',
     businessId: 'biz-03',
     businessName: 'Glow & Shine Salon',
+    businessType: 'Beauty Salon',
     duration: '90 min',
     price: '€320.00',
     currency: 'EUR',
@@ -101,6 +107,7 @@ const mockServices: ServiceItem[] = [
     category: 'Oral Surgery',
     businessId: 'biz-03',
     businessName: 'FitLife Studio',
+    businessType: 'Fitness Studio',
     duration: '45 min',
     price: '£85.00',
     currency: 'GBP',
@@ -116,6 +123,7 @@ const mockServices: ServiceItem[] = [
     category: 'Prosthodontics',
     businessId: 'biz-01',
     businessName: 'Smile Dental Business',
+    businessType: 'Dental Clinic',
     duration: '60 min',
     price: '€120.00',
     currency: 'EUR',
@@ -131,6 +139,7 @@ const mockServices: ServiceItem[] = [
     category: 'Cosmetic',
     businessId: 'biz-01',
     businessName: 'Amsterdam Dental Care',
+    businessType: 'Dental Clinic',
     duration: '15 min',
     price: '€180.00',
     currency: 'EUR',
@@ -145,6 +154,7 @@ const mockServices: ServiceItem[] = [
 export default function ServicesPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [businessFilter, setBusinessFilter] = useState('All');
+  const [typeFilter, setTypeFilter] = useState('All');
   const [countryFilter, setCountryFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
   const [selectedService, setSelectedService] = useState<ServiceItem | null>(null);
@@ -155,12 +165,14 @@ export default function ServicesPage() {
       srv.businessName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       srv.category.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesBusiness = businessFilter === 'All' || srv.businessName === businessFilter;
+    const matchesType = typeFilter === 'All' || srv.businessType === typeFilter;
     const matchesCountry = countryFilter === 'All' || srv.country === countryFilter;
     const matchesStatus = statusFilter === 'All' || srv.status === statusFilter;
-    return matchesSearch && matchesBusiness && matchesCountry && matchesStatus;
+    return matchesSearch && matchesBusiness && matchesType && matchesCountry && matchesStatus;
   });
 
   const businesses = Array.from(new Set(mockServices.map((s) => s.businessName)));
+  const businessTypes = Array.from(new Set(mockServices.map((s) => s.businessType)));
   const countries = Array.from(new Set(mockServices.map((s) => s.country)));
 
   return (
@@ -229,6 +241,21 @@ export default function ServicesPage() {
               <option value="All">All Businesses</option>
               {businesses.map((b) => (
                 <option key={b} value={b}>{b}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Business Type Filter */}
+          <div className="flex items-center gap-2">
+            <span className="text-[12px] font-semibold text-gray-400 uppercase">Type:</span>
+            <select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              className="px-3 py-1.5 text-[12px] bg-gray-50 border border-gray-200 rounded-lg font-medium text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            >
+              <option value="All">All Types</option>
+              {businessTypes.map((t) => (
+                <option key={t} value={t}>{t}</option>
               ))}
             </select>
           </div>
@@ -316,7 +343,7 @@ export default function ServicesPage() {
                           <line x1="10" y1="14" x2="21" y2="3"></line>
                         </svg>
                       </Link>
-                      <div className="text-[11px] text-gray-400">{service.country}</div>
+                      <div className="text-[11px] text-gray-400">{service.businessType} · {service.country}</div>
                     </td>
 
                     {/* Duration */}

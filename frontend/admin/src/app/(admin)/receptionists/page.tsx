@@ -122,18 +122,14 @@ export default function ReceptionistsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedBusiness, setSelectedBusiness] = useState<string>('All');
   const [selectedStatus, setSelectedStatus] = useState<string>('All');
+  const [selectedType, setSelectedType] = useState<string>('All');
   const [activeModalAgent, setActiveModalAgent] = useState<ReceptionistItem | null>(null);
   const [isPlayingVoice, setIsPlayingVoice] = useState(false);
 
-  const businessOptions = [
-    'All',
-    'Smile Dental Clinic',
-    'Amsterdam Dental Care',
-    'Berlin Health Center',
-    'Bella Rosa Ristorante',
-    'Glow & Shine Salon',
-    'FitLife Studio',
-  ];
+  const businessOptions = ['All', ...Array.from(new Set(receptionistsData.map(r => r.businessName)))];
+  const typeOptions = ['All', ...Array.from(new Set(receptionistsData.map(r => r.businessType)))];
+
+  const hasActiveFilters = selectedBusiness !== 'All' || selectedStatus !== 'All' || selectedType !== 'All' || searchQuery;
 
   const filteredReceptionists = receptionistsData.filter((r) => {
     const matchesSearch =
@@ -142,14 +138,19 @@ export default function ReceptionistsPage() {
       r.voiceModel.toLowerCase().includes(searchQuery.toLowerCase()) ||
       r.languages.some((l) => l.toLowerCase().includes(searchQuery.toLowerCase()));
 
-    const matchesBusiness =
-      selectedBusiness === 'All' || r.businessName === selectedBusiness;
+    const matchesBusiness = selectedBusiness === 'All' || r.businessName === selectedBusiness;
+    const matchesStatus = selectedStatus === 'All' || r.status === selectedStatus;
+    const matchesType = selectedType === 'All' || r.businessType === selectedType;
 
-    const matchesStatus =
-      selectedStatus === 'All' || r.status === selectedStatus;
-
-    return matchesSearch && matchesBusiness && matchesStatus;
+    return matchesSearch && matchesBusiness && matchesStatus && matchesType;
   });
+
+  const resetFilters = () => {
+    setSelectedBusiness('All');
+    setSelectedStatus('All');
+    setSelectedType('All');
+    setSearchQuery('');
+  };
 
   return (
     <div className="flex-1 overflow-y-auto scrollbar-hide p-8 animate-in fade-in duration-500">
@@ -269,6 +270,23 @@ export default function ReceptionistsPage() {
             <option value="Paused">Paused</option>
             <option value="Testing">Testing</option>
           </select>
+          {/* Business Type Filter */}
+          <select
+            value={selectedType}
+            onChange={(e) => setSelectedType(e.target.value)}
+            className="px-3 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg text-[13px] font-semibold text-[#475569] hover:bg-gray-100/80 transition-colors focus:outline-none"
+          >
+            {typeOptions.map((t) => (
+              <option key={t} value={t}>{t === 'All' ? 'Type: All' : t}</option>
+            ))}
+          </select>
+
+          {/* Reset */}
+          {hasActiveFilters && (
+            <button onClick={resetFilters} className="text-[12px] font-semibold text-[#2563EB] hover:underline px-1">
+              Reset
+            </button>
+          )}
         </div>
 
         {/* Deploy Action */}
@@ -279,6 +297,11 @@ export default function ReceptionistsPage() {
           </svg>
           Deploy AI Receptionist
         </button>
+      </div>
+
+      {/* Result Count */}
+      <div className="mb-3 text-[12px] font-semibold text-[#94A3B8]">
+        Showing <span className="text-[#0F172A]">{filteredReceptionists.length}</span> of {receptionistsData.length} receptionists
       </div>
 
       {/* Receptionists Table */}
@@ -379,7 +402,7 @@ export default function ReceptionistsPage() {
 
                   {/* Calls Handled */}
                   <td className="px-4 py-3.5 text-[13px] text-[#475569] font-medium whitespace-nowrap">
-                    {agent.callsHandled.toLocaleString()} calls
+                    {agent.callsHandled.toLocaleString('en-US')} calls
                   </td>
 
                   {/* Resolution Rate */}

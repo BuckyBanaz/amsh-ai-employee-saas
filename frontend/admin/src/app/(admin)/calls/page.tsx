@@ -6,6 +6,7 @@ interface CallRecord {
   id: string;
   businessId: string;
   businessName: string;
+  businessType: string;
   callerNumber: string;
   callerName?: string;
   time: string;
@@ -25,6 +26,7 @@ const callsData: CallRecord[] = [
     id: 'call-1',
     businessId: 'b-1',
     businessName: 'Smile Dental Clinic',
+    businessType: 'Dental Clinic',
     callerNumber: '+31 6 1234 5678',
     callerName: 'Sarah Wilson',
     time: '10:24 AM',
@@ -48,6 +50,7 @@ const callsData: CallRecord[] = [
     id: 'call-2',
     businessId: 'b-2',
     businessName: 'Amsterdam Dental Care',
+    businessType: 'Dental Clinic',
     callerNumber: '+31 8 9876 5432',
     callerName: 'Mark de Jong',
     time: '10:18 AM',
@@ -70,6 +73,7 @@ const callsData: CallRecord[] = [
     id: 'call-3',
     businessId: 'b-3',
     businessName: 'Berlin Health Center',
+    businessType: 'Medical Center',
     callerNumber: '+49 170 998877',
     callerName: 'Klaus Schmidt',
     time: '10:05 AM',
@@ -91,6 +95,7 @@ const callsData: CallRecord[] = [
     id: 'call-4',
     businessId: 'b-4',
     businessName: 'Bella Rosa Ristorante',
+    businessType: 'Restaurant',
     callerNumber: '+49 172 112233',
     callerName: 'Marco Rossi',
     time: '09:50 AM',
@@ -112,6 +117,7 @@ const callsData: CallRecord[] = [
     id: 'call-5',
     businessId: 'b-5',
     businessName: 'Glow & Shine Salon',
+    businessType: 'Beauty Salon',
     callerNumber: '+33 6 554433',
     callerName: 'Marie Dubois',
     time: '09:42 AM',
@@ -133,6 +139,7 @@ const callsData: CallRecord[] = [
     id: 'call-6',
     businessId: 'b-6',
     businessName: 'FitLife Studio',
+    businessType: 'Fitness Studio',
     callerNumber: '+44 7700 900077',
     callerName: 'James Smith',
     time: '09:15 AM',
@@ -154,37 +161,47 @@ const callsData: CallRecord[] = [
 
 export default function CallsMonitoringPage() {
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedBusiness, setSelectedBusiness] = useState('All');
-  const [selectedStatus, setSelectedStatus] = useState('All');
-  const [selectedIntent, setSelectedIntent] = useState('All');
+  const [selectedBusiness, setSelectedBusiness] = useState<string>('All');
+  const [selectedOutcome, setSelectedOutcome] = useState<string>('All');
+  const [selectedIntent, setSelectedIntent] = useState<string>('All');
+  const [selectedType, setSelectedType] = useState<string>('All');
   const [selectedCall, setSelectedCall] = useState<CallRecord>(callsData[0]);
   const [isPlayingRecording, setIsPlayingRecording] = useState(false);
+  const [activeCallDetails, setActiveCallDetails] = useState<CallRecord | null>(null);
+
+  const businessOptions = ['All', ...Array.from(new Set(callsData.map(c => c.businessName)))];
+  const typeOptions = ['All', ...Array.from(new Set(callsData.map(c => c.businessType)))];
+
+  const hasActiveFilters = selectedBusiness !== 'All' || selectedOutcome !== 'All' || selectedIntent !== 'All' || selectedType !== 'All' || searchQuery;
 
   const filteredCalls = callsData.filter((call) => {
     const matchesSearch =
-      call.callerNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      call.businessName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      call.intent.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (call.callerName && call.callerName.toLowerCase().includes(searchQuery.toLowerCase()));
+      call.callerNumber.includes(searchQuery) ||
+      (call.callerName && call.callerName.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      call.businessName.toLowerCase().includes(searchQuery.toLowerCase());
 
-    const matchesBusiness =
-      selectedBusiness === 'All' || call.businessName === selectedBusiness;
+    const matchesBusiness = selectedBusiness === 'All' || call.businessName === selectedBusiness;
+    const matchesOutcome = selectedOutcome === 'All' || call.outcome === selectedOutcome;
+    const matchesIntent = selectedIntent === 'All' || call.intent === selectedIntent;
+    const matchesType = selectedType === 'All' || call.businessType === selectedType;
 
-    const matchesStatus =
-      selectedStatus === 'All' || call.outcome === selectedStatus;
-
-    const matchesIntent =
-      selectedIntent === 'All' || call.intent === selectedIntent;
-
-    return matchesSearch && matchesBusiness && matchesStatus && matchesIntent;
+    return matchesSearch && matchesBusiness && matchesOutcome && matchesIntent && matchesType;
   });
 
+  const resetFilters = () => {
+    setSelectedBusiness('All');
+    setSelectedOutcome('All');
+    setSelectedIntent('All');
+    setSelectedType('All');
+    setSearchQuery('');
+  };
+
   return (
-    <div className="flex-1 overflow-y-auto scrollbar-hide p-5 md:p-6 animate-in fade-in duration-300 text-[13px]">
+    <div className="flex-1 overflow-y-auto scrollbar-hide p-8 animate-in fade-in duration-300 text-[13px]">
       {/* Compact Header */}
       <header className="mb-4 pb-3.5 border-b border-[#E2E8F0] flex justify-between items-center">
         <div>
-          <h1 className="text-[20px] font-bold text-[#0F172A] tracking-tight leading-tight">
+          <h1 className="text-[24px] font-bold text-[#0F172A] tracking-tight leading-tight">
             Calls
           </h1>
           <p className="text-[12px] text-[#475569] mt-0.5 font-normal">
@@ -201,6 +218,7 @@ export default function CallsMonitoringPage() {
             </svg>
             Jan 1 - Jan 30, 2026
           </button>
+
           <button className="flex items-center justify-center border border-[#E2E8F0] rounded-full w-8 h-8 text-[#475569] bg-white shadow-sm hover:bg-gray-50 transition-colors">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
@@ -299,22 +317,18 @@ export default function CallsMonitoringPage() {
             onChange={(e) => setSelectedBusiness(e.target.value)}
             className="px-2.5 py-1.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg text-[11px] font-semibold text-[#475569] hover:bg-gray-100/80 transition-colors focus:outline-none"
           >
-            <option value="All">Business: All</option>
-            <option value="Smile Dental Clinic">Smile Dental Clinic</option>
-            <option value="Amsterdam Dental Care">Amsterdam Dental Care</option>
-            <option value="Berlin Health Center">Berlin Health Center</option>
-            <option value="Bella Rosa Ristorante">Bella Rosa Ristorante</option>
-            <option value="Glow & Shine Salon">Glow & Shine Salon</option>
-            <option value="FitLife Studio">FitLife Studio</option>
+            {businessOptions.map((b) => (
+              <option key={b} value={b}>{b === 'All' ? 'Business: All' : b}</option>
+            ))}
           </select>
 
-          {/* Status Filter */}
+          {/* Outcome Filter */}
           <select
-            value={selectedStatus}
-            onChange={(e) => setSelectedStatus(e.target.value)}
+            value={selectedOutcome}
+            onChange={(e) => setSelectedOutcome(e.target.value)}
             className="px-2.5 py-1.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg text-[11px] font-semibold text-[#475569] hover:bg-gray-100/80 transition-colors focus:outline-none"
           >
-            <option value="All">Status: All</option>
+            <option value="All">Outcome: All</option>
             <option value="Resolved">Resolved</option>
             <option value="Transferred">Transferred</option>
             <option value="Failed">Failed</option>
@@ -334,17 +348,23 @@ export default function CallsMonitoringPage() {
             <option value="Cancelled">Cancelled</option>
             <option value="Complex Case">Complex Case</option>
           </select>
+
+          {/* Business Type Filter */}
+          <select
+            value={selectedType}
+            onChange={(e) => setSelectedType(e.target.value)}
+            className="px-2.5 py-1.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg text-[11px] font-semibold text-[#475569] hover:bg-gray-100/80 transition-colors focus:outline-none"
+          >
+            {typeOptions.map((t) => (
+              <option key={t} value={t}>{t === 'All' ? 'Type: All' : t}</option>
+            ))}
+          </select>
         </div>
 
-        {(selectedBusiness !== 'All' || selectedStatus !== 'All' || selectedIntent !== 'All' || searchQuery) && (
+        {hasActiveFilters && (
           <button
-            onClick={() => {
-              setSelectedBusiness('All');
-              setSelectedStatus('All');
-              setSelectedIntent('All');
-              setSearchQuery('');
-            }}
-            className="text-[11px] font-semibold text-[#2563EB] hover:underline px-2 py-0.5"
+            onClick={resetFilters}
+            className="text-[12px] font-semibold text-[#2563EB] hover:underline px-2 py-1"
           >
             Reset Filters
           </button>

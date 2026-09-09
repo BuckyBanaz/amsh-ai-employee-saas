@@ -6,6 +6,7 @@ interface ConversationItem {
   id: string;
   businessId: string;
   businessName: string;
+  businessType: string;
   channel: 'Voice Call' | 'WhatsApp' | 'Web Chat' | 'SMS';
   user: string;
   userPhone: string;
@@ -22,6 +23,7 @@ const conversationsData: ConversationItem[] = [
     id: 'cnv-8912',
     businessId: 'b-1',
     businessName: 'Smile Dental Clinic',
+    businessType: 'Dental Clinic',
     channel: 'Voice Call',
     user: 'Sarah Wilson',
     userPhone: '+31 6 1234 5678',
@@ -36,6 +38,7 @@ const conversationsData: ConversationItem[] = [
     id: 'cnv-8913',
     businessId: 'b-2',
     businessName: 'Amsterdam Dental Care',
+    businessType: 'Dental Clinic',
     channel: 'WhatsApp',
     user: 'Mark de Jong',
     userPhone: '+31 8 9876 5432',
@@ -50,6 +53,7 @@ const conversationsData: ConversationItem[] = [
     id: 'cnv-8914',
     businessId: 'b-3',
     businessName: 'Berlin Health Center',
+    businessType: 'Medical Center',
     channel: 'Voice Call',
     user: 'Klaus Schmidt',
     userPhone: '+49 170 998877',
@@ -64,6 +68,7 @@ const conversationsData: ConversationItem[] = [
     id: 'cnv-8915',
     businessId: 'b-4',
     businessName: 'Bella Rosa Ristorante',
+    businessType: 'Restaurant',
     channel: 'Web Chat',
     user: 'Marco Rossi',
     userPhone: '+49 172 112233',
@@ -78,6 +83,7 @@ const conversationsData: ConversationItem[] = [
     id: 'cnv-8916',
     businessId: 'b-5',
     businessName: 'Glow & Shine Salon',
+    businessType: 'Beauty Salon',
     channel: 'SMS',
     user: 'Marie Dubois',
     userPhone: '+33 6 554433',
@@ -92,6 +98,7 @@ const conversationsData: ConversationItem[] = [
     id: 'cnv-8917',
     businessId: 'b-6',
     businessName: 'FitLife Studio',
+    businessType: 'Fitness Studio',
     channel: 'Voice Call',
     user: 'James Smith',
     userPhone: '+44 7700 900077',
@@ -106,45 +113,45 @@ const conversationsData: ConversationItem[] = [
 
 export default function ConversationsPage() {
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedBusiness, setSelectedBusiness] = useState('All');
-  const [selectedChannel, setSelectedChannel] = useState('All');
-  const [selectedSentiment, setSelectedSentiment] = useState('All');
+  const [selectedBusiness, setSelectedBusiness] = useState<string>('All');
+  const [selectedChannel, setSelectedChannel] = useState<string>('All');
+  const [selectedSentiment, setSelectedSentiment] = useState<string>('All');
+  const [selectedType, setSelectedType] = useState<string>('All');
 
-  const businessOptions = [
-    'All',
-    'Smile Dental Clinic',
-    'Amsterdam Dental Care',
-    'Berlin Health Center',
-    'Bella Rosa Ristorante',
-    'Glow & Shine Salon',
-    'FitLife Studio',
-  ];
+  const businessOptions = ['All', ...Array.from(new Set(conversationsData.map(c => c.businessName)))];
+  const typeOptions = ['All', ...Array.from(new Set(conversationsData.map(c => c.businessType)))];
+
+  const hasActiveFilters = selectedBusiness !== 'All' || selectedChannel !== 'All' || selectedSentiment !== 'All' || selectedType !== 'All' || searchQuery !== '';
 
   const filteredConversations = conversationsData.filter((cnv) => {
     const matchesSearch =
       cnv.user.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      cnv.userPhone.includes(searchQuery) ||
+      cnv.userPhone.toLowerCase().includes(searchQuery.toLowerCase()) ||
       cnv.topic.toLowerCase().includes(searchQuery.toLowerCase()) ||
       cnv.businessName.toLowerCase().includes(searchQuery.toLowerCase());
 
-    const matchesBusiness =
-      selectedBusiness === 'All' || cnv.businessName === selectedBusiness;
+    const matchesBusiness = selectedBusiness === 'All' || cnv.businessName === selectedBusiness;
+    const matchesChannel = selectedChannel === 'All' || cnv.channel === selectedChannel;
+    const matchesSentiment = selectedSentiment === 'All' || cnv.sentiment === selectedSentiment;
+    const matchesType = selectedType === 'All' || cnv.businessType === selectedType;
 
-    const matchesChannel =
-      selectedChannel === 'All' || cnv.channel === selectedChannel;
-
-    const matchesSentiment =
-      selectedSentiment === 'All' || cnv.sentiment === selectedSentiment;
-
-    return matchesSearch && matchesBusiness && matchesChannel && matchesSentiment;
+    return matchesSearch && matchesBusiness && matchesChannel && matchesSentiment && matchesType;
   });
 
+  const resetFilters = () => {
+    setSelectedBusiness('All');
+    setSelectedChannel('All');
+    setSelectedSentiment('All');
+    setSelectedType('All');
+    setSearchQuery('');
+  };
+
   return (
-    <div className="flex-1 overflow-y-auto scrollbar-hide p-5 md:p-6 animate-in fade-in duration-300 text-[13px]">
+    <div className="flex-1 overflow-y-auto scrollbar-hide p-8 animate-in fade-in duration-300 text-[13px]">
       {/* Compact Header */}
       <header className="mb-4 pb-3.5 border-b border-[#E2E8F0] flex justify-between items-center">
         <div>
-          <h1 className="text-[20px] font-bold text-[#0F172A] tracking-tight leading-tight">
+          <h1 className="text-[24px] font-bold text-[#0F172A] tracking-tight leading-tight">
             AI Conversations
           </h1>
           <p className="text-[12px] text-[#475569] mt-0.5 font-normal">
@@ -254,6 +261,17 @@ export default function ConversationsPage() {
             ))}
           </select>
 
+          {/* Business Type Filter */}
+          <select
+            value={selectedType}
+            onChange={(e) => setSelectedType(e.target.value)}
+            className="px-2.5 py-1.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg text-[11px] font-semibold text-[#475569] hover:bg-gray-100/80 transition-colors focus:outline-none"
+          >
+            {typeOptions.map((t) => (
+              <option key={t} value={t}>{t === 'All' ? 'Type: All' : t}</option>
+            ))}
+          </select>
+
           {/* Channel Filter */}
           <select
             value={selectedChannel}
@@ -280,14 +298,9 @@ export default function ConversationsPage() {
           </select>
         </div>
 
-        {(selectedBusiness !== 'All' || selectedChannel !== 'All' || selectedSentiment !== 'All' || searchQuery) && (
+        {hasActiveFilters && (
           <button
-            onClick={() => {
-              setSelectedBusiness('All');
-              setSelectedChannel('All');
-              setSelectedSentiment('All');
-              setSearchQuery('');
-            }}
+            onClick={resetFilters}
             className="text-[11px] font-semibold text-[#2563EB] hover:underline px-2 py-0.5"
           >
             Reset Filters

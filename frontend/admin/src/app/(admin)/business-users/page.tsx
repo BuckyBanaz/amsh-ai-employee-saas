@@ -8,6 +8,7 @@ interface BusinessUser {
   email: string;
   business: string;
   role: 'Owner' | 'Admin' | 'Manager' | 'Doctor' | 'Receptionist';
+  businessType: string;
   status: 'Active' | 'Suspended' | 'Pending';
   statusColor: { bg: string; text: string };
   lastActive: string;
@@ -19,6 +20,7 @@ const usersData: BusinessUser[] = [
     name: 'Dr. Sarah Wilson',
     email: 'sarah.w@smile.nl',
     business: 'Smile Dental Business',
+    businessType: 'Dental Clinic',
     role: 'Owner',
     status: 'Active',
     statusColor: { bg: 'bg-[#D1FAE5]', text: 'text-[#065F46]' },
@@ -29,6 +31,7 @@ const usersData: BusinessUser[] = [
     name: 'Dr. Mark de Jong',
     email: 'mark@amsterdamcare.nl',
     business: 'Amsterdam Dental Care',
+    businessType: 'Dental Clinic',
     role: 'Owner',
     status: 'Active',
     statusColor: { bg: 'bg-[#D1FAE5]', text: 'text-[#065F46]' },
@@ -39,6 +42,7 @@ const usersData: BusinessUser[] = [
     name: 'Dr. Klaus Schmidt',
     email: 'klaus@berlin-health.de',
     business: 'Berlin Health Center',
+    businessType: 'Medical Center',
     role: 'Admin',
     status: 'Suspended',
     statusColor: { bg: 'bg-[#FEE2E2]', text: 'text-[#991B1B]' },
@@ -49,6 +53,7 @@ const usersData: BusinessUser[] = [
     name: 'Dr. Lisa Muller',
     email: 'lisa.m@munichortho.de',
     business: 'Munich Orthodontics',
+    businessType: 'Dental Clinic',
     role: 'Manager',
     status: 'Active',
     statusColor: { bg: 'bg-[#D1FAE5]', text: 'text-[#065F46]' },
@@ -59,6 +64,7 @@ const usersData: BusinessUser[] = [
     name: 'Dr. Pierre Dubois',
     email: 'p.dubois@parisdent.fr',
     business: 'Paris Dental Studio',
+    businessType: 'Dental Clinic',
     role: 'Doctor',
     status: 'Active',
     statusColor: { bg: 'bg-[#D1FAE5]', text: 'text-[#065F46]' },
@@ -69,6 +75,7 @@ const usersData: BusinessUser[] = [
     name: 'Emma Watson',
     email: 'emma@londontooth.co.uk',
     business: 'London Tooth Business',
+    businessType: 'Dental Clinic',
     role: 'Receptionist',
     status: 'Pending',
     statusColor: { bg: 'bg-[#FEF3C7]', text: 'text-[#92400E]' },
@@ -79,17 +86,15 @@ const usersData: BusinessUser[] = [
 export default function BusinessUsersPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedBusiness, setSelectedBusiness] = useState<string>('All');
+  const [selectedRole, setSelectedRole] = useState<string>('All');
+  const [selectedStatus, setSelectedStatus] = useState<string>('All');
+  const [selectedType, setSelectedType] = useState<string>('All');
   const [showBusinessDropdown, setShowBusinessDropdown] = useState(false);
 
-  const businessOptions = [
-    'All',
-    'Smile Dental Business',
-    'Amsterdam Dental Care',
-    'Berlin Health Center',
-    'Munich Orthodontics',
-    'Paris Dental Studio',
-    'London Tooth Business',
-  ];
+  const businessOptions = ['All', ...Array.from(new Set(usersData.map(u => u.business)))];
+  const typeOptions = ['All', ...Array.from(new Set(usersData.map(u => u.businessType)))];
+
+  const hasActiveFilters = selectedBusiness !== 'All' || selectedRole !== 'All' || selectedStatus !== 'All' || selectedType !== 'All' || searchQuery;
 
   const filteredUsers = usersData.filter((user) => {
     const matchesSearch =
@@ -98,11 +103,21 @@ export default function BusinessUsersPage() {
       user.business.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.role.toLowerCase().includes(searchQuery.toLowerCase());
 
-    const matchesBusiness =
-      selectedBusiness === 'All' || user.business === selectedBusiness;
+    const matchesBusiness = selectedBusiness === 'All' || user.business === selectedBusiness;
+    const matchesRole = selectedRole === 'All' || user.role === selectedRole;
+    const matchesStatus = selectedStatus === 'All' || user.status === selectedStatus;
+    const matchesType = selectedType === 'All' || user.businessType === selectedType;
 
-    return matchesSearch && matchesBusiness;
+    return matchesSearch && matchesBusiness && matchesRole && matchesStatus && matchesType;
   });
+
+  const resetFilters = () => {
+    setSelectedBusiness('All');
+    setSelectedRole('All');
+    setSelectedStatus('All');
+    setSelectedType('All');
+    setSearchQuery('');
+  };
 
   return (
     <div className="flex-1 overflow-y-auto scrollbar-hide p-8 animate-in fade-in duration-500">
@@ -188,6 +203,49 @@ export default function BusinessUsersPage() {
               </div>
             )}
           </div>
+          {/* Role Filter */}
+          <select
+            value={selectedRole}
+            onChange={(e) => setSelectedRole(e.target.value)}
+            className="px-2.5 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg text-[12px] font-semibold text-[#475569] hover:bg-gray-100/80 transition-colors focus:outline-none"
+          >
+            <option value="All">Role: All</option>
+            <option value="Owner">Owner</option>
+            <option value="Admin">Admin</option>
+            <option value="Manager">Manager</option>
+            <option value="Doctor">Doctor</option>
+            <option value="Receptionist">Receptionist</option>
+          </select>
+
+          {/* Status Filter */}
+          <select
+            value={selectedStatus}
+            onChange={(e) => setSelectedStatus(e.target.value)}
+            className="px-2.5 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg text-[12px] font-semibold text-[#475569] hover:bg-gray-100/80 transition-colors focus:outline-none"
+          >
+            <option value="All">Status: All</option>
+            <option value="Active">Active</option>
+            <option value="Suspended">Suspended</option>
+            <option value="Pending">Pending</option>
+          </select>
+
+          {/* Business Type Filter */}
+          <select
+            value={selectedType}
+            onChange={(e) => setSelectedType(e.target.value)}
+            className="px-2.5 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg text-[12px] font-semibold text-[#475569] hover:bg-gray-100/80 transition-colors focus:outline-none"
+          >
+            {typeOptions.map((t) => (
+              <option key={t} value={t}>{t === 'All' ? 'Type: All' : t}</option>
+            ))}
+          </select>
+
+          {/* Reset */}
+          {hasActiveFilters && (
+            <button onClick={resetFilters} className="text-[12px] font-semibold text-[#2563EB] hover:underline px-1">
+              Reset
+            </button>
+          )}
         </div>
 
         {/* Invite User Button */}
@@ -198,6 +256,11 @@ export default function BusinessUsersPage() {
           </svg>
           Invite User
         </button>
+      </div>
+
+      {/* Result Count */}
+      <div className="mb-3 text-[12px] font-semibold text-[#94A3B8]">
+        Showing <span className="text-[#0F172A]">{filteredUsers.length}</span> of {usersData.length} users
       </div>
 
       {/* Users Table */}

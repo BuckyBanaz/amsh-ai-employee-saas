@@ -14,6 +14,7 @@ interface AppointmentItem {
   statusColor: { bg: string; text: string };
   source: 'AI' | 'Website' | 'Staff' | 'WhatsApp';
   sourceColor: { bg: string; text: string };
+  businessType: string;
 }
 
 const appointmentsData: AppointmentItem[] = [
@@ -29,6 +30,7 @@ const appointmentsData: AppointmentItem[] = [
     statusColor: { bg: 'bg-[#D1FAE5]', text: 'text-[#065F46]' },
     source: 'AI',
     sourceColor: { bg: 'bg-[#EFF6FF]', text: 'text-[#2563EB]' },
+    businessType: 'Dental Clinic',
   },
   {
     id: 'apt-2',
@@ -42,6 +44,7 @@ const appointmentsData: AppointmentItem[] = [
     statusColor: { bg: 'bg-[#DBEAFE]', text: 'text-[#1D4ED8]' },
     source: 'Website',
     sourceColor: { bg: 'bg-purple-50', text: 'text-purple-700' },
+    businessType: 'Dental Clinic',
   },
   {
     id: 'apt-3',
@@ -55,6 +58,7 @@ const appointmentsData: AppointmentItem[] = [
     statusColor: { bg: 'bg-[#FEE2E2]', text: 'text-[#991B1B]' },
     source: 'Staff',
     sourceColor: { bg: 'bg-gray-100', text: 'text-gray-700' },
+    businessType: 'Medical Center',
   },
   {
     id: 'apt-4',
@@ -68,6 +72,7 @@ const appointmentsData: AppointmentItem[] = [
     statusColor: { bg: 'bg-[#FFEDD5]', text: 'text-[#C2410C]' },
     source: 'WhatsApp',
     sourceColor: { bg: 'bg-emerald-50', text: 'text-emerald-700' },
+    businessType: 'Restaurant',
   },
   {
     id: 'apt-5',
@@ -81,6 +86,7 @@ const appointmentsData: AppointmentItem[] = [
     statusColor: { bg: 'bg-[#D1FAE5]', text: 'text-[#065F46]' },
     source: 'AI',
     sourceColor: { bg: 'bg-[#EFF6FF]', text: 'text-[#2563EB]' },
+    businessType: 'Beauty Salon',
   },
   {
     id: 'apt-6',
@@ -94,6 +100,7 @@ const appointmentsData: AppointmentItem[] = [
     statusColor: { bg: 'bg-[#D1FAE5]', text: 'text-[#065F46]' },
     source: 'AI',
     sourceColor: { bg: 'bg-[#EFF6FF]', text: 'text-[#2563EB]' },
+    businessType: 'Fitness Studio',
   },
 ];
 
@@ -102,16 +109,12 @@ export default function AppointmentsPage() {
   const [selectedBusiness, setSelectedBusiness] = useState<string>('All');
   const [selectedStatus, setSelectedStatus] = useState<string>('All');
   const [selectedSource, setSelectedSource] = useState<string>('All');
+  const [selectedType, setSelectedType] = useState<string>('All');
 
-  const businessOptions = [
-    'All',
-    'Smile Dental Clinic',
-    'Amsterdam Dental Care',
-    'Berlin Health Center',
-    'Bella Rosa Ristorante',
-    'Glow & Shine Salon',
-    'FitLife Studio',
-  ];
+  const businessOptions = ['All', ...Array.from(new Set(appointmentsData.map(a => a.businessName)))];
+  const typeOptions = ['All', ...Array.from(new Set(appointmentsData.map(a => a.businessType)))];
+
+  const hasActiveFilters = selectedBusiness !== 'All' || selectedStatus !== 'All' || selectedSource !== 'All' || selectedType !== 'All' || searchQuery;
 
   const filteredAppointments = appointmentsData.filter((apt) => {
     const matchesSearch =
@@ -120,17 +123,21 @@ export default function AppointmentsPage() {
       apt.serviceName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       apt.businessName.toLowerCase().includes(searchQuery.toLowerCase());
 
-    const matchesBusiness =
-      selectedBusiness === 'All' || apt.businessName === selectedBusiness;
+    const matchesBusiness = selectedBusiness === 'All' || apt.businessName === selectedBusiness;
+    const matchesStatus = selectedStatus === 'All' || apt.status === selectedStatus;
+    const matchesSource = selectedSource === 'All' || apt.source === selectedSource;
+    const matchesType = selectedType === 'All' || apt.businessType === selectedType;
 
-    const matchesStatus =
-      selectedStatus === 'All' || apt.status === selectedStatus;
-
-    const matchesSource =
-      selectedSource === 'All' || apt.source === selectedSource;
-
-    return matchesSearch && matchesBusiness && matchesStatus && matchesSource;
+    return matchesSearch && matchesBusiness && matchesStatus && matchesSource && matchesType;
   });
+
+  const resetFilters = () => {
+    setSelectedBusiness('All');
+    setSelectedStatus('All');
+    setSelectedSource('All');
+    setSelectedType('All');
+    setSearchQuery('');
+  };
 
   return (
     <div className="flex-1 overflow-y-auto scrollbar-hide p-8 animate-in fade-in duration-500">
@@ -276,28 +283,31 @@ export default function AppointmentsPage() {
           <select
             value={selectedSource}
             onChange={(e) => setSelectedSource(e.target.value)}
-            className="px-3 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg text-[12px] font-semibold text-[#475569] hover:bg-gray-100/80 transition-colors focus:outline-none"
+            className="px-2.5 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg text-[12px] font-semibold text-[#475569] hover:bg-gray-100/80 transition-colors focus:outline-none"
           >
-            <option value="All">Source ∨ (All)</option>
-            <option value="AI">AI Voice</option>
+            <option value="All">Source: All</option>
+            <option value="AI">AI Agent</option>
             <option value="Website">Website</option>
-            <option value="Staff">Staff</option>
+            <option value="Staff">Staff / Manual</option>
             <option value="WhatsApp">WhatsApp</option>
+          </select>
+
+          {/* Business Type Filter */}
+          <select
+            value={selectedType}
+            onChange={(e) => setSelectedType(e.target.value)}
+            className="px-2.5 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg text-[12px] font-semibold text-[#475569] hover:bg-gray-100/80 transition-colors focus:outline-none"
+          >
+            {typeOptions.map((t) => (
+              <option key={t} value={t}>{t === 'All' ? 'Type: All' : t}</option>
+            ))}
           </select>
         </div>
 
         {/* Clear Filters or New Appointment */}
         <div className="flex items-center gap-2">
-          {(selectedBusiness !== 'All' || selectedStatus !== 'All' || selectedSource !== 'All' || searchQuery) && (
-            <button
-              onClick={() => {
-                setSelectedBusiness('All');
-                setSelectedStatus('All');
-                setSelectedSource('All');
-                setSearchQuery('');
-              }}
-              className="text-[12px] font-semibold text-[#2563EB] hover:underline px-2 py-1"
-            >
+          {hasActiveFilters && (
+            <button onClick={resetFilters} className="text-[12px] font-semibold text-[#2563EB] hover:underline px-2 py-1">
               Reset Filters
             </button>
           )}

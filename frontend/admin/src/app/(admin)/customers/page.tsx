@@ -8,6 +8,7 @@ interface CustomerRecord {
   name: string;
   businessId: string;
   businessName: string;
+  businessType: string;
   maskedContact: string;
   phone: string;
   lastBooking: string;
@@ -25,6 +26,7 @@ const mockCustomers: CustomerRecord[] = [
     name: 'Sarah W.••••',
     businessId: 'biz-01',
     businessName: 'Smile Dental Business',
+    businessType: 'Dental Clinic',
     maskedContact: 'sa••••@gmail.com',
     phone: '+31 6 •••••• 42',
     lastBooking: 'Jan 12, 2026',
@@ -40,6 +42,7 @@ const mockCustomers: CustomerRecord[] = [
     name: 'Mark de J.••••',
     businessId: 'biz-01',
     businessName: 'Amsterdam Dental Care',
+    businessType: 'Dental Clinic',
     maskedContact: 'ma••••@hotmail.com',
     phone: '+31 6 •••••• 89',
     lastBooking: 'Jan 05, 2026',
@@ -55,6 +58,7 @@ const mockCustomers: CustomerRecord[] = [
     name: 'Klaus S.••••',
     businessId: 'biz-02',
     businessName: 'Berlin Health Center',
+    businessType: 'Medical Center',
     maskedContact: 'kl••••@gmx.de',
     phone: '+49 170 •••••• 15',
     lastBooking: 'Dec 15, 2025',
@@ -70,6 +74,7 @@ const mockCustomers: CustomerRecord[] = [
     name: 'Lisa M.••••',
     businessId: 'biz-02',
     businessName: 'Munich Orthodontics',
+    businessType: 'Dental Clinic',
     maskedContact: 'li••••@web.de',
     phone: '+49 171 •••••• 77',
     lastBooking: 'Jan 22, 2026',
@@ -85,6 +90,7 @@ const mockCustomers: CustomerRecord[] = [
     name: 'Pierre D.••••',
     businessId: 'biz-03',
     businessName: 'Paris Dental Studio',
+    businessType: 'Dental Clinic',
     maskedContact: 'pi••••@yahoo.fr',
     phone: '+33 6 •••••• 34',
     lastBooking: 'Jan 19, 2026',
@@ -100,6 +106,7 @@ const mockCustomers: CustomerRecord[] = [
     name: 'Oliver T.••••',
     businessId: 'biz-03',
     businessName: 'London Tooth Business',
+    businessType: 'Dental Clinic',
     maskedContact: 'ol••••@outlook.co.uk',
     phone: '+44 7700 •••••• 91',
     lastBooking: 'Jan 28, 2026',
@@ -113,18 +120,40 @@ const mockCustomers: CustomerRecord[] = [
 ];
 
 export default function CustomersPage() {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('All');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedBusiness, setSelectedBusiness] = useState<string>('All');
+  const [selectedCountry, setSelectedCountry] = useState<string>('All');
+  const [selectedStatus, setSelectedStatus] = useState<string>('All');
+  const [selectedType, setSelectedType] = useState<string>('All');
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerRecord | null>(null);
 
-  const filteredCustomers = mockCustomers.filter((cust) => {
+  const businessOptions = ['All', ...Array.from(new Set(mockCustomers.map(c => c.businessName)))];
+  const typeOptions = ['All', ...Array.from(new Set(mockCustomers.map(c => c.businessType)))];
+
+  const hasActiveFilters = selectedBusiness !== 'All' || selectedCountry !== 'All' || selectedStatus !== 'All' || selectedType !== 'All' || searchQuery !== '';
+
+  const filteredCustomers = mockCustomers.filter((c) => {
     const matchesSearch =
-      cust.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      cust.businessName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      cust.maskedContact.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'All' || cust.status === statusFilter;
-    return matchesSearch && matchesStatus;
+      c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.maskedContact.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.phone.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.businessName.toLowerCase().includes(searchQuery.toLowerCase());
+
+    const matchesBusiness = selectedBusiness === 'All' || c.businessName === selectedBusiness;
+    const matchesCountry = selectedCountry === 'All' || c.country === selectedCountry;
+    const matchesStatus = selectedStatus === 'All' || c.status === selectedStatus;
+    const matchesType = selectedType === 'All' || c.businessType === selectedType;
+
+    return matchesSearch && matchesBusiness && matchesCountry && matchesStatus && matchesType;
   });
+
+  const resetFilters = () => {
+    setSelectedBusiness('All');
+    setSelectedCountry('All');
+    setSelectedStatus('All');
+    setSelectedType('All');
+    setSearchQuery('');
+  };
 
   return (
     <div className="flex-1 overflow-y-auto scrollbar-hide p-6 md:p-8 animate-in fade-in duration-300 w-full bg-[#F8FAFC]">
@@ -199,21 +228,39 @@ export default function CustomersPage() {
               <input
                 type="text"
                 placeholder="Search masked customers or business..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-9 pr-4 py-1.5 text-[13px] bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:bg-white text-gray-900"
               />
             </div>
 
             <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-3 py-1.5 text-[12px] bg-gray-50 border border-gray-200 rounded-lg font-medium text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            >
-              <option value="All">All Statuses</option>
-              <option value="Active">Active</option>
-              <option value="Inactive">Inactive</option>
-            </select>
+            value={selectedStatus}
+            onChange={(e) => setSelectedStatus(e.target.value)}
+            className="px-2.5 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg text-[12px] font-semibold text-[#475569] hover:bg-gray-100/80 transition-colors focus:outline-none"
+          >
+            <option value="All">Status: All</option>
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
+          </select>
+
+          {/* Business Type Filter */}
+          <select
+            value={selectedType}
+            onChange={(e) => setSelectedType(e.target.value)}
+            className="px-2.5 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg text-[12px] font-semibold text-[#475569] hover:bg-gray-100/80 transition-colors focus:outline-none"
+          >
+            {typeOptions.map((t) => (
+              <option key={t} value={t}>{t === 'All' ? 'Type: All' : t}</option>
+            ))}
+          </select>
+          
+          {/* Reset Filters */}
+          {hasActiveFilters && (
+            <button onClick={resetFilters} className="text-[12px] font-semibold text-[#2563EB] hover:underline px-2 py-1">
+              Reset Filters
+            </button>
+          )}
           </div>
 
           <div className="text-[12px] font-semibold text-gray-500">

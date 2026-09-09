@@ -104,14 +104,43 @@ const businessesData: BusinessItem[] = [
   },
 ];
 
+// Derive filter options dynamically from data
+const countries = ['All', ...Array.from(new Set(businessesData.map(b => b.country)))];
+const plans = ['All', ...Array.from(new Set(businessesData.map(b => b.plan)))];
+const statuses = ['All', 'Active', 'Suspended', 'Pending'];
+const aiStatuses = ['All', 'Active', 'Paused'];
+const businessTypes = ['All', ...Array.from(new Set(businessesData.map(b => b.type)))];
+
+const selectClass = "px-2.5 py-1.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg text-[12px] font-semibold text-[#475569] hover:bg-gray-100/80 transition-colors focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 cursor-pointer";
+
 export default function BusinessesPage() {
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCountry, setSelectedCountry] = useState('All');
+  const [selectedPlan, setSelectedPlan] = useState('All');
+  const [selectedStatus, setSelectedStatus] = useState('All');
+  const [selectedType, setSelectedType] = useState('All');
 
-  const filteredBusinesses = businessesData.filter((b) =>
-    b.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    b.owner.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    b.type.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const hasActiveFilters = selectedCountry !== 'All' || selectedPlan !== 'All' || selectedStatus !== 'All' || selectedType !== 'All' || searchQuery;
+
+  const filteredBusinesses = businessesData.filter((b) => {
+    const matchesSearch =
+      b.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      b.owner.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      b.type.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesCountry = selectedCountry === 'All' || b.country === selectedCountry;
+    const matchesPlan = selectedPlan === 'All' || b.plan === selectedPlan;
+    const matchesStatus = selectedStatus === 'All' || b.status === selectedStatus;
+    const matchesType = selectedType === 'All' || b.type === selectedType;
+    return matchesSearch && matchesCountry && matchesPlan && matchesStatus && matchesType;
+  });
+
+  const resetFilters = () => {
+    setSelectedCountry('All');
+    setSelectedPlan('All');
+    setSelectedStatus('All');
+    setSelectedType('All');
+    setSearchQuery('');
+  };
 
   return (
     <div className="flex-1 overflow-y-auto scrollbar-hide p-8 animate-in fade-in duration-500">
@@ -145,10 +174,10 @@ export default function BusinessesPage() {
       </header>
 
       {/* Filter & Action Bar */}
-      <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 mb-6 shadow-sm flex flex-wrap items-center justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-3">
+      <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 mb-6 shadow-sm flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2.5">
           {/* Search Box */}
-          <div className="relative w-[240px]">
+          <div className="relative w-[220px]">
             <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-[#94A3B8]">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="11" cy="11" r="8"></circle>
@@ -160,22 +189,36 @@ export default function BusinessesPage() {
               placeholder="Search businesses..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg text-[13px] text-[#0F172A] placeholder-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB]"
+              className="w-full pl-9 pr-3 py-1.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg text-[12px] text-[#0F172A] placeholder-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB]"
             />
           </div>
 
-          {/* Filter Pills */}
-          {['Country', 'Plan', 'Status', 'AI Status', 'Signup Date', 'Business Type'].map((filter) => (
-            <button
-              key={filter}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg text-[12px] font-semibold text-[#475569] hover:bg-gray-100/80 transition-colors"
-            >
-              <span>{filter}</span>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="6 9 12 15 18 9"></polyline>
-              </svg>
+          {/* Country Filter */}
+          <select value={selectedCountry} onChange={(e) => setSelectedCountry(e.target.value)} className={selectClass}>
+            {countries.map(c => <option key={c} value={c}>{c === 'All' ? 'Country: All' : c}</option>)}
+          </select>
+
+          {/* Plan Filter */}
+          <select value={selectedPlan} onChange={(e) => setSelectedPlan(e.target.value)} className={selectClass}>
+            {plans.map(p => <option key={p} value={p}>{p === 'All' ? 'Plan: All' : p}</option>)}
+          </select>
+
+          {/* Status Filter */}
+          <select value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)} className={selectClass}>
+            {statuses.map(s => <option key={s} value={s}>{s === 'All' ? 'Status: All' : s}</option>)}
+          </select>
+
+          {/* Business Type Filter */}
+          <select value={selectedType} onChange={(e) => setSelectedType(e.target.value)} className={selectClass}>
+            {businessTypes.map(t => <option key={t} value={t}>{t === 'All' ? 'Type: All' : t}</option>)}
+          </select>
+
+          {/* Reset */}
+          {hasActiveFilters && (
+            <button onClick={resetFilters} className="text-[12px] font-semibold text-[#2563EB] hover:underline px-1">
+              Reset
             </button>
-          ))}
+          )}
         </div>
 
         {/* Add Business Button */}
@@ -188,123 +231,89 @@ export default function BusinessesPage() {
         </button>
       </div>
 
+      {/* Results Count */}
+      <div className="mb-3 text-[12px] font-semibold text-[#94A3B8]">
+        Showing <span className="text-[#0F172A]">{filteredBusinesses.length}</span> of {businessesData.length} businesses
+      </div>
+
       {/* Businesses Table */}
       <div className="bg-white border border-[#E2E8F0] rounded-xl shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0]">
-                <th className="px-4 py-3 text-[12px] font-bold text-[#475569] uppercase tracking-wider min-w-[150px]">
-                  Business Name
-                </th>
-                <th className="px-4 py-3 text-[12px] font-bold text-[#475569] uppercase tracking-wider min-w-[120px]">
-                  Type
-                </th>
-                <th className="px-4 py-3 text-[12px] font-bold text-[#475569] uppercase tracking-wider min-w-[140px]">
-                  Owner
-                </th>
-                <th className="px-4 py-3 text-[12px] font-bold text-[#475569] uppercase tracking-wider min-w-[70px]">
-                  Country
-                </th>
-                <th className="px-4 py-3 text-[12px] font-bold text-[#475569] uppercase tracking-wider min-w-[120px]">
-                  AI Receptionist
-                </th>
-                <th className="px-4 py-3 text-[12px] font-bold text-[#475569] uppercase tracking-wider min-w-[110px]">
-                  Plan
-                </th>
-                <th className="px-4 py-3 text-[12px] font-bold text-[#475569] uppercase tracking-wider min-w-[130px]">
-                  Usage (API)
-                </th>
-                <th className="px-4 py-3 text-[12px] font-bold text-[#475569] uppercase tracking-wider min-w-[90px]">
-                  Status
-                </th>
-                <th className="px-4 py-3 text-[12px] font-bold text-[#475569] uppercase tracking-wider min-w-[110px]">
-                  Created
-                </th>
+                <th className="px-4 py-3 text-[12px] font-bold text-[#475569] uppercase tracking-wider min-w-[150px]">Business Name</th>
+                <th className="px-4 py-3 text-[12px] font-bold text-[#475569] uppercase tracking-wider min-w-[120px]">Type</th>
+                <th className="px-4 py-3 text-[12px] font-bold text-[#475569] uppercase tracking-wider min-w-[140px]">Owner</th>
+                <th className="px-4 py-3 text-[12px] font-bold text-[#475569] uppercase tracking-wider min-w-[70px]">Country</th>
+                <th className="px-4 py-3 text-[12px] font-bold text-[#475569] uppercase tracking-wider min-w-[120px]">AI Receptionist</th>
+                <th className="px-4 py-3 text-[12px] font-bold text-[#475569] uppercase tracking-wider min-w-[110px]">Plan</th>
+                <th className="px-4 py-3 text-[12px] font-bold text-[#475569] uppercase tracking-wider min-w-[130px]">Usage (API)</th>
+                <th className="px-4 py-3 text-[12px] font-bold text-[#475569] uppercase tracking-wider min-w-[90px]">Status</th>
+                <th className="px-4 py-3 text-[12px] font-bold text-[#475569] uppercase tracking-wider min-w-[110px]">Created</th>
                 <th className="px-4 py-3 text-[12px] font-bold text-[#475569] uppercase tracking-wider w-10 text-center">
                   <span className="sr-only">Actions</span>
                 </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#E2E8F0]">
-              {filteredBusinesses.map((b) => (
-                <tr key={b.id} className="hover:bg-[#F8FAFC]/70 transition-colors">
-                  {/* Name */}
-                  <td className="px-4 py-3.5 text-[14px] font-semibold text-[#0F172A] whitespace-nowrap">
-                    <Link href={`/businesses/${b.id}`} className="hover:text-[#2563EB] transition-colors">
-                      {b.name}
-                    </Link>
-                  </td>
-
-                  {/* Type Badge */}
-                  <td className="px-4 py-3.5 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[12px] font-semibold ${b.typeColor.bg} ${b.typeColor.text}`}>
-                      {b.type}
-                    </span>
-                  </td>
-
-                  {/* Owner */}
-                  <td className="px-4 py-3.5 text-[13px] text-[#475569] whitespace-nowrap">
-                    {b.owner}
-                  </td>
-
-                  {/* Country */}
-                  <td className="px-4 py-3.5 text-[13px] text-[#475569] whitespace-nowrap">
-                    {b.country}
-                  </td>
-
-                  {/* AI Receptionist */}
-                  <td className="px-4 py-3.5 text-[13px] font-medium whitespace-nowrap">
-                    <Link
-                      href="/receptionists"
-                      className="text-[#2563EB] hover:underline flex items-center gap-1"
-                    >
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#10B981]"></span>
-                      {b.aiReceptionist}
-                    </Link>
-                  </td>
-
-                  {/* Plan */}
-                  <td className="px-4 py-3.5 text-[13px] font-medium text-[#475569] whitespace-nowrap">
-                    {b.plan}
-                  </td>
-
-                  {/* Usage (API) Progress Bar */}
-                  <td className="px-4 py-3.5 whitespace-nowrap">
-                    <div className="flex items-center gap-2">
-                      <div className="w-[100px] h-2 bg-[#E2E8F0] rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-[#2563EB] rounded-full transition-all duration-300"
-                          style={{ width: `${b.usagePercent}%` }}
-                        />
-                      </div>
-                    </div>
-                  </td>
-
-                  {/* Status Badge */}
-                  <td className="px-4 py-3.5 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[12px] font-semibold ${b.statusColor.bg} ${b.statusColor.text}`}>
-                      {b.status}
-                    </span>
-                  </td>
-
-                  {/* Created Date */}
-                  <td className="px-4 py-3.5 text-[13px] text-[#94A3B8] whitespace-nowrap">
-                    {b.created}
-                  </td>
-
-                  {/* Actions Menu */}
-                  <td className="px-4 py-3.5 text-center whitespace-nowrap">
-                    <button className="p-1 text-[#94A3B8] hover:text-[#0F172A] hover:bg-gray-100 rounded-md transition-colors">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <circle cx="12" cy="12" r="1"></circle>
-                        <circle cx="19" cy="12" r="1"></circle>
-                        <circle cx="5" cy="12" r="1"></circle>
-                      </svg>
-                    </button>
+              {filteredBusinesses.length === 0 ? (
+                <tr>
+                  <td colSpan={10} className="px-4 py-10 text-center text-[13px] text-[#94A3B8]">
+                    No businesses match your filters.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                filteredBusinesses.map((b) => (
+                  <tr key={b.id} className="hover:bg-[#F8FAFC]/70 transition-colors">
+                    <td className="px-4 py-3.5 text-[14px] font-semibold text-[#0F172A] whitespace-nowrap">
+                      <Link href={`/businesses/${b.id}`} className="hover:text-[#2563EB] transition-colors">
+                        {b.name}
+                      </Link>
+                    </td>
+                    <td className="px-4 py-3.5 whitespace-nowrap">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[12px] font-semibold ${b.typeColor.bg} ${b.typeColor.text}`}>
+                        {b.type}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3.5 text-[13px] text-[#475569] whitespace-nowrap">{b.owner}</td>
+                    <td className="px-4 py-3.5 text-[13px] text-[#475569] whitespace-nowrap">{b.country}</td>
+                    <td className="px-4 py-3.5 text-[13px] font-medium whitespace-nowrap">
+                      <Link href="/receptionists" className="text-[#2563EB] hover:underline flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#10B981]"></span>
+                        {b.aiReceptionist}
+                      </Link>
+                    </td>
+                    <td className="px-4 py-3.5 text-[13px] font-medium text-[#475569] whitespace-nowrap">{b.plan}</td>
+                    <td className="px-4 py-3.5 whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        <div className="w-[100px] h-2 bg-[#E2E8F0] rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-300 ${b.usagePercent >= 90 ? 'bg-red-500' : b.usagePercent >= 70 ? 'bg-amber-500' : 'bg-[#2563EB]'}`}
+                            style={{ width: `${b.usagePercent}%` }}
+                          />
+                        </div>
+                        <span className="text-[11px] text-[#94A3B8]">{b.usagePercent}%</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3.5 whitespace-nowrap">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[12px] font-semibold ${b.statusColor.bg} ${b.statusColor.text}`}>
+                        {b.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3.5 text-[13px] text-[#94A3B8] whitespace-nowrap">{b.created}</td>
+                    <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                      <button className="p-1 text-[#94A3B8] hover:text-[#0F172A] hover:bg-gray-100 rounded-md transition-colors">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="12" cy="12" r="1"></circle>
+                          <circle cx="19" cy="12" r="1"></circle>
+                          <circle cx="5" cy="12" r="1"></circle>
+                        </svg>
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
@@ -312,3 +321,4 @@ export default function BusinessesPage() {
     </div>
   );
 }
+
