@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 
@@ -42,6 +42,18 @@ export default function BusinessDetailPage() {
   const [isAiPaused, setIsAiPaused] = useState(false);
   const [isEmergencyForwardingActive, setIsEmergencyForwardingActive] = useState(false);
   const [businessStatus, setBusinessStatus] = useState<'Active' | 'Suspended'>('Active');
+  const hasOpenModal = showContactModal || showEmergencyModal || showDirectPasswordModal || showImpersonateModal;
+
+  useEffect(() => {
+    if (!hasOpenModal) return;
+
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [hasOpenModal]);
 
   const showToast = (msg: string) => {
     setNotificationToast(msg);
@@ -200,7 +212,7 @@ export default function BusinessDetailPage() {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto scrollbar-hide p-6 md:p-8 animate-in fade-in duration-300 bg-[#F8FAFC]">
+    <div className={`flex-1 scrollbar-hide p-6 md:p-8 animate-in fade-in duration-300 bg-[#F8FAFC] ${hasOpenModal ? 'overflow-hidden' : 'overflow-y-auto'}`}>
       {/* Toast Notification */}
       {notificationToast && (
         <div className="fixed top-5 right-5 z-50 bg-[#0F172A] text-white text-[13px] font-medium px-4 py-3 rounded-xl shadow-2xl border border-gray-700 flex items-center gap-3 animate-in slide-in-from-top-3">
@@ -1405,8 +1417,8 @@ export default function BusinessDetailPage() {
 
       {/* 1. DIRECT PASSWORD SET / OVERRIDE MODAL */}
       {showDirectPasswordModal && selectedStaffForAction && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 transition-opacity animate-in fade-in">
-          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-gray-200 p-6 space-y-4">
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-start sm:items-center justify-center p-4 transition-opacity animate-in fade-in overflow-y-auto">
+          <div className="w-full max-w-md max-h-[calc(100vh-2rem)] overflow-y-auto bg-white rounded-2xl shadow-2xl border border-gray-200 p-6 space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-gray-100">
               <div className="flex items-center gap-2.5">
                 <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
@@ -1546,8 +1558,8 @@ export default function BusinessDetailPage() {
 
       {/* 2. CONTACT OWNER MODAL */}
       {showContactModal && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 transition-opacity">
-          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-gray-200 p-6 space-y-4">
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-start sm:items-center justify-center p-4 transition-opacity overflow-y-auto">
+          <div className="w-full max-w-md max-h-[calc(100vh-2rem)] overflow-y-auto bg-white rounded-2xl shadow-2xl border border-gray-200 p-6 space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-gray-100">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-[14px]">
@@ -1627,8 +1639,8 @@ export default function BusinessDetailPage() {
 
       {/* 3. EMERGENCY OPERATOR / WORST SCENARIOS MODAL */}
       {showEmergencyModal && selectedStaffForAction && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 transition-opacity">
-          <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-amber-300 p-6 space-y-4">
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-start sm:items-center justify-center p-4 transition-opacity overflow-y-auto">
+          <div className="w-full max-w-lg max-h-[calc(100vh-2rem)] overflow-y-auto bg-white rounded-2xl shadow-2xl border border-amber-300 p-6 space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-gray-100">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center">
@@ -1784,8 +1796,8 @@ export default function BusinessDetailPage() {
 
       {/* 4. IMPERSONATE TENANT MODAL */}
       {showImpersonateModal && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 transition-opacity">
-          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-gray-200 p-6 space-y-4">
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-start sm:items-center justify-center p-4 transition-opacity overflow-y-auto">
+          <div className="w-full max-w-md max-h-[calc(100vh-2rem)] overflow-y-auto bg-white rounded-2xl shadow-2xl border border-gray-200 p-6 space-y-4">
             <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>

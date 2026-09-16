@@ -4,6 +4,8 @@ every table when creating tables or generating migrations.
 from backend.database.models.business import Business  # noqa: F401
 from backend.database.models.user import User  # noqa: F401
 from backend.database.models.agent import Agent  # noqa: F401
+from backend.database.models.staff import Staff  # noqa: F401
+from backend.database.models.service import Service  # noqa: F401
 from backend.database.models.phone_number import PhoneNumber  # noqa: F401
 from backend.database.models.call import Call  # noqa: F401
 from backend.database.models.message import Message  # noqa: F401

@@ -5,8 +5,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 
+from backend.api.routes._shared import get_business_or_404, require_membership, require_owner_or_admin
 from backend.auth.security import create_invite_token, get_current_user, hash_password
-from backend.database.models.business import Business
 from backend.database.models.user import User
 from backend.database.session import get_db
 
@@ -44,24 +44,6 @@ class InviteUserOut(BaseModel):
     invite_token: str
 
 
-def _get_business_or_404(business_id: str, db: Session) -> Business:
-    business = db.get(Business, business_id)
-    if not business:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Business not found")
-    return business
-
-
-def _require_membership(business_id: str, current_user: User) -> None:
-    if current_user.scope != "platform" and current_user.business_id != business_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a member of this business")
-
-
-def _require_owner_or_admin(business_id: str, current_user: User) -> None:
-    _require_membership(business_id, current_user)
-    if current_user.scope != "platform" and current_user.role not in ("owner", "admin"):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only an owner or admin can do this")
-
-
 @router.post("", response_model=InviteUserOut, status_code=status.HTTP_201_CREATED)
 def invite_team_member(
     business_id: str,
@@ -69,8 +51,8 @@ def invite_team_member(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _get_business_or_404(business_id, db)
-    _require_owner_or_admin(business_id, current_user)
+    get_business_or_404(business_id, db)
+    require_owner_or_admin(business_id, current_user)
 
     if payload.role not in INVITABLE_ROLES:
         raise HTTPException(
@@ -107,6 +89,6 @@ def list_team_members(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _get_business_or_404(business_id, db)
-    _require_membership(business_id, current_user)
+    get_business_or_404(business_id, db)
+    require_membership(business_id, current_user)
     return db.query(User).filter(User.business_id == business_id).order_by(User.created_at.asc()).all()

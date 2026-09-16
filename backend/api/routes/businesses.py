@@ -11,16 +11,41 @@ from backend.database.session import get_db
 
 router = APIRouter(prefix="/api/businesses", tags=["businesses"])
 
+# MVP is healthcare-only (DOCS/04_AMSh_MVP_Scope_and_Roadmap.md). business_type
+# will grow more entries in later phases; each maps to its own allowed
+# business_subtype set.
+BUSINESS_SUBTYPES: dict[str, set[str]] = {
+    "healthcare": {"hospital", "clinic", "medical_center"},
+}
+
+
+def _validate_business_type(business_type: str, business_subtype: str | None) -> None:
+    if business_type not in BUSINESS_SUBTYPES:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"business_type must be one of {sorted(BUSINESS_SUBTYPES)}",
+        )
+    allowed = BUSINESS_SUBTYPES[business_type]
+    if business_subtype is not None and business_subtype not in allowed:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"business_subtype for '{business_type}' must be one of {sorted(allowed)}",
+        )
+
 
 class BusinessCreate(BaseModel):
     name: str
     vertical: str = "clinic"
+    business_type: str = "healthcare"
+    business_subtype: str | None = None
     country: str | None = None
     timezone: str = "UTC"
 
 
 class BusinessUpdate(BaseModel):
     name: str | None = None
+    business_type: str | None = None
+    business_subtype: str | None = None
     timezone: str | None = None
     working_hours: dict | None = None
     status: str | None = None
@@ -31,6 +56,8 @@ class BusinessOut(BaseModel):
     id: str
     name: str
     vertical: str
+    business_type: str
+    business_subtype: str | None
     country: str | None
     timezone: str
     plan: str
@@ -43,9 +70,12 @@ class BusinessOut(BaseModel):
 
 @router.post("", response_model=BusinessOut, status_code=status.HTTP_201_CREATED)
 def create_business(payload: BusinessCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _validate_business_type(payload.business_type, payload.business_subtype)
     business = Business(
         name=payload.name,
         vertical=payload.vertical,
+        business_type=payload.business_type,
+        business_subtype=payload.business_subtype,
         country=payload.country,
         timezone=payload.timezone,
         status="pending",
@@ -101,7 +131,14 @@ def update_business(
     if current_user.scope != "platform" and current_user.business_id != business.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed")
 
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    updates = payload.model_dump(exclude_unset=True)
+    if "business_type" in updates or "business_subtype" in updates:
+        _validate_business_type(
+            updates.get("business_type", business.business_type),
+            updates.get("business_subtype", business.business_subtype),
+        )
+
+    for field, value in updates.items():
         setattr(business, field, value)
     db.commit()
     db.refresh(business)

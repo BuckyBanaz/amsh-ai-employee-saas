@@ -17,6 +17,12 @@ class Business(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     name: Mapped[str] = mapped_column(String(255))
     vertical: Mapped[str] = mapped_column(String(50), default="clinic")
+    # Business classification shown in onboarding/admin UI. MVP is healthcare-only
+    # (see DOCS/04_AMSh_MVP_Scope_and_Roadmap.md) — business_type will grow more
+    # values in later phases; business_subtype is validated against business_type
+    # in the API layer (backend/api/routes/businesses.py), not here.
+    business_type: Mapped[str] = mapped_column(String(50), default="healthcare")
+    business_subtype: Mapped[str | None] = mapped_column(String(50), nullable=True)
     country: Mapped[str | None] = mapped_column(String(2), nullable=True)
     timezone: Mapped[str] = mapped_column(String(50), default="UTC")
     working_hours: Mapped[dict] = mapped_column(JSON, default=dict)
@@ -27,3 +33,5 @@ class Business(Base):
 
     users = relationship("User", back_populates="business", cascade="all, delete-orphan")
     agents = relationship("Agent", back_populates="business", cascade="all, delete-orphan")
+    services = relationship("Service", back_populates="business", cascade="all, delete-orphan")
+    staff = relationship("Staff", back_populates="business", cascade="all, delete-orphan")
