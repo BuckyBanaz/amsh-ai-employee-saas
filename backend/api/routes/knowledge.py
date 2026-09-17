@@ -14,7 +14,7 @@ from backend.database.models.knowledge_base import KnowledgeDocument
 from backend.database.models.user import User
 from backend.database.session import get_db
 
-router = APIRouter(prefix="/api/businesses/{business_id}/knowledge", tags=["knowledge"])
+router = APIRouter(prefix="/api/onboarding/businesses/{business_id}/knowledge", tags=["knowledge"])
 
 DOC_TYPES = {"document", "website", "faq"}
 

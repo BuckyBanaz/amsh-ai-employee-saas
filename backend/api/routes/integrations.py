@@ -15,7 +15,7 @@ from backend.database.models.integration import Integration
 from backend.database.models.user import User
 from backend.database.session import get_db
 
-router = APIRouter(prefix="/api/businesses/{business_id}/integrations", tags=["integrations"])
+router = APIRouter(prefix="/api/onboarding/businesses/{business_id}/integrations", tags=["integrations"])
 
 
 class IntegrationConnect(BaseModel):

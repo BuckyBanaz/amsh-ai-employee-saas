@@ -109,14 +109,14 @@ export default function ServicesOnboardingPage() {
       <div className="pt-6 border-t border-gray-100 flex items-center justify-between">
         <button 
           type="button" 
-          onClick={() => router.push('/onboarding/business')}
+          onClick={() => router.push('/onboarding/staff')}
           className="px-6 py-2.5 rounded-lg border border-gray-200 text-gray-700 font-medium hover:bg-gray-50 transition-colors shadow-sm"
         >
           {STRINGS.ONBOARDING.SERVICES.BACK_BTN}
         </button>
         <button 
           type="button"
-          onClick={() => router.push('/onboarding/staff')} 
+          onClick={() => router.push('/onboarding/hours')} 
           className="px-8 py-2.5 rounded-lg bg-[#0066FF] text-white font-medium hover:bg-[#0052cc] transition-colors shadow-sm"
         >
           {STRINGS.ONBOARDING.SERVICES.CONTINUE_BTN}

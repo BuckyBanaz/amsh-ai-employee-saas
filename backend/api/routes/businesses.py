@@ -9,7 +9,7 @@ from backend.database.models.business import Business
 from backend.database.models.user import User
 from backend.database.session import get_db
 
-router = APIRouter(prefix="/api/businesses", tags=["businesses"])
+router = APIRouter(prefix="/api/onboarding/businesses", tags=["businesses"])
 
 # MVP is healthcare-only (DOCS/04_AMSh_MVP_Scope_and_Roadmap.md). business_type
 # will grow more entries in later phases; each maps to its own allowed

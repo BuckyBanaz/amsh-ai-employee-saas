@@ -12,7 +12,7 @@ from backend.database.models.service import Service
 from backend.database.models.user import User
 from backend.database.session import get_db
 
-router = APIRouter(prefix="/api/businesses/{business_id}/services", tags=["services"])
+router = APIRouter(prefix="/api/onboarding/businesses/{business_id}/services", tags=["services"])
 
 
 class ServiceCreate(BaseModel):

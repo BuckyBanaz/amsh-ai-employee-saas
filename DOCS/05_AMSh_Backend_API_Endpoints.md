@@ -47,6 +47,18 @@ The spec's `backend/api/routes/` only lists 9 files (`auth, businesses, agents, 
 | `PATCH /api/businesses/{id}/subscription` | Change plan | admin: Change Subscription modal |
 | `GET /api/businesses/{id}/dashboard` | Aggregated KPIs for owner dashboard | user: `dashboard` |
 
+## 2a. Onboarding Flow APIs (Dedicated Paths)
+To clearly distinguish API calls that are part of the initial onboarding wizard vs general CRUD, the onboarding steps are grouped under the `/api/onboarding` prefix.
+
+| Endpoint | Purpose | Powers |
+|---|---|---|
+| `POST /api/onboarding/businesses` | Create tenant | user: `onboarding/business` |
+| `POST /api/onboarding/businesses/{id}/services` | Add initial service | user: `onboarding/services` |
+| `POST /api/onboarding/businesses/{id}/staff` | Add initial staff | user: `onboarding/staff` |
+| `POST /api/onboarding/businesses/{id}/agents` | Create initial AI config | user: `onboarding/ai-receptionist` |
+| `POST /api/onboarding/businesses/{id}/knowledge` | Add initial knowledge docs | user: `onboarding/knowledge` |
+| `POST /api/onboarding/businesses/{id}/integrations` | Add initial integrations | user: `onboarding/integrations` |
+
 ## 3. `users.py` (gap-fill — business users, admin users, team)
 ✅ = built and curl-tested this session (2026-09-09).
 | Endpoint | Purpose | Powers |

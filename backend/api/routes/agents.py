@@ -14,7 +14,7 @@ from backend.database.models.agent import Agent
 from backend.database.models.user import User
 from backend.database.session import get_db
 
-router = APIRouter(prefix="/api/businesses/{business_id}/agents", tags=["agents"])
+router = APIRouter(prefix="/api/onboarding/businesses/{business_id}/agents", tags=["agents"])
 
 
 class AgentCreate(BaseModel):
