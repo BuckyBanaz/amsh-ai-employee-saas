@@ -235,15 +235,15 @@ export default function AnnouncementsPage() {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto scrollbar-hide p-8 animate-in fade-in duration-500">
-      <header className="mb-6 pb-5 border-b border-[#E2E8F0] flex flex-wrap justify-between items-center gap-3">
+    <div className="flex-1 overflow-y-auto scrollbar-hide p-4 sm:p-5 animate-in fade-in duration-500">
+      <header className="mb-4 pb-3 border-b border-[#E2E8F0] flex flex-wrap justify-between items-center gap-2.5">
         <div>
-          <h1 className="text-[24px] font-bold text-[#0F172A] tracking-tight leading-tight">Announcements</h1>
-          <p className="text-[14px] text-[#475569] mt-1 font-normal">Platform-wide announcements.</p>
+          <h1 className="text-lg font-bold text-[#0F172A] tracking-tight leading-tight">Announcements</h1>
+          <p className="text-xs text-[#475569] mt-0.5 font-normal">Platform-wide announcements.</p>
         </div>
-        <div className="flex items-center gap-3">
-          <button className="flex items-center gap-2 border border-[#E2E8F0] rounded-lg py-2 px-3 text-[13px] font-medium text-[#475569] bg-white shadow-sm hover:bg-gray-50 transition-colors">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <div className="flex items-center gap-2">
+          <button className="flex items-center gap-1.5 border border-[#E2E8F0] rounded-lg py-1.5 px-2.5 text-xs font-medium text-[#475569] bg-white shadow-2xs hover:bg-gray-50 transition-colors">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
               <line x1="16" y1="2" x2="16" y2="6"></line>
               <line x1="8" y1="2" x2="8" y2="6"></line>
@@ -251,8 +251,8 @@ export default function AnnouncementsPage() {
             </svg>
             Jan 1 - Jan 30, 2026
           </button>
-          <button className="flex items-center justify-center border border-[#E2E8F0] rounded-full w-9 h-9 text-[#475569] bg-white shadow-sm hover:bg-gray-50 transition-colors">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <button className="flex items-center justify-center border border-[#E2E8F0] rounded-full w-7 h-7 text-[#475569] bg-white shadow-2xs hover:bg-gray-50 transition-colors">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
               <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
             </svg>
@@ -260,16 +260,16 @@ export default function AnnouncementsPage() {
         </div>
       </header>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-3.5">
         {/* List */}
         <div className="xl:col-span-2">
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-            <h2 className="text-[14px] font-bold text-[#475569] uppercase tracking-wider">Recent Announcements</h2>
+          <div className="flex flex-wrap items-center justify-between gap-2.5 mb-3">
+            <h2 className="text-xs font-bold text-[#475569] uppercase tracking-wider">Recent Announcements</h2>
             <div className="flex items-center gap-2">
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as 'All' | Status)}
-                className="px-2.5 py-1.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg text-[12px] font-semibold text-[#475569] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 cursor-pointer"
+                className="px-2 py-1 bg-[#F8FAFC] border border-[#E2E8F0] rounded-md text-xs font-semibold text-[#475569] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 cursor-pointer"
               >
                 <option value="All">Status: All</option>
                 <option value="Published">Published</option>
@@ -279,7 +279,7 @@ export default function AnnouncementsPage() {
               <select
                 value={typeFilter}
                 onChange={(e) => setTypeFilter(e.target.value)}
-                className="px-2.5 py-1.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg text-[12px] font-semibold text-[#475569] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 cursor-pointer"
+                className="px-2 py-1 bg-[#F8FAFC] border border-[#E2E8F0] rounded-md text-xs font-semibold text-[#475569] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 cursor-pointer"
               >
                 <option value="All">Business Type: All</option>
                 {BUSINESS_TYPES.map((type) => (
@@ -291,51 +291,51 @@ export default function AnnouncementsPage() {
             </div>
           </div>
 
-          <div className="space-y-4">
+          <div className="space-y-3">
             {visible.length === 0 ? (
-              <div className="bg-white border border-[#E2E8F0] rounded-xl p-10 text-center text-[13px] text-[#94A3B8]">
+              <div className="bg-white border border-[#E2E8F0] rounded-lg p-6 shadow-2xs text-center text-xs text-[#94A3B8]">
                 No announcements match these filters.
               </div>
             ) : (
               visible.map((item) => {
                 const reach = estimatedReach(item.audience);
                 return (
-                  <article key={item.id} className="bg-white border border-[#E2E8F0] rounded-xl p-5 shadow-sm">
-                    <div className="flex flex-wrap items-start justify-between gap-3 mb-2">
+                  <article key={item.id} className="bg-white border border-[#E2E8F0] rounded-lg p-3.5 shadow-2xs">
+                    <div className="flex flex-wrap items-start justify-between gap-2.5 mb-1.5">
                       <div className="flex items-center gap-2">
-                        <h3 className="text-[15px] font-bold text-[#0F172A]">{item.title}</h3>
-                        <span className={`px-2 py-0.5 rounded-md text-[12px] font-semibold ${priorityStyles[item.priority]}`}>
+                        <h3 className="text-sm font-bold text-[#0F172A]">{item.title}</h3>
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${priorityStyles[item.priority]}`}>
                           {item.priority}
                         </span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className={`px-2 py-0.5 rounded-md text-[12px] font-semibold ${statusStyles[item.status]}`}>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${statusStyles[item.status]}`}>
                           {item.status}
                         </span>
-                        <span className="text-[12px] text-[#94A3B8]">{item.date}</span>
+                        <span className="text-[11px] text-[#94A3B8]">{item.date}</span>
                       </div>
                     </div>
 
-                    <p className="text-[13px] text-[#475569] leading-relaxed mb-3">{item.body}</p>
+                    <p className="text-xs text-[#475569] leading-relaxed mb-2.5">{item.body}</p>
 
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 pt-3 border-t border-[#E2E8F0]">
-                      <span className="text-[12px] text-[#94A3B8]">Target Audience:</span>
-                      <span className="text-[12px] font-semibold text-[#2563EB]">{audienceLabel(item.audience)}</span>
+                    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 pt-2.5 border-t border-[#E2E8F0]">
+                      <span className="text-[11px] text-[#94A3B8]">Target Audience:</span>
+                      <span className="text-xs font-semibold text-[#2563EB]">{audienceLabel(item.audience)}</span>
                       {reach !== null && (
-                        <span className="text-[11px] text-[#94A3B8]">· approx {reach} businesses</span>
+                        <span className="text-[10px] text-[#94A3B8]">· approx {reach} businesses</span>
                       )}
                       <div className="ml-auto flex items-center gap-2">
                         {item.status !== 'Published' && (
                           <button
                             onClick={() => publishExisting(item.id)}
-                            className="text-[12px] font-semibold text-[#10B981] hover:underline"
+                            className="text-xs font-semibold text-[#10B981] hover:underline"
                           >
                             Publish
                           </button>
                         )}
                         <button
                           onClick={() => remove(item.id)}
-                          className="text-[12px] font-semibold text-[#991B1B] hover:underline"
+                          className="text-xs font-semibold text-[#991B1B] hover:underline"
                         >
                           Delete
                         </button>
@@ -349,44 +349,44 @@ export default function AnnouncementsPage() {
         </div>
 
         {/* Create form */}
-        <aside className="bg-white border border-[#E2E8F0] rounded-xl p-6 shadow-sm h-fit">
-          <h2 className="text-[16px] font-bold text-[#0F172A] mb-4 pb-4 border-b border-[#E2E8F0]">New Announcement</h2>
+        <aside className="bg-white border border-[#E2E8F0] rounded-lg p-4 shadow-2xs h-fit">
+          <h2 className="text-xs font-bold text-[#0F172A] mb-3 pb-2.5 border-b border-[#E2E8F0]">New Announcement</h2>
 
           {error && (
-            <div className="mb-4 rounded-lg border border-[#EF4444] bg-[#FEE2E2] px-3 py-2 text-[13px] font-semibold text-[#991B1B]">
+            <div className="mb-3 rounded-lg border border-[#EF4444] bg-[#FEE2E2] px-2.5 py-1.5 text-xs font-semibold text-[#991B1B]">
               {error}
             </div>
           )}
 
-          <div className="space-y-4">
+          <div className="space-y-3">
             <label className="block">
-              <span className="text-[13px] font-semibold text-[#475569]">Announcement Title</span>
+              <span className="text-xs font-semibold text-[#475569]">Announcement Title</span>
               <input
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="e.g. System upgrade notification"
-                className={`${inputClass} mt-1.5`}
+                className={`${inputClass} mt-1`}
               />
             </label>
 
             <label className="block">
-              <span className="text-[13px] font-semibold text-[#475569]">Message Content</span>
+              <span className="text-xs font-semibold text-[#475569]">Message Content</span>
               <textarea
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
-                rows={4}
+                rows={3}
                 placeholder="Write announcement details here..."
-                className={`${inputClass} mt-1.5 resize-y`}
+                className={`${inputClass} mt-1 resize-y`}
               />
             </label>
 
             <label className="block">
-              <span className="text-[13px] font-semibold text-[#475569]">Target Audience</span>
+              <span className="text-xs font-semibold text-[#475569]">Target Audience</span>
               <select
                 value={scope}
                 onChange={(e) => changeScope(e.target.value as AudienceScope)}
-                className={`${inputClass} mt-1.5 cursor-pointer`}
+                className={`${inputClass} mt-1 cursor-pointer`}
               >
                 {scopeOptions.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -397,20 +397,20 @@ export default function AnnouncementsPage() {
             </label>
 
             {scope !== 'All' && (
-              <div className="border border-[#E2E8F0] rounded-lg p-3">
-                <div className="text-[12px] font-semibold text-[#475569] mb-2">
+              <div className="border border-[#E2E8F0] rounded-md p-2.5">
+                <div className="text-[11px] font-semibold text-[#475569] mb-1.5">
                   {scope === 'BusinessType' ? 'Pick business types' : scope === 'Plan' ? 'Pick plans' : 'Pick countries'}
                 </div>
                 <div className="grid grid-cols-2 gap-1.5">
                   {optionsForScope(scope).map((option) => (
-                    <label key={option} className="flex items-center gap-2 cursor-pointer">
+                    <label key={option} className="flex items-center gap-1.5 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={values.includes(option)}
                         onChange={() => toggleValue(option)}
-                        className="w-4 h-4 accent-[#2563EB]"
+                        className="w-3.5 h-3.5 accent-[#2563EB]"
                       />
-                      <span className="text-[12px] text-[#0F172A]">
+                      <span className="text-[11px] text-[#0F172A]">
                         {option}
                         {scope === 'BusinessType' && (
                           <span className="text-[#94A3B8]"> ({BUSINESS_TYPE_COUNTS[option]})</span>
@@ -423,11 +423,11 @@ export default function AnnouncementsPage() {
             )}
 
             <label className="block">
-              <span className="text-[13px] font-semibold text-[#475569]">Priority</span>
+              <span className="text-xs font-semibold text-[#475569]">Priority</span>
               <select
                 value={priority}
                 onChange={(e) => setPriority(e.target.value as Priority)}
-                className={`${inputClass} mt-1.5 cursor-pointer`}
+                className={`${inputClass} mt-1 cursor-pointer`}
               >
                 <option value="Low">Low</option>
                 <option value="Normal">Normal</option>
@@ -435,12 +435,12 @@ export default function AnnouncementsPage() {
               </select>
             </label>
 
-            <div className="bg-[#F8FAFC] rounded-lg p-3 text-[12px]">
+            <div className="bg-[#F8FAFC] rounded-md p-2.5 text-xs">
               <div className="flex justify-between">
                 <span className="text-[#64748B]">Audience</span>
                 <span className="font-semibold text-[#0F172A] text-right">{audienceLabel(draftAudience)}</span>
               </div>
-              <div className="flex justify-between mt-1.5">
+              <div className="flex justify-between mt-1">
                 <span className="text-[#64748B]">Estimated reach</span>
                 <span className="font-semibold text-[#0F172A]">
                   {draftReach === null ? 'Not estimated' : `${draftReach} businesses`}
@@ -448,22 +448,22 @@ export default function AnnouncementsPage() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2 pt-2">
+            <div className="flex items-center gap-2 pt-1">
               <button
                 onClick={() => submit('Draft')}
-                className="flex-1 px-3 py-2 border border-[#E2E8F0] bg-white text-[#475569] rounded-lg text-[13px] font-semibold hover:bg-gray-50 transition-colors"
+                className="flex-1 px-2.5 py-1.5 border border-[#E2E8F0] bg-white text-[#475569] rounded-lg text-xs font-semibold hover:bg-gray-50 transition-colors"
               >
                 Save Draft
               </button>
               <button
                 onClick={() => submit('Scheduled')}
-                className="flex-1 px-3 py-2 border border-[#E2E8F0] bg-white text-[#475569] rounded-lg text-[13px] font-semibold hover:bg-gray-50 transition-colors"
+                className="flex-1 px-2.5 py-1.5 border border-[#E2E8F0] bg-white text-[#475569] rounded-lg text-xs font-semibold hover:bg-gray-50 transition-colors"
               >
                 Schedule
               </button>
               <button
                 onClick={() => submit('Published')}
-                className="flex-1 px-3 py-2 bg-[#2563EB] hover:bg-blue-700 text-white rounded-lg text-[13px] font-semibold transition-colors"
+                className="flex-1 px-2.5 py-1.5 bg-[#2563EB] hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition-colors"
               >
                 Publish Now
               </button>

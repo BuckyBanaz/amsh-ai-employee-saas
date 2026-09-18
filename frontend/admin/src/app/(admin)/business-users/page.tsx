@@ -120,20 +120,20 @@ export default function BusinessUsersPage() {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto scrollbar-hide p-8 animate-in fade-in duration-500">
+    <div className="flex-1 overflow-y-auto scrollbar-hide p-4 sm:p-5 animate-in fade-in duration-500">
       {/* Header */}
-      <header className="mb-6 pb-5 border-b border-[#E2E8F0] flex justify-between items-center">
+      <header className="mb-4 pb-3 border-b border-[#E2E8F0] flex justify-between items-center">
         <div>
-          <h1 className="text-[24px] font-bold text-[#0F172A] tracking-tight leading-tight">
+          <h1 className="text-lg font-bold text-[#0F172A] tracking-tight leading-tight">
             Business Users
           </h1>
-          <p className="text-[14px] text-[#475569] mt-1 font-normal">
+          <p className="text-xs text-[#475569] mt-0.5 font-normal">
             All users across platform tenants.
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <button className="flex items-center gap-2 border border-[#E2E8F0] rounded-lg py-2 px-3 text-[13px] font-medium text-[#475569] bg-white shadow-sm hover:bg-gray-50 transition-colors">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <div className="flex items-center gap-2">
+          <button className="flex items-center gap-1.5 border border-[#E2E8F0] rounded-md py-1.5 px-2.5 text-xs font-medium text-[#475569] bg-white shadow-2xs hover:bg-gray-50 transition-colors">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
               <line x1="16" y1="2" x2="16" y2="6"></line>
               <line x1="8" y1="2" x2="8" y2="6"></line>
@@ -141,8 +141,8 @@ export default function BusinessUsersPage() {
             </svg>
             Jan 1 - Jan 30, 2026
           </button>
-          <button className="flex items-center justify-center border border-[#E2E8F0] rounded-full w-9 h-9 text-[#475569] bg-white shadow-sm hover:bg-gray-50 transition-colors">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <button className="flex items-center justify-center border border-[#E2E8F0] rounded-full w-7 h-7 text-[#475569] bg-white shadow-2xs hover:bg-gray-50 transition-colors">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
               <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
             </svg>
@@ -151,7 +151,7 @@ export default function BusinessUsersPage() {
       </header>
 
       {/* Filter & Action Bar */}
-      <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 mb-6 shadow-sm flex flex-wrap items-center justify-between gap-4">
+      <div className="bg-white border border-[#E2E8F0] rounded-lg p-2.5 mb-3.5 shadow-2xs flex flex-wrap items-center justify-between gap-2.5">
         <div className="flex flex-wrap items-center gap-3">
           {/* Search Box */}
           <div className="relative w-[240px]">
@@ -264,30 +264,30 @@ export default function BusinessUsersPage() {
       </div>
 
       {/* Users Table */}
-      <div className="bg-white border border-[#E2E8F0] rounded-xl shadow-sm overflow-hidden">
+      <div className="bg-white border border-[#E2E8F0] rounded-lg shadow-2xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0]">
-                <th className="px-4 py-3 text-[12px] font-bold text-[#475569] uppercase tracking-wider min-w-[180px]">
+                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider min-w-[150px]">
                   Name
                 </th>
-                <th className="px-4 py-3 text-[12px] font-bold text-[#475569] uppercase tracking-wider min-w-[180px]">
+                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider min-w-[150px]">
                   Email
                 </th>
-                <th className="px-4 py-3 text-[12px] font-bold text-[#475569] uppercase tracking-wider min-w-[180px]">
+                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider min-w-[150px]">
                   Business
                 </th>
-                <th className="px-4 py-3 text-[12px] font-bold text-[#475569] uppercase tracking-wider min-w-[120px]">
+                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider min-w-[100px]">
                   Role
                 </th>
-                <th className="px-4 py-3 text-[12px] font-bold text-[#475569] uppercase tracking-wider min-w-[100px]">
+                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider min-w-[80px]">
                   Status
                 </th>
-                <th className="px-4 py-3 text-[12px] font-bold text-[#475569] uppercase tracking-wider min-w-[120px]">
+                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider min-w-[100px]">
                   Last Active
                 </th>
-                <th className="px-4 py-3 text-[12px] font-bold text-[#475569] uppercase tracking-wider w-12 text-center">
+                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider w-10 text-center">
                   <span className="sr-only">Actions</span>
                 </th>
               </tr>
@@ -296,45 +296,45 @@ export default function BusinessUsersPage() {
               {filteredUsers.map((user) => (
                 <tr key={user.id} className="hover:bg-[#F8FAFC]/70 transition-colors">
                   {/* Name */}
-                  <td className="px-4 py-3.5 text-[14px] font-semibold text-[#0F172A] whitespace-nowrap">
+                  <td className="px-3.5 py-2.5 text-xs font-semibold text-[#0F172A] whitespace-nowrap">
                     <Link href={`/business-users/${user.id}`} className="hover:text-[#2563EB] transition-colors">
                       {user.name}
                     </Link>
                   </td>
 
                   {/* Email */}
-                  <td className="px-4 py-3.5 text-[13px] text-[#475569] whitespace-nowrap">
+                  <td className="px-3.5 py-2.5 text-xs text-[#475569] whitespace-nowrap">
                     {user.email}
                   </td>
 
                   {/* Business */}
-                  <td className="px-4 py-3.5 text-[13px] text-[#475569] whitespace-nowrap">
+                  <td className="px-3.5 py-2.5 text-xs text-[#475569] whitespace-nowrap">
                     {user.business}
                   </td>
 
                   {/* Role Badge */}
-                  <td className="px-4 py-3.5 whitespace-nowrap">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold bg-[#EFF6FF] text-[#2563EB]">
+                  <td className="px-3.5 py-2.5 whitespace-nowrap">
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#EFF6FF] text-[#2563EB]">
                       {user.role}
                     </span>
                   </td>
 
                   {/* Status Badge */}
-                  <td className="px-4 py-3.5 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[12px] font-semibold ${user.statusColor.bg} ${user.statusColor.text}`}>
+                  <td className="px-3.5 py-2.5 whitespace-nowrap">
+                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold ${user.statusColor.bg} ${user.statusColor.text}`}>
                       {user.status}
                     </span>
                   </td>
 
                   {/* Last Active */}
-                  <td className="px-4 py-3.5 text-[13px] text-[#94A3B8] whitespace-nowrap">
+                  <td className="px-3.5 py-2.5 text-xs text-[#94A3B8] whitespace-nowrap">
                     {user.lastActive}
                   </td>
 
                   {/* Actions Menu */}
-                  <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                  <td className="px-3.5 py-2.5 text-center whitespace-nowrap">
                     <button className="p-1 text-[#94A3B8] hover:text-[#0F172A] hover:bg-gray-100 rounded-md transition-colors">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <circle cx="12" cy="12" r="1"></circle>
                         <circle cx="19" cy="12" r="1"></circle>
                         <circle cx="5" cy="12" r="1"></circle>

@@ -680,19 +680,19 @@ export default function BillingPage() {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto scrollbar-hide p-8 animate-in fade-in duration-500">
-      <header className="mb-6 pb-5 border-b border-[#E2E8F0] flex justify-between items-center">
+    <div className="flex-1 overflow-y-auto scrollbar-hide p-4 sm:p-5 animate-in fade-in duration-500">
+      <header className="mb-4 pb-3 border-b border-[#E2E8F0] flex justify-between items-center">
         <div>
-          <h1 className="text-[24px] font-bold text-[#0F172A] tracking-tight leading-tight">
+          <h1 className="text-lg font-bold text-[#0F172A] tracking-tight leading-tight">
             Billing &amp; Subscriptions
           </h1>
-          <p className="text-[14px] text-[#475569] mt-1 font-normal">
+          <p className="text-xs text-[#475569] mt-0.5 font-normal">
             Subscription, plan catalog and revenue management.
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <button className="flex items-center gap-2 border border-[#E2E8F0] rounded-lg py-2 px-3 text-[13px] font-medium text-[#475569] bg-white shadow-sm hover:bg-gray-50 transition-colors">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <div className="flex items-center gap-2">
+          <button className="flex items-center gap-1.5 border border-[#E2E8F0] rounded-lg py-1.5 px-2.5 text-xs font-medium text-[#475569] bg-white shadow-2xs hover:bg-gray-50 transition-colors">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
               <line x1="16" y1="2" x2="16" y2="6"></line>
               <line x1="8" y1="2" x2="8" y2="6"></line>
@@ -702,9 +702,9 @@ export default function BillingPage() {
           </button>
           <button
             onClick={() => openCreate('Catalog')}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-[#2563EB] hover:bg-blue-700 text-white rounded-lg text-[13px] font-semibold shadow-sm transition-colors"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[#2563EB] hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-2xs transition-colors"
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <line x1="12" y1="5" x2="12" y2="19"></line>
               <line x1="5" y1="12" x2="19" y2="12"></line>
             </svg>
@@ -714,12 +714,12 @@ export default function BillingPage() {
       </header>
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2.5 mb-3.5">
         {kpis.map((kpi) => (
-          <div key={kpi.label} className="bg-white border border-[#E2E8F0] rounded-xl p-4 shadow-sm">
-            <div className="text-[11px] font-bold text-[#94A3B8] uppercase tracking-wider mb-2">{kpi.label}</div>
-            <div className="text-[22px] font-bold text-[#0F172A] leading-none mb-2">{kpi.value}</div>
-            <div className={`text-[12px] font-semibold ${kpi.tone === 'positive' ? 'text-[#10B981]' : 'text-[#EF4444]'}`}>
+          <div key={kpi.label} className="bg-white border border-[#E2E8F0] rounded-lg p-2.5 sm:p-3 shadow-2xs">
+            <div className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider mb-1.5">{kpi.label}</div>
+            <div className="text-lg font-bold text-[#0F172A] leading-none mb-1.5">{kpi.value}</div>
+            <div className={`text-[11px] font-semibold ${kpi.tone === 'positive' ? 'text-[#10B981]' : 'text-[#EF4444]'}`}>
               {kpi.change}
             </div>
           </div>
@@ -727,28 +727,28 @@ export default function BillingPage() {
       </div>
 
       {/* Revenue trend + plan distribution */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-4">
-        <section className="xl:col-span-2 bg-white border border-[#E2E8F0] rounded-xl p-5 shadow-sm">
-          <h2 className="text-[14px] font-bold text-[#0F172A] mb-4">Monthly Revenue Trend (YTD)</h2>
-          <div className="flex items-end justify-between gap-3 h-[160px]">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-3.5 mb-3.5">
+        <section className="xl:col-span-2 bg-white border border-[#E2E8F0] rounded-lg p-3.5 shadow-2xs">
+          <h2 className="text-xs font-bold text-[#0F172A] mb-3">Monthly Revenue Trend (YTD)</h2>
+          <div className="flex items-end justify-between gap-2.5 h-[120px]">
             {revenueTrend.map((value, index) => (
-              <div key={revenuePoints[index]} className="flex-1 flex flex-col items-center justify-end gap-2 h-full">
-                <div className="w-8 bg-[#2563EB] rounded-t-md" style={{ height: `${(value / barMax) * 100}%` }} />
-                <span className="text-[11px] text-[#94A3B8]">{revenuePoints[index]}</span>
+              <div key={revenuePoints[index]} className="flex-1 flex flex-col items-center justify-end gap-1.5 h-full">
+                <div className="w-7 bg-[#2563EB] rounded-t-md" style={{ height: `${(value / barMax) * 100}%` }} />
+                <span className="text-[10px] text-[#94A3B8]">{revenuePoints[index]}</span>
               </div>
             ))}
           </div>
         </section>
 
-        <section className="bg-white border border-[#E2E8F0] rounded-xl p-5 shadow-sm">
-          <h2 className="text-[14px] font-bold text-[#0F172A] mb-1">Plan Distribution</h2>
-          <p className="text-[12px] text-[#64748B] mb-4">{totalSubscribers} paying tenants across {plans.length} plans.</p>
-          <div className="space-y-3">
+        <section className="bg-white border border-[#E2E8F0] rounded-lg p-3.5 shadow-2xs">
+          <h2 className="text-xs font-bold text-[#0F172A] mb-0.5">Plan Distribution</h2>
+          <p className="text-[11px] text-[#64748B] mb-3">{totalSubscribers} paying tenants across {plans.length} plans.</p>
+          <div className="space-y-2">
             {plans.map((plan) => {
               const share = totalSubscribers === 0 ? 0 : Math.round((plan.subscribers / totalSubscribers) * 100);
               return (
-                <div key={plan.id} className="space-y-1.5">
-                  <div className="flex justify-between text-[12px]">
+                <div key={plan.id} className="space-y-1">
+                  <div className="flex justify-between text-[11px]">
                     <span className="text-[#475569]">
                       {plan.name} ({plan.customPricing ? 'Quoted' : `${money(plan.price)}/mo`})
                     </span>
@@ -767,22 +767,22 @@ export default function BillingPage() {
       </div>
 
       {/* Plan catalog */}
-      <section className="bg-white border border-[#E2E8F0] rounded-xl shadow-sm mb-4">
-        <div className="p-4 border-b border-[#E2E8F0] flex flex-wrap items-center justify-between gap-3">
+      <section className="bg-white border border-[#E2E8F0] rounded-lg shadow-2xs mb-3.5">
+        <div className="p-3 border-b border-[#E2E8F0] flex flex-wrap items-center justify-between gap-2.5">
           <div>
-            <h2 className="text-[14px] font-bold text-[#0F172A]">Plan Catalog</h2>
-            <p className="text-[12px] text-[#64748B] mt-0.5">
+            <h2 className="text-xs font-bold text-[#0F172A]">Plan Catalog</h2>
+            <p className="text-[11px] text-[#64748B] mt-0.5">
               Catalog plans sell themselves from the website. Enterprise plans are configured per client by the AMSH team.
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <div className="inline-flex items-center gap-1 bg-[#F1F5F9] rounded-lg p-1">
               {(['All', 'Catalog', 'Enterprise'] as const).map((option) => (
                 <button
                   key={option}
                   onClick={() => setKindFilter(option)}
-                  className={`px-3 py-1 rounded-md text-[12px] font-semibold transition-colors ${
-                    kindFilter === option ? 'bg-white text-[#2563EB] shadow-sm' : 'text-[#475569] hover:text-[#0F172A]'
+                  className={`px-2.5 py-0.5 rounded-md text-[11px] font-semibold transition-colors ${
+                    kindFilter === option ? 'bg-white text-[#2563EB] shadow-2xs' : 'text-[#475569] hover:text-[#0F172A]'
                   }`}
                 >
                   {option}
@@ -791,9 +791,9 @@ export default function BillingPage() {
             </div>
             <button
               onClick={() => openCreate('Catalog')}
-              className="flex items-center gap-1.5 px-3 py-1.5 border border-[#2563EB] text-[#2563EB] rounded-lg text-[12px] font-semibold hover:bg-[#EFF6FF] transition-colors"
+              className="flex items-center gap-1 px-2.5 py-1 border border-[#2563EB] text-[#2563EB] rounded-lg text-xs font-semibold hover:bg-[#EFF6FF] transition-colors"
             >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="12" y1="5" x2="12" y2="19"></line>
                 <line x1="5" y1="12" x2="19" y2="12"></line>
               </svg>
@@ -801,9 +801,9 @@ export default function BillingPage() {
             </button>
             <button
               onClick={() => openCreate('Enterprise')}
-              className="flex items-center gap-1.5 px-3 py-1.5 border border-[#7C3AED] text-[#7C3AED] rounded-lg text-[12px] font-semibold hover:bg-[#F5F3FF] transition-colors"
+              className="flex items-center gap-1 px-2.5 py-1 border border-[#7C3AED] text-[#7C3AED] rounded-lg text-xs font-semibold hover:bg-[#F5F3FF] transition-colors"
             >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="12" y1="5" x2="12" y2="19"></line>
                 <line x1="5" y1="12" x2="19" y2="12"></line>
               </svg>
@@ -814,66 +814,66 @@ export default function BillingPage() {
 
         {visibleGroups.map((group) => (
           <div key={group.kind}>
-            <div className="px-4 pt-4 flex items-center gap-2">
-              <span className={`px-2 py-0.5 rounded-md text-[11px] font-bold ${kindStyles[group.kind]}`}>
+            <div className="px-3 pt-3 flex items-center gap-2">
+              <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${kindStyles[group.kind]}`}>
                 {group.kind === 'Catalog' ? 'CATALOG' : 'ENTERPRISE'}
               </span>
-              <span className="text-[12px] text-[#64748B]">{group.description}</span>
-              <span className="text-[12px] font-semibold text-[#94A3B8] ml-auto">
+              <span className="text-[11px] text-[#64748B]">{group.description}</span>
+              <span className="text-[11px] font-semibold text-[#94A3B8] ml-auto">
                 {group.plans.length} {group.plans.length === 1 ? 'plan' : 'plans'}
               </span>
             </div>
 
             {group.plans.length === 0 ? (
-              <p className="px-4 py-6 text-[13px] text-[#94A3B8]">Nothing here yet.</p>
+              <p className="px-3 py-4 text-xs text-[#94A3B8]">Nothing here yet.</p>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 p-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 p-3">
                 {group.plans.map((plan) => (
                   <div
                     key={plan.id}
-                    className={`border rounded-xl p-4 flex flex-col gap-3 ${
+                    className={`border rounded-lg p-3 flex flex-col gap-2 ${
                       plan.status === 'Archived' ? 'border-[#E2E8F0] bg-[#F8FAFC] opacity-70' : 'border-[#E2E8F0] bg-white'
                     }`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <div className="text-[15px] font-bold text-[#0F172A]">{plan.name}</div>
-                        <div className="text-[12px] text-[#64748B]">
+                        <div className="text-sm font-bold text-[#0F172A]">{plan.name}</div>
+                        <div className="text-[11px] text-[#64748B]">
                           {plan.customPricing
                             ? `${money(plan.price)} / ${plan.cycle.toLowerCase()} (quoted)`
                             : `${money(plan.price)} / ${plan.cycle.toLowerCase()}`}
                         </div>
                         {plan.client && (
-                          <div className="text-[11px] font-semibold text-[#7C3AED] mt-0.5">{plan.client}</div>
+                          <div className="text-[10px] font-semibold text-[#7C3AED] mt-0.5">{plan.client}</div>
                         )}
                       </div>
-                      <span className={`px-2 py-0.5 rounded-md text-[11px] font-semibold ${statusStyles[plan.status]}`}>
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${statusStyles[plan.status]}`}>
                         {plan.status}
                       </span>
                     </div>
 
-              <div className="bg-[#F8FAFC] rounded-lg p-3 space-y-1.5">
-                <div className="flex justify-between text-[12px]">
+              <div className="bg-[#F8FAFC] rounded-md p-2 space-y-1">
+                <div className="flex justify-between text-[11px]">
                   <span className="text-[#64748B]">Minutes</span>
                   <span className="font-semibold text-[#0F172A]">{plan.quotas.voiceMinutes.toLocaleString('en-US')}</span>
                 </div>
-                <div className="flex justify-between text-[12px]">
+                <div className="flex justify-between text-[11px]">
                   <span className="text-[#64748B]">Messages</span>
                   <span className="font-semibold text-[#0F172A]">{plan.quotas.messages.toLocaleString('en-US')}</span>
                 </div>
-                <div className="flex justify-between text-[12px]">
+                <div className="flex justify-between text-[11px]">
                   <span className="text-[#64748B]">Audio storage</span>
                   <span className="font-semibold text-[#0F172A]">{plan.quotas.audioStorageGb} GB</span>
                 </div>
-                <div className="flex justify-between text-[12px]">
+                <div className="flex justify-between text-[11px]">
                   <span className="text-[#64748B]">Vector storage</span>
                   <span className="font-semibold text-[#0F172A]">{plan.quotas.vectorStorageGb} GB</span>
                 </div>
-                <div className="flex justify-between text-[12px]">
+                <div className="flex justify-between text-[11px]">
                   <span className="text-[#64748B]">Conversation history</span>
                   <span className="font-semibold text-[#0F172A]">{plan.quotas.conversationRetentionDays} days</span>
                 </div>
-                <div className="flex justify-between text-[12px]">
+                <div className="flex justify-between text-[11px]">
                   <span className="text-[#64748B]">Concurrent calls</span>
                   <span className="font-semibold text-[#0F172A]">{plan.quotas.concurrentCalls}</span>
                 </div>
@@ -881,16 +881,16 @@ export default function BillingPage() {
 
               <div className="flex flex-wrap gap-1">
                 {plan.features.length === 0 ? (
-                  <span className="text-[11px] text-[#94A3B8]">No add-on features</span>
+                  <span className="text-[10px] text-[#94A3B8]">No add-on features</span>
                 ) : (
                   <>
                     {plan.features.slice(0, 3).map((key) => (
-                      <span key={key} className="px-2 py-0.5 rounded bg-[#EFF6FF] text-[#2563EB] text-[11px] font-medium">
+                      <span key={key} className="px-1.5 py-0.5 rounded bg-[#EFF6FF] text-[#2563EB] text-[10px] font-medium">
                         {FEATURE_CATALOG.find((f) => f.key === key)?.label}
                       </span>
                     ))}
                     {plan.features.length > 3 && (
-                      <span className="px-2 py-0.5 rounded bg-[#F1F5F9] text-[#475569] text-[11px] font-medium">
+                      <span className="px-1.5 py-0.5 rounded bg-[#F1F5F9] text-[#475569] text-[10px] font-medium">
                         +{plan.features.length - 3} more
                       </span>
                     )}
@@ -898,28 +898,28 @@ export default function BillingPage() {
                 )}
               </div>
 
-              <div className="text-[11px] text-[#94A3B8]">
+              <div className="text-[10px] text-[#94A3B8]">
                 Overage €{plan.overage.perMinute}/min · €{plan.overage.perMessage}/msg · €{plan.overage.perGb}/GB
               </div>
 
               <div className="mt-auto pt-2 border-t border-[#E2E8F0] flex items-center justify-between">
-                <span className="text-[11px] text-[#64748B]">{plan.subscribers} subscribers</span>
+                <span className="text-[10px] text-[#64748B]">{plan.subscribers} subscribers</span>
                 <div className="flex items-center gap-1">
                   <button
                     onClick={() => openEdit(plan)}
-                    className="px-2 py-1 text-[11px] font-semibold text-[#2563EB] hover:bg-[#EFF6FF] rounded-md transition-colors"
+                    className="px-1.5 py-0.5 text-[10px] font-semibold text-[#2563EB] hover:bg-[#EFF6FF] rounded transition-colors"
                   >
                     Edit
                   </button>
                   <button
                     onClick={() => duplicatePlan(plan)}
-                    className="px-2 py-1 text-[11px] font-semibold text-[#475569] hover:bg-gray-100 rounded-md transition-colors"
+                    className="px-1.5 py-0.5 text-[10px] font-semibold text-[#475569] hover:bg-gray-100 rounded transition-colors"
                   >
                     Duplicate
                   </button>
                   <button
                     onClick={() => archivePlan(plan.id)}
-                    className="px-2 py-1 text-[11px] font-semibold text-[#991B1B] hover:bg-[#FEE2E2] rounded-md transition-colors"
+                    className="px-1.5 py-0.5 text-[10px] font-semibold text-[#991B1B] hover:bg-[#FEE2E2] rounded transition-colors"
                   >
                     {plan.status === 'Archived' ? 'Restore' : 'Archive'}
                   </button>
@@ -934,37 +934,37 @@ export default function BillingPage() {
       </section>
 
       {/* Tenant subscriptions */}
-      <section className="bg-white border border-[#E2E8F0] rounded-xl shadow-sm overflow-hidden mb-4">
-        <div className="p-4 border-b border-[#E2E8F0]">
-          <h2 className="text-[14px] font-bold text-[#0F172A]">Tenant Subscriptions</h2>
+      <section className="bg-white border border-[#E2E8F0] rounded-lg shadow-2xs overflow-hidden mb-3.5">
+        <div className="p-3 border-b border-[#E2E8F0]">
+          <h2 className="text-xs font-bold text-[#0F172A]">Tenant Subscriptions</h2>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0]">
-                <th className="px-4 py-2.5 text-[11px] font-bold text-[#475569] uppercase tracking-wider">Tenant</th>
-                <th className="px-4 py-2.5 text-[11px] font-bold text-[#475569] uppercase tracking-wider">Plan</th>
-                <th className="px-4 py-2.5 text-[11px] font-bold text-[#475569] uppercase tracking-wider">Status</th>
-                <th className="px-4 py-2.5 text-[11px] font-bold text-[#475569] uppercase tracking-wider">Price</th>
-                <th className="px-4 py-2.5 text-[11px] font-bold text-[#475569] uppercase tracking-wider w-[160px]">Quota Usage</th>
-                <th className="px-4 py-2.5 text-[11px] font-bold text-[#475569] uppercase tracking-wider">Renewal</th>
-                <th className="px-4 py-2.5 text-[11px] font-bold text-[#475569] uppercase tracking-wider">Actions</th>
+                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider">Tenant</th>
+                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider">Plan</th>
+                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider">Status</th>
+                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider">Price</th>
+                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider w-[140px]">Quota Usage</th>
+                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider">Renewal</th>
+                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#E2E8F0]">
               {tenantSubscriptions.map((sub) => (
                 <tr key={sub.id} className="hover:bg-[#F8FAFC]/70 transition-colors">
-                  <td className="px-4 py-3 text-[13px] font-semibold text-[#0F172A] whitespace-nowrap">{sub.tenant}</td>
-                  <td className="px-4 py-3 text-[13px] text-[#475569] whitespace-nowrap">{sub.plan}</td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    <span className={`px-2 py-0.5 rounded-md text-[12px] font-semibold ${statusStyles[sub.status]}`}>
+                  <td className="px-3.5 py-2 text-xs font-semibold text-[#0F172A] whitespace-nowrap">{sub.tenant}</td>
+                  <td className="px-3.5 py-2 text-xs text-[#475569] whitespace-nowrap">{sub.plan}</td>
+                  <td className="px-3.5 py-2 whitespace-nowrap">
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${statusStyles[sub.status]}`}>
                       {sub.status}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-[13px] font-semibold text-[#0F172A] whitespace-nowrap">{sub.price}</td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    <div className="flex items-center gap-2">
-                      <div className="w-[90px] h-1.5 bg-[#E2E8F0] rounded-full overflow-hidden">
+                  <td className="px-3.5 py-2 text-xs font-semibold text-[#0F172A] whitespace-nowrap">{sub.price}</td>
+                  <td className="px-3.5 py-2 whitespace-nowrap">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-16 h-1 bg-[#E2E8F0] rounded-full overflow-hidden">
                         <div
                           className={`h-full rounded-full ${
                             sub.usage >= 90 ? 'bg-[#EF4444]' : sub.usage >= 70 ? 'bg-[#F59E0B]' : 'bg-[#2563EB]'
@@ -972,14 +972,14 @@ export default function BillingPage() {
                           style={{ width: `${sub.usage}%` }}
                         />
                       </div>
-                      <span className="text-[11px] text-[#94A3B8]">{sub.usage}%</span>
+                      <span className="text-[10px] text-[#94A3B8]">{sub.usage}%</span>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-[13px] text-[#475569] whitespace-nowrap">{sub.renewal}</td>
-                  <td className="px-4 py-3 whitespace-nowrap">
+                  <td className="px-3.5 py-2 text-xs text-[#475569] whitespace-nowrap">{sub.renewal}</td>
+                  <td className="px-3.5 py-2 whitespace-nowrap">
                     <div className="flex items-center gap-2">
-                      <button className="text-[12px] font-semibold text-[#2563EB] hover:underline">Manage</button>
-                      <button className="text-[12px] font-semibold text-[#475569] hover:underline">Invoice</button>
+                      <button className="text-xs font-semibold text-[#2563EB] hover:underline">Manage</button>
+                      <button className="text-xs font-semibold text-[#475569] hover:underline">Invoice</button>
                     </div>
                   </td>
                 </tr>
@@ -990,33 +990,33 @@ export default function BillingPage() {
       </section>
 
       {/* Invoices */}
-      <section className="bg-white border border-[#E2E8F0] rounded-xl shadow-sm overflow-hidden">
-        <div className="p-4 border-b border-[#E2E8F0]">
-          <h2 className="text-[14px] font-bold text-[#0F172A]">Recent Invoices</h2>
+      <section className="bg-white border border-[#E2E8F0] rounded-lg shadow-2xs overflow-hidden">
+        <div className="p-3 border-b border-[#E2E8F0]">
+          <h2 className="text-xs font-bold text-[#0F172A]">Recent Invoices</h2>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0]">
-                <th className="px-4 py-2.5 text-[11px] font-bold text-[#475569] uppercase tracking-wider">Tenant</th>
-                <th className="px-4 py-2.5 text-[11px] font-bold text-[#475569] uppercase tracking-wider">Invoice #</th>
-                <th className="px-4 py-2.5 text-[11px] font-bold text-[#475569] uppercase tracking-wider">Amount</th>
-                <th className="px-4 py-2.5 text-[11px] font-bold text-[#475569] uppercase tracking-wider">Status</th>
-                <th className="px-4 py-2.5 text-[11px] font-bold text-[#475569] uppercase tracking-wider">Date</th>
+                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider">Tenant</th>
+                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider">Invoice #</th>
+                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider">Amount</th>
+                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider">Status</th>
+                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider">Date</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#E2E8F0]">
               {invoices.map((invoice) => (
                 <tr key={invoice.id} className="hover:bg-[#F8FAFC]/70 transition-colors">
-                  <td className="px-4 py-3 text-[13px] font-semibold text-[#0F172A] whitespace-nowrap">{invoice.tenant}</td>
-                  <td className="px-4 py-3 text-[13px] text-[#475569] whitespace-nowrap">{invoice.id}</td>
-                  <td className="px-4 py-3 text-[13px] font-semibold text-[#0F172A] whitespace-nowrap">{invoice.amount}</td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    <span className={`px-2 py-0.5 rounded-md text-[12px] font-semibold ${statusStyles[invoice.status]}`}>
+                  <td className="px-3.5 py-2 text-xs font-semibold text-[#0F172A] whitespace-nowrap">{invoice.tenant}</td>
+                  <td className="px-3.5 py-2 text-xs text-[#475569] whitespace-nowrap">{invoice.id}</td>
+                  <td className="px-3.5 py-2 text-xs font-semibold text-[#0F172A] whitespace-nowrap">{invoice.amount}</td>
+                  <td className="px-3.5 py-2 whitespace-nowrap">
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${statusStyles[invoice.status]}`}>
                       {invoice.status}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-[13px] text-[#475569] whitespace-nowrap">{invoice.date}</td>
+                  <td className="px-3.5 py-2 text-xs text-[#475569] whitespace-nowrap">{invoice.date}</td>
                 </tr>
               ))}
             </tbody>

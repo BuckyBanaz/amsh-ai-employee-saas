@@ -212,10 +212,10 @@ export default function BusinessDetailPage() {
   };
 
   return (
-    <div className={`flex-1 scrollbar-hide p-6 md:p-8 animate-in fade-in duration-300 bg-[#F8FAFC] ${hasOpenModal ? 'overflow-hidden' : 'overflow-y-auto'}`}>
+    <div className={`flex-1 scrollbar-hide p-4 sm:p-5 animate-in fade-in duration-300 bg-[#F8FAFC] ${hasOpenModal ? 'overflow-hidden' : 'overflow-y-auto'}`}>
       {/* Toast Notification */}
       {notificationToast && (
-        <div className="fixed top-5 right-5 z-50 bg-[#0F172A] text-white text-[13px] font-medium px-4 py-3 rounded-xl shadow-2xl border border-gray-700 flex items-center gap-3 animate-in slide-in-from-top-3">
+        <div className="fixed top-5 right-5 z-50 bg-[#0F172A] text-white text-xs font-medium px-3.5 py-2.5 rounded-lg shadow-2xl border border-gray-700 flex items-center gap-2.5 animate-in slide-in-from-top-3">
           <div className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
           <span>{notificationToast}</span>
           <button onClick={() => setNotificationToast(null)} className="text-gray-400 hover:text-white ml-2">✕</button>
@@ -223,29 +223,29 @@ export default function BusinessDetailPage() {
       )}
 
       {/* Top Banner */}
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 bg-[#EFF6FF] border border-[#BFDBFE] rounded-xl text-[#2563EB]">
+      <div className="mb-3.5 flex flex-wrap items-center justify-between gap-2.5 px-3.5 py-2 bg-[#EFF6FF] border border-[#BFDBFE] rounded-lg text-[#2563EB]">
         <div className="flex items-center gap-2">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
             <line x1="12" y1="8" x2="12" y2="12"></line>
             <line x1="12" y1="16" x2="12.01" y2="16"></line>
           </svg>
-          <span className="text-[12px] font-bold uppercase tracking-wider">
-            MANAGING SECURE PLATFORM TENANT: SMILE DENTAL CLINIC (ID: {params.id || 'b-1'})
+          <span className="text-[11px] font-bold uppercase tracking-wider">
+            MANAGING TENANT: SMILE DENTAL CLINIC (ID: {params.id || 'b-1'})
           </span>
         </div>
-        <div className="flex items-center gap-3 text-[12px]">
+        <div className="flex items-center gap-2.5 text-[11px]">
           <span className="text-blue-700 font-semibold">Onboarded: Jan 4, 2026</span>
           <span className="text-blue-300">|</span>
-          <span className="text-emerald-700 font-bold bg-emerald-100/80 px-2 py-0.5 rounded">All Microservices Healthy</span>
+          <span className="text-emerald-700 font-bold bg-emerald-100/80 px-1.5 py-0.5 rounded">Microservices Healthy</span>
         </div>
       </div>
 
       {/* Business Header & Primary Actions */}
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <div className="flex flex-wrap items-center gap-2.5">
-            <h1 className="text-[26px] md:text-[28px] font-bold text-[#0F172A] tracking-tight">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-lg font-bold text-[#0F172A] tracking-tight">
               Smile Dental Clinic
             </h1>
             <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[12px] font-semibold ${
@@ -392,42 +392,42 @@ export default function BusinessDetailPage() {
       {activeTab === 'Overview' && (
         <div className="space-y-5">
           {/* 4 Mini Stat Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3.5">
-            <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 shadow-sm flex flex-col justify-between">
-              <div className="text-[12px] font-semibold text-[#94A3B8] uppercase tracking-wider mb-2">Total Customers</div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5">
+            <div className="bg-white border border-[#E2E8F0] rounded-lg p-2.5 sm:p-3 shadow-2xs flex flex-col justify-between">
+              <div className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-1">Total Customers</div>
               <div className="flex items-end justify-between">
-                <div className="text-[22px] font-bold text-[#0F172A] leading-none">2,847</div>
-                <span className="text-[12px] font-semibold text-[#10B981]">+42 this week</span>
+                <div className="text-base font-bold text-[#0F172A] leading-none">2,847</div>
+                <span className="text-[10px] font-semibold text-[#10B981]">+42 this week</span>
               </div>
             </div>
 
-            <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 shadow-sm flex flex-col justify-between">
-              <div className="text-[12px] font-semibold text-[#94A3B8] uppercase tracking-wider mb-2">Calls Answered</div>
+            <div className="bg-white border border-[#E2E8F0] rounded-lg p-2.5 sm:p-3 shadow-2xs flex flex-col justify-between">
+              <div className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-1">Calls Answered</div>
               <div className="flex items-end justify-between">
-                <div className="text-[22px] font-bold text-[#0F172A] leading-none">3,892</div>
-                <span className="text-[12px] font-semibold text-[#10B981]">+128 today</span>
+                <div className="text-base font-bold text-[#0F172A] leading-none">3,892</div>
+                <span className="text-[10px] font-semibold text-[#10B981]">+128 today</span>
               </div>
             </div>
 
-            <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 shadow-sm flex flex-col justify-between">
-              <div className="text-[12px] font-semibold text-[#94A3B8] uppercase tracking-wider mb-2">Appointments Booked</div>
+            <div className="bg-white border border-[#E2E8F0] rounded-lg p-2.5 sm:p-3 shadow-2xs flex flex-col justify-between">
+              <div className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-1">Appointments Booked</div>
               <div className="flex items-end justify-between">
-                <div className="text-[22px] font-bold text-[#0F172A] leading-none">1,284</div>
-                <span className="text-[12px] font-semibold text-[#10B981]">+34 today</span>
+                <div className="text-base font-bold text-[#0F172A] leading-none">1,284</div>
+                <span className="text-[10px] font-semibold text-[#10B981]">+34 today</span>
               </div>
             </div>
 
-            <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 shadow-sm flex flex-col justify-between">
-              <div className="text-[12px] font-semibold text-[#94A3B8] uppercase tracking-wider mb-2">AI Resolution Rate</div>
+            <div className="bg-white border border-[#E2E8F0] rounded-lg p-2.5 sm:p-3 shadow-2xs flex flex-col justify-between">
+              <div className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-1">AI Resolution Rate</div>
               <div className="flex items-end justify-between">
-                <div className="text-[22px] font-bold text-[#0F172A] leading-none">84%</div>
-                <span className="text-[12px] font-semibold text-[#10B981]">Target 85%</span>
+                <div className="text-base font-bold text-[#0F172A] leading-none">84%</div>
+                <span className="text-[10px] font-semibold text-[#10B981]">Target 85%</span>
               </div>
             </div>
           </div>
 
           {/* Detailed Onboarding & Profile Specifications */}
-          <div className="bg-white border border-[#E2E8F0] rounded-xl p-6 shadow-sm">
+          <div className="bg-white border border-[#E2E8F0] rounded-lg p-3.5 sm:p-4 shadow-2xs">
             <div className="flex flex-wrap items-center justify-between pb-4 border-b border-gray-100 gap-3">
               <div>
                 <h3 className="text-[16px] font-bold text-gray-900 flex items-center gap-2">
@@ -1332,24 +1332,24 @@ export default function BusinessDetailPage() {
 
       {/* 10. USAGE TAB */}
       {activeTab === 'Usage' && (
-        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm space-y-4">
-          <h3 className="text-[16px] font-bold text-gray-900">Detailed Telephony & Inference Usage</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
-              <div className="text-[11px] text-gray-400 font-bold">Twilio Voice Minutes</div>
-              <div className="text-[20px] font-bold text-gray-900 mt-1">4,280 mins</div>
+        <div className="bg-white border border-[#E2E8F0] rounded-lg p-3.5 sm:p-4 shadow-2xs space-y-3">
+          <h3 className="text-sm font-bold text-[#0F172A]">Detailed Telephony & Inference Usage</h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+            <div className="p-2.5 bg-[#F8FAFC] rounded-md border border-[#E2E8F0]">
+              <div className="text-[10px] text-[#64748B] font-bold uppercase tracking-wider">Twilio Voice Minutes</div>
+              <div className="text-base font-bold text-[#0F172A] mt-0.5">4,280 mins</div>
             </div>
-            <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
-              <div className="text-[11px] text-gray-400 font-bold">Deepgram STT Audio</div>
-              <div className="text-[20px] font-bold text-gray-900 mt-1">71.3 hrs</div>
+            <div className="p-2.5 bg-[#F8FAFC] rounded-md border border-[#E2E8F0]">
+              <div className="text-[10px] text-[#64748B] font-bold uppercase tracking-wider">Deepgram STT Audio</div>
+              <div className="text-base font-bold text-[#0F172A] mt-0.5">71.3 hrs</div>
             </div>
-            <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
-              <div className="text-[11px] text-gray-400 font-bold">Groq LLM Tokens</div>
-              <div className="text-[20px] font-bold text-gray-900 mt-1">1.84M tok</div>
+            <div className="p-2.5 bg-[#F8FAFC] rounded-md border border-[#E2E8F0]">
+              <div className="text-[10px] text-[#64748B] font-bold uppercase tracking-wider">Groq LLM Tokens</div>
+              <div className="text-base font-bold text-[#0F172A] mt-0.5">1.84M tok</div>
             </div>
-            <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
-              <div className="text-[11px] text-gray-400 font-bold">ElevenLabs Chars</div>
-              <div className="text-[20px] font-bold text-gray-900 mt-1">320,400</div>
+            <div className="p-2.5 bg-[#F8FAFC] rounded-md border border-[#E2E8F0]">
+              <div className="text-[10px] text-[#64748B] font-bold uppercase tracking-wider">ElevenLabs Chars</div>
+              <div className="text-base font-bold text-[#0F172A] mt-0.5">320,400</div>
             </div>
           </div>
         </div>

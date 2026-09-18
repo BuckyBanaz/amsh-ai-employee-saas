@@ -240,14 +240,14 @@ export default function CallsMonitoringPage() {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto scrollbar-hide p-8 animate-in fade-in duration-300 text-[13px]">
+    <div className="flex-1 overflow-y-auto scrollbar-hide p-4 sm:p-5 animate-in fade-in duration-300 text-xs">
       {/* Compact Header */}
-      <header className="mb-4 pb-3.5 border-b border-[#E2E8F0] flex justify-between items-center">
+      <header className="mb-3.5 pb-2.5 border-b border-[#E2E8F0] flex justify-between items-center">
         <div>
-          <h1 className="text-[24px] font-bold text-[#0F172A] tracking-tight leading-tight">
+          <h1 className="text-lg font-bold text-[#0F172A] tracking-tight leading-tight">
             Calls
           </h1>
-          <p className="text-[12px] text-[#475569] mt-0.5 font-normal">
+          <p className="text-xs text-[#475569] mt-0.5 font-normal">
             Platform-wide real-time call monitoring.
           </p>
         </div>
@@ -271,13 +271,13 @@ export default function CallsMonitoringPage() {
         </div>
       </header>
 
-      {/* Compact Top 5 KPI Metrics Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5 mb-4">
-        <div className="bg-white border border-[#E2E8F0] rounded-xl p-3 shadow-sm">
-          <div className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider mb-1">
+      {/* Top 5 KPI Metric Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5 mb-3.5">
+        <div className="bg-white border border-[#E2E8F0] rounded-lg p-2.5 sm:p-3 shadow-2xs">
+          <div className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-0.5">
             CALLS TODAY
           </div>
-          <div className="text-[20px] font-bold text-[#0F172A] leading-none mb-1">
+          <div className="text-base font-bold text-[#0F172A] leading-none mb-1">
             4,892
           </div>
           <div className="text-[10px] font-semibold text-[#10B981]">
@@ -285,11 +285,11 @@ export default function CallsMonitoringPage() {
           </div>
         </div>
 
-        <div className="bg-white border border-[#E2E8F0] rounded-xl p-3 shadow-sm">
-          <div className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider mb-1">
+        <div className="bg-white border border-[#E2E8F0] rounded-lg p-2.5 sm:p-3 shadow-2xs">
+          <div className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-0.5">
             AVERAGE DURATION
           </div>
-          <div className="text-[20px] font-bold text-[#0F172A] leading-none mb-1">
+          <div className="text-base font-bold text-[#0F172A] leading-none mb-1">
             3:24
           </div>
           <div className="text-[10px] font-semibold text-[#10B981]">
@@ -297,11 +297,11 @@ export default function CallsMonitoringPage() {
           </div>
         </div>
 
-        <div className="bg-white border border-[#E2E8F0] rounded-xl p-3 shadow-sm">
-          <div className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider mb-1">
+        <div className="bg-white border border-[#E2E8F0] rounded-lg p-2.5 sm:p-3 shadow-2xs">
+          <div className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-0.5">
             AI RESOLUTION
           </div>
-          <div className="text-[20px] font-bold text-[#0F172A] leading-none mb-1">
+          <div className="text-base font-bold text-[#0F172A] leading-none mb-1">
             82.4%
           </div>
           <div className="text-[10px] font-semibold text-[#10B981]">
@@ -309,11 +309,11 @@ export default function CallsMonitoringPage() {
           </div>
         </div>
 
-        <div className="bg-white border border-[#E2E8F0] rounded-xl p-3 shadow-sm">
-          <div className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider mb-1">
+        <div className="bg-white border border-[#E2E8F0] rounded-lg p-2.5 sm:p-3 shadow-2xs">
+          <div className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-0.5">
             TRANSFERRED
           </div>
-          <div className="text-[20px] font-bold text-[#0F172A] leading-none mb-1">
+          <div className="text-base font-bold text-[#0F172A] leading-none mb-1">
             412
           </div>
           <div className="text-[10px] font-semibold text-[#C2410C]">
@@ -321,11 +321,11 @@ export default function CallsMonitoringPage() {
           </div>
         </div>
 
-        <div className="bg-white border border-[#E2E8F0] rounded-xl p-3 shadow-sm">
-          <div className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider mb-1">
+        <div className="bg-white border border-[#E2E8F0] rounded-lg p-2.5 sm:p-3 shadow-2xs">
+          <div className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-0.5">
             FAILED CALLS
           </div>
-          <div className="text-[20px] font-bold text-[#0F172A] leading-none mb-1">
+          <div className="text-base font-bold text-[#0F172A] leading-none mb-1">
             23
           </div>
           <div className="text-[10px] font-semibold text-[#EF4444]">

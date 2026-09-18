@@ -10,58 +10,58 @@ const verticals = [
 
 export default function VerticalsPage() {
   return (
-    <div className="flex-1 overflow-y-auto scrollbar-hide p-8 animate-in fade-in duration-500">
-      <header className="mb-8 flex justify-between items-end">
+    <div className="flex-1 overflow-y-auto scrollbar-hide p-4 sm:p-5 animate-in fade-in duration-300">
+      <header className="mb-4 flex justify-between items-end">
         <div>
-          <h1 className="text-[28px] font-extrabold text-gray-900 tracking-tight leading-tight">
+          <h1 className="text-lg font-bold text-[#0F172A] tracking-tight leading-tight">
             Vertical Templates
           </h1>
-          <p className="text-[15px] text-gray-500 mt-1 font-medium">
+          <p className="text-xs text-[#475569] mt-0.5">
             Configure industry-specific AI behaviors, intents, and capabilities.
           </p>
         </div>
-        <button className="px-4 py-2 bg-[#0066FF] hover:bg-blue-600 text-white font-bold text-[13px] rounded-lg shadow-sm transition-colors flex items-center gap-2">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+        <button className="px-2.5 py-1.5 bg-[#0066FF] hover:bg-blue-600 text-white font-bold text-xs rounded-md shadow-2xs transition-colors flex items-center gap-1.5">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
           Create New Vertical
         </button>
       </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
         {verticals.map((v) => (
-          <div key={v.id} className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:border-blue-200 transition-colors group">
-            <div className="flex justify-between items-start mb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center text-gray-500">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 12 12 17 22 12"></polyline><polyline points="2 17 12 22 22 17"></polyline></svg>
+          <div key={v.id} className="bg-white border border-[#E2E8F0] rounded-lg p-3.5 shadow-2xs hover:border-blue-300 transition-colors group">
+            <div className="flex justify-between items-start mb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-md bg-[#F8FAFC] border border-[#E2E8F0] flex items-center justify-center text-[#64748B]">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 12 12 17 22 12"></polyline><polyline points="2 17 12 22 22 17"></polyline></svg>
                 </div>
                 <div>
-                  <h3 className="text-[16px] font-bold text-gray-900">{v.name}</h3>
-                  <div className="text-[12px] font-medium text-gray-500 uppercase tracking-widest">{v.slug}</div>
+                  <h3 className="text-sm font-bold text-[#0F172A]">{v.name}</h3>
+                  <div className="text-[10px] font-semibold text-[#64748B] uppercase tracking-wider">{v.slug}</div>
                 </div>
               </div>
-              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider ${
-                v.status === 'Active' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'
+              <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider ${
+                v.status === 'Active' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
               }`}>
                 {v.status}
               </span>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 mb-6">
-              <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
-                <div className="text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-1">Active Tenants</div>
-                <div className="text-[18px] font-black text-gray-900">{v.tenants}</div>
+            <div className="grid grid-cols-2 gap-2.5 mb-3">
+              <div className="p-2 bg-[#F8FAFC] rounded-md border border-[#E2E8F0]">
+                <div className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-0.5">Active Tenants</div>
+                <div className="text-base font-bold text-[#0F172A]">{v.tenants}</div>
               </div>
-              <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
-                <div className="text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-1">Assigned Tools</div>
-                <div className="text-[18px] font-black text-gray-900">{v.tools}</div>
+              <div className="p-2 bg-[#F8FAFC] rounded-md border border-[#E2E8F0]">
+                <div className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-0.5">Assigned Tools</div>
+                <div className="text-base font-bold text-[#0F172A]">{v.tools}</div>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
-              <button className="flex-1 py-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 font-bold text-[13px] rounded-lg transition-colors">
+              <button className="flex-1 py-1.5 bg-white border border-[#E2E8F0] hover:bg-[#F8FAFC] text-[#334155] font-semibold text-xs rounded-md shadow-2xs transition-colors">
                 Edit Config (YAML)
               </button>
-              <button className="flex-1 py-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 font-bold text-[13px] rounded-lg transition-colors">
+              <button className="flex-1 py-1.5 bg-white border border-[#E2E8F0] hover:bg-[#F8FAFC] text-[#334155] font-semibold text-xs rounded-md shadow-2xs transition-colors">
                 Manage Tools
               </button>
             </div>

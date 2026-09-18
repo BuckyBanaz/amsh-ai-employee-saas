@@ -372,25 +372,25 @@ export default function AdminUsersPage() {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto scrollbar-hide p-8 animate-in fade-in duration-500">
-      <header className="mb-6 flex flex-wrap justify-between items-center gap-3">
+    <div className="flex-1 overflow-y-auto scrollbar-hide p-4 sm:p-5 animate-in fade-in duration-500">
+      <header className="mb-4 pb-3 border-b border-[#E2E8F0] flex flex-wrap justify-between items-center gap-2.5">
         <div>
-          <h1 className="text-[24px] font-bold text-[#0F172A] tracking-tight leading-tight">Admin Users</h1>
-          <p className="text-[14px] text-[#475569] mt-1 font-normal">Manage internal Amsh administrators.</p>
+          <h1 className="text-lg font-bold text-[#0F172A] tracking-tight leading-tight">Admin Users</h1>
+          <p className="text-xs text-[#475569] mt-0.5 font-normal">Manage internal Amsh administrators.</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <button
             onClick={openAdd}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-[#2563EB] hover:bg-blue-700 text-white rounded-lg text-[13px] font-semibold shadow-sm transition-colors"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[#2563EB] hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-2xs transition-colors"
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <line x1="12" y1="5" x2="12" y2="19"></line>
               <line x1="5" y1="12" x2="19" y2="12"></line>
             </svg>
             Add Admin
           </button>
-          <button className="flex items-center gap-2 border border-[#E2E8F0] rounded-lg py-2 px-3 text-[13px] font-medium text-[#475569] bg-white shadow-sm hover:bg-gray-50 transition-colors">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <button className="flex items-center gap-1.5 border border-[#E2E8F0] rounded-lg py-1.5 px-2.5 text-xs font-medium text-[#475569] bg-white shadow-2xs hover:bg-gray-50 transition-colors">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
               <line x1="16" y1="2" x2="16" y2="6"></line>
               <line x1="8" y1="2" x2="8" y2="6"></line>
@@ -398,8 +398,8 @@ export default function AdminUsersPage() {
             </svg>
             Jan 1 - Jan 30, 2026
           </button>
-          <button className="flex items-center justify-center border border-[#E2E8F0] rounded-full w-9 h-9 text-[#475569] bg-white shadow-sm hover:bg-gray-50 transition-colors">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <button className="flex items-center justify-center border border-[#E2E8F0] rounded-full w-7 h-7 text-[#475569] bg-white shadow-2xs hover:bg-gray-50 transition-colors">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
               <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
             </svg>
@@ -407,19 +407,19 @@ export default function AdminUsersPage() {
         </div>
       </header>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-3.5">
         {/* Admin table */}
-        <div className="xl:col-span-2 bg-white border border-[#E2E8F0] rounded-xl shadow-sm overflow-hidden">
+        <div className="xl:col-span-2 bg-white border border-[#E2E8F0] rounded-lg shadow-2xs overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0]">
-                  <th className="px-4 py-3 text-[11px] font-bold text-[#475569] uppercase tracking-wider">Name</th>
-                  <th className="px-4 py-3 text-[11px] font-bold text-[#475569] uppercase tracking-wider">Email</th>
-                  <th className="px-4 py-3 text-[11px] font-bold text-[#475569] uppercase tracking-wider">Role</th>
-                  <th className="px-4 py-3 text-[11px] font-bold text-[#475569] uppercase tracking-wider">Status</th>
-                  <th className="px-4 py-3 text-[11px] font-bold text-[#475569] uppercase tracking-wider">Last Active</th>
-                  <th className="px-4 py-3 text-[11px] font-bold text-[#475569] uppercase tracking-wider">Actions</th>
+                  <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider">Name</th>
+                  <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider">Email</th>
+                  <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider">Role</th>
+                  <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider">Status</th>
+                  <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider">Last Active</th>
+                  <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#E2E8F0]">
@@ -431,27 +431,27 @@ export default function AdminUsersPage() {
                       admin.id === selectedId ? 'bg-[#EFF6FF]' : 'hover:bg-[#F8FAFC]/70'
                     }`}
                   >
-                    <td className="px-4 py-3.5 text-[13px] font-bold text-[#0F172A]">
+                    <td className="px-3.5 py-2 text-xs font-bold text-[#0F172A]">
                       {admin.name}
-                      {admin.isCurrentUser && <span className="text-[11px] font-medium text-[#94A3B8] ml-1.5">(you)</span>}
+                      {admin.isCurrentUser && <span className="text-[10px] font-medium text-[#94A3B8] ml-1.5">(you)</span>}
                     </td>
-                    <td className="px-4 py-3.5 text-[13px] text-[#475569]">{admin.email}</td>
-                    <td className="px-4 py-3.5 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-0.5 rounded-md text-[12px] font-semibold ${roleStyles[admin.role]}`}>
+                    <td className="px-3.5 py-2 text-xs text-[#475569]">{admin.email}</td>
+                    <td className="px-3.5 py-2 whitespace-nowrap">
+                      <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-semibold ${roleStyles[admin.role]}`}>
                         {admin.role}
                       </span>
                     </td>
-                    <td className="px-4 py-3.5 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-0.5 rounded-md text-[12px] font-semibold ${statusStyles[admin.status]}`}>
+                    <td className="px-3.5 py-2 whitespace-nowrap">
+                      <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-semibold ${statusStyles[admin.status]}`}>
                         {admin.status}
                       </span>
                     </td>
-                    <td className="px-4 py-3.5 text-[13px] text-[#94A3B8] whitespace-nowrap">{admin.lastActive}</td>
-                    <td className="px-4 py-3.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center gap-3">
+                    <td className="px-3.5 py-2 text-xs text-[#94A3B8] whitespace-nowrap">{admin.lastActive}</td>
+                    <td className="px-3.5 py-2 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center gap-2.5">
                         <button
                           onClick={() => openEdit(admin)}
-                          className="text-[12px] font-semibold text-[#2563EB] hover:underline"
+                          className="text-xs font-semibold text-[#2563EB] hover:underline"
                         >
                           Edit
                         </button>
@@ -459,7 +459,7 @@ export default function AdminUsersPage() {
                           onClick={() => toggleStatus(admin)}
                           disabled={admin.isCurrentUser}
                           title={admin.isCurrentUser ? 'You cannot deactivate your own account' : undefined}
-                          className={`text-[12px] font-semibold ${
+                          className={`text-xs font-semibold ${
                             admin.isCurrentUser
                               ? 'text-[#CBD5E1] cursor-not-allowed'
                               : admin.status === 'Active'
@@ -479,31 +479,31 @@ export default function AdminUsersPage() {
         </div>
 
         {/* Role permissions */}
-        <aside className="bg-white border border-[#E2E8F0] rounded-xl shadow-sm p-5 h-fit">
-          <h2 className="text-[15px] font-bold text-[#0F172A]">Role Permissions</h2>
-          <p className="text-[12px] text-[#64748B] mt-0.5">Inspect and edit access scopes for selected role.</p>
+        <aside className="bg-white border border-[#E2E8F0] rounded-lg shadow-2xs p-3.5 h-fit">
+          <h2 className="text-xs font-bold text-[#0F172A]">Role Permissions</h2>
+          <p className="text-[11px] text-[#64748B] mt-0.5">Inspect and edit access scopes for selected role.</p>
 
-          <div className="mt-3 mb-4 flex items-center gap-2">
-            <span className={`inline-flex px-2 py-0.5 rounded-md text-[12px] font-semibold ${roleStyles[selectedRole]}`}>
+          <div className="mt-2.5 mb-3 flex items-center gap-2">
+            <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-semibold ${roleStyles[selectedRole]}`}>
               {selectedRole}
             </span>
-            <span className="text-[11px] text-[#94A3B8]">via {selectedAdmin?.name}</span>
+            <span className="text-[10px] text-[#94A3B8]">via {selectedAdmin?.name}</span>
           </div>
 
           {roleLocked && (
-            <div className="mb-4 rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2 text-[11px] text-[#475569]">
+            <div className="mb-3 rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] px-2.5 py-1.5 text-[10px] text-[#475569]">
               Super Admin always has full access. Locked to prevent an accidental lockout.
             </div>
           )}
 
-          <div className="space-y-3">
+          <div className="space-y-2">
             {RESOURCES.map((resource) => (
               <div key={resource.key} className="flex items-center justify-between gap-2">
-                <span className="text-[13px] font-medium text-[#475569]">{resource.label}</span>
-                <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-[#475569]">{resource.label}</span>
+                <div className="flex items-center gap-1.5">
                   {scopes.map((scope) => (
                     <div key={scope.key} className="flex items-center gap-1">
-                      <span className="text-[10px] font-semibold text-[#94A3B8]">{scope.short}</span>
+                      <span className="text-[9px] font-semibold text-[#94A3B8]">{scope.short}</span>
                       <Toggle
                         checked={rolePermissions[resource.key][scope.key]}
                         disabled={roleLocked}
@@ -523,7 +523,7 @@ export default function AdminUsersPage() {
               flash(`Permissions saved for ${selectedRole}`);
             }}
             disabled={roleLocked || !dirty}
-            className="w-full mt-5 px-3.5 py-2 bg-[#2563EB] hover:bg-blue-700 text-white rounded-lg text-[13px] font-semibold transition-colors disabled:bg-[#CBD5E1] disabled:cursor-not-allowed"
+            className="w-full mt-3.5 px-2.5 py-1.5 bg-[#2563EB] hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition-colors disabled:bg-[#CBD5E1] disabled:cursor-not-allowed"
           >
             {dirty ? 'Save Permissions' : 'Saved'}
           </button>

@@ -327,7 +327,7 @@ const scaleSeries = (series: RangeSeries, factor: number): RangeSeries => {
 };
 
 const CHART_WIDTH = 700;
-const CHART_HEIGHT = 220;
+const CHART_HEIGHT = 160;
 
 export default function AnalyticsPage() {
   const [activeRange, setActiveRange] = useState<RangeOption>('30D');
@@ -395,17 +395,17 @@ export default function AnalyticsPage() {
   const barMax = Math.max(...series.revenue);
 
   return (
-    <div className="flex-1 overflow-y-auto scrollbar-hide p-8 animate-in fade-in duration-500">
-      <header className="mb-6 pb-5 border-b border-[#E2E8F0] flex justify-between items-center">
+    <div className="flex-1 overflow-y-auto scrollbar-hide p-4 sm:p-5 animate-in fade-in duration-500">
+      <header className="mb-4 pb-3 border-b border-[#E2E8F0] flex justify-between items-center">
         <div>
-          <h1 className="text-[24px] font-bold text-[#0F172A] tracking-tight leading-tight">Analytics</h1>
-          <p className="text-[14px] text-[#475569] mt-1 font-normal">
+          <h1 className="text-lg font-bold text-[#0F172A] tracking-tight leading-tight">Analytics</h1>
+          <p className="text-xs text-[#475569] mt-0.5 font-normal">
             Revenue, sales, usage limits, and profit intelligence for the platform.
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 border border-[#E2E8F0] rounded-lg py-2 px-3 text-[13px] font-medium text-[#475569] bg-white shadow-sm">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 border border-[#E2E8F0] rounded-lg py-1.5 px-2.5 text-xs font-medium text-[#475569] bg-white shadow-2xs">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
               <line x1="16" y1="2" x2="16" y2="6"></line>
               <line x1="8" y1="2" x2="8" y2="6"></line>
@@ -413,8 +413,8 @@ export default function AnalyticsPage() {
             </svg>
             {fromLabel} - {toLabel}
           </div>
-          <button className="flex items-center justify-center border border-[#E2E8F0] rounded-full w-9 h-9 text-[#475569] bg-white shadow-sm hover:bg-gray-50 transition-colors">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <button className="flex items-center justify-center border border-[#E2E8F0] rounded-full w-7 h-7 text-[#475569] bg-white shadow-2xs hover:bg-gray-50 transition-colors">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
               <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
             </svg>
@@ -422,14 +422,14 @@ export default function AnalyticsPage() {
         </div>
       </header>
 
-      <div className="flex flex-wrap items-center gap-3 mb-2">
+      <div className="flex flex-wrap items-center gap-2 mb-1.5">
         <div className="inline-flex items-center gap-1 bg-[#F1F5F9] rounded-lg p-1">
           {rangeOptions.map((range) => (
             <button
               key={range.id}
               onClick={() => setActiveRange(range.id)}
-              className={`px-4 py-1.5 rounded-md text-[13px] font-semibold transition-colors ${
-                activeRange === range.id ? 'bg-white text-[#2563EB] shadow-sm' : 'text-[#475569] hover:text-[#0F172A]'
+              className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${
+                activeRange === range.id ? 'bg-white text-[#2563EB] shadow-2xs' : 'text-[#475569] hover:text-[#0F172A]'
               }`}
             >
               {range.label}
@@ -438,86 +438,86 @@ export default function AnalyticsPage() {
         </div>
 
         {activeRange === 'Custom' && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <input
               type="date"
               value={customFrom}
               onChange={(e) => setCustomFrom(e.target.value)}
-              className="px-2.5 py-1.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg text-[12px] font-semibold text-[#475569] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20"
+              className="px-2 py-1 bg-[#F8FAFC] border border-[#E2E8F0] rounded-md text-xs font-semibold text-[#475569] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20"
               aria-label="Start date"
             />
-            <span className="text-[12px] text-[#94A3B8]">to</span>
+            <span className="text-xs text-[#94A3B8]">to</span>
             <input
               type="date"
               value={customTo}
               onChange={(e) => setCustomTo(e.target.value)}
-              className="px-2.5 py-1.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg text-[12px] font-semibold text-[#475569] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20"
+              className="px-2 py-1 bg-[#F8FAFC] border border-[#E2E8F0] rounded-md text-xs font-semibold text-[#475569] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20"
               aria-label="End date"
             />
           </div>
         )}
       </div>
 
-      <p className="text-[12px] text-[#94A3B8] mb-6">
+      <p className="text-xs text-[#94A3B8] mb-3.5">
         Showing <span className="font-semibold text-[#475569]">{series.label}</span> ({dayCount} {dayCount === 1 ? 'day' : 'days'}): {fromLabel} - {toLabel} · compared {series.compare}
       </p>
 
       {invalidCustom && (
-        <div className="mb-6 rounded-lg border border-[#F59E0B] bg-[#FEF3C7] px-3 py-2 text-[13px] font-semibold text-[#92400E]">
+        <div className="mb-3.5 rounded-lg border border-[#F59E0B] bg-[#FEF3C7] px-3 py-1.5 text-xs font-semibold text-[#92400E]">
           Start date is after end date. Adjust the range to see accurate figures.
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-3 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-2.5 mb-3.5">
         {kpiCards.map((card) => (
-          <div key={card.label} className="bg-white border border-[#E2E8F0] rounded-xl p-4 shadow-sm flex flex-col gap-3 min-h-[128px]">
-            <div className="text-[11px] font-bold text-[#94A3B8] uppercase tracking-wider">{card.label}</div>
+          <div key={card.label} className="bg-white border border-[#E2E8F0] rounded-lg p-2.5 sm:p-3 shadow-2xs flex flex-col gap-1.5 min-h-[96px]">
+            <div className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider">{card.label}</div>
             <div>
-              <div className="text-[22px] font-bold text-[#0F172A] leading-none">{card.value}</div>
-              <div className={`text-[12px] font-semibold mt-2 ${toneClass(card.tone)}`}>{card.change}</div>
+              <div className="text-lg font-bold text-[#0F172A] leading-none">{card.value}</div>
+              <div className={`text-[11px] font-semibold mt-1 ${toneClass(card.tone)}`}>{card.change}</div>
             </div>
-            <div className="text-[11px] text-[#64748B] mt-auto">{card.subtext}</div>
+            <div className="text-[10px] text-[#64748B] mt-auto">{card.subtext}</div>
           </div>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-4">
-        <section className="xl:col-span-2 bg-white border border-[#E2E8F0] rounded-xl p-5 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-3.5 mb-3.5">
+        <section className="xl:col-span-2 bg-white border border-[#E2E8F0] rounded-lg p-3.5 shadow-2xs">
+          <div className="flex items-center justify-between mb-3">
             <div>
-              <h2 className="text-[14px] font-bold text-[#0F172A]">Revenue, Profit & Usage Trend</h2>
-              <p className="text-[12px] text-[#64748B] mt-0.5">Solid lines are the selected range, dashed line is the previous period.</p>
+              <h2 className="text-xs font-bold text-[#0F172A]">Revenue, Profit & Usage Trend</h2>
+              <p className="text-[11px] text-[#64748B] mt-0.5">Solid lines are the selected range, dashed line is the previous period.</p>
             </div>
-            <div className="flex items-center gap-3 text-[12px] font-semibold">
+            <div className="flex items-center gap-2.5 text-[11px] font-semibold">
               <span className="text-[#2563EB]">Revenue</span>
               <span className="text-[#10B981]">Profit</span>
               <span className="text-[#F59E0B]">Usage</span>
               <span className="text-[#94A3B8]">Previous</span>
             </div>
           </div>
-          <svg viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} className="w-full h-[260px]" preserveAspectRatio="none" role="img" aria-label="Revenue, profit and usage trend versus the previous period">
+          <svg viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} className="w-full h-[160px]" preserveAspectRatio="none" role="img" aria-label="Revenue, profit and usage trend versus the previous period">
             {[0, 0.25, 0.5, 0.75, 1].map((ratio) => (
               <line key={ratio} x1="0" x2={CHART_WIDTH} y1={CHART_HEIGHT * ratio} y2={CHART_HEIGHT * ratio} stroke="#E2E8F0" strokeWidth="1" />
             ))}
-            <path d={previousPath} fill="none" stroke="#94A3B8" strokeWidth="2" strokeDasharray="6 6" vectorEffect="non-scaling-stroke" />
-            <path d={revenuePath} fill="none" stroke="#2563EB" strokeWidth="3" vectorEffect="non-scaling-stroke" />
-            <path d={profitPath} fill="none" stroke="#10B981" strokeWidth="3" vectorEffect="non-scaling-stroke" />
-            <path d={usagePath} fill="none" stroke="#F59E0B" strokeWidth="3" vectorEffect="non-scaling-stroke" />
+            <path d={previousPath} fill="none" stroke="#94A3B8" strokeWidth="1.5" strokeDasharray="5 5" vectorEffect="non-scaling-stroke" />
+            <path d={revenuePath} fill="none" stroke="#2563EB" strokeWidth="2.5" vectorEffect="non-scaling-stroke" />
+            <path d={profitPath} fill="none" stroke="#10B981" strokeWidth="2.5" vectorEffect="non-scaling-stroke" />
+            <path d={usagePath} fill="none" stroke="#F59E0B" strokeWidth="2.5" vectorEffect="non-scaling-stroke" />
           </svg>
-          <div className="flex justify-between mt-2 text-[11px] text-[#94A3B8]">
+          <div className="flex justify-between mt-1.5 text-[10px] text-[#94A3B8]">
             {series.points.map((point) => (
               <span key={point}>{point}</span>
             ))}
           </div>
         </section>
 
-        <section className="bg-white border border-[#E2E8F0] rounded-xl p-5 shadow-sm">
-          <h2 className="text-[14px] font-bold text-[#0F172A] mb-1">Revenue by Period</h2>
-          <p className="text-[12px] text-[#64748B] mb-5">Bar view of the same range for period-on-period reading.</p>
-          <div className="flex items-end justify-between gap-2 h-[200px]">
+        <section className="bg-white border border-[#E2E8F0] rounded-lg p-3.5 shadow-2xs">
+          <h2 className="text-xs font-bold text-[#0F172A] mb-0.5">Revenue by Period</h2>
+          <p className="text-[11px] text-[#64748B] mb-3.5">Bar view of the same range for period-on-period reading.</p>
+          <div className="flex items-end justify-between gap-1.5 h-[140px]">
             {series.revenue.map((value, index) => (
-              <div key={series.points[index]} className="flex-1 flex flex-col items-center gap-2 h-full justify-end">
-                <span className="text-[11px] font-semibold text-[#475569]">{value.toFixed(1)}</span>
+              <div key={series.points[index]} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end">
+                <span className="text-[10px] font-semibold text-[#475569]">{value.toFixed(1)}</span>
                 <div className="w-full bg-[#2563EB] rounded-t-md min-h-[4px]" style={{ height: `${(value / barMax) * 100}%` }} />
                 <span className="text-[10px] text-[#94A3B8]">{series.points[index]}</span>
               </div>
@@ -526,24 +526,24 @@ export default function AnalyticsPage() {
         </section>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-4">
-        <section className="bg-white border border-[#E2E8F0] rounded-xl p-5 shadow-sm">
-          <h2 className="text-[14px] font-bold text-[#0F172A] mb-1">Revenue to Profit Flow</h2>
-          <p className="text-[12px] text-[#64748B] mb-5">Waterfall of what remains after provider spend.</p>
-          <div className="space-y-3">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-3.5 mb-3.5">
+        <section className="bg-white border border-[#E2E8F0] rounded-lg p-3.5 shadow-2xs">
+          <h2 className="text-xs font-bold text-[#0F172A] mb-0.5">Revenue to Profit Flow</h2>
+          <p className="text-[11px] text-[#64748B] mb-3.5">Waterfall of what remains after provider spend.</p>
+          <div className="space-y-2">
             {providerCosts.map((line) => (
-              <div key={line.label} className="grid grid-cols-[84px_1fr_88px] items-center gap-3">
-                <span className="text-[12px] font-semibold text-[#475569]">{line.label}</span>
-                <div className="h-8 bg-[#F8FAFC] rounded-lg overflow-hidden flex items-center">
+              <div key={line.label} className="grid grid-cols-[76px_1fr_80px] items-center gap-2">
+                <span className="text-xs font-semibold text-[#475569]">{line.label}</span>
+                <div className="h-6 bg-[#F8FAFC] rounded overflow-hidden flex items-center">
                   <div
-                    className="h-full rounded-lg"
+                    className="h-full rounded"
                     style={{
                       width: `${Math.max((Math.abs(line.value) / waterfallMax) * 100, 4)}%`,
                       backgroundColor: line.color,
                     }}
                   />
                 </div>
-                <span className={`text-[12px] font-bold text-right ${line.value < 0 ? 'text-[#EF4444]' : 'text-[#0F172A]'}`}>
+                <span className={`text-xs font-bold text-right ${line.value < 0 ? 'text-[#EF4444]' : 'text-[#0F172A]'}`}>
                   {money(line.value)}
                 </span>
               </div>
@@ -551,22 +551,22 @@ export default function AnalyticsPage() {
           </div>
         </section>
 
-        <section className="bg-white border border-[#E2E8F0] rounded-xl p-5 shadow-sm">
-          <h2 className="text-[14px] font-bold text-[#0F172A] mb-1">Usage &amp; Limit Pressure</h2>
-          <p className="text-[12px] text-[#64748B] mb-5">Capacity rows are live ceilings; burn row follows the selected range.</p>
-          <div className="space-y-4">
+        <section className="bg-white border border-[#E2E8F0] rounded-lg p-3.5 shadow-2xs">
+          <h2 className="text-xs font-bold text-[#0F172A] mb-0.5">Usage &amp; Limit Pressure</h2>
+          <p className="text-[11px] text-[#64748B] mb-3.5">Capacity rows are live ceilings; burn row follows the selected range.</p>
+          <div className="space-y-3">
             {usageLimits.map((limit) => {
               const percent = Math.round((limit.used / limit.limit) * 100);
               return (
-                <div key={limit.label} className="space-y-1.5">
-                  <div className="flex justify-between text-[12px]">
+                <div key={limit.label} className="space-y-1">
+                  <div className="flex justify-between text-xs">
                     <span className="font-medium text-[#475569]">{limit.label}</span>
                     <span className="font-semibold text-[#0F172A]">{percent}%</span>
                   </div>
-                  <div className="h-2 bg-[#F1F5F9] rounded-full overflow-hidden">
+                  <div className="h-1.5 bg-[#F1F5F9] rounded-full overflow-hidden">
                     <div className={`h-full rounded-full ${limitTone(percent)}`} style={{ width: `${Math.min(percent, 100)}%` }} />
                   </div>
-                  <div className="text-[11px] text-[#94A3B8]">
+                  <div className="text-[10px] text-[#94A3B8]">
                     {limit.used.toLocaleString('en-US')} / {limit.limit.toLocaleString('en-US')}
                   </div>
                 </div>
@@ -575,32 +575,32 @@ export default function AnalyticsPage() {
           </div>
         </section>
 
-        <section className="bg-white border border-[#E2E8F0] rounded-xl p-5 shadow-sm">
-          <h2 className="text-[14px] font-bold text-[#0F172A] mb-1">Sales Funnel Flow</h2>
-          <p className="text-[12px] text-[#64748B] mb-5">Lead to paid conversion in the selected range.</p>
-          <div className="space-y-3">
+        <section className="bg-white border border-[#E2E8F0] rounded-lg p-3.5 shadow-2xs">
+          <h2 className="text-xs font-bold text-[#0F172A] mb-0.5">Sales Funnel Flow</h2>
+          <p className="text-[11px] text-[#64748B] mb-3.5">Lead to paid conversion in the selected range.</p>
+          <div className="space-y-2.5">
             {series.funnel.map((step, index) => {
               const width = (step.value / series.funnel[0].value) * 100;
               const next = series.funnel[index + 1];
               const conversion = next ? Math.round((next.value / step.value) * 100) : null;
               return (
                 <div key={step.label}>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-[#EFF6FF] text-[#2563EB] text-[12px] font-bold flex items-center justify-center flex-shrink-0">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-6 h-6 rounded-full bg-[#EFF6FF] text-[#2563EB] text-[11px] font-bold flex items-center justify-center flex-shrink-0">
                       {index + 1}
                     </div>
                     <div className="flex-1">
-                      <div className="flex justify-between text-[12px] mb-1">
+                      <div className="flex justify-between text-xs mb-1">
                         <span className="font-semibold text-[#0F172A]">{step.label}</span>
                         <span className="font-bold text-[#475569]">{step.value.toLocaleString('en-US')}</span>
                       </div>
-                      <div className="h-2 bg-[#F1F5F9] rounded-full overflow-hidden">
+                      <div className="h-1.5 bg-[#F1F5F9] rounded-full overflow-hidden">
                         <div className="h-full bg-[#2563EB] rounded-full" style={{ width: `${width}%` }} />
                       </div>
                     </div>
                   </div>
                   {conversion !== null && (
-                    <div className="ml-4 my-1.5 pl-8 border-l border-dashed border-[#CBD5E1] text-[11px] text-[#94A3B8]">
+                    <div className="ml-3 my-1 pl-6 border-l border-dashed border-[#CBD5E1] text-[10px] text-[#94A3B8]">
                       {conversion}% conversion
                     </div>
                   )}
@@ -611,19 +611,19 @@ export default function AnalyticsPage() {
         </section>
       </div>
 
-      <section className="bg-white border border-[#E2E8F0] rounded-xl p-5 shadow-sm mb-4">
-        <h2 className="text-[14px] font-bold text-[#0F172A] mb-1">Sales by Vertical</h2>
-        <p className="text-[12px] text-[#64748B] mb-5">New paid tenants by business category in the selected range.</p>
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+      <section className="bg-white border border-[#E2E8F0] rounded-lg p-3.5 shadow-2xs mb-3.5">
+        <h2 className="text-xs font-bold text-[#0F172A] mb-0.5">Sales by Vertical</h2>
+        <p className="text-[11px] text-[#64748B] mb-3.5">New paid tenants by business category in the selected range.</p>
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
           {series.verticalSales.map((item) => {
             const top = Math.max(...series.verticalSales.map((v) => v.value)) || 1;
             return (
-              <div key={item.label} className="space-y-1.5">
-                <div className="flex justify-between text-[12px]">
+              <div key={item.label} className="space-y-1">
+                <div className="flex justify-between text-xs">
                   <span className="font-medium text-[#475569]">{item.label}</span>
                   <span className="font-semibold text-[#0F172A]">{item.value}</span>
                 </div>
-                <div className="h-2 bg-[#F1F5F9] rounded-full overflow-hidden">
+                <div className="h-1.5 bg-[#F1F5F9] rounded-full overflow-hidden">
                   <div className="h-full rounded-full" style={{ width: `${(item.value / top) * 100}%`, backgroundColor: item.color }} />
                 </div>
               </div>
@@ -632,27 +632,27 @@ export default function AnalyticsPage() {
         </div>
       </section>
 
-      <section className="bg-white border border-[#E2E8F0] rounded-xl shadow-sm overflow-hidden">
-        <div className="p-4 border-b border-[#E2E8F0]">
-          <h2 className="text-[14px] font-bold text-[#0F172A]">Executive Summary</h2>
-          <p className="text-[12px] text-[#64748B] mt-0.5">Operator read for {series.label.toLowerCase()}.</p>
+      <section className="bg-white border border-[#E2E8F0] rounded-lg shadow-2xs overflow-hidden">
+        <div className="p-3 border-b border-[#E2E8F0]">
+          <h2 className="text-xs font-bold text-[#0F172A]">Executive Summary</h2>
+          <p className="text-[11px] text-[#64748B] mt-0.5">Operator read for {series.label.toLowerCase()}.</p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-[#E2E8F0]">
-          <div className="p-4">
-            <div className="text-[11px] font-bold text-[#94A3B8] uppercase tracking-wider mb-2">Revenue</div>
-            <p className="text-[13px] text-[#475569] leading-relaxed">
+          <div className="p-3">
+            <div className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider mb-1.5">Revenue</div>
+            <p className="text-xs text-[#475569] leading-relaxed">
               {money(m.revenue)} billed, {signed(m.revenueDelta)} {series.compare}. Expansion should target high-usage clinics where ROI is already proven.
             </p>
           </div>
-          <div className="p-4">
-            <div className="text-[11px] font-bold text-[#94A3B8] uppercase tracking-wider mb-2">Usage</div>
-            <p className="text-[13px] text-[#475569] leading-relaxed">
+          <div className="p-3">
+            <div className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider mb-1.5">Usage</div>
+            <p className="text-xs text-[#475569] leading-relaxed">
               {burnPercent}% of sold minutes consumed. Channel capacity is the tightest technical constraint, not the sold quota.
             </p>
           </div>
-          <div className="p-4">
-            <div className="text-[11px] font-bold text-[#94A3B8] uppercase tracking-wider mb-2">Profit</div>
-            <p className="text-[13px] text-[#475569] leading-relaxed">
+          <div className="p-3">
+            <div className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider mb-1.5">Profit</div>
+            <p className="text-xs text-[#475569] leading-relaxed">
               {money(m.grossProfit)} gross profit at {m.grossMargin}% margin ({signed(m.marginDelta)}). Watch telephony and TTS spend before adding cheaper plans.
             </p>
           </div>

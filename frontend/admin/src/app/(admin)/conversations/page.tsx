@@ -147,14 +147,14 @@ export default function ConversationsPage() {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto scrollbar-hide p-8 animate-in fade-in duration-300 text-[13px]">
+    <div className="flex-1 overflow-y-auto scrollbar-hide p-4 sm:p-5 animate-in fade-in duration-300 text-xs">
       {/* Compact Header */}
-      <header className="mb-4 pb-3.5 border-b border-[#E2E8F0] flex justify-between items-center">
+      <header className="mb-3.5 pb-2.5 border-b border-[#E2E8F0] flex justify-between items-center">
         <div>
-          <h1 className="text-[24px] font-bold text-[#0F172A] tracking-tight leading-tight">
+          <h1 className="text-lg font-bold text-[#0F172A] tracking-tight leading-tight">
             AI Conversations
           </h1>
-          <p className="text-[12px] text-[#475569] mt-0.5 font-normal">
+          <p className="text-xs text-[#475569] mt-0.5 font-normal">
             Real-time omnichannel conversation logs across all platform tenants.
           </p>
         </div>
@@ -178,12 +178,12 @@ export default function ConversationsPage() {
       </header>
 
       {/* Top 4 KPI Metric Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mb-4">
-        <div className="bg-white border border-[#E2E8F0] rounded-xl p-3 shadow-sm">
-          <div className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider mb-1">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mb-3.5">
+        <div className="bg-white border border-[#E2E8F0] rounded-lg p-2.5 sm:p-3 shadow-2xs">
+          <div className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider mb-0.5">
             TOTAL CONVERSATIONS
           </div>
-          <div className="text-[20px] font-bold text-[#0F172A] leading-none mb-1">
+          <div className="text-base font-bold text-[#0F172A] leading-none mb-1">
             18,420
           </div>
           <div className="text-[10px] font-semibold text-[#10B981]">
@@ -191,11 +191,11 @@ export default function ConversationsPage() {
           </div>
         </div>
 
-        <div className="bg-white border border-[#E2E8F0] rounded-xl p-3 shadow-sm">
-          <div className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider mb-1">
+        <div className="bg-white border border-[#E2E8F0] rounded-lg p-2.5 sm:p-3 shadow-2xs">
+          <div className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider mb-0.5">
             VOICE CHANNELS
           </div>
-          <div className="text-[20px] font-bold text-[#0F172A] leading-none mb-1">
+          <div className="text-base font-bold text-[#0F172A] leading-none mb-1">
             12,890
           </div>
           <div className="text-[10px] font-semibold text-[#2563EB]">
@@ -203,11 +203,11 @@ export default function ConversationsPage() {
           </div>
         </div>
 
-        <div className="bg-white border border-[#E2E8F0] rounded-xl p-3 shadow-sm">
-          <div className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider mb-1">
+        <div className="bg-white border border-[#E2E8F0] rounded-lg p-2.5 sm:p-3 shadow-2xs">
+          <div className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider mb-0.5">
             WHATSAPP / WEB / SMS
           </div>
-          <div className="text-[20px] font-bold text-[#0F172A] leading-none mb-1">
+          <div className="text-base font-bold text-[#0F172A] leading-none mb-1">
             5,530
           </div>
           <div className="text-[10px] font-semibold text-[#10B981]">
@@ -215,11 +215,11 @@ export default function ConversationsPage() {
           </div>
         </div>
 
-        <div className="bg-white border border-[#E2E8F0] rounded-xl p-3 shadow-sm">
-          <div className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider mb-1">
+        <div className="bg-white border border-[#E2E8F0] rounded-lg p-2.5 sm:p-3 shadow-2xs">
+          <div className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider mb-0.5">
             AVG TURNS PER DIALOGUE
           </div>
-          <div className="text-[20px] font-bold text-[#0F172A] leading-none mb-1">
+          <div className="text-base font-bold text-[#0F172A] leading-none mb-1">
             4.8 turns
           </div>
           <div className="text-[10px] font-semibold text-[#10B981]">

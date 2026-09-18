@@ -150,20 +150,20 @@ export default function IntegrationsPage() {
   );
 
   return (
-    <div className="flex-1 overflow-y-auto scrollbar-hide p-8 animate-in fade-in duration-500">
+    <div className="flex-1 overflow-y-auto scrollbar-hide p-4 sm:p-5 animate-in fade-in duration-500">
       {/* Header */}
-      <header className="mb-6 pb-5 border-b border-[#E2E8F0] flex justify-between items-center">
+      <header className="mb-4 pb-3 border-b border-[#E2E8F0] flex justify-between items-center">
         <div>
-          <h1 className="text-[24px] font-bold text-[#0F172A] tracking-tight leading-tight">
+          <h1 className="text-lg font-bold text-[#0F172A] tracking-tight leading-tight">
             Integrations
           </h1>
-          <p className="text-[14px] text-[#475569] mt-1 font-normal">
+          <p className="text-xs text-[#475569] mt-0.5 font-normal">
             Platform-wide integration management.
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <button className="flex items-center gap-2 border border-[#E2E8F0] rounded-lg py-2 px-3 text-[13px] font-medium text-[#475569] bg-white shadow-sm hover:bg-gray-50 transition-colors">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <div className="flex items-center gap-2">
+          <button className="flex items-center gap-1.5 border border-[#E2E8F0] rounded-md py-1.5 px-2.5 text-xs font-medium text-[#475569] bg-white shadow-2xs hover:bg-gray-50 transition-colors">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
               <line x1="16" y1="2" x2="16" y2="6"></line>
               <line x1="8" y1="2" x2="8" y2="6"></line>
@@ -171,8 +171,8 @@ export default function IntegrationsPage() {
             </svg>
             Jan 1 - Jan 30, 2026
           </button>
-          <button className="flex items-center justify-center border border-[#E2E8F0] rounded-full w-9 h-9 text-[#475569] bg-white shadow-sm hover:bg-gray-50 transition-colors">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <button className="flex items-center justify-center border border-[#E2E8F0] rounded-full w-7 h-7 text-[#475569] bg-white shadow-2xs hover:bg-gray-50 transition-colors">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
               <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
             </svg>
@@ -181,77 +181,80 @@ export default function IntegrationsPage() {
       </header>
 
       {/* Category Tabs */}
-      <div className="inline-flex items-center gap-1 bg-[#F1F5F9] rounded-lg p-1 mb-6">
+      <div className="flex items-center gap-1.5 mb-3.5 border-b border-[#E2E8F0]">
         {tabs.map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`px-4 py-1.5 rounded-md text-[13px] font-semibold transition-colors ${
+            className={`pb-2 px-2.5 text-xs font-semibold transition-colors relative ${
               activeTab === tab
-                ? 'bg-white text-[#2563EB] shadow-sm'
-                : 'text-[#475569] hover:text-[#0F172A]'
+                ? 'text-[#2563EB]'
+                : 'text-[#64748B] hover:text-[#0F172A]'
             }`}
           >
             {tab}
+            {activeTab === tab && (
+              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#2563EB] rounded-full" />
+            )}
           </button>
         ))}
       </div>
 
       {/* Integrations Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
         {filteredIntegrations.map((integration) => (
           <div
             key={integration.id}
-            className="bg-white border border-[#E2E8F0] rounded-xl p-5 shadow-sm flex flex-col gap-4"
+            className="bg-white border border-[#E2E8F0] rounded-lg p-3.5 shadow-2xs flex flex-col gap-3"
           >
             {/* Top: identity + status */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-md bg-[#F1F5F9] text-[#475569] flex items-center justify-center flex-shrink-0">
+                <div className="w-7 h-7 rounded-md bg-[#F1F5F9] text-[#475569] flex items-center justify-center shrink-0">
                   {getIcon(integration.icon)}
                 </div>
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-[14px] font-bold text-[#0F172A] leading-none">
+                <div className="flex flex-col">
+                  <span className="text-xs font-bold text-[#0F172A] leading-tight">
                     {integration.name}
                   </span>
-                  <span className="text-[11px] text-[#64748B]">{integration.category}</span>
+                  <span className="text-[10px] text-[#64748B]">{integration.category}</span>
                 </div>
               </div>
               <span
-                className={`px-2 py-1 rounded-md text-[12px] font-semibold ${statusStyles[integration.status]}`}
+                className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${statusStyles[integration.status]}`}
               >
                 {integration.status}
               </span>
             </div>
 
             {/* Details */}
-            <div className="bg-[#F8FAFC] rounded-lg p-3 flex flex-col gap-2">
+            <div className="bg-[#F8FAFC] rounded-md p-2.5 flex flex-col gap-1.5 text-xs">
               <div className="flex justify-between">
-                <span className="text-[12px] text-[#64748B]">API Key</span>
-                <span className="text-[12px] font-semibold text-[#0F172A]">
+                <span className="text-[11px] text-[#64748B]">API Key</span>
+                <span className="text-[11px] font-semibold text-[#0F172A]">
                   {integration.apiKeyMasked}
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-[12px] text-[#64748B]">Last Checked</span>
-                <span className="text-[12px] font-medium text-[#1E293B]">
+                <span className="text-[11px] text-[#64748B]">Last Checked</span>
+                <span className="text-[11px] font-medium text-[#1E293B]">
                   {integration.lastChecked}
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-[12px] text-[#64748B]">Error Rate</span>
-                <span className={`text-[12px] font-semibold ${errorRateColor(integration.errorRate)}`}>
+                <span className="text-[11px] text-[#64748B]">Error Rate</span>
+                <span className={`text-[11px] font-semibold ${errorRateColor(integration.errorRate)}`}>
                   {integration.errorRate}
                 </span>
               </div>
             </div>
 
             {/* Actions */}
-            <div className="flex items-center gap-2">
-              <button className="flex-1 py-2 px-3 bg-[#2563EB] hover:bg-blue-700 text-white rounded-md text-[12px] font-semibold transition-colors">
+            <div className="flex items-center gap-2 pt-0.5">
+              <button className="flex-1 py-1 px-2.5 bg-[#2563EB] hover:bg-blue-700 text-white rounded text-xs font-semibold transition-colors">
                 Configure
               </button>
-              <button className="flex-1 py-2 px-3 border border-[#E2E8F0] text-[#475569] rounded-md text-[12px] font-semibold hover:bg-gray-50 transition-colors">
+              <button className="flex-1 py-1 px-2.5 border border-[#E2E8F0] text-[#475569] rounded text-xs font-semibold hover:bg-gray-50 transition-colors">
                 Test Connection
               </button>
             </div>

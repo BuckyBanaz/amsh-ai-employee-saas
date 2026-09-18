@@ -71,14 +71,14 @@ export default function UserDetailPage() {
   ];
 
   return (
-    <div className="flex-1 overflow-y-auto scrollbar-hide p-8 animate-in fade-in duration-500">
+    <div className="flex-1 overflow-y-auto scrollbar-hide p-4 sm:p-5 animate-in fade-in duration-500">
       {/* Breadcrumb / Back button */}
-      <div className="mb-4">
+      <div className="mb-3">
         <Link
           href="/business-users"
-          className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#475569] hover:text-[#2563EB] transition-colors"
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#475569] hover:text-[#2563EB] transition-colors"
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <line x1="19" y1="12" x2="5" y2="12"></line>
             <polyline points="12 19 5 12 12 5"></polyline>
           </svg>
@@ -87,52 +87,52 @@ export default function UserDetailPage() {
       </div>
 
       {/* Top Banner */}
-      <div className="mb-5 flex items-center justify-between px-4 py-2 bg-[#EFF6FF] border border-[#BFDBFE] rounded-lg text-[#2563EB]">
+      <div className="mb-3.5 flex items-center justify-between px-3.5 py-1.5 bg-[#EFF6FF] border border-[#BFDBFE] rounded-md text-[#2563EB]">
         <div className="flex items-center gap-2">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
             <circle cx="12" cy="10" r="3"></circle>
           </svg>
-          <span className="text-[12px] font-bold uppercase tracking-wide">
+          <span className="text-[11px] font-bold uppercase tracking-wide">
             TENANT USER PROFILE: DR. SARAH WILSON (ID: {params?.id || 'u-1'})
           </span>
         </div>
-        <span className="text-[11px] font-semibold bg-white/80 px-2 py-0.5 rounded border border-[#BFDBFE]">
+        <span className="text-[10px] font-semibold bg-white/80 px-1.5 py-0.5 rounded border border-[#BFDBFE]">
           2FA Verified
         </span>
       </div>
 
       {/* User Header Profile Card */}
-      <div className="bg-white border border-[#E2E8F0] rounded-xl p-6 shadow-sm mb-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="bg-white border border-[#E2E8F0] rounded-lg p-4 shadow-2xs mb-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
           {/* User Left Details */}
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-full bg-[#EFF6FF] border-2 border-[#BFDBFE] text-[#2563EB] font-bold text-2xl flex items-center justify-center shadow-inner">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-[#EFF6FF] border border-[#BFDBFE] text-[#2563EB] font-bold text-xs flex items-center justify-center shrink-0">
               SW
             </div>
             <div>
-              <div className="flex flex-wrap items-center gap-2.5">
-                <h1 className="text-[24px] font-bold text-[#0F172A] tracking-tight">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-lg font-bold text-[#0F172A] tracking-tight">
                   Dr. Sarah Wilson
                 </h1>
-                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold bg-[#EFF6FF] text-[#2563EB]">
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#EFF6FF] text-[#2563EB]">
                   Owner
                 </span>
-                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold bg-[#D1FAE5] text-[#065F46]">
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#D1FAE5] text-[#065F46]">
                   ● Active Account
                 </span>
               </div>
 
-              <div className="flex flex-wrap items-center gap-y-1 gap-x-4 text-[13px] text-[#475569] mt-1.5">
+              <div className="flex flex-wrap items-center gap-y-1 gap-x-3.5 text-xs text-[#475569] mt-1">
                 <span className="flex items-center gap-1.5">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#94A3B8]">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#94A3B8]">
                     <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
                     <polyline points="22,6 12,13 2,6"></polyline>
                   </svg>
                   sarah.w@smile.nl
                 </span>
                 <span className="flex items-center gap-1.5">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#94A3B8]">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#94A3B8]">
                     <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
                   </svg>
                   +31 20 555 0192
@@ -145,35 +145,35 @@ export default function UserDetailPage() {
           </div>
 
           {/* Action Buttons */}
-          <div className="flex items-center gap-2.5">
-            <button className="px-3 py-2 bg-white border border-[#E2E8F0] rounded-lg text-[12px] font-semibold text-[#0F172A] hover:bg-gray-50 shadow-sm transition-colors">
+          <div className="flex items-center gap-1.5">
+            <button className="px-2.5 py-1.5 bg-white border border-[#E2E8F0] rounded-md text-xs font-semibold text-[#0F172A] hover:bg-gray-50 shadow-2xs transition-colors">
               Reset Password
             </button>
-            <button className="px-3 py-2 bg-white border border-[#EF4444] rounded-lg text-[12px] font-semibold text-[#EF4444] hover:bg-red-50 shadow-sm transition-colors">
+            <button className="px-2.5 py-1.5 bg-white border border-[#EF4444] rounded-md text-xs font-semibold text-[#EF4444] hover:bg-red-50 shadow-2xs transition-colors">
               Suspend Access
             </button>
-            <button className="px-3.5 py-2 bg-[#2563EB] hover:bg-blue-700 text-white rounded-lg text-[12px] font-semibold shadow-sm transition-colors">
+            <button className="px-2.5 py-1.5 bg-[#2563EB] hover:bg-blue-700 text-white rounded-md text-xs font-semibold shadow-2xs transition-colors">
               Edit User Info
             </button>
           </div>
         </div>
 
         {/* 4 Quick Stat Cards in Profile */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5 mt-6 pt-5 border-t border-[#E2E8F0]">
-          <div className="p-3 bg-[#F8FAFC] rounded-lg border border-[#E2E8F0]">
-            <div className="text-[11px] font-semibold text-[#94A3B8] uppercase tracking-wider mb-1">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mt-3 pt-3 border-t border-[#E2E8F0]">
+          <div className="p-2 sm:p-2.5 bg-[#F8FAFC] rounded-md border border-[#E2E8F0]">
+            <div className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-0.5">
               Associated Businesses
             </div>
-            <div className="text-[20px] font-bold text-[#0F172A]">
+            <div className="text-base font-bold text-[#0F172A]">
               {associatedBusinesses.length} Clinics
             </div>
           </div>
 
-          <div className="p-3 bg-[#F8FAFC] rounded-lg border border-[#E2E8F0]">
-            <div className="text-[11px] font-semibold text-[#94A3B8] uppercase tracking-wider mb-1">
+          <div className="p-2 sm:p-2.5 bg-[#F8FAFC] rounded-md border border-[#E2E8F0]">
+            <div className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-0.5">
               Total Managed Calls
             </div>
-            <div className="text-[20px] font-bold text-[#0F172A]">
+            <div className="text-base font-bold text-[#0F172A]">
               5,312 calls
             </div>
           </div>

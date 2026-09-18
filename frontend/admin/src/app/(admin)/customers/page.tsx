@@ -155,37 +155,46 @@ export default function CustomersPage() {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto scrollbar-hide p-6 md:p-8 animate-in fade-in duration-300 w-full bg-[#F8FAFC]">
+    <div className="flex-1 overflow-y-auto scrollbar-hide p-4 sm:p-5 animate-in fade-in duration-300 w-full bg-[#F8FAFC]">
       {/* Header */}
-      <header className="mb-6 pb-5 border-b border-[#E2E8F0] flex justify-between items-center w-full">
+      <header className="mb-4 pb-3 border-b border-[#E2E8F0] flex justify-between items-center w-full">
         <div>
-          <h1 className="text-[24px] font-bold text-[#0F172A] tracking-tight leading-tight">
+          <h1 className="text-lg font-bold text-[#0F172A] tracking-tight leading-tight">
             Customers
           </h1>
-          <p className="text-[14px] text-[#475569] mt-1 font-normal">
+          <p className="text-xs text-[#475569] mt-0.5 font-normal">
             Platform-level customer management.
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           {/* Date Range Selector */}
-          <button className="flex items-center gap-2 border border-[#E2E8F0] rounded-lg py-2 px-3 text-[13px] font-medium text-[#475569] bg-white shadow-sm hover:bg-gray-50 transition-colors">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400">
+          <button className="flex items-center gap-1.5 border border-[#E2E8F0] rounded-md py-1.5 px-2.5 text-xs font-medium text-[#475569] bg-white shadow-2xs hover:bg-gray-50 transition-colors">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400">
               <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
               <line x1="16" y1="2" x2="16" y2="6"></line>
-              <line x1="8" y1="2" x2="8" y2="8"></line>
+              <line x1="8" y1="2" x2="8" y2="6"></line>
               <line x1="3" y1="10" x2="21" y2="10"></line>
             </svg>
             <span>Jan 1 - Jan 30, 2026</span>
           </button>
 
-          {/* Bell Icon */}
-          <button className="flex items-center justify-center border border-[#E2E8F0] rounded-full w-9 h-9 text-[#475569] bg-white shadow-sm hover:bg-gray-50 transition-colors relative">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          {/* Export Button */}
+          <button className="flex items-center gap-1.5 border border-[#E2E8F0] rounded-md py-1.5 px-2.5 text-xs font-medium text-[#475569] bg-white shadow-2xs hover:bg-gray-50 transition-colors">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            <span>Export</span>
+          </button>
+
+          {/* Notifications */}
+          <button className="flex items-center justify-center border border-[#E2E8F0] rounded-full w-7 h-7 text-[#475569] bg-white shadow-2xs hover:bg-gray-50 transition-colors">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
               <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
             </svg>
-            <span className="absolute top-2 right-2 w-1.5 h-1.5 bg-blue-600 rounded-full"></span>
           </button>
         </div>
       </header>
@@ -217,146 +226,133 @@ export default function CustomersPage() {
         </div>
 
         {/* Filter Controls */}
-        <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-          <div className="flex items-center gap-3 flex-1 min-w-[280px]">
-            <div className="relative flex-1 max-w-md">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+        {/* Top Control Filter & Metrics Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-2.5 bg-white p-2.5 rounded-lg border border-gray-200 shadow-2xs">
+          <div className="flex items-center gap-2 flex-1 min-w-[240px]">
+            <div className="relative flex-1 max-w-sm">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400">
                 <circle cx="11" cy="11" r="8"></circle>
                 <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
               </svg>
               <input
                 type="text"
-                placeholder="Search masked customers or business..."
+                placeholder="Search masked customers..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-4 py-1.5 text-[13px] bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:bg-white text-gray-900"
+                className="w-full pl-8 pr-2.5 py-1 text-xs bg-gray-50 border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:bg-white text-gray-900"
               />
             </div>
 
             <select
-            value={selectedStatus}
-            onChange={(e) => setSelectedStatus(e.target.value)}
-            className="px-2.5 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg text-[12px] font-semibold text-[#475569] hover:bg-gray-100/80 transition-colors focus:outline-none"
-          >
-            <option value="All">Status: All</option>
-            <option value="Active">Active</option>
-            <option value="Inactive">Inactive</option>
-          </select>
+              value={selectedStatus}
+              onChange={(e) => setSelectedStatus(e.target.value)}
+              className="px-2 py-1 bg-[#F8FAFC] border border-[#E2E8F0] rounded-md text-xs font-semibold text-[#475569] hover:bg-gray-100/80 transition-colors focus:outline-none"
+            >
+              <option value="All">Status: All</option>
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+            </select>
 
-          {/* Business Type Filter */}
-          <select
-            value={selectedType}
-            onChange={(e) => setSelectedType(e.target.value)}
-            className="px-2.5 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg text-[12px] font-semibold text-[#475569] hover:bg-gray-100/80 transition-colors focus:outline-none"
-          >
-            {typeOptions.map((t) => (
-              <option key={t} value={t}>{t === 'All' ? 'Type: All' : t}</option>
-            ))}
-          </select>
-          
-          {/* Reset Filters */}
-          {hasActiveFilters && (
-            <button onClick={resetFilters} className="text-[12px] font-semibold text-[#2563EB] hover:underline px-2 py-1">
-              Reset Filters
-            </button>
-          )}
+            {/* Business Type Filter */}
+            <select
+              value={selectedType}
+              onChange={(e) => setSelectedType(e.target.value)}
+              className="px-2 py-1 bg-[#F8FAFC] border border-[#E2E8F0] rounded-md text-xs font-semibold text-[#475569] hover:bg-gray-100/80 transition-colors focus:outline-none"
+            >
+              {typeOptions.map((t) => (
+                <option key={t} value={t}>{t === 'All' ? 'Type: All' : t}</option>
+              ))}
+            </select>
+            
+            {/* Reset Filters */}
+            {hasActiveFilters && (
+              <button onClick={resetFilters} className="text-[11px] font-semibold text-[#2563EB] hover:underline px-1 py-0.5">
+                Reset
+              </button>
+            )}
           </div>
 
-          <div className="text-[12px] font-semibold text-gray-500">
+          <div className="text-[11px] font-semibold text-gray-500">
             Showing <span className="text-gray-900 font-bold">{filteredCustomers.length}</span> platform customers
           </div>
         </div>
 
         {/* Customers Table */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-lg border border-gray-200 shadow-2xs overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-gray-100 bg-[#F9FAFB]">
-                  <th className="py-3 px-5 text-[11px] font-bold text-gray-500 uppercase tracking-wider">Customer Name</th>
-                  <th className="py-3 px-5 text-[11px] font-bold text-gray-500 uppercase tracking-wider">Business</th>
-                  <th className="py-3 px-5 text-[11px] font-bold text-gray-500 uppercase tracking-wider">Contact (Masked)</th>
-                  <th className="py-3 px-5 text-[11px] font-bold text-gray-500 uppercase tracking-wider">Last Booking</th>
-                  <th className="py-3 px-5 text-[11px] font-bold text-gray-500 uppercase tracking-wider">Status</th>
-                  <th className="py-3 px-5 text-[11px] font-bold text-gray-500 uppercase tracking-wider text-right">Actions</th>
+                  <th className="py-2 px-3.5 text-[10px] font-bold text-gray-500 uppercase tracking-wider">Customer</th>
+                  <th className="py-2 px-3.5 text-[10px] font-bold text-gray-500 uppercase tracking-wider">Business</th>
+                  <th className="py-2 px-3.5 text-[10px] font-bold text-gray-500 uppercase tracking-wider">Contact</th>
+                  <th className="py-2 px-3.5 text-[10px] font-bold text-gray-500 uppercase tracking-wider">Last Booking</th>
+                  <th className="py-2 px-3.5 text-[10px] font-bold text-gray-500 uppercase tracking-wider">Status</th>
+                  <th className="py-2 px-3.5 text-[10px] font-bold text-gray-500 uppercase tracking-wider text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100 text-[13px]">
+              <tbody className="divide-y divide-gray-100">
                 {filteredCustomers.map((customer) => (
                   <tr key={customer.id} className="hover:bg-gray-50/75 transition-colors group">
-                    {/* Customer Name */}
-                    <td className="py-3 px-5">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 border border-blue-100 font-bold text-[12px] flex items-center justify-center flex-shrink-0">
+                    {/* Customer */}
+                    <td className="py-2.5 px-3.5">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-full bg-blue-50 text-blue-600 border border-blue-100 font-bold text-xs flex items-center justify-center shrink-0">
                           {customer.name.charAt(0)}
                         </div>
                         <div>
                           <button
                             onClick={() => setSelectedCustomer(customer)}
-                            className="font-bold text-gray-900 hover:text-blue-600 transition-colors text-left font-mono"
+                            className="font-semibold text-gray-900 hover:text-blue-600 transition-colors text-left font-mono text-xs"
                           >
                             {customer.name}
                           </button>
-                          <div className="text-[11px] text-gray-400 font-mono">ID: {customer.id}</div>
+                          <div className="text-[10px] text-gray-400 font-mono">ID: {customer.id}</div>
                         </div>
                       </div>
                     </td>
 
                     {/* Business */}
-                    <td className="py-3 px-5">
+                    <td className="py-2.5 px-3.5">
                       <Link
                         href={`/businesses/${customer.businessId}`}
-                        className="font-medium text-gray-800 hover:text-blue-600 transition-colors flex items-center gap-1.5"
+                        className="font-medium text-gray-800 hover:text-blue-600 transition-colors flex items-center gap-1 text-xs"
                       >
                         <span>{customer.businessName}</span>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-                          <polyline points="15 3 21 3 21 9"></polyline>
-                          <line x1="10" y1="14" x2="21" y2="3"></line>
-                        </svg>
                       </Link>
-                      <div className="text-[11px] text-gray-400">{customer.city}, {customer.country}</div>
+                      <div className="text-[10px] text-gray-400">{customer.city}, {customer.country}</div>
                     </td>
 
                     {/* Contact (Masked) */}
-                    <td className="py-3 px-5 font-mono text-[12px] text-gray-600">
+                    <td className="py-2.5 px-3.5 font-mono text-xs text-gray-600">
                       <div>{customer.maskedContact}</div>
-                      <div className="text-[11px] text-gray-400">{customer.phone}</div>
+                      <div className="text-[10px] text-gray-400">{customer.phone}</div>
                     </td>
 
                     {/* Last Booking */}
-                    <td className="py-3 px-5 text-gray-600">
+                    <td className="py-2.5 px-3.5 text-xs text-gray-600">
                       <Link
                         href={`/appointments/${customer.appointmentId}`}
-                        className="hover:text-blue-600 font-medium transition-colors"
+                        className="hover:text-blue-600 hover:underline flex items-center gap-1"
                       >
-                        {customer.lastBooking}
+                        <span>{customer.lastBooking}</span>
                       </Link>
-                      <div className="text-[11px] text-gray-400">{customer.totalAppointments} past appointments</div>
+                      <div className="text-[10px] text-gray-400">{customer.totalAppointments} total bookings</div>
                     </td>
 
                     {/* Status */}
-                    <td className="py-3 px-5">
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold ${
-                        customer.status === 'Active'
-                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                          : 'bg-red-50 text-red-700 border border-red-200'
+                    <td className="py-2.5 px-3.5">
+                      <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                        customer.status === 'Active' ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-600'
                       }`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${customer.status === 'Active' ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
+                        <span className={`w-1 h-1 rounded-full ${customer.status === 'Active' ? 'bg-green-500' : 'bg-gray-400'}`}></span>
                         {customer.status}
                       </span>
                     </td>
 
                     {/* Actions */}
-                    <td className="py-3 px-5 text-right">
-                      <div className="flex items-center justify-end gap-3 text-[12px] font-semibold">
-                        <button
-                          onClick={() => setSelectedCustomer(customer)}
-                          className="text-blue-600 hover:text-blue-800 transition-colors"
-                        >
-                          View Logs
-                        </button>
-                        <span className="text-gray-300">·</span>
+                    <td className="py-2.5 px-3.5 text-right">
+                      <div className="flex items-center justify-end gap-2 text-xs">
                         <Link
                           href={`/businesses/${customer.businessId}`}
                           className="text-gray-600 hover:text-gray-900 transition-colors"

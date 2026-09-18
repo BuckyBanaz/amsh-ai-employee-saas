@@ -114,15 +114,15 @@ export default function SecurityEventsPage() {
   });
 
   return (
-    <div className="flex-1 overflow-y-auto scrollbar-hide p-8 animate-in fade-in duration-500">
-      <header className="mb-6 flex flex-wrap justify-between items-center gap-3">
+    <div className="flex-1 overflow-y-auto scrollbar-hide p-4 sm:p-5 animate-in fade-in duration-500">
+      <header className="mb-4 pb-3 border-b border-[#E2E8F0] flex flex-wrap justify-between items-center gap-2.5">
         <div>
-          <h1 className="text-[24px] font-bold text-[#0F172A] tracking-tight leading-tight">Security Events</h1>
-          <p className="text-[14px] text-[#475569] mt-1 font-normal">Security monitoring and threat detection.</p>
+          <h1 className="text-lg font-bold text-[#0F172A] tracking-tight leading-tight">Security Events</h1>
+          <p className="text-xs text-[#475569] mt-0.5 font-normal">Security monitoring and threat detection.</p>
         </div>
-        <div className="flex items-center gap-3">
-          <button className="flex items-center gap-2 border border-[#E2E8F0] rounded-lg py-2 px-3 text-[13px] font-medium text-[#475569] bg-white shadow-sm hover:bg-gray-50 transition-colors">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <div className="flex items-center gap-2">
+          <button className="flex items-center gap-1.5 border border-[#E2E8F0] rounded-lg py-1.5 px-2.5 text-xs font-medium text-[#475569] bg-white shadow-2xs hover:bg-gray-50 transition-colors">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
               <line x1="16" y1="2" x2="16" y2="6"></line>
               <line x1="8" y1="2" x2="8" y2="6"></line>
@@ -130,8 +130,8 @@ export default function SecurityEventsPage() {
             </svg>
             Jan 1 - Jan 30, 2026
           </button>
-          <button className="flex items-center justify-center border border-[#E2E8F0] rounded-full w-9 h-9 text-[#475569] bg-white shadow-sm hover:bg-gray-50 transition-colors">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <button className="flex items-center justify-center border border-[#E2E8F0] rounded-full w-7 h-7 text-[#475569] bg-white shadow-2xs hover:bg-gray-50 transition-colors">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
               <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
             </svg>
@@ -140,13 +140,13 @@ export default function SecurityEventsPage() {
       </header>
 
       {/* KPI cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 mb-3.5">
         {kpis.map((kpi) => (
-          <div key={kpi.label} className="bg-white border border-[#E2E8F0] rounded-xl p-5 shadow-sm">
-            <div className="text-[11px] font-bold text-[#94A3B8] uppercase tracking-wider mb-3">{kpi.label}</div>
-            <div className="flex items-end justify-between gap-3">
-              <span className="text-[26px] font-bold text-[#0F172A] leading-none">{kpi.value}</span>
-              <span className={`text-[12px] font-semibold ${kpi.tone === 'positive' ? 'text-[#10B981]' : 'text-[#EF4444]'}`}>
+          <div key={kpi.label} className="bg-white border border-[#E2E8F0] rounded-lg p-3 shadow-2xs">
+            <div className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider mb-2">{kpi.label}</div>
+            <div className="flex items-end justify-between gap-2.5">
+              <span className="text-xl font-bold text-[#0F172A] leading-none">{kpi.value}</span>
+              <span className={`text-[11px] font-semibold ${kpi.tone === 'positive' ? 'text-[#10B981]' : 'text-[#EF4444]'}`}>
                 {kpi.note}
               </span>
             </div>
@@ -155,14 +155,14 @@ export default function SecurityEventsPage() {
       </div>
 
       {/* Severity tabs + search */}
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+      <div className="flex flex-wrap items-center justify-between gap-2.5 mb-3">
         <div className="inline-flex items-center gap-1 bg-[#F1F5F9] rounded-lg p-1">
           {severityTabs.map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveSeverity(tab)}
-              className={`px-4 py-1.5 rounded-md text-[13px] font-semibold transition-colors ${
-                activeSeverity === tab ? 'bg-white text-[#2563EB] shadow-sm' : 'text-[#475569] hover:text-[#0F172A]'
+              className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${
+                activeSeverity === tab ? 'bg-white text-[#2563EB] shadow-2xs' : 'text-[#475569] hover:text-[#0F172A]'
               }`}
             >
               {tab === 'All' ? 'All Severities' : tab} ({countFor(tab)})
@@ -170,9 +170,9 @@ export default function SecurityEventsPage() {
           ))}
         </div>
 
-        <div className="relative w-[240px]">
-          <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-[#94A3B8]">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <div className="relative w-[210px]">
+          <span className="absolute inset-y-0 left-0 flex items-center pl-2.5 pointer-events-none text-[#94A3B8]">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="11" cy="11" r="8"></circle>
               <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
             </svg>
@@ -182,45 +182,45 @@ export default function SecurityEventsPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search event, identity, IP..."
-            className="w-full pl-9 pr-3 py-2 bg-white border border-[#E2E8F0] rounded-lg text-[12px] text-[#0F172A] placeholder-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB]"
+            className="w-full pl-8 pr-2.5 py-1 bg-white border border-[#E2E8F0] rounded-md text-xs text-[#0F172A] placeholder-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB]"
           />
         </div>
       </div>
 
-      <div className="bg-white border border-[#E2E8F0] rounded-xl shadow-sm overflow-hidden">
+      <div className="bg-white border border-[#E2E8F0] rounded-lg shadow-2xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0]">
-                <th className="px-4 py-3 text-[11px] font-bold text-[#475569] uppercase tracking-wider whitespace-nowrap">Severity</th>
-                <th className="px-4 py-3 text-[11px] font-bold text-[#475569] uppercase tracking-wider whitespace-nowrap">Timestamp</th>
-                <th className="px-4 py-3 text-[11px] font-bold text-[#475569] uppercase tracking-wider whitespace-nowrap">IP Address</th>
-                <th className="px-4 py-3 text-[11px] font-bold text-[#475569] uppercase tracking-wider whitespace-nowrap">Admin User / Identity</th>
-                <th className="px-4 py-3 text-[11px] font-bold text-[#475569] uppercase tracking-wider min-w-[280px]">Action / Event Detected</th>
-                <th className="px-4 py-3 text-[11px] font-bold text-[#475569] uppercase tracking-wider whitespace-nowrap">Status</th>
+                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider whitespace-nowrap">Severity</th>
+                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider whitespace-nowrap">Timestamp</th>
+                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider whitespace-nowrap">IP Address</th>
+                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider whitespace-nowrap">Admin User / Identity</th>
+                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider min-w-[240px]">Action / Event Detected</th>
+                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider whitespace-nowrap">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#E2E8F0]">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-10 text-center text-[13px] text-[#94A3B8]">
+                  <td colSpan={6} className="px-3.5 py-6 text-center text-xs text-[#94A3B8]">
                     No security events match this view.
                   </td>
                 </tr>
               ) : (
                 filtered.map((entry) => (
                   <tr key={entry.id} className="hover:bg-[#F8FAFC]/70 transition-colors">
-                    <td className="px-4 py-3.5 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-0.5 rounded-md text-[12px] font-semibold ${severityStyles[entry.severity]}`}>
+                    <td className="px-3.5 py-2 whitespace-nowrap">
+                      <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-semibold ${severityStyles[entry.severity]}`}>
                         {entry.severity}
                       </span>
                     </td>
-                    <td className="px-4 py-3.5 text-[13px] text-[#475569] whitespace-nowrap">{entry.timestamp}</td>
-                    <td className="px-4 py-3.5 text-[13px] text-[#475569] whitespace-nowrap">{entry.ip}</td>
-                    <td className="px-4 py-3.5 text-[13px] font-bold text-[#0F172A] whitespace-nowrap">{entry.identity}</td>
-                    <td className="px-4 py-3.5 text-[13px] text-[#475569]">{entry.event}</td>
+                    <td className="px-3.5 py-2 text-xs text-[#475569] whitespace-nowrap">{entry.timestamp}</td>
+                    <td className="px-3.5 py-2 text-xs text-[#475569] whitespace-nowrap">{entry.ip}</td>
+                    <td className="px-3.5 py-2 text-xs font-bold text-[#0F172A] whitespace-nowrap">{entry.identity}</td>
+                    <td className="px-3.5 py-2 text-xs text-[#475569]">{entry.event}</td>
                     <td
-                      className={`px-4 py-3.5 text-[13px] font-bold whitespace-nowrap ${
+                      className={`px-3.5 py-2 text-xs font-bold whitespace-nowrap ${
                         entry.statusTone === 'danger' ? 'text-[#EF4444]' : 'text-[#0F172A]'
                       }`}
                     >

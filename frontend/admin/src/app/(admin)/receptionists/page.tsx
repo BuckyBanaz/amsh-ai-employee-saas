@@ -166,23 +166,21 @@ export default function ReceptionistsPage() {
     setSelectedStatus('All');
     setSelectedType('All');
     setSearchQuery('');
-  };
-
-  return (
-    <div className="flex-1 overflow-y-auto scrollbar-hide p-8 animate-in fade-in duration-500">
+  };  return (
+    <div className="flex-1 overflow-y-auto scrollbar-hide p-4 sm:p-5 animate-in fade-in duration-500">
       {/* Header */}
-      <header className="mb-6 pb-5 border-b border-[#E2E8F0] flex justify-between items-center">
+      <header className="mb-4 pb-3 border-b border-[#E2E8F0] flex justify-between items-center">
         <div>
-          <h1 className="text-[24px] font-bold text-[#0F172A] tracking-tight leading-tight">
+          <h1 className="text-lg font-bold text-[#0F172A] tracking-tight leading-tight">
             AI Receptionists
           </h1>
-          <p className="text-[14px] text-[#475569] mt-1 font-normal">
+          <p className="text-xs text-[#475569] mt-0.5 font-normal">
             Manage, configure, and monitor automated voice receptionists across all businesses.
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <button className="flex items-center gap-2 border border-[#E2E8F0] rounded-lg py-2 px-3 text-[13px] font-medium text-[#475569] bg-white shadow-sm hover:bg-gray-50 transition-colors">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <div className="flex items-center gap-2">
+          <button className="flex items-center gap-1.5 border border-[#E2E8F0] rounded-md py-1.5 px-2.5 text-xs font-medium text-[#475569] bg-white shadow-2xs hover:bg-gray-50 transition-colors">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
               <line x1="16" y1="2" x2="16" y2="6"></line>
               <line x1="8" y1="2" x2="8" y2="6"></line>
@@ -190,8 +188,8 @@ export default function ReceptionistsPage() {
             </svg>
             Jan 1 - Jan 30, 2026
           </button>
-          <button className="flex items-center justify-center border border-[#E2E8F0] rounded-full w-9 h-9 text-[#475569] bg-white shadow-sm hover:bg-gray-50 transition-colors">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <button className="flex items-center justify-center border border-[#E2E8F0] rounded-full w-7 h-7 text-[#475569] bg-white shadow-2xs hover:bg-gray-50 transition-colors">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
               <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
             </svg>
@@ -200,65 +198,65 @@ export default function ReceptionistsPage() {
       </header>
 
       {/* Top 4 KPI Metrics Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 shadow-sm">
-          <div className="text-[12px] font-semibold text-[#94A3B8] uppercase tracking-wider mb-2">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+        <div className="bg-white border border-[#E2E8F0] rounded-lg p-3 shadow-2xs">
+          <div className="text-[10px] font-semibold text-[#94A3B8] uppercase tracking-wider mb-1">
             Total AI Agents
           </div>
-          <div className="flex items-end justify-between">
-            <div className="text-[26px] font-bold text-[#0F172A] leading-none">121</div>
-            <span className="text-[12px] font-semibold text-[#10B981]">+12% growth</span>
+          <div className="flex items-baseline justify-between">
+            <div className="text-xl font-bold text-[#0F172A] leading-none">121</div>
+            <span className="text-[11px] font-semibold text-[#10B981]">+12%</span>
           </div>
         </div>
 
-        <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 shadow-sm">
-          <div className="text-[12px] font-semibold text-[#94A3B8] uppercase tracking-wider mb-2">
+        <div className="bg-white border border-[#E2E8F0] rounded-lg p-3 shadow-2xs">
+          <div className="text-[10px] font-semibold text-[#94A3B8] uppercase tracking-wider mb-1">
             Active On Calls
           </div>
-          <div className="flex items-end justify-between">
-            <div className="text-[26px] font-bold text-[#0F172A] leading-none">84</div>
-            <span className="text-[12px] font-semibold text-[#2563EB]">Live Now</span>
+          <div className="flex items-baseline justify-between">
+            <div className="text-xl font-bold text-[#0F172A] leading-none">84</div>
+            <span className="text-[11px] font-semibold text-[#2563EB]">Live</span>
           </div>
         </div>
 
-        <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 shadow-sm">
-          <div className="text-[12px] font-semibold text-[#94A3B8] uppercase tracking-wider mb-2">
-            Calls Handled (Today)
+        <div className="bg-white border border-[#E2E8F0] rounded-lg p-3 shadow-2xs">
+          <div className="text-[10px] font-semibold text-[#94A3B8] uppercase tracking-wider mb-1">
+            Calls Processed (Today)
           </div>
-          <div className="flex items-end justify-between">
-            <div className="text-[26px] font-bold text-[#0F172A] leading-none">4,892</div>
-            <span className="text-[12px] font-semibold text-[#10B981]">+1,201 vs yest</span>
+          <div className="flex items-baseline justify-between">
+            <div className="text-xl font-bold text-[#0F172A] leading-none">4,892</div>
+            <span className="text-[11px] font-semibold text-[#10B981]">+1,201</span>
           </div>
         </div>
 
-        <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 shadow-sm">
-          <div className="text-[12px] font-semibold text-[#94A3B8] uppercase tracking-wider mb-2">
+        <div className="bg-white border border-[#E2E8F0] rounded-lg p-3 shadow-2xs">
+          <div className="text-[10px] font-semibold text-[#94A3B8] uppercase tracking-wider mb-1">
             Avg Resolution Rate
           </div>
-          <div className="flex items-end justify-between">
-            <div className="text-[26px] font-bold text-[#0F172A] leading-none">82.4%</div>
-            <span className="text-[12px] font-semibold text-[#10B981]">+1.2% eff</span>
+          <div className="flex items-baseline justify-between">
+            <div className="text-xl font-bold text-[#0F172A] leading-none">82.4%</div>
+            <span className="text-[11px] font-semibold text-[#10B981]">+1.2%</span>
           </div>
         </div>
       </div>
 
       {/* Filter & Action Bar */}
-      <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 mb-6 shadow-sm flex flex-wrap items-center justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-3">
+      <div className="bg-white border border-[#E2E8F0] rounded-lg p-2.5 mb-3.5 shadow-2xs flex flex-wrap items-center justify-between gap-2.5">
+        <div className="flex flex-wrap items-center gap-2">
           {/* Search Box */}
-          <div className="relative w-[260px]">
-            <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-[#94A3B8]">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <div className="relative w-[200px]">
+            <span className="absolute inset-y-0 left-0 flex items-center pl-2.5 pointer-events-none text-[#94A3B8]">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="11" cy="11" r="8"></circle>
                 <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
               </svg>
             </span>
             <input
               type="text"
-              placeholder="Search receptionists, voices..."
+              placeholder="Search receptionists..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg text-[13px] text-[#0F172A] placeholder-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB]"
+              className="w-full pl-8 pr-2.5 py-1 bg-[#F8FAFC] border border-[#E2E8F0] rounded-md text-xs text-[#0F172A] placeholder-[#94A3B8] focus:outline-none focus:ring-1 focus:ring-[#2563EB] focus:border-[#2563EB]"
             />
           </div>
 
@@ -266,11 +264,11 @@ export default function ReceptionistsPage() {
           <select
             value={selectedBusiness}
             onChange={(e) => setSelectedBusiness(e.target.value)}
-            className="px-3 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg text-[13px] font-semibold text-[#475569] hover:bg-gray-100/80 transition-colors focus:outline-none"
+            className="px-2.5 py-1 bg-[#F8FAFC] border border-[#E2E8F0] rounded-md text-xs font-semibold text-[#475569] hover:bg-gray-100/80 transition-colors focus:outline-none"
           >
             {businessOptions.map((b) => (
               <option key={b} value={b}>
-                {b === 'All' ? 'Filter by Business: All' : b}
+                {b === 'All' ? 'Business: All' : b}
               </option>
             ))}
           </select>
@@ -279,18 +277,19 @@ export default function ReceptionistsPage() {
           <select
             value={selectedStatus}
             onChange={(e) => setSelectedStatus(e.target.value)}
-            className="px-3 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg text-[13px] font-semibold text-[#475569] hover:bg-gray-100/80 transition-colors focus:outline-none"
+            className="px-2.5 py-1 bg-[#F8FAFC] border border-[#E2E8F0] rounded-md text-xs font-semibold text-[#475569] hover:bg-gray-100/80 transition-colors focus:outline-none"
           >
             <option value="All">Status: All</option>
             <option value="Active">Active</option>
             <option value="Paused">Paused</option>
             <option value="Testing">Testing</option>
           </select>
+
           {/* Business Type Filter */}
           <select
             value={selectedType}
             onChange={(e) => setSelectedType(e.target.value)}
-            className="px-3 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg text-[13px] font-semibold text-[#475569] hover:bg-gray-100/80 transition-colors focus:outline-none"
+            className="px-2.5 py-1 bg-[#F8FAFC] border border-[#E2E8F0] rounded-md text-xs font-semibold text-[#475569] hover:bg-gray-100/80 transition-colors focus:outline-none"
           >
             {typeOptions.map((t) => (
               <option key={t} value={t}>{t === 'All' ? 'Type: All' : t}</option>
@@ -299,19 +298,19 @@ export default function ReceptionistsPage() {
 
           {/* Reset */}
           {hasActiveFilters && (
-            <button onClick={resetFilters} className="text-[12px] font-semibold text-[#2563EB] hover:underline px-1">
+            <button onClick={resetFilters} className="text-[11px] font-semibold text-[#2563EB] hover:underline px-1">
               Reset
             </button>
           )}
         </div>
 
         {/* Deploy Action */}
-        <button className="flex items-center gap-1.5 px-3.5 py-2 bg-[#2563EB] hover:bg-blue-700 text-white rounded-lg text-[13px] font-semibold shadow-sm transition-colors">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <button className="flex items-center gap-1.5 px-3 py-1.5 bg-[#2563EB] hover:bg-blue-700 text-white rounded-md text-xs font-semibold shadow-2xs transition-colors">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <line x1="12" y1="5" x2="12" y2="19"></line>
             <line x1="5" y1="12" x2="19" y2="12"></line>
           </svg>
-          Deploy AI Receptionist
+          Deploy Receptionist
         </button>
       </div>
 
@@ -321,36 +320,36 @@ export default function ReceptionistsPage() {
       </div>
 
       {/* Receptionists Table */}
-      <div className="bg-white border border-[#E2E8F0] rounded-xl shadow-sm overflow-hidden">
+      <div className="bg-white border border-[#E2E8F0] rounded-lg shadow-2xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0]">
-                <th className="px-4 py-3 text-[12px] font-bold text-[#475569] uppercase tracking-wider min-w-[170px]">
+                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider min-w-[150px]">
                   Receptionist
                 </th>
-                <th className="px-4 py-3 text-[12px] font-bold text-[#475569] uppercase tracking-wider min-w-[190px]">
+                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider min-w-[160px]">
                   Assigned Business
                 </th>
-                <th className="px-4 py-3 text-[12px] font-bold text-[#475569] uppercase tracking-wider min-w-[180px]">
+                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider min-w-[150px]">
                   Voice & Provider
                 </th>
-                <th className="px-4 py-3 text-[12px] font-bold text-[#475569] uppercase tracking-wider min-w-[160px]">
+                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider min-w-[130px]">
                   AI Number
                 </th>
-                <th className="px-4 py-3 text-[12px] font-bold text-[#475569] uppercase tracking-wider min-w-[130px]">
+                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider min-w-[100px]">
                   Languages
                 </th>
-                <th className="px-4 py-3 text-[12px] font-bold text-[#475569] uppercase tracking-wider min-w-[110px]">
+                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider min-w-[90px]">
                   Calls (30D)
                 </th>
-                <th className="px-4 py-3 text-[12px] font-bold text-[#475569] uppercase tracking-wider min-w-[110px]">
+                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider min-w-[90px]">
                   Resolution
                 </th>
-                <th className="px-4 py-3 text-[12px] font-bold text-[#475569] uppercase tracking-wider min-w-[90px]">
+                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider min-w-[80px]">
                   Status
                 </th>
-                <th className="px-4 py-3 text-[12px] font-bold text-[#475569] uppercase tracking-wider text-right min-w-[140px]">
+                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider text-right min-w-[120px]">
                   Actions
                 </th>
               </tr>
@@ -359,21 +358,21 @@ export default function ReceptionistsPage() {
               {filteredReceptionists.map((agent) => (
                 <tr key={agent.id} className="hover:bg-[#F8FAFC]/70 transition-colors">
                   {/* Name & Avatar */}
-                  <td className="px-4 py-3.5 whitespace-nowrap">
-                    <div className="flex items-center gap-3">
+                  <td className="px-3.5 py-2.5 whitespace-nowrap">
+                    <div className="flex items-center gap-2.5">
                       <div className="relative">
-                        <div className={`w-9 h-9 rounded-full ${agent.avatarColor} text-white font-bold flex items-center justify-center text-[13px] shadow-sm`}>
+                        <div className={`w-7 h-7 rounded-full ${agent.avatarColor} text-white font-bold flex items-center justify-center text-xs shadow-2xs`}>
                           {agent.name.charAt(0)}
                         </div>
                         {agent.status === 'Active' && (
-                          <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-[#10B981] border-2 border-white"></span>
+                          <span className="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-[#10B981] border-2 border-white"></span>
                         )}
                       </div>
                       <div>
-                        <div className="text-[14px] font-semibold text-[#0F172A] flex items-center gap-1.5">
+                        <div className="text-xs font-semibold text-[#0F172A] flex items-center gap-1.5">
                           {agent.name}
                         </div>
-                        <div className="text-[11px] text-[#94A3B8]">
+                        <div className="text-[10px] text-[#94A3B8]">
                           Last call: {agent.lastCall}
                         </div>
                       </div>

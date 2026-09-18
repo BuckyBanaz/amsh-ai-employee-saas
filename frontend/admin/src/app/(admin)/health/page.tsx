@@ -124,28 +124,28 @@ function StatusBadge({ status }: { status: HealthStatus }) {
 
 function ServiceCard({ service }: { service: ServiceHealth }) {
   return (
-    <div className="rounded-xl border border-[#E2E8F0] bg-white p-4 shadow-sm">
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <h3 className="text-[19px] font-bold tracking-tight text-[#1E293B]">{service.name}</h3>
+    <div className="rounded-lg border border-[#E2E8F0] bg-white p-3 shadow-2xs">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <h3 className="text-sm font-bold tracking-tight text-[#1E293B]">{service.name}</h3>
         <StatusBadge status={service.status} />
       </div>
 
-      <dl className="space-y-1.5">
-        <div className="flex items-center justify-between gap-3">
-          <dt className="text-[12px] text-[#94A3B8]">Latency</dt>
-          <dd className="text-[13px] font-bold text-[#334155]">{service.latency}</dd>
+      <dl className="space-y-1">
+        <div className="flex items-center justify-between gap-2">
+          <dt className="text-[11px] text-[#94A3B8]">Latency</dt>
+          <dd className="text-xs font-bold text-[#334155]">{service.latency}</dd>
         </div>
-        <div className="flex items-center justify-between gap-3">
-          <dt className="text-[12px] text-[#94A3B8]">Error Rate</dt>
-          <dd className="text-[13px] font-bold text-[#10B981]">{service.errorRate}</dd>
+        <div className="flex items-center justify-between gap-2">
+          <dt className="text-[11px] text-[#94A3B8]">Error Rate</dt>
+          <dd className="text-xs font-bold text-[#10B981]">{service.errorRate}</dd>
         </div>
-        <div className="flex items-center justify-between gap-3">
-          <dt className="text-[12px] text-[#94A3B8]">Requests/min</dt>
-          <dd className="text-[13px] font-bold text-[#334155]">{service.requestsPerMinute}</dd>
+        <div className="flex items-center justify-between gap-2">
+          <dt className="text-[11px] text-[#94A3B8]">Requests/min</dt>
+          <dd className="text-xs font-bold text-[#334155]">{service.requestsPerMinute}</dd>
         </div>
-        <div className="flex items-center justify-between gap-3">
-          <dt className="text-[12px] text-[#94A3B8]">Uptime</dt>
-          <dd className="text-[13px] font-bold text-[#334155]">{service.uptime}</dd>
+        <div className="flex items-center justify-between gap-2">
+          <dt className="text-[11px] text-[#94A3B8]">Uptime</dt>
+          <dd className="text-xs font-bold text-[#334155]">{service.uptime}</dd>
         </div>
       </dl>
     </div>
@@ -154,16 +154,16 @@ function ServiceCard({ service }: { service: ServiceHealth }) {
 
 export default function SystemHealthPage() {
   return (
-    <div className="flex-1 overflow-y-auto scrollbar-hide p-6 md:p-8 animate-in fade-in duration-500">
-      <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
+    <div className="flex-1 overflow-y-auto scrollbar-hide p-4 sm:p-5 animate-in fade-in duration-500">
+      <header className="mb-4 pb-3 border-b border-[#E2E8F0] flex flex-wrap items-center justify-between gap-2.5">
         <div>
-          <h1 className="text-[40px] font-bold tracking-tight text-[#0F172A] leading-tight">System Health</h1>
-          <p className="mt-1 text-[20px] text-[#64748B]">Technical infrastructure monitoring.</p>
+          <h1 className="text-lg font-bold tracking-tight text-[#0F172A] leading-tight">System Health</h1>
+          <p className="mt-0.5 text-xs text-[#475569] font-normal">Technical infrastructure monitoring.</p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <button className="inline-flex items-center gap-2 rounded-xl border border-[#E2E8F0] bg-white px-4 py-2 text-[14px] font-semibold text-[#64748B] shadow-sm hover:bg-gray-50 transition-colors">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <div className="flex items-center gap-2">
+          <button className="inline-flex items-center gap-1.5 rounded-lg border border-[#E2E8F0] bg-white px-2.5 py-1.5 text-xs font-medium text-[#475569] shadow-2xs hover:bg-gray-50 transition-colors">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
               <line x1="16" y1="2" x2="16" y2="6"></line>
               <line x1="8" y1="2" x2="8" y2="6"></line>
@@ -174,9 +174,9 @@ export default function SystemHealthPage() {
 
           <button
             aria-label="Notifications"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#E2E8F0] bg-white text-[#64748B] shadow-sm hover:bg-gray-50 transition-colors"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[#E2E8F0] bg-white text-[#475569] shadow-2xs hover:bg-gray-50 transition-colors"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
               <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
             </svg>
@@ -184,9 +184,9 @@ export default function SystemHealthPage() {
         </div>
       </header>
 
-      <div className="mb-5 rounded-xl border border-[#FCD34D] bg-[#FFFBEB] px-4 py-3 text-[14px] font-semibold text-[#B45309]">
+      <div className="mb-3.5 rounded-lg border border-[#FCD34D] bg-[#FFFBEB] p-2.5 text-xs font-semibold text-[#B45309]">
         <div className="flex items-center gap-2">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3l-8.47-14.14a2 2 0 0 0-3.42 0z"></path>
             <line x1="12" y1="9" x2="12" y2="13"></line>
             <line x1="12" y1="17" x2="12.01" y2="17"></line>
@@ -195,7 +195,7 @@ export default function SystemHealthPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         {services.map((service) => (
           <ServiceCard key={service.id} service={service} />
         ))}
