@@ -10,16 +10,16 @@ interface MetricCardProps {
 
 export function MetricCard({ title, value, trendText, trendUp }: MetricCardProps) {
   return (
-    <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-[0_2px_10px_rgb(0,0,0,0.02)] flex flex-col justify-between">
+    <div className="bg-white border border-gray-100 rounded-xl p-4 shadow-[0_1px_4px_rgba(0,0,0,0.03)] flex flex-col justify-between">
       <div>
-        <h3 className="text-[13px] font-semibold text-gray-500 mb-3">{title}</h3>
-        <div className="mb-5">
-          <span className="text-4xl font-bold text-gray-900 tracking-tight">{value}</span>
+        <h3 className="text-xs font-medium text-gray-500 mb-1">{title}</h3>
+        <div className="mb-2">
+          <span className="text-2xl font-bold text-gray-900 tracking-tight">{value}</span>
         </div>
       </div>
-      <div className="flex items-center gap-1.5 mt-auto">
+      <div className="flex items-center gap-1 mt-auto">
         <svg 
-          width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" 
+          width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" 
           className={trendUp ? 'text-[#10B981]' : 'text-red-500'}
         >
           {trendUp ? (
@@ -34,7 +34,7 @@ export function MetricCard({ title, value, trendText, trendUp }: MetricCardProps
             </>
           )}
         </svg>
-        <span className={`text-xs font-bold ${trendUp ? 'text-[#10B981]' : 'text-red-500'}`}>
+        <span className={`text-[11px] font-semibold ${trendUp ? 'text-[#10B981]' : 'text-red-500'}`}>
           {trendText}
         </span>
       </div>

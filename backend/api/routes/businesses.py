@@ -39,14 +39,31 @@ class BusinessCreate(BaseModel):
     business_type: str = "healthcare"
     business_subtype: str | None = None
     country: str | None = None
+    website: str | None = None
+    business_email: str | None = None
+    business_phone: str | None = None
+    logo_url: str | None = None
+    city: str | None = None
+    address: str | None = None
+    postal_code: str | None = None
     timezone: str = "UTC"
+    currency: str = "USD"
 
 
 class BusinessUpdate(BaseModel):
     name: str | None = None
     business_type: str | None = None
     business_subtype: str | None = None
+    country: str | None = None
+    website: str | None = None
+    business_email: str | None = None
+    business_phone: str | None = None
+    logo_url: str | None = None
+    city: str | None = None
+    address: str | None = None
+    postal_code: str | None = None
     timezone: str | None = None
+    currency: str | None = None
     working_hours: dict | None = None
     status: str | None = None
     plan: str | None = None
@@ -59,7 +76,15 @@ class BusinessOut(BaseModel):
     business_type: str
     business_subtype: str | None
     country: str | None
+    website: str | None
+    business_email: str | None
+    business_phone: str | None
+    logo_url: str | None
+    city: str | None
+    address: str | None
+    postal_code: str | None
     timezone: str
+    currency: str
     plan: str
     status: str
     working_hours: dict
@@ -77,6 +102,13 @@ def create_business(payload: BusinessCreate, db: Session = Depends(get_db), curr
         business_type=payload.business_type,
         business_subtype=payload.business_subtype,
         country=payload.country,
+        website=payload.website,
+        business_email=payload.business_email,
+        business_phone=payload.business_phone,
+        logo_url=payload.logo_url,
+        city=payload.city,
+        address=payload.address,
+        postal_code=payload.postal_code,
         timezone=payload.timezone,
         status="pending",
     )

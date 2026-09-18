@@ -11,13 +11,13 @@ import { AlertsCard } from '../../../components/dashboard/AlertsCard';
 
 export default function DashboardPage() {
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 pb-12">
+    <div className="space-y-4 animate-in fade-in duration-500 pb-8">
       
       <TopBar />
       <AIBanner />
       
       {/* Metrics Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 pt-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard 
           title="Today's Appointments" 
           value="12" 
@@ -45,16 +45,16 @@ export default function DashboardPage() {
       </div>
 
       {/* Main Content Columns */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 pt-2">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         
         {/* Left Column (Tables) */}
-        <div className="xl:col-span-2 space-y-6">
+        <div className="xl:col-span-2 space-y-4">
           <AppointmentsTable />
           <CallStreamsTable />
         </div>
 
         {/* Right Column (Widgets) */}
-        <div className="space-y-6">
+        <div className="space-y-4">
           <InsightsCard />
           <QuickActionsCard />
           <AlertsCard />
@@ -64,4 +64,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-

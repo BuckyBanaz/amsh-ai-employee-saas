@@ -7,13 +7,14 @@ import { STRINGS } from '../../utils/strings/en';
 const ALL_STEPS = [
   { id: 1, name: 'Account', href: '/onboarding/account' },
   { id: 2, name: 'Business', href: '/onboarding/business' },
-  { id: 3, name: 'Staff', href: '/onboarding/staff' },
-  { id: 4, name: 'Services', href: '/onboarding/services' },
+  { id: 3, name: 'Services', href: '/onboarding/services' },
+  { id: 4, name: 'Staff', href: '/onboarding/staff' },
   { id: 5, name: 'Hours', href: '/onboarding/hours' },
   { id: 6, name: 'AI Receptionist', href: '/onboarding/ai-receptionist' },
   { id: 7, name: 'Knowledge', href: '/onboarding/knowledge' },
   { id: 8, name: 'Integrations', href: '/onboarding/integrations' },
   { id: 9, name: 'Review', href: '/onboarding/review' },
+  { id: 10, name: 'Checkout', href: '/onboarding/checkout' },
 ];
 
 export default function OnboardingLayout({ children }: { children: React.ReactNode }) {

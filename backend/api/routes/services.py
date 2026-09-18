@@ -21,7 +21,6 @@ class ServiceCreate(BaseModel):
     duration_minutes: int = 30
     price_amount: float | None = None
     price_currency: str = "USD"
-    staff_id: str | None = None
 
 
 class ServiceUpdate(BaseModel):
@@ -30,7 +29,6 @@ class ServiceUpdate(BaseModel):
     duration_minutes: int | None = None
     price_amount: float | None = None
     price_currency: str | None = None
-    staff_id: str | None = None
 
 
 class ServiceOut(BaseModel):
@@ -41,7 +39,6 @@ class ServiceOut(BaseModel):
     duration_minutes: int
     price_amount: float | None
     price_currency: str
-    staff_id: str | None
     created_at: datetime
 
     model_config = {"from_attributes": True}

@@ -17,7 +17,9 @@ export default function BusinessOnboardingPage() {
     postalCode: '78701',
     phone: '+1 (555) 234-5678',
     timezone: 'Central Time (US & Canada)',
+    currency: 'USD',
   });
+  const [logoFile, setLogoFile] = useState<File | null>(null);
   const [error, setError] = useState('');
 
   const handleNext = (e: React.FormEvent) => {
@@ -27,6 +29,7 @@ export default function BusinessOnboardingPage() {
       return;
     }
     setError('');
+    localStorage.setItem('onboarding_currency', formData.currency);
     router.push('/onboarding/services');
   };
 
@@ -156,22 +159,59 @@ export default function BusinessOnboardingPage() {
               <option>Pacific Time (US & Canada)</option>
             </select>
           </div>
+
+          <div className="space-y-1">
+            <label className="text-sm font-semibold text-gray-900">Currency</label>
+            <select 
+              value={formData.currency}
+              onChange={(e) => setFormData({...formData, currency: e.target.value})}
+              className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#0066FF] focus:border-transparent transition-all appearance-none bg-white"
+            >
+              <option value="USD">USD ($)</option>
+              <option value="EUR">EUR (€)</option>
+              <option value="GBP">GBP (£)</option>
+              <option value="INR">INR (₹)</option>
+              <option value="CAD">CAD ($)</option>
+              <option value="AUD">AUD ($)</option>
+            </select>
+          </div>
         </div>
 
         {/* File Upload Area */}
         <div className="space-y-2 pt-2">
           <label className="text-sm font-semibold text-gray-900">{STRINGS.ONBOARDING.BUSINESS.UPLOAD_LOGO}</label>
-          <div className="border-2 border-dashed border-gray-200 rounded-xl bg-gray-50/50 p-10 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 hover:border-[#0066FF] transition-colors group">
-            <div className="w-10 h-10 mb-3 bg-white rounded-full shadow-sm flex items-center justify-center group-hover:scale-110 transition-transform">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0066FF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                <polyline points="17 8 12 3 7 8"></polyline>
-                <line x1="12" y1="3" x2="12" y2="15"></line>
-              </svg>
-            </div>
-            <p className="text-sm font-semibold text-[#0066FF]">{STRINGS.ONBOARDING.BUSINESS.UPLOAD_DRAG}</p>
-            <p className="text-xs text-gray-500 mt-1">{STRINGS.ONBOARDING.BUSINESS.UPLOAD_HINT}</p>
-          </div>
+          <label className="border-2 border-dashed border-gray-200 rounded-xl bg-gray-50/50 p-10 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 hover:border-[#0066FF] transition-colors group relative overflow-hidden">
+            <input 
+              type="file" 
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" 
+              accept="image/png, image/jpeg"
+              onChange={(e) => setLogoFile(e.target.files?.[0] || null)}
+            />
+            {logoFile ? (
+              <div className="flex flex-col items-center">
+                <div className="w-12 h-12 mb-3 bg-[#E6FBF3] rounded-full flex items-center justify-center">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#10B981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                    <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                  </svg>
+                </div>
+                <p className="text-sm font-bold text-gray-900">{logoFile.name}</p>
+                <p className="text-xs text-[#0066FF] mt-1 font-medium hover:underline">Click to change logo</p>
+              </div>
+            ) : (
+              <>
+                <div className="w-10 h-10 mb-3 bg-white rounded-full shadow-sm flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0066FF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="17 8 12 3 7 8"></polyline>
+                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                  </svg>
+                </div>
+                <p className="text-sm font-semibold text-[#0066FF]">{STRINGS.ONBOARDING.BUSINESS.UPLOAD_DRAG}</p>
+                <p className="text-xs text-gray-500 mt-1">{STRINGS.ONBOARDING.BUSINESS.UPLOAD_HINT}</p>
+              </>
+            )}
+          </label>
         </div>
 
         {/* Footer Buttons */}

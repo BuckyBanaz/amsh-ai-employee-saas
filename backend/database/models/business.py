@@ -23,8 +23,16 @@ class Business(Base):
     # in the API layer (backend/api/routes/businesses.py), not here.
     business_type: Mapped[str] = mapped_column(String(50), default="healthcare")
     business_subtype: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    country: Mapped[str | None] = mapped_column(String(2), nullable=True)
+    country: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    website: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    business_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    business_phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    logo_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    city: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    address: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    postal_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
     timezone: Mapped[str] = mapped_column(String(50), default="UTC")
+    currency: Mapped[str] = mapped_column(String(3), default="USD")
     working_hours: Mapped[dict] = mapped_column(JSON, default=dict)
     plan: Mapped[str] = mapped_column(String(50), default="starter")
     status: Mapped[str] = mapped_column(String(20), default="pending")  # active | paused | suspended | pending

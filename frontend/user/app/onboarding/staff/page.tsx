@@ -1,10 +1,10 @@
 "use client";
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { STRINGS } from '../../../utils/strings/en';
 
-const staffMembers = [
+const initialStaffMembers = [
   {
     id: 1,
     initials: 'DSW',
@@ -39,6 +39,27 @@ const staffMembers = [
 
 export default function StaffOnboardingPage() {
   const router = useRouter();
+  const [staffList, setStaffList] = useState(initialStaffMembers);
+  const [isAdding, setIsAdding] = useState(false);
+  const [newStaff, setNewStaff] = useState<{name: string, role: string, specialty: string, email: string, phone: string, treatments: string[]}>({ name: '', role: 'Doctor', specialty: '', email: '', phone: '', treatments: [] });
+
+  const mockServices = ['Dental Consultation', 'Dental Cleaning', 'Teeth Whitening', 'Root Canal'];
+
+  const handleAddStaff = () => {
+    if (!newStaff.name) return;
+    const initials = newStaff.name.split(' ').map(n => n[0]).join('').substring(0, 3).toUpperCase();
+    setStaffList([...staffList, { ...newStaff, initials, id: Date.now() }]);
+    setNewStaff({ name: '', role: 'Doctor', specialty: '', email: '', phone: '', treatments: [] });
+    setIsAdding(false);
+  };
+
+  const toggleTreatment = (treatment: string) => {
+    if (newStaff.treatments.includes(treatment)) {
+      setNewStaff({ ...newStaff, treatments: newStaff.treatments.filter(t => t !== treatment) });
+    } else {
+      setNewStaff({ ...newStaff, treatments: [...newStaff.treatments, treatment] });
+    }
+  };
 
   return (
     <div className="w-full max-w-4xl bg-white rounded-2xl shadow-sm border border-gray-100 p-8 sm:p-12">
@@ -50,7 +71,7 @@ export default function StaffOnboardingPage() {
       </div>
 
       <div className="space-y-4 mb-8">
-        {staffMembers.map((staff) => (
+        {staffList.map((staff) => (
           <div key={staff.id} className="border border-gray-200 rounded-xl p-6 hover:border-gray-300 transition-colors bg-white">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-4">
@@ -115,33 +136,133 @@ export default function StaffOnboardingPage() {
           </div>
         ))}
 
-        <button 
-          type="button" 
-          className="w-full border-2 border-dashed border-gray-200 rounded-xl bg-[#FAFAFB] p-8 flex flex-col items-center justify-center hover:bg-gray-50 hover:border-[#0066FF] transition-colors group"
-        >
-          <div className="w-10 h-10 mb-3 bg-[#F0F7FF] rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0066FF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="12" y1="5" x2="12" y2="19"></line>
-              <line x1="5" y1="12" x2="19" y2="12"></line>
-            </svg>
+        {isAdding ? (
+          <div className="border-2 border-[#0066FF] rounded-xl p-5 bg-blue-50/30">
+            <h3 className="text-sm font-bold text-gray-900 mb-4">Add Team Member</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="text-xs font-semibold text-gray-700 mb-1 block">Full Name</label>
+                <input 
+                  type="text" 
+                  value={newStaff.name}
+                  onChange={(e) => setNewStaff({...newStaff, name: e.target.value})}
+                  placeholder="e.g. Dr. Sarah Wilson"
+                  className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#0066FF] text-sm"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-gray-700 mb-1 block">Role</label>
+                <select 
+                  value={newStaff.role}
+                  onChange={(e) => setNewStaff({...newStaff, role: e.target.value})}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#0066FF] text-sm bg-white"
+                >
+                  <option>Doctor</option>
+                  <option>Nurse</option>
+                  <option>Hygienist</option>
+                  <option>Specialist</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-gray-700 mb-1 block">Specialty</label>
+                <input 
+                  type="text" 
+                  value={newStaff.specialty}
+                  onChange={(e) => setNewStaff({...newStaff, specialty: e.target.value})}
+                  placeholder="e.g. Orthodontics"
+                  className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#0066FF] text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-gray-700 mb-1 block">Phone</label>
+                <input 
+                  type="tel" 
+                  value={newStaff.phone}
+                  onChange={(e) => setNewStaff({...newStaff, phone: e.target.value})}
+                  placeholder="+1 (555) 000-0000"
+                  className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#0066FF] text-sm"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="text-xs font-semibold text-gray-700 mb-1 block">Email</label>
+                <input 
+                  type="email" 
+                  value={newStaff.email}
+                  onChange={(e) => setNewStaff({...newStaff, email: e.target.value})}
+                  placeholder="sarah@clinic.com"
+                  className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#0066FF] text-sm"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="text-xs font-semibold text-gray-700 mb-2 block">Assign Treatments</label>
+                <div className="flex flex-wrap gap-2">
+                  {mockServices.map((treatment) => {
+                    const isSelected = newStaff.treatments.includes(treatment);
+                    return (
+                      <button
+                        key={treatment}
+                        type="button"
+                        onClick={() => toggleTreatment(treatment)}
+                        className={`text-xs font-medium px-3 py-1.5 rounded-full border transition-colors ${
+                          isSelected 
+                            ? 'bg-[#0066FF] text-white border-[#0066FF]' 
+                            : 'bg-white text-gray-600 border-gray-200 hover:border-[#0066FF] hover:text-[#0066FF]'
+                        }`}
+                      >
+                        {treatment}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button 
+                onClick={() => setIsAdding(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleAddStaff}
+                disabled={!newStaff.name}
+                className="px-4 py-2 text-sm font-medium text-white bg-[#0066FF] hover:bg-[#0052cc] rounded-lg transition-colors disabled:opacity-50"
+              >
+                Save Member
+              </button>
+            </div>
           </div>
-          <p className="text-sm font-semibold text-[#0066FF]">{STRINGS.ONBOARDING.STAFF.ADD_TEAM_MEMBER}</p>
-          <p className="text-xs text-gray-500 mt-1">{STRINGS.ONBOARDING.STAFF.ADD_TEAM_MEMBER_SUBTITLE}</p>
-        </button>
+        ) : (
+          <button 
+            type="button" 
+            onClick={() => setIsAdding(true)}
+            className="w-full border-2 border-dashed border-gray-200 rounded-xl bg-[#FAFAFB] p-8 flex flex-col items-center justify-center hover:bg-gray-50 hover:border-[#0066FF] transition-colors group"
+          >
+            <div className="w-10 h-10 mb-3 bg-[#F0F7FF] rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0066FF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+            </div>
+            <p className="text-sm font-semibold text-[#0066FF]">{STRINGS.ONBOARDING.STAFF.ADD_TEAM_MEMBER}</p>
+            <p className="text-xs text-gray-500 mt-1">{STRINGS.ONBOARDING.STAFF.ADD_TEAM_MEMBER_SUBTITLE}</p>
+          </button>
+        )}
       </div>
 
       {/* Footer Buttons */}
       <div className="pt-6 border-t border-gray-100 flex items-center justify-between">
         <button 
           type="button"
-          onClick={() => router.push('/onboarding/business')}
+          onClick={() => router.push('/onboarding/services')}
           className="px-6 py-2.5 rounded-lg border border-gray-200 text-gray-700 font-medium hover:bg-gray-50 transition-colors shadow-sm"
         >
           {STRINGS.ONBOARDING.STAFF.BACK_BTN}
         </button>
         <button 
           type="button"
-          onClick={() => router.push('/onboarding/services')}
+          onClick={() => router.push('/onboarding/hours')}
           className="px-8 py-2.5 rounded-lg bg-[#0066FF] text-white font-medium hover:bg-[#0052cc] transition-colors shadow-sm"
         >
           {STRINGS.ONBOARDING.STAFF.CONTINUE_BTN}

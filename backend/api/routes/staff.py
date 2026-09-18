@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from backend.api.routes._shared import get_business_or_404, require_membership, require_owner_or_admin
 from backend.auth.security import get_current_user
 from backend.database.models.staff import Staff
+from backend.database.models.service import Service
 from backend.database.models.user import User
 from backend.database.session import get_db
 
@@ -21,6 +22,7 @@ class StaffCreate(BaseModel):
     specialty: str | None = None
     email: str | None = None
     phone: str | None = None
+    service_ids: list[str] = []
 
 
 class StaffUpdate(BaseModel):
@@ -29,6 +31,7 @@ class StaffUpdate(BaseModel):
     specialty: str | None = None
     email: str | None = None
     phone: str | None = None
+    service_ids: list[str] | None = None
 
 
 class StaffOut(BaseModel):
@@ -53,7 +56,17 @@ def create_staff(
 ):
     get_business_or_404(business_id, db)
     require_owner_or_admin(business_id, current_user)
-    staff = Staff(business_id=business_id, **payload.model_dump())
+    
+    payload_dict = payload.model_dump(exclude={"service_ids"})
+    staff = Staff(business_id=business_id, **payload_dict)
+    
+    if payload.service_ids:
+        services = db.query(Service).filter(
+            Service.id.in_(payload.service_ids), 
+            Service.business_id == business_id
+        ).all()
+        staff.services = services
+        
     db.add(staff)
     db.commit()
     db.refresh(staff)

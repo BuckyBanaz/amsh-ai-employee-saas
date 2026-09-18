@@ -206,10 +206,10 @@ export default function ReviewOnboardingPage() {
         </button>
         <button 
           type="button" 
-          onClick={() => router.push('/onboarding/success')}
+          onClick={() => router.push('/onboarding/checkout')}
           className="px-8 py-2.5 rounded-lg bg-[#0066FF] text-white font-medium hover:bg-[#0052cc] transition-colors shadow-sm"
         >
-          {STRINGS.ONBOARDING.REVIEW.FINISH_BTN}
+          Continue to Checkout
         </button>
       </div>
     </div>

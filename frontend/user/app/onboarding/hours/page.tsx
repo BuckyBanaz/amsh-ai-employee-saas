@@ -1,10 +1,10 @@
 "use client";
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { STRINGS } from '../../../utils/strings/en';
 
-const schedule = [
+const initialSchedule = [
   { day: 'Monday', active: true, ranges: [{ start: '09:00', end: '13:00' }, { start: '14:00', end: '18:00' }] },
   { day: 'Tuesday', active: true, ranges: [{ start: '09:00', end: '13:00' }, { start: '14:00', end: '18:00' }] },
   { day: 'Wednesday', active: true, ranges: [{ start: '09:00', end: '13:00' }, { start: '14:00', end: '18:00' }] },
@@ -16,6 +16,40 @@ const schedule = [
 
 export default function HoursOnboardingPage() {
   const router = useRouter();
+  const [schedule, setSchedule] = useState(initialSchedule);
+
+  const toggleDay = (dayName: string) => {
+    setSchedule(schedule.map(d => 
+      d.day === dayName ? { ...d, active: !d.active, ranges: d.active ? [] : [{ start: '09:00', end: '17:00' }] } : d
+    ));
+  };
+
+  const addRange = (dayName: string) => {
+    setSchedule(schedule.map(d => 
+      d.day === dayName ? { ...d, ranges: [...d.ranges, { start: '09:00', end: '17:00' }] } : d
+    ));
+  };
+
+  const updateRange = (dayName: string, idx: number, field: 'start' | 'end', value: string) => {
+    setSchedule(schedule.map(d => {
+      if (d.day === dayName) {
+        const newRanges = [...d.ranges];
+        newRanges[idx] = { ...newRanges[idx], [field]: value };
+        return { ...d, ranges: newRanges };
+      }
+      return d;
+    }));
+  };
+
+  const removeRange = (dayName: string, idx: number) => {
+    setSchedule(schedule.map(d => {
+      if (d.day === dayName) {
+        return { ...d, ranges: d.ranges.filter((_, i) => i !== idx) };
+      }
+      return d;
+    }));
+  };
+
   return (
     <div className="w-full max-w-4xl bg-white rounded-2xl shadow-sm border border-gray-100 p-8 sm:p-12">
       <div className="mb-10">
@@ -37,7 +71,11 @@ export default function HoursOnboardingPage() {
               
               {/* Day Toggle */}
               <div className="flex items-center gap-3 w-[140px] pt-2 md:pt-0 shrink-0">
-                <button type="button" className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors focus:outline-none ${item.active ? 'bg-[#0066FF]' : 'bg-gray-200'}`}>
+                <button 
+                  type="button" 
+                  onClick={() => toggleDay(item.day)}
+                  className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors focus:outline-none ${item.active ? 'bg-[#0066FF]' : 'bg-gray-200'}`}
+                >
                   <span className={`pointer-events-none absolute left-0.5 inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${item.active ? 'translate-x-5' : 'translate-x-0'}`} />
                 </button>
                 <span className="text-sm font-semibold text-gray-900">{item.day}</span>
@@ -51,20 +89,27 @@ export default function HoursOnboardingPage() {
                       {item.ranges.map((range, idx) => (
                         <div key={idx} className="flex items-center gap-2">
                           {idx > 0 && <span className="text-sm text-gray-400 font-medium px-1">&amp;</span>}
-                          <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-md px-3 py-1.5 shadow-sm">
-                            <span className="text-sm text-gray-900">{range.start}</span>
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400">
-                              <polyline points="6 9 12 15 18 9"></polyline>
-                            </svg>
+                          <div className="flex items-center bg-white border border-gray-200 rounded-md shadow-sm overflow-hidden focus-within:ring-2 focus-within:ring-[#0066FF] focus-within:border-transparent">
+                            <input 
+                              type="time" 
+                              value={range.start}
+                              onChange={(e) => updateRange(item.day, idx, 'start', e.target.value)}
+                              className="px-2 py-1.5 text-sm text-gray-900 focus:outline-none bg-transparent"
+                            />
                           </div>
                           <span className="text-sm text-gray-400">{STRINGS.ONBOARDING.HOURS.TO}</span>
-                          <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-md px-3 py-1.5 shadow-sm">
-                            <span className="text-sm text-gray-900">{range.end}</span>
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400">
-                              <polyline points="6 9 12 15 18 9"></polyline>
-                            </svg>
+                          <div className="flex items-center bg-white border border-gray-200 rounded-md shadow-sm overflow-hidden focus-within:ring-2 focus-within:ring-[#0066FF] focus-within:border-transparent">
+                            <input 
+                              type="time" 
+                              value={range.end}
+                              onChange={(e) => updateRange(item.day, idx, 'end', e.target.value)}
+                              className="px-2 py-1.5 text-sm text-gray-900 focus:outline-none bg-transparent"
+                            />
                           </div>
-                          <button className="p-1.5 text-gray-400 hover:text-red-500 rounded-md transition-colors ml-1">
+                          <button 
+                            onClick={() => removeRange(item.day, idx)}
+                            className="p-1.5 text-gray-400 hover:text-red-500 rounded-md transition-colors ml-1"
+                          >
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                               <polyline points="3 6 5 6 21 6"></polyline>
                               <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
@@ -73,7 +118,10 @@ export default function HoursOnboardingPage() {
                         </div>
                       ))}
                       
-                      <button className="flex items-center gap-1.5 text-sm font-semibold text-[#0066FF] hover:text-[#0052cc] transition-colors ml-2">
+                      <button 
+                        onClick={() => addRange(item.day)}
+                        className="flex items-center gap-1.5 text-sm font-semibold text-[#0066FF] hover:text-[#0052cc] transition-colors ml-2"
+                      >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                           <line x1="12" y1="5" x2="12" y2="19"></line>
                           <line x1="5" y1="12" x2="19" y2="12"></line>

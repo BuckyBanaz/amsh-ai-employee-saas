@@ -26,4 +26,4 @@ class Staff(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     business = relationship("Business", back_populates="staff")
-    services = relationship("Service", back_populates="staff_member")
+    services = relationship("Service", secondary="staff_services", back_populates="staff_members")

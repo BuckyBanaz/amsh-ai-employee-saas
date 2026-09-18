@@ -22,20 +22,20 @@ export function SettingsSidebar({ activeTab, onTabChange }: SettingsSidebarProps
   ];
 
   return (
-    <div className="w-[240px] shrink-0">
-      <nav className="flex flex-col space-y-1">
+    <div className="w-[180px] shrink-0">
+      <nav className="flex flex-col space-y-0.5">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => onTabChange(tab.id)}
-            className={`flex items-center w-full px-4 py-2.5 rounded-lg text-[13px] font-bold text-left transition-colors ${
+            className={`flex items-center w-full px-3 py-1.5 rounded-md text-xs font-semibold text-left transition-colors ${
               activeTab === tab.id
                 ? tab.isDanger 
                   ? 'bg-red-50 text-red-600' 
                   : 'bg-[#F0F7FF] text-[#0066FF]'
                 : tab.isDanger
                   ? 'text-red-500 hover:bg-red-50'
-                  : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
+                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
             }`}
           >
             {tab.label}

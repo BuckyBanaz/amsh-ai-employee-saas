@@ -21,8 +21,8 @@ interface AITabsProps {
 
 export function AITabs({ activeTab, setActiveTab }: AITabsProps) {
   return (
-    <div className="border-b border-gray-200 mb-6 w-full">
-      <nav className="flex items-center gap-8 px-2 overflow-x-auto scrollbar-hide">
+    <div className="border-b border-gray-200 mb-4 w-full">
+      <nav className="flex items-center gap-5 px-1 overflow-x-auto scrollbar-hide">
         {AI_TABS.map((tab) => {
           const isActive = tab === activeTab;
           
@@ -30,7 +30,7 @@ export function AITabs({ activeTab, setActiveTab }: AITabsProps) {
             <button 
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`pb-3 text-[14px] font-bold whitespace-nowrap transition-colors relative ${
+              className={`pb-2 text-xs font-semibold whitespace-nowrap transition-colors relative ${
                 isActive ? 'text-[#0066FF]' : 'text-gray-500 hover:text-gray-900'
               }`}
             >

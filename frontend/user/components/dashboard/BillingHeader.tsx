@@ -4,29 +4,26 @@ import { STRINGS } from '../../utils/strings/en';
 
 export function BillingHeader() {
   return (
-    <header className="flex flex-col md:flex-row md:items-center justify-between mb-8 shrink-0 gap-4">
+    <header className="flex flex-col md:flex-row md:items-center justify-between mb-3 py-1 shrink-0 gap-3">
       <div>
-        <h1 className="text-[28px] font-extrabold text-gray-900 tracking-tight leading-tight">
+        <h1 className="text-xl font-bold text-gray-900 tracking-tight leading-tight">
           {STRINGS.DASHBOARD.HEADERS.BILLING.TITLE}
         </h1>
-        <p className="text-[15px] text-gray-500 mt-1">
+        <p className="text-xs text-gray-500 mt-0.5">
           {STRINGS.DASHBOARD.HEADERS.BILLING.SUBTITLE}
         </p>
       </div>
 
-      <div className="flex items-center gap-4">
-        {/* Date Display */}
-        <div className="text-[14px] font-bold text-gray-600 mr-2">
+      <div className="flex items-center gap-2.5">
+        <div className="text-xs font-medium text-gray-500 hidden sm:inline-block">
           Tuesday, August 12, 2026
         </div>
 
-        {/* Notification Dot */}
-        <button className="w-10 h-10 rounded-full border border-gray-200 bg-white flex items-center justify-center text-gray-500 hover:bg-gray-50 shadow-sm transition-colors relative">
-          <div className="absolute top-3 right-3 w-1.5 h-1.5 bg-black rounded-full"></div>
+        <button className="w-8 h-8 rounded-full border border-gray-200 bg-white flex items-center justify-center text-gray-500 hover:bg-gray-50 shadow-2xs transition-colors relative">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
         </button>
 
-        {/* Profile Circle */}
-        <div className="w-10 h-10 rounded-full bg-[#F0F7FF] text-[#0066FF] flex items-center justify-center font-bold text-sm cursor-pointer shadow-sm hover:bg-blue-100 transition-colors">
+        <div className="w-8 h-8 rounded-full bg-[#F0F7FF] text-[#0066FF] flex items-center justify-center font-bold text-xs cursor-pointer shadow-2xs hover:bg-blue-100 transition-colors">
           SW
         </div>
       </div>
