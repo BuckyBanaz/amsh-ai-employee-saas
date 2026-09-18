@@ -11,32 +11,31 @@ from backend.server.database.session import get_db
 
 router = APIRouter(prefix="/api/onboarding/businesses", tags=["businesses"])
 
-# MVP is healthcare-only. business_type will grow more entries in later phases;
-# each maps to its own allowed business_subtype set.
-BUSINESS_SUBTYPES: dict[str, set[str]] = {
-    "healthcare": {"hospital", "clinic", "medical_center"},
-}
+# Add a new vertical simply by dropping a new YAML file in backend/ai/verticals/configs/.
+# No code changes required anywhere else.
+ALLOWED_VERTICALS: set[str] = {"clinic", "hospital", "restaurant", "gym", "salon"}
 
 
-def _validate_business_type(business_type: str, business_subtype: str | None) -> None:
-    if business_type not in BUSINESS_SUBTYPES:
+def _validate_vertical(vertical: str) -> None:
+    if vertical not in ALLOWED_VERTICALS:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"business_type must be one of {sorted(BUSINESS_SUBTYPES)}",
+            detail=f"vertical must be one of {sorted(ALLOWED_VERTICALS)}",
         )
-    allowed = BUSINESS_SUBTYPES[business_type]
-    if business_subtype is not None and business_subtype not in allowed:
+
+
+def _validate_business_type(business_type: str | None, business_subtype: str | None) -> None:
+    # Flexible validation to support config-driven verticals
+    if business_type is not None and not business_type.strip():
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"business_subtype for '{business_type}' must be one of {sorted(allowed)}",
+            detail="business_type cannot be empty",
         )
 
 
 class BusinessCreate(BaseModel):
     name: str
-    vertical: str = "clinic"
-    business_type: str = "healthcare"
-    business_subtype: str | None = None
+    vertical: str = "clinic"       # Maps directly to configs/{vertical}.yaml
     country: str | None = None
     website: str | None = None
     business_email: str | None = None
@@ -94,12 +93,10 @@ class BusinessOut(BaseModel):
 
 @router.post("", response_model=BusinessOut, status_code=status.HTTP_201_CREATED)
 def create_business(payload: BusinessCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    _validate_business_type(payload.business_type, payload.business_subtype)
+    _validate_vertical(payload.vertical)
     business = Business(
         name=payload.name,
         vertical=payload.vertical,
-        business_type=payload.business_type,
-        business_subtype=payload.business_subtype,
         country=payload.country,
         website=payload.website,
         business_email=payload.business_email,
@@ -109,6 +106,7 @@ def create_business(payload: BusinessCreate, db: Session = Depends(get_db), curr
         address=payload.address,
         postal_code=payload.postal_code,
         timezone=payload.timezone,
+        currency=payload.currency,
         status="pending",
     )
     db.add(business)

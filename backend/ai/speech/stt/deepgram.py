@@ -20,12 +20,29 @@ class DeepgramSTT:
     def is_configured(self) -> bool:
         return bool(self.api_key)
 
-    async def transcribe_audio_chunk(self, audio_bytes: bytes) -> Optional[str]:
-        """Transcribe an audio chunk (WAV/mulaw)."""
+    async def transcribe_audio(self, audio_bytes: bytes, mimetype: str = "audio/wav") -> Optional[str]:
+        """Transcribe an audio payload using Deepgram Nova-2."""
         if not self.api_key:
             return None
-        # Placeholder for Deepgram Live WebSocket or prerecorded API
+        import httpx
+        try:
+            url = "https://api.deepgram.com/v1/listen?model=nova-2&smart_format=true"
+            headers = {
+                "Authorization": f"Token {self.api_key}",
+                "Content-Type": mimetype,
+            }
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.post(url, headers=headers, content=audio_bytes)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    transcript = data["results"]["channels"][0]["alternatives"][0]["transcript"]
+                    return transcript
+                else:
+                    logger.warning(f"[DEEPGRAM STT] Error ({resp.status_code}): {resp.text}")
+        except Exception as e:
+            logger.error(f"[DEEPGRAM STT] Transcription failed: {e}")
         return None
+
 
 
 # Global singleton

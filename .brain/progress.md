@@ -103,7 +103,16 @@ Read `frontend/user/app/onboarding/*` (business, services, staff, hours, ai-rece
    - Documented the planned surface (`/api/admin/auth`, `/api/admin/users`, `/api/admin/tenants`, `/api/admin/system`) in `.brain/overview.md`.
    - Actual implementation of admin APIs scheduled for the Admin phase; active development focuses on User/Tenant flows first.
 
+6. **Telephony Ingestion & Call Transfer Architecture Documented**:
+   - Designed dual-path telephony strategy: Dedicated Twilio number provisioning vs. Existing clinic number carrier call forwarding (`*72`/`*71` with `From` and `ForwardedFrom` header preservation).
+   - Specified **Flaw 4: Human Doctor/Staff Call Transfer Engine**:
+     - **Cold Transfer (MVP Core)**: TwiML `<Dial timeout="20" action="/api/voice/transfer-status">` with 20s timeout.
+     - **Zero Dropped Calls 20s Fallback**: If doctor is busy/unanswered after 20s, AI resumes gracefully: *"Dr. Sarah is currently with a patient, I have marked this as high priority and she will call you back at this number in 10 minutes."*
+     - Automatic P0 emergency ticket created in DB + immediate high-priority SMS alert dispatched to doctor.
+     - **Warm Transfer (Optional / Phase 2)**: Maintained as a configurable option (whisper briefing + IVR bridge) without overloading MVP.
+     - Browser WebRTC "Try It Yourself" test console for self-serve onboarding.
+   - Created detailed architecture documents in `DOCS/11_AMSh_Telephony_Call_Transfer_and_Forwarding.md` and `ai generated docs/telephony_and_call_transfer.md`.
+
 ## Current & Next Steps
-- Both frontends (`frontend/user` and `frontend/admin`) are compacted, styled, and free of syntax errors.
-- Backend is completely clean: only `server/` (Pillar 3) and `ai/` (Pillar 4), fully operational with live PostgreSQL and Docker.
+- Onboarding, Telephony blueprints, and backend separation are 100% complete and documented.
 - Next priority: Build User/Tenant APIs according to user journey (Dashboard metrics, Appointments/Transactions, Call logs, Patients).

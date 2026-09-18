@@ -42,6 +42,7 @@ class StaffOut(BaseModel):
     specialty: str | None
     email: str | None
     phone: str | None
+    service_ids: list[str] = []
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -70,14 +71,38 @@ def create_staff(
     db.add(staff)
     db.commit()
     db.refresh(staff)
-    return staff
+    return StaffOut(
+        id=staff.id,
+        business_id=staff.business_id,
+        name=staff.name,
+        role=staff.role,
+        specialty=staff.specialty,
+        email=staff.email,
+        phone=staff.phone,
+        service_ids=[s.id for s in staff.services] if staff.services else [],
+        created_at=staff.created_at,
+    )
 
 
 @router.get("", response_model=list[StaffOut])
 def list_staff(business_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     get_business_or_404(business_id, db)
     require_membership(business_id, current_user)
-    return db.query(Staff).filter(Staff.business_id == business_id).order_by(Staff.created_at.asc()).all()
+    staff_members = db.query(Staff).filter(Staff.business_id == business_id).order_by(Staff.created_at.asc()).all()
+    return [
+        StaffOut(
+            id=s.id,
+            business_id=s.business_id,
+            name=s.name,
+            role=s.role,
+            specialty=s.specialty,
+            email=s.email,
+            phone=s.phone,
+            service_ids=[svc.id for svc in s.services] if s.services else [],
+            created_at=s.created_at,
+        )
+        for s in staff_members
+    ]
 
 
 def _get_staff_or_404(business_id: str, staff_id: str, db: Session) -> Staff:
@@ -98,11 +123,27 @@ def update_staff(
     get_business_or_404(business_id, db)
     require_owner_or_admin(business_id, current_user)
     staff = _get_staff_or_404(business_id, staff_id, db)
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    for field, value in payload.model_dump(exclude_unset=True, exclude={"service_ids"}).items():
         setattr(staff, field, value)
+    if payload.service_ids is not None:
+        services = db.query(Service).filter(
+            Service.id.in_(payload.service_ids),
+            Service.business_id == business_id,
+        ).all()
+        staff.services = services
     db.commit()
     db.refresh(staff)
-    return staff
+    return StaffOut(
+        id=staff.id,
+        business_id=staff.business_id,
+        name=staff.name,
+        role=staff.role,
+        specialty=staff.specialty,
+        email=staff.email,
+        phone=staff.phone,
+        service_ids=[s.id for s in staff.services] if staff.services else [],
+        created_at=staff.created_at,
+    )
 
 
 @router.delete("/{staff_id}", status_code=status.HTTP_204_NO_CONTENT)

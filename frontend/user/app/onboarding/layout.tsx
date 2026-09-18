@@ -14,7 +14,8 @@ const ALL_STEPS = [
   { id: 7, name: 'Knowledge', href: '/onboarding/knowledge' },
   { id: 8, name: 'Integrations', href: '/onboarding/integrations' },
   { id: 9, name: 'Review', href: '/onboarding/review' },
-  { id: 10, name: 'Checkout', href: '/onboarding/checkout' },
+  { id: 10, name: 'Plans', href: '/onboarding/plans' },
+  { id: 11, name: 'Checkout', href: '/onboarding/checkout' },
 ];
 
 export default function OnboardingLayout({ children }: { children: React.ReactNode }) {
@@ -32,16 +33,16 @@ export default function OnboardingLayout({ children }: { children: React.ReactNo
     <div className="min-h-screen bg-[#F9FAFB] flex flex-col font-sans">
       {/* Top Navbar */}
       {!pathname.includes('success') && (
-        <header className="bg-white border-b border-gray-200 px-8 py-4 flex items-center justify-between sticky top-0 z-10">
+        <header className="bg-white border-b border-gray-200 px-4 sm:px-6 py-2 sm:py-2.5 flex items-center justify-between sticky top-0 z-10">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-[#0066FF] rounded-md flex items-center justify-center">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
+            <div className="w-7 h-7 bg-[#0066FF] rounded-md flex items-center justify-center">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
                 <path d="M12 4v16m-4-10v4m8-8v12" />
               </svg>
             </div>
-            <span className="text-xl font-bold tracking-tight text-gray-900">{STRINGS.APP.NAME}</span>
+            <span className="text-base sm:text-lg font-bold tracking-tight text-gray-900">{STRINGS.APP.NAME}</span>
           </div>
-          <button className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors shadow-sm">
+          <button className="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors shadow-xs">
             {STRINGS.ONBOARDING.LAYOUT.SAVE_LATER}
           </button>
         </header>
@@ -49,49 +50,58 @@ export default function OnboardingLayout({ children }: { children: React.ReactNo
 
       {/* Stepper Navigation */}
       {!pathname.includes('success') && (
-        <div className="bg-white border-b border-gray-200 px-4 py-3 overflow-x-auto shadow-sm scrollbar-hide [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
-        <nav aria-label="Progress" className="max-w-7xl mx-auto flex justify-center">
-          <ol role="list" className="flex items-center justify-center gap-2 md:gap-4 min-w-max">
-            {steps.map((step, stepIdx) => (
-              <li key={step.name} className="relative flex items-center">
-                {step.status === 'complete' ? (
-                  <div className="flex items-center">
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#0066FF]">
-                      <svg className="h-3 w-3 text-white" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                        <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
-                      </svg>
-                    </span>
-                    <span className="ml-2 text-[11px] md:text-xs font-medium text-gray-900">{step.name}</span>
-                  </div>
-                ) : step.status === 'current' ? (
-                  <div className="flex items-center" aria-current="step">
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#0066FF] text-white text-[10px] font-bold ring-2 ring-blue-50">
-                      {step.id}
-                    </span>
-                    <span className="ml-2 text-[11px] md:text-xs font-bold text-[#0066FF]">{step.name}</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center">
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full border border-gray-300 bg-white text-gray-500 text-[10px] font-medium">
-                      {step.id}
-                    </span>
-                    <span className="ml-2 text-[11px] md:text-xs font-medium text-gray-500">{step.name}</span>
-                  </div>
-                )}
+        <div className="bg-white border-b border-gray-200 px-2 sm:px-4 py-2 sm:py-2.5 shadow-xs">
+          <nav aria-label="Progress" className="max-w-7xl mx-auto flex flex-col items-center">
+            <div className="w-full overflow-x-auto scrollbar-none py-0.5 flex justify-center">
+              <ol role="list" className="flex items-center justify-center shrink-0">
+                {steps.map((step, stepIdx) => (
+                  <li key={step.name} className="flex items-center">
+                    {step.status === 'complete' ? (
+                      <a href={step.href} className="flex items-center group cursor-pointer" title={step.name}>
+                        <span className="flex h-5 w-5 sm:h-6 sm:w-6 items-center justify-center rounded-full bg-[#0066FF] text-white text-[10px] sm:text-xs font-bold group-hover:bg-[#0052cc] transition-colors shadow-xs">
+                          {step.id}
+                        </span>
+                        <span className="hidden xl:inline ml-2 text-xs font-medium text-gray-900">{step.name}</span>
+                      </a>
+                    ) : step.status === 'current' ? (
+                      <div className="flex items-center" aria-current="step">
+                        <span className="flex h-5 w-5 sm:h-6 sm:w-6 items-center justify-center rounded-full bg-[#0066FF] text-white text-[10px] sm:text-xs font-bold ring-2 sm:ring-3 ring-blue-100 shadow-xs">
+                          {step.id}
+                        </span>
+                        <span className="hidden xl:inline ml-2 text-xs font-bold text-[#0066FF]">{step.name}</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center">
+                        <span className="flex h-5 w-5 sm:h-6 sm:w-6 items-center justify-center rounded-full border border-gray-300 bg-white text-gray-400 text-[10px] sm:text-xs font-medium">
+                          {step.id}
+                        </span>
+                        <span className="hidden xl:inline ml-2 text-xs font-medium text-gray-500">{step.name}</span>
+                      </div>
+                    )}
 
-                {/* Separator line between steps */}
-                {stepIdx !== steps.length - 1 && (
-                  <div className="hidden sm:block ml-2 md:ml-4 w-3 md:w-6 h-px bg-gray-200" />
-                )}
-              </li>
-            ))}
-          </ol>
-        </nav>
-      </div>
+                    {/* Separator line between steps */}
+                    {stepIdx !== steps.length - 1 && (
+                      <div className="w-1.5 sm:w-3 md:w-5 xl:w-7 h-0.5 bg-gray-200 mx-1 sm:mx-1.5 md:mx-2" />
+                    )}
+                  </li>
+                ))}
+              </ol>
+            </div>
+            {/* Mobile and Tablet current step indicator */}
+            <div className="xl:hidden mt-1.5 flex items-center justify-center gap-1.5 text-xs">
+              <span className="px-2 py-0.5 rounded-full bg-blue-50 text-[#0066FF] font-semibold text-[11px]">
+                Step {currentStepIndex + 1} of {steps.length}
+              </span>
+              <span className="text-gray-800 font-semibold text-xs">
+                {steps[currentStepIndex]?.name}
+              </span>
+            </div>
+          </nav>
+        </div>
       )}
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col items-center justify-start p-6 sm:p-10">
+      <main className="flex-1 flex flex-col items-center justify-start p-3 sm:p-5 md:p-6 w-full">
         {children}
       </main>
     </div>
