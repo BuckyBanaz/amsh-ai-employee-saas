@@ -43,6 +43,10 @@ class Settings(BaseSettings):
     ELEVENLABS_API_KEY: str | None = None
     CARTESIA_API_KEY: str | None = None
 
+    # Public HTTPS origin Twilio can reach this server on (ngrok in dev, the
+    # real domain in prod). Used to build absolute TwiML action/stream URLs.
+    PUBLIC_BASE_URL: str | None = None
+
 
 @lru_cache
 def get_settings() -> Settings:

@@ -10,9 +10,9 @@ export function AppointmentsTable() {
     <div className="bg-white border border-gray-100 rounded-xl shadow-[0_1px_4px_rgba(0,0,0,0.03)] overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
         <h2 className="text-sm font-bold text-gray-900 tracking-tight">{appointmentStrings.TITLE}</h2>
-        <button className="text-xs font-semibold text-[#0066FF] hover:text-[#0052cc] transition-colors">
+        <a href="/appointments" className="text-xs font-semibold text-[#0066FF] hover:text-[#0052cc] transition-colors">
           {appointmentStrings.VIEW_ALL}
-        </button>
+        </a>
       </div>
       
       <div className="overflow-x-auto">

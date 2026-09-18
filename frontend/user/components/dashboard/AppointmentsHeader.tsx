@@ -4,10 +4,10 @@ import { STRINGS } from '../../utils/strings/en';
 
 export function AppointmentsHeader() {
   return (
-    <div className="flex items-center justify-between mb-3 py-1">
+    <div className="flex items-center justify-between mb-1.5 py-0.5">
       <div>
-        <h1 className="text-xl font-bold text-gray-900 tracking-tight leading-tight">{STRINGS.HEADERS.APPOINTMENTS.TITLE}</h1>
-        <p className="text-xs text-gray-500 mt-0.5">{STRINGS.HEADERS.APPOINTMENTS.SUBTITLE}</p>
+        <h1 className="text-lg font-bold text-gray-900 tracking-tight leading-tight">{STRINGS.HEADERS.APPOINTMENTS.TITLE}</h1>
+        <p className="text-[11px] text-gray-500 mt-0.5">{STRINGS.HEADERS.APPOINTMENTS.SUBTITLE}</p>
       </div>
       <div className="flex items-center gap-2.5">
         <button className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 bg-white rounded-lg text-xs font-semibold text-gray-700 shadow-2xs hover:bg-gray-50 transition-colors">

@@ -18,10 +18,12 @@ class CartesiaTTS:
     def __init__(self) -> None:
         self.settings = get_settings()
         self.api_key = getattr(self.settings, "CARTESIA_API_KEY", "")
-        self.model_id = "sonic-english"
+        # "sonic-english" was sunsetted by Cartesia; sonic-2 is the current
+        # low-latency model as of the 2025-04-16 API version.
+        self.model_id = "sonic-2"
         # Standard friendly female voice (Barbershop / Sarah / Doctor Receptionist)
         self.voice_id = "a0e99841-438c-4a64-b679-ae501e7d6091"
-        self.api_version = "2024-06-10"
+        self.api_version = "2025-04-16"
 
     def is_configured(self) -> bool:
         return bool(self.api_key)

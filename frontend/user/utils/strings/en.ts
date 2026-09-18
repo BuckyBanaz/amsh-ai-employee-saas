@@ -1,11 +1,11 @@
 export const STRINGS = {
   APP: {
-    NAME: "Aira",
-    COMPANY: "Aira Platform",
+    NAME: "Amsh",
+    COMPANY: "Amsh Platform",
   },
   AUTH: {
     LAYOUT: {
-      LOGO: "Aira",
+      LOGO: "Amsh",
       CHAT_USER: "Hi, I'd like to book a dental cleaning for next Tuesday afternoon.",
       CHAT_AI: "I can help with that! We have openings at 2:00 PM and 4:30 PM on Tuesday. Which works best?",
       HERO_TITLE: "Empower your business with non-stop AI receptionist support.",

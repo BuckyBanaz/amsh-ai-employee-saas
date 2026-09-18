@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
-from backend.server.api.routes import agents, businesses, auth, integrations, knowledge, services, staff, users, admin
-from backend.ai.realtime.twilio.gateway import router as voice_router
+from backend.server.api.routes import agents, businesses, auth, integrations, knowledge, services, staff, users, admin, voice
+from backend.ai.realtime.twilio.gateway import router as voice_stream_router
 
 api_router = APIRouter()
 api_router.include_router(auth.router)
@@ -12,5 +12,6 @@ api_router.include_router(staff.router)
 api_router.include_router(agents.router)
 api_router.include_router(knowledge.router)
 api_router.include_router(integrations.router)
-api_router.include_router(voice_router)
+api_router.include_router(voice_stream_router)
+api_router.include_router(voice.router)
 api_router.include_router(admin.router)

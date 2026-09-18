@@ -7,7 +7,7 @@ import { AppointmentDetailPanel } from '../../../components/dashboard/Appointmen
 
 export default function AppointmentsPage() {
   return (
-    <div className="animate-in fade-in duration-500 pt-6 pb-12">
+    <div className="animate-in fade-in duration-500 pt-1 pb-4">
       <AppointmentsHeader />
       <AppointmentsFilterBar />
       

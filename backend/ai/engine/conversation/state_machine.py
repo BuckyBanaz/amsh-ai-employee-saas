@@ -71,16 +71,37 @@ class ConversationStateMachine:
         )
         if is_escalated:
             self.current_state = CallState.ESCALATED
+
+            # Resolve the actual transfer target (phone number + TwiML) via the
+            # same transfer_call tool used for intent-driven transfers, so a
+            # safety escalation is just as deterministic as a requested one.
+            tool_context = ToolContext(
+                business_id=self.business_id,
+                caller_number=self.caller_number,
+                call_id=self.call_id,
+                db=self.db,
+            )
+            tool_result: ToolResult = await tool_registry.execute(
+                "transfer_call",
+                tool_context,
+                department=target_role or "front_desk",
+                reason=f"Safety escalation: {user_transcript}",
+            )
+            bot_response = esc_msg or tool_result.message or "Transferring your call."
+
             turn = Turn(
                 sequence=self.sequence,
                 user_transcript=user_transcript,
-                bot_response=esc_msg or "Transferring your call.",
+                bot_response=bot_response,
                 intent="escalation",
+                tool_called="transfer_call",
+                tool_result=tool_result.data,
             )
             self.turns.append(turn)
             return {
-                "bot_response": esc_msg,
+                "bot_response": bot_response,
                 "state": self.current_state.value,
+                "tool_result": tool_result.data,
                 "should_transfer": True,
                 "transfer_target": target_role,
             }

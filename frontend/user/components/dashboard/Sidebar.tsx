@@ -63,21 +63,40 @@ const getIcon = (name: string) => {
   }
 };
 
-export function Sidebar() {
+interface SidebarProps {
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
+}
+
+export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
   const pathname = usePathname();
 
-  return (
-    <aside className="w-[230px] bg-white border-r border-gray-100 flex flex-col h-screen flex-shrink-0 font-sans">
-      
+  const sidebarContent = (
+    <div className="flex flex-col h-full w-full">
       {/* Logo & Dropdown */}
       <div className="p-3.5 pb-2">
-        <div className="flex items-center gap-2 mb-3.5">
-          <div className="w-7 h-7 bg-[#0066FF] rounded-md flex items-center justify-center">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
-              <path d="M12 4v16m-4-10v4m8-8v12" />
-            </svg>
+        <div className="flex items-center justify-between mb-3.5">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 bg-[#0066FF] rounded-md flex items-center justify-center">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
+                <path d="M12 4v16m-4-10v4m8-8v12" />
+              </svg>
+            </div>
+            <span className="text-base font-bold tracking-tight text-gray-900">{STRINGS.APP.NAME}</span>
           </div>
-          <span className="text-base font-bold tracking-tight text-gray-900">{STRINGS.APP.NAME}</span>
+
+          {/* Close button for mobile */}
+          {onMobileClose && (
+            <button
+              onClick={onMobileClose}
+              className="lg:hidden p-1.5 text-gray-400 hover:text-gray-700 rounded-md transition-colors"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          )}
         </div>
 
         <div className="w-full flex items-center justify-between px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-md cursor-pointer hover:bg-gray-100 transition-colors">
@@ -93,7 +112,6 @@ export function Sidebar() {
 
       {/* Main Navigation */}
       <nav className="flex-1 overflow-y-auto scrollbar-hide px-2.5 pb-4 space-y-4">
-        
         {navGroups.map((group, groupIdx) => (
           <div key={groupIdx}>
             <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-2.5 mb-1">
@@ -103,7 +121,12 @@ export function Sidebar() {
               {group.items.map((item) => {
                 const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
                 return (
-                  <Link key={item.label} href={item.href} className="block group/item">
+                  <Link
+                    key={item.label}
+                    href={item.href}
+                    onClick={() => onMobileClose?.()}
+                    className="block group/item"
+                  >
                     <div className={`flex items-center justify-between px-2.5 py-1.5 rounded-md transition-colors ${
                       isActive ? 'bg-[#F0F7FF] text-[#0066FF]' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                     }`}>
@@ -131,7 +154,7 @@ export function Sidebar() {
       </nav>
 
       {/* Bottom Profile */}
-      <div className="p-3 border-t border-gray-100">
+      <div className="p-3 border-t border-gray-100 mt-auto">
         <div className="flex items-center gap-2.5 cursor-pointer hover:bg-gray-50 p-1.5 rounded-md transition-colors">
           <div className="w-7 h-7 rounded-full bg-[#F0F7FF] text-[#0066FF] flex items-center justify-center font-bold text-xs">
             SW
@@ -142,7 +165,32 @@ export function Sidebar() {
           </div>
         </div>
       </div>
+    </div>
+  );
 
-    </aside>
+  return (
+    <>
+      {/* Desktop Persistent Sidebar */}
+      <aside className="hidden lg:flex w-[230px] bg-white border-r border-gray-100 flex-col h-screen flex-shrink-0 font-sans sticky top-0">
+        {sidebarContent}
+      </aside>
+
+      {/* Mobile Slide-over Drawer */}
+      {mobileOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden flex">
+          {/* Backdrop Overlay */}
+          <div
+            className="fixed inset-0 bg-black/40 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
+            onClick={onMobileClose}
+          />
+
+          {/* Drawer Panel */}
+          <aside className="relative w-[260px] max-w-[85vw] bg-white h-full shadow-2xl z-10 flex flex-col animate-in slide-in-from-left duration-200">
+            {sidebarContent}
+          </aside>
+        </div>
+      )}
+    </>
   );
 }
+

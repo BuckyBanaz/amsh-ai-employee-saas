@@ -4,7 +4,7 @@ import { STRINGS } from '../../utils/strings/en';
 
 export function AppointmentsFilterBar() {
   return (
-    <div className="bg-white border border-gray-100 rounded-lg px-3.5 py-2 shadow-2xs mb-3 flex items-center justify-between gap-3 flex-wrap">
+    <div className="bg-white border border-gray-100 rounded-lg px-3.5 py-1.5 shadow-2xs mb-2 flex items-center justify-between gap-3 flex-wrap">
       <div className="flex items-center gap-3 flex-wrap">
         {/* Doctor Filter */}
         <div className="flex flex-col gap-0.5">

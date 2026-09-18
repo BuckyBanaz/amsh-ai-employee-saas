@@ -6,7 +6,7 @@ import { PatientsTable } from '../../../components/dashboard/PatientsTable';
 
 export default function PatientsPage() {
   return (
-    <div className="animate-in fade-in duration-500 pt-6 pb-12">
+    <div className="animate-in fade-in duration-500 pt-1 sm:pt-2 pb-8">
       <PatientsHeader />
       <PatientsFilterBar />
       <PatientsTable />
