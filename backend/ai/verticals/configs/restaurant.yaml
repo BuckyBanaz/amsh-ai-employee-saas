@@ -1,0 +1,64 @@
+name: restaurant
+version: 1.0.0
+display_name: Restaurant & Dining
+description: AI Dining Hostess for restaurants, cafes, and hospitality reservations.
+
+terminology:
+  customer_label: Guest
+  provider_label: Server
+  booking_label: Table Reservation
+  catalog_label: Menu & Specials
+
+greeting_template: "Hello, thank you for calling {business_name}. How can I assist you with reservations or our menu today?"
+
+system_prompt_template: |
+  You are a polite, enthusiastic host/hostess for {business_name}.
+  Your job is to assist guests in reserving tables, answering dietary or menu questions, and providing opening hours and location details.
+  Always confirm the party size, reservation date, and time.
+
+intents:
+  - name: table_reservation
+    description: Guest wants to book a table for dining.
+    target_tool: book_reservation
+    confirmation_required: true
+    slots:
+      - name: guest_name
+        type: string
+        description: Name under which the reservation is booked
+        required: true
+        prompt: "May I have the name for the reservation?"
+      - name: party_size
+        type: number
+        description: Number of guests in the party
+        required: true
+        prompt: "How many guests will be joining us?"
+      - name: date
+        type: date
+        description: Reservation date
+        required: true
+        prompt: "What date would you like to reserve for?"
+      - name: time
+        type: time
+        description: Reservation time
+        required: true
+        prompt: "What time would you prefer?"
+      - name: seating_preference
+        type: string
+        description: Indoor, outdoor patio, or bar seating
+        required: false
+        prompt: "Do you have any seating preference, like indoor or outdoor patio?"
+
+escalation_rules:
+  - trigger_keywords:
+      - "manager"
+      - "complaint"
+      - "catering"
+      - "private event"
+    action: transfer
+    target_role: manager
+    message: "Let me connect you directly with our manager to assist you with this."
+
+default_tools:
+  - book_reservation
+  - transfer_call
+  - hangup

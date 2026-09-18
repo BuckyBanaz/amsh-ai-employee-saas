@@ -1,0 +1,111 @@
+name: clinic
+version: 1.0.0
+display_name: Healthcare & Dental Clinic
+description: AI Medical Receptionist for outpatient clinics, dental practices, and doctors.
+
+terminology:
+  customer_label: Patient
+  provider_label: Doctor
+  booking_label: Appointment
+  catalog_label: Treatments & Procedures
+
+greeting_template: "Hello, thank you for calling {business_name}. I am the AI receptionist. How can I help you today?"
+
+system_prompt_template: |
+  You are an empathetic, professional, and HIPAA-conscious medical receptionist for {business_name}.
+  Your primary responsibilities are scheduling patient appointments, checking doctor schedules, answering clinic FAQs, and transferring emergency cases.
+  
+  CRITICAL RULES:
+  1. Never give medical advice or diagnose symptoms. If the patient asks for medical advice, kindly decline and offer to book an appointment with a doctor or transfer to nursing staff.
+  2. In case of life-threatening emergencies (chest pain, shortness of breath, severe bleeding), immediately advise calling 911/emergency services and initiate call transfer.
+  3. Be courteous, concise, and confirm dates, times, and doctor names explicitly.
+
+intents:
+  - name: appointment_booking
+    description: Patient wants to schedule a new appointment or checkup.
+    target_tool: book_appointment
+    confirmation_required: true
+    slots:
+      - name: patient_name
+        type: string
+        description: Full name of the patient
+        required: true
+        prompt: "May I please have your full name?"
+      - name: phone_number
+        type: string
+        description: Contact phone number of the patient
+        required: true
+        prompt: "What is the best phone number to reach you at?"
+      - name: doctor_name
+        type: string
+        description: Name of the preferred doctor or specialist
+        required: false
+        prompt: "Do you have a specific doctor you would like to see?"
+      - name: service_name
+        type: string
+        description: The service or reason for visit (e.g. Dental Cleaning, General Checkup)
+        required: true
+        prompt: "What service or checkup are you visiting us for?"
+      - name: preferred_date
+        type: date
+        description: Desired date for the appointment (YYYY-MM-DD or relative like 'tomorrow')
+        required: true
+        prompt: "What date works best for your appointment?"
+      - name: preferred_time
+        type: time
+        description: Desired time of day (e.g. 10:00 AM, 3:30 PM, or 'morning/afternoon')
+        required: true
+        prompt: "What time would you prefer?"
+
+  - name: check_availability
+    description: Patient wants to check available dates or times for a doctor or service.
+    target_tool: check_availability
+    confirmation_required: false
+    slots:
+      - name: doctor_name
+        type: string
+        description: Name of the doctor to check
+        required: false
+        prompt: "Which doctor would you like to check availability for?"
+      - name: date
+        type: date
+        description: Date to check for open slots
+        required: true
+        prompt: "Which date would you like to check?"
+
+  - name: clinic_faq
+    description: General questions regarding clinic hours, address, parking, or insurance.
+    target_tool: null
+    confirmation_required: false
+    slots: []
+
+escalation_rules:
+  - trigger_keywords:
+      - "chest pain"
+      - "heart attack"
+      - "can't breathe"
+      - "cannot breathe"
+      - "bleeding heavily"
+      - "unconscious"
+      - "emergency"
+      - "suicide"
+    action: transfer
+    target_role: emergency
+    message: "This sounds like an emergency. I am transferring you to an emergency care coordinator immediately. If you are in immediate danger, please dial emergency services right now."
+
+  - trigger_keywords:
+      - "human"
+      - "real person"
+      - "operator"
+      - "representative"
+      - "speak to someone"
+    action: transfer
+    target_role: front_desk
+    message: "Certainly, let me transfer you to our front desk staff right away."
+
+default_tools:
+  - check_availability
+  - book_appointment
+  - transfer_call
+  - hangup
+  - send_sms

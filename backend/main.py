@@ -3,11 +3,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 import asyncio
 
-from backend.api.router import api_router
-from backend.common.config import get_settings
-from backend.common.warmup import warmup_all_clients, keep_alive_ping, state as warmup_state
-from backend.database.models import *  # noqa: F401,F403 — registers all tables on Base.metadata
-from backend.database.session import Base, engine
+from backend.server.api.router import api_router
+from backend.server.common.config import get_settings
+from backend.server.common.warmup import warmup_all_clients, keep_alive_ping, state as warmup_state
+from backend.server.database.models import *  # noqa: F401,F403 — registers all tables on Base.metadata
+from backend.server.database.session import Base, engine
 
 settings = get_settings()
 
