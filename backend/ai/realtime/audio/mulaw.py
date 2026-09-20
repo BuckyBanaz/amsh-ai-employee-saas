@@ -25,13 +25,18 @@ def chunk_bytes(data: bytes, frame_size: int = FRAME_BYTES) -> Iterator[bytes]:
         yield data[i : i + frame_size]
 
 
-async def frame_stream(audio_chunks: AsyncIterator[bytes]) -> AsyncIterator[str]:
+PCM_FRAME_BYTES = 320  # 8000 samples/sec * 2 bytes/sample (PCM16) * 20ms
+
+
+async def frame_stream(
+    audio_chunks: AsyncIterator[bytes], frame_bytes: int = FRAME_BYTES
+) -> AsyncIterator[str]:
     """Re-chunk an arbitrary-sized async byte stream into paced 20ms base64 frames."""
     buffer = b""
     async for chunk in audio_chunks:
         buffer += chunk
-        while len(buffer) >= FRAME_BYTES:
-            frame, buffer = buffer[:FRAME_BYTES], buffer[FRAME_BYTES:]
+        while len(buffer) >= frame_bytes:
+            frame, buffer = buffer[:frame_bytes], buffer[frame_bytes:]
             yield encode_frame(frame)
     if buffer:
         yield encode_frame(buffer)

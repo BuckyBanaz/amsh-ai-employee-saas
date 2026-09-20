@@ -47,6 +47,13 @@ class Settings(BaseSettings):
     # real domain in prod). Used to build absolute TwiML action/stream URLs.
     PUBLIC_BASE_URL: str | None = None
 
+    # Exotel — Indian Telephony (+91 calls & SMS)
+    EXOTEL_ACCOUNT_SID: str | None = None
+    EXOTEL_API_KEY: str | None = None
+    EXOTEL_API_TOKEN: str | None = None
+    EXOTEL_PHONE_NUMBER: str | None = None
+    EXOTEL_SUBDOMAIN: str = "api.exotel.com"
+
 
 @lru_cache
 def get_settings() -> Settings:

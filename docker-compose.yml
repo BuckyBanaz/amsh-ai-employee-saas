@@ -52,7 +52,7 @@ services:
     restart: unless-stopped
     command:
       - "http"
-      - "--pooling-enabled"
+      - "--domain=zainab-bootyless-overmasteringly.ngrok-free.dev"
       - "api:8000"
     environment:
       NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN}

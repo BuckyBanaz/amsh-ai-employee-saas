@@ -16,10 +16,27 @@ from backend.ai.tools.common.send_sms import SendSmsTool
 from backend.ai.tools.framework.base import ToolContext
 from backend.server.database.models.business import Business
 from backend.server.database.session import get_db
+from backend.ai.speech.tts.cartesia import cartesia_tts
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/voice", tags=["Voice Telephony"])
+
+
+@router.get("/voices")
+async def list_voices():
+    """Fetch available TTS voices from Cartesia."""
+    voices = await cartesia_tts.get_voices()
+    return {"voices": voices}
+
+
+@router.get("/preview")
+async def preview_voice(voice_id: str = Query(...), text: str = Query(...)):
+    """Generate and return MP3 audio preview for a voice and text."""
+    audio_bytes = await cartesia_tts.generate_preview_audio(text, voice_id)
+    if not audio_bytes:
+        return Response(status_code=500, content="Failed to generate audio")
+    return Response(content=audio_bytes, media_type="audio/mpeg")
 
 
 @router.post("/incoming")
@@ -43,10 +60,14 @@ async def handle_incoming_call(
     )
 
     if not business:
-        logger.warning(f"[VOICE INCOMING] No business found for number {lookup_number} (call {CallSid})")
+        # Fallback to latest business for development and trial numbers
+        business = db.execute(select(Business).order_by(Business.created_at.desc())).scalars().first()
+
+    if not business:
+        logger.warning(f"[VOICE INCOMING] No businesses found in database (call {CallSid})")
         twiml = (
             '<?xml version="1.0" encoding="UTF-8"?>'
-            "<Response><Say>Sorry, this number is not currently configured. Goodbye.</Say><Hangup/></Response>"
+            "<Response><Say>Sorry, no business is currently configured on this system. Goodbye.</Say><Hangup/></Response>"
         )
         return Response(content=twiml, media_type="application/xml")
 

@@ -3,6 +3,8 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { STRINGS } from '../../../utils/strings/en';
+import { OnboardingController } from '../../../controllers/onboarding.controller';
+import { StorageService } from '../../../services/storage.service';
 
 export default function BusinessOnboardingPage() {
   const router = useRouter();
@@ -21,16 +23,42 @@ export default function BusinessOnboardingPage() {
   });
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleNext = (e: React.FormEvent) => {
+  const handleNext = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.businessName || !formData.vertical || !formData.address || !formData.email || !formData.phone) {
       setError(STRINGS.ONBOARDING.BUSINESS.ERROR_REQUIRED);
       return;
     }
     setError('');
-    localStorage.setItem('onboarding_currency', formData.currency);
-    router.push('/onboarding/services');
+    setLoading(true);
+
+    try {
+      const response = await OnboardingController.createBusiness({
+        name: formData.businessName,
+        vertical: formData.vertical,
+        country: formData.country,
+        address: formData.address,
+        website: formData.website,
+        city: formData.city,
+        business_email: formData.email,
+        business_phone: formData.phone,
+        postal_code: formData.postalCode,
+        timezone: formData.timezone,
+        currency: formData.currency,
+      });
+
+      if (response && response.id) {
+        StorageService.setBusinessId(response.id);
+        localStorage.setItem('onboarding_currency', formData.currency);
+        router.push('/onboarding/services');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to create business');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleBack = () => {
@@ -224,19 +252,22 @@ export default function BusinessOnboardingPage() {
         </div>
 
         {/* Footer Buttons */}
-        <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
+        <div className="pt-2 flex justify-between items-center border-t border-gray-100 mt-2">
           <button 
             type="button" 
             onClick={handleBack}
-            className="px-5 py-2 rounded-lg border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors shadow-sm"
+            disabled={loading}
+            className="text-gray-500 hover:text-gray-900 font-semibold text-xs px-4 py-2 transition-colors disabled:opacity-50"
           >
-            {STRINGS.ONBOARDING.BUSINESS.BACK_BTN}
+            {STRINGS.ONBOARDING.BUSINESS.BACK}
           </button>
+          
           <button 
             type="submit" 
-            className="px-6 py-2 rounded-lg bg-[#0066FF] text-white text-sm font-medium hover:bg-[#0052cc] transition-colors shadow-sm"
+            disabled={loading}
+            className="bg-[#0066FF] hover:bg-[#0052cc] text-white font-medium px-6 py-2 rounded-lg text-sm transition-colors shadow-sm disabled:bg-blue-300"
           >
-            {STRINGS.ONBOARDING.BUSINESS.CONTINUE_BTN}
+            {loading ? 'Saving...' : STRINGS.ONBOARDING.BUSINESS.NEXT}
           </button>
         </div>
       </form>

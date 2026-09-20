@@ -25,8 +25,28 @@ To ensure strict security and avoid cross-tenant or role confusion, API routes f
 3. **Voice & AI Engine Namespace (`/api/voice/*`, `/media-stream/*`)**:
    - Twilio WebSocket media streams, VAD, and voice simulation endpoints.
 
+## Multi-Telephony Inbound & Outbound Architecture (Call Tunnels)
+AMSh operates a unified, provider-agnostic telephony adapter pattern (`call_tunnels/`):
+- **India Telephony (Local +91 DIDs)**: Handled via **Exotel** (`08047284627`) with PCM16 @ 8kHz streaming and Indian SMS.
+- **Global / US / UK Telephony (+1 DIDs)**: Handled via **Twilio** (`+16562547488`) with $\mu$-law @ 8kHz media streaming and international SMS.
+- **Future Country Tunnels**: Designed for zero-overhead plug-and-play expansion (Telnyx for Middle East/Europe, Plivo/Sinch for Southeast Asia).
+- **Unified Engine**: All tunnels feed normalized audio and metadata into the core pipeline (`Deepgram Nova-2` $\leftrightarrow$ `Groq Fast LLM` $\leftrightarrow$ `Cartesia Sonic-3` $\leftrightarrow$ `PostgreSQL DB`).
+
+## AI Capabilities & Server Notification Hub
+1. **AI Capabilities Architecture (`backend/ai/capabilities/`)**:
+   - **Rules**: Deterministic guardrails (Emergency safety, working hours, HIPAA/PII masking).
+   - **Skills**: Conversational workflows (Appointment booking, table reservation, lead qualification, FAQ handling).
+   - **Operations (Read vs. Write)**:
+     - *Read*: Fetch doctor schedule, check availability, query RAG knowledge base.
+     - *Write*: Persist appointment, update CRM, dispatch notifications.
+2. **Server Notification Hub (`backend/server/notifications/`)**:
+   - Centralized multi-channel dispatcher supporting: SMS (Exotel/Twilio), WhatsApp (Meta Cloud API / Twilio), Email (Resend), and Live Dashboard Push (SSE/FCM).
+
 ## Key Architectural Principles
 1. **Vertical Agnostic:** Never hardcode vertical-specific logic (`if businessType == "clinic"`). Support any business via a configuration layer.
-2. **Capability System:** The frontend dashboard adapts based on the features the business supports (e.g., appointments, orders, menu).
-3. **Deterministic Core:** The conversation engine uses a deterministic state machine rather than purely unbounded LLM generation. Field validation and tool routing are handled strictly via Python code to maintain low latency (<800ms) and eliminate hallucinations.
-4. **Monorepo First, Split on Scale:** Keep development unified in the monorepo during early growth to eliminate network hops and multi-repo deployment overhead, while maintaining clean internal module boundaries so extraction into 4 dedicated repos is seamless when team size demands it.
+2. **Dynamic Tenant-Driven (Zero Hardcoding):** Business name, operating hours, active doctor list, services catalog, and AI voice settings are fetched dynamically from PostgreSQL per tenant.
+3. **Capability System:** The frontend dashboard adapts based on the features the business supports (e.g., appointments, orders, menu).
+4. **Deterministic Core:** The conversation engine uses a deterministic state machine rather than purely unbounded LLM generation. Field validation and tool routing are handled strictly via Python code to maintain low latency (<800ms) and eliminate hallucinations.
+5. **Monorepo First, Split on Scale:** Keep development unified in the monorepo during early growth to eliminate network hops and multi-repo deployment overhead, while maintaining clean internal module boundaries so extraction into 4 dedicated repos is seamless when team size demands it.
+
+

@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { STRINGS } from '../../../utils/strings/en';
+import { OnboardingController } from '../../../controllers/onboarding.controller';
+import { StorageService } from '../../../services/storage.service';
 
 // Duration options — value = integer minutes (matches backend duration_minutes: int)
 const DURATION_OPTIONS = [
@@ -49,6 +51,8 @@ export default function ServicesOnboardingPage() {
   const [newService, setNewService]     = useState<typeof emptyForm>(emptyForm);
   const [editForm, setEditForm]         = useState<typeof emptyForm>(emptyForm);
   const [currencySymbol, setCurrencySymbol] = useState('$');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     const saved = localStorage.getItem('onboarding_currency');
@@ -88,10 +92,36 @@ export default function ServicesOnboardingPage() {
 
   const cancelEdit = () => setEditingId(null);
 
-  // ── Delete ───────────────────────────────────────────────────────────
   const handleDelete = (id: number) => {
     setServicesList(servicesList.filter(s => s.id !== id));
     if (editingId === id) setEditingId(null);
+  };
+
+  const handleNext = async () => {
+    const businessId = StorageService.getBusinessId();
+    if (!businessId) {
+      setError('Business ID missing. Please restart onboarding.');
+      return;
+    }
+    setLoading(true);
+    setError('');
+
+    try {
+      // Create all services sequentially (or in parallel)
+      for (const svc of servicesList) {
+        await OnboardingController.createService(businessId, {
+          name: svc.title,
+          description: svc.description,
+          duration_minutes: svc.duration_minutes,
+          price: svc.price_amount,
+        });
+      }
+      router.push('/onboarding/staff');
+    } catch (err: any) {
+      setError(err.message || 'Failed to save services');
+    } finally {
+      setLoading(false);
+    }
   };
 
   // ── Shared form UI ───────────────────────────────────────────────────
@@ -172,6 +202,8 @@ export default function ServicesOnboardingPage() {
         <h1 className="text-2xl font-bold text-gray-900 tracking-tight mb-1.5">{STRINGS.ONBOARDING.SERVICES.TITLE}</h1>
         <p className="text-sm text-gray-500">{STRINGS.ONBOARDING.SERVICES.SUBTITLE}</p>
       </div>
+
+      {error && <div className="mb-4 text-red-500 text-xs font-medium p-2.5 bg-red-50 rounded-lg border border-red-100">{error}</div>}
 
       <div className="space-y-3 mb-6">
         {servicesList.map((service) => (
@@ -268,16 +300,18 @@ export default function ServicesOnboardingPage() {
         <button
           type="button"
           onClick={() => router.push('/onboarding/business')}
-          className="px-5 py-2 rounded-lg border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors shadow-sm"
+          disabled={loading}
+          className="px-5 py-2 rounded-lg border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors shadow-sm disabled:opacity-50"
         >
           {STRINGS.ONBOARDING.SERVICES.BACK_BTN}
         </button>
         <button
           type="button"
-          onClick={() => router.push('/onboarding/staff')}
-          className="px-6 py-2 rounded-lg bg-[#0066FF] text-white text-sm font-medium hover:bg-[#0052cc] transition-colors shadow-sm"
+          onClick={handleNext}
+          disabled={loading}
+          className="px-6 py-2 rounded-lg bg-[#0066FF] text-white text-sm font-medium hover:bg-[#0052cc] transition-colors shadow-sm disabled:bg-blue-300"
         >
-          {STRINGS.ONBOARDING.SERVICES.CONTINUE_BTN}
+          {loading ? 'Saving...' : STRINGS.ONBOARDING.SERVICES.CONTINUE_BTN}
         </button>
       </div>
     </div>

@@ -113,6 +113,125 @@ Read `frontend/user/app/onboarding/*` (business, services, staff, hours, ai-rece
      - Browser WebRTC "Try It Yourself" test console for self-serve onboarding.
    - Created detailed architecture documents in `DOCS/11_AMSh_Telephony_Call_Transfer_and_Forwarding.md` and `ai generated docs/telephony_and_call_transfer.md`.
 
-## Current & Next Steps
-- Onboarding, Telephony blueprints, and backend separation are 100% complete and documented.
-- Next priority: Build User/Tenant APIs according to user journey (Dashboard metrics, Appointments/Transactions, Call logs, Patients).
+## 2026-09-19 — Exotel Telephony, Realtime Voice Pipeline & 4-Module Live Tracking
+1. **Exotel Telephony Integration for Indian Numbers (+91 DIDs)**:
+   - Built Exotel outbound REST client & SMS dispatch: `backend/ai/realtime/exotel/client.py`.
+   - Created inbound voicebot webhook & status routes: `backend/server/api/routes/exotel.py` (`/api/voice/exotel/incoming`, `/api/voice/exotel/status`).
+   - Upgraded universal WebSocket gateway `backend/ai/realtime/twilio/gateway.py` to support dual codecs:
+     - **Exotel**: 16-bit Linear PCM (`pcm_s16le`, 8kHz, 320 bytes/frame).
+     - **Twilio**: 8-bit $\mu$-law (`audio/x-mulaw`, 8kHz, 160 bytes/frame).
+   - Connected virtual number `08047284627` (Exotel Account: `techycodex1`) via public ngrok tunnel.
+   - Built smart SMS routing: `backend/ai/tools/common/send_sms.py` (+91 -> Exotel, global -> Twilio).
+
+2. **Cartesia TTS & Audio Quality Fixes**:
+   - Upgraded Cartesia TTS adapter from sunsetted `sonic-2` to `sonic-3` (`backend/ai/speech/tts/cartesia.py`) with voice `a631bc8b-ea1c-49bb-8dab-7a118afd11b8`.
+   - Enforced explicit `sample_rate=8000` & PCM frame handling to eliminate audio distortion / 3x chipmunk speed.
+
+3. **LLM & STT Indian Accent Enhancements**:
+   - Upgraded Groq LLM model to `openai/gpt-oss-20b` (low latency <200ms).
+   - Deepgram STT configured with `language=en-IN` for accurate Indian accent recognition.
+   - Added spoken number word normalizer (`eight nine zero...` -> `8901414107`).
+
+4. **Live Inbound Call Verified End-to-End**:
+   - Received live call from `+91 8901414107` on `08047284627`.
+   - Live stream connected, caller name (*"Parikshit Verma"*), phone number (*"8901414107"*), and appointment intent recognized and processed.
+
+5. **Database Schema & Business Audit**:
+   - Extended PostgreSQL `agents` table schema: `primary_language VARCHAR(10)`, `languages JSONB`, `greeting_message TEXT`, `config JSONB`.
+   - Audited PostgreSQL database: verified `Smile Clinic` (`dfdbb047...`) has complete doctor roster (`Dr. Sarah Wilson`), services (`Dental Consultation $50`), and active agent configuration.
+
+---
+
+# 4-Module Comprehensive State & Blocker Matrix (Live Status)
+
+### Module 1: Backend Server (`backend/server/`)
+* **Done (Completed)**:
+  * FastAPI modular architecture (`api/routes/`, `database/models/`, `auth/`, `billing/`, `workers/`).
+  * JWT Auth & Bcrypt password hashing (`/api/auth/register`, `/login`, `/me`, `/accept-invite`).
+  * Complete PostgreSQL SQLAlchemy models (`Business`, `User`, `Staff`, `Service`, `Agent`, `KnowledgeDocument`, `Integration`, `Call`, `Message`, `Transaction`, `Usage`, `PhoneNumber`).
+  * Onboarding CRUD endpoints verified (`businesses`, `services`, `staff`, `agents`, `knowledge`, `integrations`).
+  * Exotel incoming webhook handler (`/api/voice/exotel/incoming`).
+  * Multi-tenancy database isolation verified.
+* **Atka Hua / Pending (Next Steps)**:
+  * **Appointments / Transactions API**: Need full CRUD `/api/businesses/{id}/appointments` with live DB query and calendar status syncing.
+  * **Admin APIs (`/api/admin/*`)**: Route scaffolded, but tenant control, global stats, and audit log endpoints need business logic.
+  * **Phone Numbers API (`/api/businesses/{id}/phone-numbers`)**: Needs DB persistence and automated Twilio/Exotel provisioning/forwarding mapping.
+  * **Call Webhooks**: Background notification worker to alert clinic owner upon call completion (SMS/Email).
+
+---
+
+### Module 2: Backend AI / Voice Engine (`backend/ai/`)
+* **Done (Completed)**:
+  * Dual Telephony Gateway (Exotel PCM16 @ 8kHz + Twilio $\mu$-law @ 8kHz).
+  * Deepgram Nova-2 Live STT with `en-IN` Indian accent support and digit normalizer.
+  * Groq Fast LLM (`openai/gpt-oss-20b`) with <200ms latency.
+  * Cartesia Sonic-3 streaming TTS with clean 8kHz audio output.
+  * Deterministic state machine (`conversation/state_machine.py`) for multi-turn appointment slot collection.
+  * Zero-latency Emergency Safety Guardrail ("chest pain" -> immediate transfer).
+  * Dynamic YAML vertical configuration loader (`clinic.yaml`, `restaurant.yaml`).
+  * Smart multi-provider SMS tool (`send_sms.py`).
+* **Atka Hua / Pending (Next Steps)**:
+  * **Slot Confirmation & Repetition Bug**: In live calls, if speech contains background noise or extra words, state machine re-asks slot. Need robust slot confirmation & fallback handling so it never loops.
+  * **In-Flow FAQ / Services Inquiry**: If caller asks "konsi services dete ho" mid-booking, state machine must answer dynamically from DB service catalog instead of repeating the missing slot prompt.
+  * **Latency & Greeting Pre-buffer**: Greeting audio delay (~1.5-2.5s) needs reduction down to <100ms by pre-buffering welcome greeting audio chunks.
+  * **Barge-In / VAD Tuning**: Ensure instant audio cutoff when user interrupts.
+  * **Postgres Appointment Record Creation**: Ensure `book_appointment` creates confirmed row in `transactions`/`appointments` table upon completion.
+
+---
+
+### Module 3: Frontend User / Tenant Dashboard (`frontend/user/`)
+* **Done (Completed)**:
+  * Complete Next.js 14 tenant portal UI with clean styling & responsive layout.
+  * 8-Step Onboarding Wizard (Business Info, Services, Staff, Hours, AI Receptionist, Knowledge Base, Integrations, Review).
+  * Centralized terminology string mapping (`utils/strings/en.ts`) supporting multi-verticals.
+  * Interactive AI Test Playground Modal (scripted tests + chat + simulated call).
+  * Appointment calendar, call history, customer CRM, and settings UI views.
+  * 0 TypeScript compilation errors.
+* **Atka Hua / Pending (Next Steps)**:
+  * **Live API Integration**: Wire the onboarding wizard and dashboard views to real FastAPI backend (`/api/businesses/*`, `/api/auth/*`, `/api/services/*`).
+  * **WebRTC Browser Test Voice**: Connect "Test AI" button directly to `/api/voice` WebSocket for live voice testing without dialing real phone.
+  * **Realtime Call Notification**: WebSockets / SSE for live call alerts on the dashboard.
+
+---
+
+### Module 4: Frontend Admin / SuperAdmin Portal (`frontend/admin/`)
+* **Done (Completed)**:
+  * 20+ SuperAdmin screens built matching Figma spec.
+  * Compacted modern UI styling (standard headers, crisp typography, clean SVG icons).
+  * Real multi-bar waveform audio player & live transcript inspector on Call Detail view.
+  * Cross-screen bidirectional navigation and tenant drill-downs.
+  * 0 TypeScript compilation errors.
+* **Atka Hua / Pending (Next Steps)**:
+  * **Live Backend Wiring**: Connect admin tables (Businesses, Users, Health, Usage, Billing, Audit) to `/api/admin/*` endpoints.
+  * **Live Call Takeover / Listen Bridge**: Wire admin "Live Listen" and "Take Over Call" buttons to active media stream WebSocket.
+  * **Platform Telemetry & Metrics**: Connect server health dashboard to real Redis / Docker / PostgreSQL telemetry.
+
+---
+
+## Current Roadmap & Priority Order
+1. **P0 (AI Conversation Polish)**: Fix slot repetition, enable in-flow FAQ / services answering from DB, and reduce greeting latency (<100ms prebuffer).
+2. **P0 (Backend Persistence)**: Ensure appointment booking writes directly into PostgreSQL database and sends confirmation SMS.
+3. **P1 (Frontend User Wiring)**: Connect `frontend/user` onboarding and appointment calendar to `backend/server` APIs.
+4. **P2 (Frontend Admin Wiring)**: Connect `frontend/admin` screens to `/api/admin` endpoints.
+
+---
+
+### 🎯 Document 12 & Document 14 Architectures Implemented:
+- **Human-Like Emotional Tone Layer (`backend/ai/capabilities/skills/emotional_tone.py`)**:
+  - Pure-Python zero-latency sentiment detection (`ANXIOUS`, `FRUSTRATED`, `UPBEAT`, `NEUTRAL`) with English + Hindi/Hinglish triggers (*dard*, *tension*, *pareshan*, *gussa*, *shukriya*).
+  - Dynamic conversational bridges based on tenant personality profile (`PROFESSIONAL`, `FRIENDLY`, `WARM`, `CALM`) prepended naturally to responses without touching deterministic clinical facts.
+- **Call Tunnels (`backend/ai/realtime/call_tunnels/`)**: `BaseTelephonyTunnel`, `ExotelTunnel` (India PCM16 8kHz), `TwilioTunnel` (Global $\mu$-law 8kHz), and `TunnelRouter`.
+- **AI Capabilities Layer (`backend/ai/capabilities/`)**:
+  - `rules/`: `safety_emergency.py`, `business_hours.py`, `compliance_pii.py`.
+  - `skills/`: `appointment_booking.py`, `faq_answering.py`, `emotional_tone.py`.
+  - `operations/clinic/`: `read_operations.py` (Doctors & Services), `write_operations.py` (PostgreSQL DB Appointment Storage).
+  - `operations/common/`: `write_operations.py` (SMS & Call Transfer).
+- **Server Notification Hub (`backend/server/notifications/`)**: `NotificationDispatcher` for multi-channel alerts (SMS, WhatsApp, Email, SSE live dashboard push).
+
+---
+
+### 🎯 41-Day Master Daily Execution Roadmap & Tracker (20-Sep to 31-Oct):
+See **[`DOCS/roadmap/AMSh_Master_Daily_Roadmap_and_Tracker.md`](file:///c:/Users/Parikshit/Desktop/saas/DOCS/roadmap/AMSh_Master_Daily_Roadmap_and_Tracker.md)** for the complete date-by-date sprint checklist across Frontend User, Frontend Admin, Backend Server, and Backend AI.
+
+
+

@@ -55,10 +55,10 @@ class DeepgramSTT:
 deepgram_stt = DeepgramSTT()
 
 
-DEEPGRAM_LIVE_URL = (
+DEEPGRAM_LIVE_URL_TEMPLATE = (
     "wss://api.deepgram.com/v1/listen"
-    "?model=nova-2&encoding=mulaw&sample_rate=8000&channels=1"
-    "&punctuate=true&interim_results=true&endpointing=300&vad_events=true"
+    "?model=nova-2&language={language}&encoding={encoding}&sample_rate=8000&channels=1"
+    "&punctuate=true&interim_results=true&endpointing=200&vad_events=true"
 )
 
 
@@ -67,7 +67,9 @@ class DeepgramLiveConnection:
     Push raw mulaw audio chunks in via `send_audio`; consume transcript and
     speech-started (barge-in) events via `events()`."""
 
-    def __init__(self) -> None:
+    def __init__(self, encoding: str = "mulaw", language: str = "en-IN") -> None:
+        self.encoding = encoding  # "mulaw" (Twilio) or "linear16" (Exotel)
+        self.language = language  # "en-IN" (India), "en-US" (US), "en-GB" (UK), "hi" (Hindi)
         self.settings = get_settings()
         self.api_key = getattr(self.settings, "DEEPGRAM_API_KEY", "")
         self._ws: Optional[WebSocketClientProtocol] = None
@@ -82,8 +84,12 @@ class DeepgramLiveConnection:
             logger.warning("[DEEPGRAM LIVE] No API key configured — live STT disabled")
             return False
         try:
+            url = DEEPGRAM_LIVE_URL_TEMPLATE.format(
+                encoding=self.encoding,
+                language=self.language or "en-IN"
+            )
             self._ws = await websockets.connect(
-                DEEPGRAM_LIVE_URL,
+                url,
                 additional_headers={"Authorization": f"Token {self.api_key}"},
                 ping_interval=5,
             )

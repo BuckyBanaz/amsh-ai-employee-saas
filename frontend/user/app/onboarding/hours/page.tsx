@@ -3,6 +3,8 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { STRINGS } from '../../../utils/strings/en';
+import { OnboardingController } from '../../../controllers/onboarding.controller';
+import { StorageService } from '../../../services/storage.service';
 
 interface Holiday {
   id: string;
@@ -30,6 +32,8 @@ export default function HoursOnboardingPage() {
   const [isAddingHoliday, setIsAddingHoliday] = useState(false);
   const [newHolidayName, setNewHolidayName] = useState('');
   const [newHolidayDate, setNewHolidayDate] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const toggleDay = (dayName: string) => {
     setSchedule(schedule.map(d => 
@@ -77,6 +81,33 @@ export default function HoursOnboardingPage() {
 
   const handleDeleteHoliday = (id: string) => {
     setHolidays(holidays.filter(h => h.id !== id));
+  };
+
+  const handleNext = async () => {
+    const businessId = StorageService.getBusinessId();
+    if (!businessId) {
+      setError('Business ID missing. Please restart onboarding.');
+      return;
+    }
+    setLoading(true);
+    setError('');
+
+    // Build working_hours payload: { Monday: [{start, end}], ... }
+    const working_hours: Record<string, { start: string; end: string }[]> = {};
+    schedule.forEach(d => {
+      if (d.active && d.ranges.length > 0) {
+        working_hours[d.day] = d.ranges;
+      }
+    });
+
+    try {
+      await OnboardingController.updateBusiness(businessId, { working_hours });
+      router.push('/onboarding/ai-receptionist');
+    } catch (err: any) {
+      setError(err.message || 'Failed to save working hours');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -266,21 +297,25 @@ export default function HoursOnboardingPage() {
         )}
       </div>
 
+      {error && <div className="mb-3 text-red-500 text-xs font-medium p-2.5 bg-red-50 rounded-lg border border-red-100">{error}</div>}
+
       {/* Footer Buttons */}
       <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
         <button 
           type="button" 
           onClick={() => router.push('/onboarding/staff')}
-          className="px-5 py-2 rounded-lg border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors shadow-sm"
+          disabled={loading}
+          className="px-5 py-2 rounded-lg border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors shadow-sm disabled:opacity-50"
         >
           {STRINGS.ONBOARDING.HOURS.BACK_BTN}
         </button>
         <button 
           type="button" 
-          onClick={() => router.push('/onboarding/ai-receptionist')}
-          className="px-6 py-2 rounded-lg bg-[#0066FF] text-white text-sm font-medium hover:bg-[#0052cc] transition-colors shadow-sm"
+          onClick={handleNext}
+          disabled={loading}
+          className="px-6 py-2 rounded-lg bg-[#0066FF] text-white text-sm font-medium hover:bg-[#0052cc] transition-colors shadow-sm disabled:bg-blue-300"
         >
-          {STRINGS.ONBOARDING.HOURS.CONTINUE_BTN}
+          {loading ? 'Saving...' : STRINGS.ONBOARDING.HOURS.CONTINUE_BTN}
         </button>
       </div>
     </div>

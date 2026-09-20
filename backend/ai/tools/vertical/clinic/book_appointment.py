@@ -78,6 +78,21 @@ class BookAppointmentTool(BaseTool):
             context.db.refresh(trx)
             details["appointment_id"] = trx.id
 
+            # Trigger Instant Confirmation SMS
+            try:
+                from backend.ai.capabilities.operations.common.write_operations import CommonWriteOperations
+                from backend.server.database.models.business import Business
+                biz = context.db.get(Business, context.business_id)
+                biz_name = biz.name if biz else "Our Clinic"
+                CommonWriteOperations.send_confirmation_sms(
+                    to_phone=phone_number,
+                    business_name=biz_name,
+                    booking_details=f"{service_name} on {preferred_date} at {preferred_time}"
+                )
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning("Failed to dispatch booking confirmation SMS: %s", e)
+
         return ToolResult(
             success=True,
             message=(

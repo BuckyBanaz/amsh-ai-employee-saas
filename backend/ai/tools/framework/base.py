@@ -16,6 +16,7 @@ class ToolContext:
     caller_number: str
     call_id: Optional[str] = None
     db: Optional[Session] = None
+    user_transcript: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 

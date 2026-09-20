@@ -4,6 +4,21 @@ import { STRINGS } from '../../../utils/strings/en';
 
 export function BehaviorTab() {
   const content = STRINGS.DASHBOARD.COMPONENTS.AI_TABS_CONTENT.BEHAVIOR;
+  
+  const [caps, setCaps] = React.useState([
+    { id: 'faq', name: 'Answer FAQs', enabled: true },
+    { id: 'book', name: 'Book appointments', enabled: true },
+    { id: 'reschedule', name: 'Reschedule appointments', enabled: true },
+    { id: 'cancel', name: 'Cancel appointments', enabled: true },
+    { id: 'details', name: 'Collect patient details', enabled: true },
+    { id: 'services', name: 'Explain services', enabled: true },
+    { id: 'hours', name: 'Explain opening hours', enabled: true },
+    { id: 'transfer', name: 'Transfer to human', enabled: true },
+  ]);
+
+  const toggleCap = (id: string) => {
+    setCaps(caps.map(c => c.id === id ? { ...c, enabled: !c.enabled } : c));
+  };
 
   return (
     <div className="animate-in fade-in duration-500 bg-white border border-gray-100 rounded-xl p-4 shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
@@ -61,6 +76,29 @@ export function BehaviorTab() {
                 <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#10B981]"></div>
               </div>
             </label>
+          </div>
+
+          <div className="h-px bg-gray-100 w-full"></div>
+
+          {/* AI Actions & Capabilities */}
+          <div className="space-y-4">
+            <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wide">AI ACTIONS & CAPABILITIES</h3>
+            <div className="space-y-3">
+              {caps.map((cap) => (
+                <label key={cap.id} className="flex items-center justify-between cursor-pointer group">
+                  <div className="text-sm text-gray-700">{cap.name}</div>
+                  <div className="relative">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only peer" 
+                      checked={cap.enabled}
+                      onChange={() => toggleCap(cap.id)}
+                    />
+                    <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#0066FF]"></div>
+                  </div>
+                </label>
+              ))}
+            </div>
           </div>
 
           {/* Save Button */}

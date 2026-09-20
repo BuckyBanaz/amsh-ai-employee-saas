@@ -8,6 +8,7 @@ import logging
 from typing import Any, Dict, List, Optional
 import httpx
 
+from backend.ai.engine.conversation.spoken_numbers import spoken_to_digits
 from backend.server.common.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -19,13 +20,18 @@ class GroqLLMClient:
     def __init__(self) -> None:
         self.settings = get_settings()
         self.api_key = getattr(self.settings, "GROQ_API_KEY", "")
-        self.model = "llama-3.1-8b-instant"
+        self.model = "openai/gpt-oss-20b"
         self.api_url = "https://api.groq.com/openai/v1/chat/completions"
+        # Reused across calls: skips a TLS handshake (~100-200ms) per turn.
+        self._client = httpx.AsyncClient(timeout=4.0)
 
     async def extract_intent_and_slots(
         self,
         user_utterance: str,
         available_intents: List[Dict[str, Any]],
+        available_services: Optional[List[str]] = None,
+        current_intent: Optional[str] = None,
+        missing_slot: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Extracts detected intent and slot values from a user utterance.
@@ -35,38 +41,53 @@ class GroqLLMClient:
             # Fallback to rule-based extraction
             return self._fallback_extraction(user_utterance, available_intents)
 
+        service_hint = ""
+        if available_services:
+            service_hint = (
+                f"Available services: {json.dumps(available_services)}. For the service_name slot, always return the "
+                "closest matching service exactly as listed. If the user says only a partial or related word "
+                "(e.g. 'Dental', 'Teeth', 'Checkup'), map it to the closest available service "
+                "(e.g. 'Dental Consultation'). Use null if nothing is close.\n"
+            )
         system_prompt = f"""
 You are an intent and slot extractor for an AI Receptionist.
 Analyze the user utterance and extract:
 1. "intent": matching one of {json.dumps([i['name'] for i in available_intents])}, or null if unclear.
 2. "slots": a dictionary of extracted slot values (e.g. date, time, doctor, patient_name, service).
+Convert spoken word numbers (e.g. "eight nine zero one four one four one zero seven") into clean digit strings ("8901414107") for the phone_number slot.
+{service_hint}Keep names exactly as spoken (Indian names are common); do not translate or alter them.
+If the user spells out a word or name letter-by-letter (e.g., 'P A R I K S H I T' or 'P. A. R...'), combine the letters into a single clean word without spaces or punctuation. If the user corrects a previously stated slot (e.g., 'No, my name is actually XYZ' or 'No, it starts with K'), ensure you extract the new corrected value for that slot.
+
+CRITICAL CONTEXT: The AI recently asked the user a question to fill the slot '{missing_slot or 'none'}' for the intent '{current_intent or 'none'}'. 
+Strongly assume the user's answer corresponds to this slot if it matches the expected type, even if they only say a single word (e.g., 'Dental consultation' -> service_name). Always extract the slot if the intent aligns!
 
 Respond ONLY with valid JSON in this exact structure:
 {{"intent": "intent_name", "slots": {{"slot_name": "value"}}}}
 """
 
         try:
-            async with httpx.AsyncClient(timeout=4.0) as client:
-                resp = await client.post(
-                    self.api_url,
-                    headers={
-                        "Authorization": f"Bearer {self.api_key}",
-                        "Content-Type": "application/json",
-                    },
-                    json={
-                        "model": self.model,
-                        "messages": [
-                            {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": user_utterance},
-                        ],
-                        "temperature": 0.1,
-                        "response_format": {"type": "json_object"},
-                    },
-                )
-                if resp.status_code == 200:
-                    data = resp.json()
-                    content = data["choices"][0]["message"]["content"]
-                    return json.loads(content)
+            resp = await self._client.post(
+                self.api_url,
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": self.model,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_utterance},
+                    ],
+                    "temperature": 0.1,
+                    "response_format": {"type": "json_object"},
+                    # gpt-oss is a reasoning model; extraction needs no deep thinking.
+                    "reasoning_effort": "low",
+                },
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                content = data["choices"][0]["message"]["content"]
+                return json.loads(content)
         except Exception as e:
             logger.warning(f"Groq intent extraction failed: {e}. Falling back to rule-based parser.")
 
@@ -88,8 +109,11 @@ Respond ONLY with valid JSON in this exact structure:
             slots["patient_name"] = user_utterance.strip()
 
         # Extract phone: e.g. 555-987-6543 or +1555... or 10 digits
+        spoken_digits = spoken_to_digits(user_utterance)
         phone_match = re.search(r"(\+?\d[\d\-\s]{7,}\d)", user_utterance)
-        if phone_match:
+        if len(spoken_digits) >= 7:
+            slots["phone_number"] = spoken_digits
+        elif phone_match:
             slots["phone_number"] = phone_match.group(1).strip()
 
         # Extract date
@@ -127,7 +151,41 @@ Respond ONLY with valid JSON in this exact structure:
         elif any(w in lower for w in ["available", "availability", "open", "slot", "timing", "when"]):
             intent = "check_availability"
 
+        if not intent:
+            if "hours" in lower or "where" in lower or "location" in lower or "address" in lower:
+                intent = "clinic_faq"
+            elif any(w in lower for w in ["available", "free", "open", "check"]):
+                intent = "check_availability"
+
         return {"intent": intent, "slots": slots}
+
+    async def generate_text(self, system_prompt: str, user_utterance: str) -> str:
+        """Generates a raw string response from the LLM based on system prompt and user utterance."""
+        if not self.api_key:
+            return "I'm sorry, my AI capabilities are currently offline."
+
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_utterance}
+            ],
+            "temperature": 0.3,
+            "max_tokens": 150
+        }
+        
+        try:
+            resp = await self._client.post(self.api_url, headers=headers, json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+            return data["choices"][0]["message"]["content"].strip()
+        except Exception as e:
+            logger.error(f"Groq generate_text failed: {e}")
+            return "I apologize, but I am having trouble connecting to my knowledge base right now."
 
 
 # Global singleton

@@ -14,7 +14,8 @@ class SlotDefinition(BaseModel):
     type: str = "string"  # string, date, time, number, boolean
     description: str
     required: bool = True
-    prompt: Optional[str] = None  # Question to ask if this slot is missing
+    prompt: Optional[str] = None  # Literal fallback question if this slot is missing
+    prompt_key: Optional[str] = None  # Locale key (backend/ai/locales/*.json) for the question
     validation_regex: Optional[str] = None
     allowed_values: Optional[List[str]] = None
 

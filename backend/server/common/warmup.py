@@ -66,7 +66,7 @@ async def _warmup_groq() -> None:
                     "Content-Type": "application/json",
                 },
                 json={
-                    "model": "llama-3.1-8b-instant",
+                    "model": "openai/gpt-oss-20b",
                     "messages": [{"role": "user", "content": "hi"}],
                     "max_tokens": 1,
                 },

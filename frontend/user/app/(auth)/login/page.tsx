@@ -1,8 +1,33 @@
-import React from 'react';
+'use client';
+
+import React, { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { STRINGS } from '../../../utils/strings/en';
 
+import { AuthController } from '../../../controllers/auth.controller';
+
 export default function LoginPage() {
+  const router = useRouter();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    try {
+      await AuthController.login(email, password);
+      router.push('/onboarding');
+    } catch (err: any) {
+      setError(err.message || 'Failed to login');
+    } finally {
+      setLoading(false);
+    }
+  };
   const content = STRINGS.AUTH.LOGIN;
   const common = STRINGS.AUTH.COMMON;
   return (
@@ -14,13 +39,22 @@ export default function LoginPage() {
         </p>
       </div>
 
-      <form className="space-y-4">
+      {error && (
+        <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm border border-red-100">
+          {error}
+        </div>
+      )}
+
+      <form className="space-y-4" onSubmit={handleLogin}>
         <div className="space-y-1">
           <label className="text-xs font-semibold text-gray-900">{common.EMAIL_LABEL}</label>
           <input 
             type="email" 
             placeholder={common.EMAIL_PLACEHOLDER}
             className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#0066FF] focus:border-transparent transition-all"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            disabled={loading}
             required
           />
         </div>
@@ -32,6 +66,9 @@ export default function LoginPage() {
               type="password" 
               placeholder={common.PASSWORD_PLACEHOLDER}
               className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#0066FF] focus:border-transparent transition-all"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={loading}
               required
             />
             <button 
@@ -58,9 +95,10 @@ export default function LoginPage() {
 
         <button 
           type="submit" 
-          className="w-full bg-[#0066FF] hover:bg-[#0052cc] text-white font-medium py-2 rounded-lg text-sm transition-colors shadow-sm"
+          disabled={loading}
+          className="w-full bg-[#0066FF] hover:bg-[#0052cc] disabled:bg-blue-300 text-white font-medium py-2 rounded-lg text-sm transition-colors shadow-sm"
         >
-          {content.SUBMIT}
+          {loading ? 'Signing in...' : content.SUBMIT}
         </button>
       </form>
 

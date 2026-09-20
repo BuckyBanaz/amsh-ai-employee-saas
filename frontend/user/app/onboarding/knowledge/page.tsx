@@ -3,6 +3,8 @@
 import React, { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { STRINGS } from '../../../utils/strings/en';
+import { OnboardingController } from '../../../controllers/onboarding.controller';
+import { StorageService } from '../../../services/storage.service';
 
 interface KnowledgeDoc {
   id: number;
@@ -58,6 +60,8 @@ export default function KnowledgeOnboardingPage() {
   const [editFaqForm, setEditFaqForm] = useState({ question: '', answer: '' });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -96,6 +100,39 @@ export default function KnowledgeOnboardingPage() {
   const removeDoc = (id: number) => setDocList(docList.filter(d => d.id !== id));
   const removeSite = (id: number) => setSiteList(siteList.filter(s => s.id !== id));
   const removeFaq = (id: number) => setFaqList(faqList.filter(f => f.id !== id));
+
+  const handleFinish = async () => {
+    const businessId = StorageService.getBusinessId();
+    if (!businessId) {
+      setError('Business ID missing. Please restart onboarding.');
+      return;
+    }
+    setLoading(true);
+    setError('');
+
+    try {
+      // Save websites
+      for (const site of siteList) {
+        await OnboardingController.createKnowledge(businessId, {
+          doc_type: 'website',
+          source_url: site.url.startsWith('http') ? site.url : `https://${site.url}`,
+        });
+      }
+      // Save FAQs
+      for (const faq of faqList) {
+        await OnboardingController.createKnowledge(businessId, {
+          doc_type: 'faq',
+          question: faq.question,
+          answer: faq.answer,
+        });
+      }
+      router.push('/onboarding/integrations');
+    } catch (err: any) {
+      setError(err.message || 'Failed to save knowledge base');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="w-full max-w-3xl bg-white rounded-xl shadow-sm border border-gray-100 p-4 sm:p-6 md:p-8">
@@ -368,21 +405,25 @@ export default function KnowledgeOnboardingPage() {
 
       </div>
 
+      {error && <div className="mb-3 text-red-500 text-xs font-medium p-2.5 bg-red-50 rounded-lg border border-red-100">{error}</div>}
+
       {/* Footer Buttons */}
       <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
         <button
           type="button"
           onClick={() => router.push('/onboarding/ai-receptionist')}
-          className="px-5 py-2 rounded-lg border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors shadow-sm"
+          disabled={loading}
+          className="px-5 py-2 rounded-lg border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors shadow-sm disabled:opacity-50"
         >
           {STRINGS.ONBOARDING.KNOWLEDGE.BACK_BTN}
         </button>
         <button
           type="button"
-          onClick={() => router.push('/onboarding/integrations')}
-          className="px-6 py-2 rounded-lg bg-[#0066FF] text-white text-sm font-medium hover:bg-[#0052cc] transition-colors shadow-sm"
+          onClick={handleFinish}
+          disabled={loading}
+          className="px-6 py-2 rounded-lg bg-[#0066FF] text-white text-sm font-medium hover:bg-[#0052cc] transition-colors shadow-sm disabled:bg-blue-300"
         >
-          {STRINGS.ONBOARDING.KNOWLEDGE.CONTINUE_BTN}
+          {loading ? 'Finishing...' : STRINGS.ONBOARDING.KNOWLEDGE.CONTINUE_BTN}
         </button>
       </div>
     </div>

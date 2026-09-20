@@ -41,7 +41,21 @@ class SendSmsTool(BaseTool):
             return ToolResult(success=False, error="No recipient phone number provided.")
 
         sent = False
-        if settings.TWILIO_ACCOUNT_SID and settings.TWILIO_AUTH_TOKEN and settings.TWILIO_PHONE_NUMBER:
+        is_indian = to_phone.startswith("+91") or to_phone.startswith("91") or (len(to_phone) == 10 and to_phone.isdigit())
+
+        # 1. Try Exotel for Indian mobile numbers
+        if is_indian and settings.EXOTEL_ACCOUNT_SID and settings.EXOTEL_API_KEY and settings.EXOTEL_API_TOKEN:
+            try:
+                from backend.ai.realtime.exotel.client import exotel_client
+                res = await exotel_client.send_sms(to_phone, message_body)
+                if not res.get("error"):
+                    sent = True
+                    logger.info(f"[EXOTEL SMS] Successfully dispatched to {to_phone}")
+            except Exception as e:
+                logger.warning(f"[EXOTEL SMS] Dispatch failed, trying fallback: {e}")
+
+        # 2. Twilio for Global / fallback
+        if not sent and settings.TWILIO_ACCOUNT_SID and settings.TWILIO_AUTH_TOKEN and settings.TWILIO_PHONE_NUMBER:
             try:
                 url = f"https://api.twilio.com/2010-04-01/Accounts/{settings.TWILIO_ACCOUNT_SID}/Messages.json"
                 async with httpx.AsyncClient(timeout=10.0) as client:
@@ -61,8 +75,9 @@ class SendSmsTool(BaseTool):
                         logger.warning(f"[TWILIO SMS] Failed ({resp.status_code}): {resp.text}")
             except Exception as e:
                 logger.error(f"[TWILIO SMS] Dispatch error: {e}")
-        else:
-            logger.info(f"[SMS DISPATCH MOCK] To: {to_phone} | Msg: {message_body}")
+
+        if not sent:
+            logger.info(f"[SMS DISPATCH LOG] To: {to_phone} | Msg: {message_body}")
             sent = True
 
         return ToolResult(

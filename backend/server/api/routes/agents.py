@@ -23,6 +23,7 @@ class AgentCreate(BaseModel):
     languages: list[str] = []
     voice_provider: str = "elevenlabs"
     voice_model: str = "default"
+    primary_language: str = "en"
     config: dict = {}  # {personality, capabilities: {id: bool}, transfer_phone, escalation}
 
 
@@ -33,6 +34,7 @@ class AgentUpdate(BaseModel):
     languages: list[str] | None = None
     voice_provider: str | None = None
     voice_model: str | None = None
+    primary_language: str | None = None
     config: dict | None = None
 
 
@@ -44,6 +46,7 @@ class AgentOut(BaseModel):
     voice_provider: str
     voice_model: str
     languages: list
+    primary_language: str
     greeting_message: str
     config: dict
     created_at: datetime

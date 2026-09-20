@@ -30,32 +30,32 @@ intents:
         type: string
         description: Full name of the patient
         required: true
-        prompt: "May I please have your full name?"
+        prompt_key: "ask_patient_name"
       - name: phone_number
         type: string
         description: Contact phone number of the patient
         required: true
-        prompt: "What is the best phone number to reach you at?"
+        prompt_key: "ask_phone_number"
       - name: doctor_name
         type: string
         description: Name of the preferred doctor or specialist
         required: false
-        prompt: "Do you have a specific doctor you would like to see?"
+        prompt_key: "ask_doctor_name"
       - name: service_name
         type: string
         description: The service or reason for visit (e.g. Dental Cleaning, General Checkup)
         required: true
-        prompt: "What service or checkup are you visiting us for?"
+        prompt_key: "ask_service_name"
       - name: preferred_date
         type: date
         description: Desired date for the appointment (YYYY-MM-DD or relative like 'tomorrow')
         required: true
-        prompt: "What date works best for your appointment?"
+        prompt_key: "ask_preferred_date"
       - name: preferred_time
         type: time
         description: Desired time of day (e.g. 10:00 AM, 3:30 PM, or 'morning/afternoon')
         required: true
-        prompt: "What time would you prefer?"
+        prompt_key: "ask_preferred_time"
 
   - name: check_availability
     description: Patient wants to check available dates or times for a doctor or service.
@@ -66,16 +66,16 @@ intents:
         type: string
         description: Name of the doctor to check
         required: false
-        prompt: "Which doctor would you like to check availability for?"
+        prompt_key: "ask_doctor_availability"
       - name: date
         type: date
         description: Date to check for open slots
         required: true
-        prompt: "Which date would you like to check?"
+        prompt_key: "ask_date_availability"
 
   - name: clinic_faq
     description: General questions regarding clinic hours, address, parking, or insurance.
-    target_tool: null
+    target_tool: answer_faq
     confirmation_required: false
     slots: []
 

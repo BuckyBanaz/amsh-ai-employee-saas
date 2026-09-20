@@ -1,8 +1,39 @@
-import React from 'react';
+'use client';
+
+import React, { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { STRINGS } from '../../../utils/strings/en';
 
+import { AuthController } from '../../../controllers/auth.controller';
+
 export default function RegisterPage() {
+  const router = useRouter();
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (password !== confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+    setError('');
+    setLoading(true);
+
+    try {
+      await AuthController.register(name, email, password);
+      router.push('/onboarding');
+    } catch (err: any) {
+      setError(err.message || 'Failed to register');
+    } finally {
+      setLoading(false);
+    }
+  };
   const content = STRINGS.AUTH.REGISTER;
   const common = STRINGS.AUTH.COMMON;
   return (
@@ -14,13 +45,22 @@ export default function RegisterPage() {
         </p>
       </div>
 
-      <form className="space-y-3.5">
+      {error && (
+        <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm border border-red-100">
+          {error}
+        </div>
+      )}
+
+      <form className="space-y-3.5" onSubmit={handleRegister}>
         <div className="space-y-1">
           <label className="text-xs font-semibold text-gray-900">{common.FULL_NAME_LABEL}</label>
           <input 
             type="text" 
             placeholder={content.NAME_PLACEHOLDER}
             className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#0066FF] focus:border-transparent transition-all"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            disabled={loading}
             required
           />
         </div>
@@ -31,6 +71,9 @@ export default function RegisterPage() {
             type="email" 
             placeholder={common.EMAIL_PLACEHOLDER}
             className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#0066FF] focus:border-transparent transition-all"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            disabled={loading}
             required
           />
         </div>
@@ -42,6 +85,9 @@ export default function RegisterPage() {
               type="password" 
               placeholder={content.NEW_PASSWORD_PLACEHOLDER}
               className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#0066FF] focus:border-transparent transition-all"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={loading}
               required
             />
             <button 
@@ -63,6 +109,9 @@ export default function RegisterPage() {
               type="password" 
               placeholder={content.CONFIRM_PASSWORD_PLACEHOLDER}
               className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#0066FF] focus:border-transparent transition-all"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              disabled={loading}
               required
             />
             <button 
@@ -86,9 +135,10 @@ export default function RegisterPage() {
 
         <button 
           type="submit" 
-          className="w-full bg-[#0066FF] hover:bg-[#0052cc] text-white font-medium py-2 rounded-lg text-sm transition-colors shadow-sm mt-1"
+          disabled={loading}
+          className="w-full bg-[#0066FF] hover:bg-[#0052cc] disabled:bg-blue-300 text-white font-medium py-2 rounded-lg text-sm transition-colors shadow-sm mt-1"
         >
-          {content.SUBMIT}
+          {loading ? 'Signing up...' : content.SUBMIT}
         </button>
       </form>
 

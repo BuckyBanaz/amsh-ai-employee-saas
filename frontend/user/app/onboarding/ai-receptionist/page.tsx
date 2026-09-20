@@ -3,18 +3,15 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { STRINGS } from '../../../utils/strings/en';
+import { OnboardingController } from '../../../controllers/onboarding.controller';
+import { API_ENDPOINTS } from '../../../utils/api_endpoints';
+import { StorageService } from '../../../services/storage.service';
 
 const initialPersonalities = [
   { id: 'professional', name: 'Professional', desc: 'Polite, clinical, focused on scheduling accuracy' },
   { id: 'friendly', name: 'Friendly', desc: 'Conversational, cheerful, high patient engagement' },
   { id: 'warm', name: 'Warm', desc: 'Empathetic, reassuring, ideal for family practices' },
   { id: 'concise', name: 'Concise', desc: 'Direct, quick responses, swift turnarounds' },
-];
-
-const voices = [
-  { id: 'rachel', name: 'Rachel', type: 'American • Female • Professional' },
-  { id: 'drew', name: 'Drew', type: 'American • Male • Friendly' },
-  { id: 'matilda', name: 'Matilda', type: 'British • Female • Warm' }
 ];
 
 const initialLanguages = [
@@ -49,21 +46,63 @@ export default function AiReceptionistOnboardingPage() {
   const [transferPhone, setTransferPhone] = useState('+1 (555) 019-2834');
   const [escalation, setEscalation] = useState(STRINGS.ONBOARDING.AI_RECEPTIONIST.ESCALATION_OPTIONS.ASK_HUMAN);
   const [caps, setCaps] = useState(initialCapabilities);
+  const [primaryLanguage, setPrimaryLanguage] = useState('en');
   const [langs, setLangs] = useState(initialLanguages);
   const [isLangDropdownOpen, setIsLangDropdownOpen] = useState(false);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const selectedLangs = langs.filter(l => l.selected);
 
+  const [voices, setVoices] = useState<any[]>([]);
+  const [audioObj, setAudioObj] = useState<HTMLAudioElement | null>(null);
+
+  React.useEffect(() => {
+    OnboardingController.fetchVoices()
+      .then(data => {
+        const voicesArr = Array.isArray(data.voices) ? data.voices : (data.voices?.data || []);
+        if (voicesArr && Array.isArray(voicesArr)) {
+          // Format Cartesia voices for the UI
+          const formatted = voicesArr.map((v: any) => ({
+            id: v.id,
+            name: v.name,
+            type: `${v.language || 'English'} • ${v.description || 'Professional'}`
+          }));
+          setVoices(formatted);
+          if (formatted.length > 0) setSelectedVoice(formatted[0].id);
+        }
+      })
+      .catch(err => console.error('Failed to fetch voices:', err));
+  }, []);
+
   const togglePlay = (e: React.MouseEvent, voiceId: string) => {
     e.stopPropagation();
+    
+    // Stop currently playing audio if any
+    if (audioObj) {
+      audioObj.pause();
+      setAudioObj(null);
+    }
+
     if (playingVoice === voiceId) {
       setPlayingVoice(null);
     } else {
       setPlayingVoice(voiceId);
-      setTimeout(() => {
+      
+      const audioUrl = `${API_ENDPOINTS.VOICE.PREVIEW}?voice_id=${voiceId}&text=${encodeURIComponent(greeting)}`;
+      const audio = new Audio(audioUrl);
+      
+      audio.onended = () => {
         setPlayingVoice(null);
-      }, 3000);
+        setAudioObj(null);
+      };
+      
+      audio.play().catch(e => {
+        console.error("Audio playback failed:", e);
+        setPlayingVoice(null);
+      });
+      
+      setAudioObj(audio);
     }
   };
 
@@ -75,13 +114,37 @@ export default function AiReceptionistOnboardingPage() {
     setLangs(langs.map(l => l.id === id ? { ...l, selected: !l.selected } : l));
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (!aiName.trim() || !greeting.trim()) {
       setError(STRINGS.ONBOARDING.AI_RECEPTIONIST.ERROR_REQUIRED);
       return;
     }
+    const businessId = StorageService.getBusinessId();
+    if (!businessId) {
+      setError('Business ID missing. Please restart onboarding.');
+      return;
+    }
     setError('');
-    router.push('/onboarding/knowledge');
+    setLoading(true);
+
+    try {
+      await OnboardingController.createAgent(businessId, {
+        name: aiName,
+        greeting_message: greeting,
+        voice_id: selectedVoice,
+        personality: selectedPersonality,
+        transfer_phone: transferPhone,
+        escalation_policy: escalation,
+        capabilities: caps.filter(c => c.enabled).map(c => c.id),
+        languages: langs.filter(l => l.selected).map(l => l.id),
+        primary_language: primaryLanguage,
+      });
+      router.push('/onboarding/knowledge');
+    } catch (err: any) {
+      setError(err.message || 'Failed to create AI agent');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -189,6 +252,19 @@ export default function AiReceptionistOnboardingPage() {
                 </div>
               ))}
             </div>
+          </div>
+
+          <div className="space-y-1 relative">
+            <label className="text-xs font-semibold text-gray-900">Primary Language</label>
+            <select
+              value={primaryLanguage}
+              onChange={(e) => setPrimaryLanguage(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-gray-200 bg-white text-xs text-gray-900 focus:ring-2 focus:ring-[#0066FF] focus:border-transparent outline-none transition-all"
+            >
+              {langs.map(l => (
+                <option key={l.id} value={l.id}>{l.name}</option>
+              ))}
+            </select>
           </div>
 
           <div className="space-y-1 relative">
@@ -309,16 +385,18 @@ export default function AiReceptionistOnboardingPage() {
         <button 
           type="button" 
           onClick={() => router.push('/onboarding/hours')}
-          className="px-5 py-2 rounded-lg border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors shadow-sm"
+          disabled={loading}
+          className="px-5 py-2 rounded-lg border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors shadow-sm disabled:opacity-50"
         >
           {STRINGS.ONBOARDING.AI_RECEPTIONIST.BACK_BTN}
         </button>
         <button 
           type="button" 
           onClick={handleNext}
-          className="px-6 py-2 rounded-lg bg-[#0066FF] text-white text-sm font-medium hover:bg-[#0052cc] transition-colors shadow-sm"
+          disabled={loading}
+          className="px-6 py-2 rounded-lg bg-[#0066FF] text-white text-sm font-medium hover:bg-[#0052cc] transition-colors shadow-sm disabled:bg-blue-300"
         >
-          {STRINGS.ONBOARDING.AI_RECEPTIONIST.CONTINUE_BTN}
+          {loading ? 'Saving...' : STRINGS.ONBOARDING.AI_RECEPTIONIST.CONTINUE_BTN}
         </button>
       </div>
     </div>

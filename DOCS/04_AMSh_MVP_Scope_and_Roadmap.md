@@ -1,6 +1,7 @@
 # Amsh — MVP Scope & Roadmap
-**Status:** Working document, generated from an actual audit of the codebase (not just the earlier research docs).
-**Date:** 2026-09-09
+**Status:** Active working document & sprint planning base.  
+**Date:** Updated 2026-09-20 (Master Daily Execution Roadmap created).  
+**🎯 Master Daily Roadmap (20-Sep to 31-Oct):** See **[`DOCS/roadmap/AMSh_Master_Daily_Roadmap_and_Tracker.md`](file:///c:/Users/Parikshit/Desktop/saas/DOCS/roadmap/AMSh_Master_Daily_Roadmap_and_Tracker.md)** for the complete date-by-date sprint tracker.
 
 ---
 
