@@ -1,0 +1,110 @@
+name: clinic
+version: 1.0.0
+language: es
+display_name: Clínica Médica y Dental (Spanish)
+description: Recepcionista Médica de IA para clínicas ambulatorias, consultorios dentales y médicos en español.
+
+terminology:
+  customer_label: Paciente
+  provider_label: Doctor / Médico
+  booking_label: Cita
+  catalog_label: Tratamientos y Procedimientos
+
+greeting_template: "Hola, gracias por llamar a {business_name}. Soy la recepcionista de inteligencia artificial. ¿Cómo puedo ayudarle hoy?"
+
+system_prompt_template: |
+  Usted es una recepcionista médica empática, profesional y consciente de HIPAA para {business_name}.
+  Sus responsabilidades principales son programar citas para pacientes, verificar la disponibilidad de médicos, responder preguntas frecuentes de la clínica y transferir casos de emergencia.
+  
+  REGLAS CRÍTICAS:
+  1. Nunca dé consejos médicos ni diagnostique síntomas. Si el paciente solicita consejo médico, rechace amablemente y ofrezca reservar una cita con un médico o transferir al personal de enfermería.
+  2. En caso de emergencias graves (dolor en el pecho, dificultad para respirar, sangrado severo), aconseje de inmediato llamar a los servicios de emergencia e inicie la transferencia de la llamada.
+  3. Sea cortés, conciso y confirme explícitamente las fechas, horas y nombres de los médicos.
+
+intents:
+  - name: appointment_booking
+    description: El paciente desea programar una nueva cita o chequeo médico.
+    target_tool: book_appointment
+    confirmation_required: true
+    slots:
+      - name: patient_name
+        type: string
+        description: Nombre completo del paciente
+        required: true
+        prompt_key: "ask_patient_name"
+      - name: phone_number
+        type: string
+        description: Número de teléfono de contacto del paciente
+        required: true
+        prompt_key: "ask_phone_number"
+      - name: doctor_name
+        type: string
+        description: Nombre del médico o especialista preferido
+        required: false
+        prompt_key: "ask_doctor_name"
+      - name: service_name
+        type: string
+        description: El servicio o motivo de la visita (ej. Limpieza Dental, Chequeo General)
+        required: true
+        prompt_key: "ask_service_name"
+      - name: preferred_date
+        type: date
+        description: Fecha deseada para la cita (AAAA-MM-DD o 'mañana')
+        required: true
+        prompt_key: "ask_preferred_date"
+      - name: preferred_time
+        type: time
+        description: Hora deseada del día (ej. 10:00 AM, 3:30 PM o 'por la mañana')
+        required: true
+        prompt_key: "ask_preferred_time"
+
+  - name: check_availability
+    description: El paciente desea verificar las fechas o horarios disponibles para un médico o servicio.
+    target_tool: check_availability
+    confirmation_required: false
+    slots:
+      - name: doctor_name
+        type: string
+        description: Nombre del médico a consultar
+        required: false
+        prompt_key: "ask_doctor_availability"
+      - name: date
+        type: date
+        description: Fecha para verificar horarios disponibles
+        required: true
+        prompt_key: "ask_date_availability"
+
+  - name: clinic_faq
+    description: Preguntas generales sobre horarios de la clínica, dirección, estacionamiento o seguro.
+    target_tool: answer_faq
+    confirmation_required: false
+    slots: []
+
+escalation_rules:
+  - trigger_keywords:
+      - "dolor de pecho"
+      - "ataque al corazón"
+      - "no puedo respirar"
+      - "sangrado fuerte"
+      - "inconsciente"
+      - "emergencia"
+    action: transfer
+    target_role: emergency
+    message: "Esto parece una emergencia. Le transferiré de inmediato con un coordinador de atención de emergencia. Si está en peligro inminente, llame a los servicios de emergencia ahora mismo."
+
+  - trigger_keywords:
+      - "humano"
+      - "persona real"
+      - "operador"
+      - "representante"
+      - "hablar con alguien"
+    action: transfer
+    target_role: front_desk
+    message: "Por supuesto, le transferiré de inmediato con el personal de recepción."
+
+default_tools:
+  - check_availability
+  - book_appointment
+  - transfer_call
+  - hangup
+  - send_sms

@@ -3,7 +3,10 @@ Voice Activity Detection (VAD).
 Calculates RMS energy of mulaw/PCM audio frames to detect speech onset and barge-in.
 """
 
-import audioop
+try:
+    import audioop
+except ImportError:
+    import audioop_lts as audioop
 import base64
 
 

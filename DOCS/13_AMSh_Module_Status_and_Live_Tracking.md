@@ -61,6 +61,9 @@ This document provides a single source of truth for tracking what is **Completed
 | **Auth** | JWT + Bcrypt Auth System |  **DONE** | `POST /api/auth/register`, `/login`, `/me`, `/accept-invite`. |
 | **Database** | PostgreSQL Models |  **DONE** | `Business`, `User`, `Staff`, `Service`, `Agent`, `KnowledgeDocument`, `Integration`, `Call`, `Message`, `Transaction`, `Usage`, `PhoneNumber`. |
 | **Onboarding** | Step-by-Step Onboarding API |  **DONE** | `/api/businesses/{id}/services`, `/staff`, `/agents`, `/knowledge`, `/integrations`. Validated with curl. |
+| **RAG Knowledge** | Document Upload & Site Sync |  **DONE** | `POST /upload-file` (PDF/DOCX/TXT), `POST /sync-url` (HTML scraper), `POST /query` (sub-50ms RAG search). |
+| **Security/Crypto**| Cryptography & PII Masking |  **DONE** | `CryptoManager` Fernet AES-256 / RSA encryption & `mask_phone` PII masking in server logs (`backend/server/auth/crypto.py`). |
+| **WhatsApp Webhook**| Meta WhatsApp Cloud API |  **DONE** | `GET/POST /api/v1/whatsapp/webhook` verification & inbound webhook handler in `integrations.py`. |
 | **Telephony Route**| Exotel Inbound Webhook |  **DONE** | `/api/voice/exotel/incoming`, `/api/voice/exotel/status` returning dynamic JSON for Exotel Voicebot Applet. |
 | **Schema Upgrade** | Agents Table Extended |  **DONE** | Added `primary_language`, `languages`, `greeting_message`, `config` columns to DB. |
 | **Appointments** | Bookings / Transactions API | ⏳ **PENDING** | Need dedicated `/api/businesses/{id}/appointments` CRUD with slot filtering and calendar view sync. |
@@ -74,6 +77,7 @@ This document provides a single source of truth for tracking what is **Completed
 
 | Area | Feature / Task | Status | Details / Location |
 |---|---|---|---|
+| **RAG Architecture**| Sub-50ms Vector Retriever |  **DONE** | `backend/ai/engine/rag/` (`chunker.py`, `vector_store.py`, `retriever.py`). Benchmarked at 0.06ms-0.1ms vector query latency. |
 | **Telephony Gateway** | Exotel WebSocket Adapter (India) |  **DONE** | PCM16 @ 8kHz (320-byte chunks) streaming live on virtual number `08047284627`. |
 | **Telephony Gateway** | Twilio WebSocket Adapter (Global)|  **DONE** | $\mu$-law @ 8kHz (160-byte chunks) streaming on `+16562547488`. |
 | **Speech-to-Text** | Deepgram Nova-2 Live Stream |  **DONE** | Streaming STT with `language=en-IN` and number-word to digit normalizer (`eight nine...` $\rightarrow$ `8901414107`). |

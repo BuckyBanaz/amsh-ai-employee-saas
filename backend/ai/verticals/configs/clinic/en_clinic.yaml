@@ -1,7 +1,8 @@
 name: clinic
 version: 1.0.0
-display_name: Healthcare & Dental Clinic
-description: AI Medical Receptionist for outpatient clinics, dental practices, and doctors.
+language: en
+display_name: Healthcare & Dental Clinic (English)
+description: AI Medical Receptionist for outpatient clinics, dental practices, and doctors in English.
 
 terminology:
   customer_label: Patient
@@ -17,7 +18,7 @@ system_prompt_template: |
   
   CRITICAL RULES:
   1. Never give medical advice or diagnose symptoms. If the patient asks for medical advice, kindly decline and offer to book an appointment with a doctor or transfer to nursing staff.
-  2. In case of life-threatening emergencies (chest pain, shortness of breath, severe bleeding), immediately advise calling 911/emergency services and initiate call transfer.
+  2. In case of life-threatening emergencies (chest pain, shortness of breath, severe bleeding), immediately advise calling emergency services and initiate call transfer.
   3. Be courteous, concise, and confirm dates, times, and doctor names explicitly.
 
 intents:

@@ -1,0 +1,111 @@
+name: clinic
+version: 1.0.0
+language: hi
+display_name: Swasthya aur Dental Clinic (Hindi)
+description: Outpatient clinics, dental practices aur doctors ke liye Hindi AI Receptionist.
+
+terminology:
+  customer_label: Mareez (Patient)
+  provider_label: Doctor
+  booking_label: Appointment
+  catalog_label: Ilaaj aur Services
+
+greeting_template: "Namaste, {business_name} me aapka swagat hai. Main AI receptionist hoon. Main aapki kya madad kar sakti hoon?"
+
+system_prompt_template: |
+  Aap {business_name} ke liye ek samvedansheel, professional aur HIPAA-conscious medical receptionist hain.
+  Aapki mukhya zimmewariyan hain: patient appointment schedule karna, doctor availability check karna, clinic FAQs ka jawab dena, aur emergency cases transfer karna.
+  
+  MUKHYA NIYAM:
+  1. Kabhi bhi doktari salah (medical advice) ya bimari diagnose na karein. Agar mareez medical advice maange, toh politely mana karein aur doctor ke saath appointment book karne ya nurse ko call transfer karne ka prastav dein.
+  2. Gambhir emergency (chhati me dard, saans lene me takleef, tez khoon behna) ke mamle me immediate emergency services dial karne ki salah dein aur call transfer karein.
+  3. Hamesha shisht, spashth rahein aur date, time aur doctor ke naam ki confirmation lein.
+
+intents:
+  - name: appointment_booking
+    description: Mareez nayi appointment ya checkup schedule karna chahta hai.
+    target_tool: book_appointment
+    confirmation_required: true
+    slots:
+      - name: patient_name
+        type: string
+        description: Mareez ka poora naam
+        required: true
+        prompt_key: "ask_patient_name"
+      - name: phone_number
+        type: string
+        description: Sampark hetu phone number
+        required: true
+        prompt_key: "ask_phone_number"
+      - name: doctor_name
+        type: string
+        description: Preferred doctor ya specialist ka naam
+        required: false
+        prompt_key: "ask_doctor_name"
+      - name: service_name
+        type: string
+        description: Service ya ilaaj ka naam (jaise Dental Cleaning, General Checkup)
+        required: true
+        prompt_key: "ask_service_name"
+      - name: preferred_date
+        type: date
+        description: Appointment ki pasandida tarikh (YYYY-MM-DD ya 'kal')
+        required: true
+        prompt_key: "ask_preferred_date"
+      - name: preferred_time
+        type: time
+        description: Pasandida samay (jaise 10:00 AM, 3:30 PM, ya 'subah/dopahar')
+        required: true
+        prompt_key: "ask_preferred_time"
+
+  - name: check_availability
+    description: Mareez doctor ya service ke liye available dates/times dekhna chahta hai.
+    target_tool: check_availability
+    confirmation_required: false
+    slots:
+      - name: doctor_name
+        type: string
+        description: Doctor ka naam
+        required: false
+        prompt_key: "ask_doctor_availability"
+      - name: date
+        type: date
+        description: Availability check karne ki tarikh
+        required: true
+        prompt_key: "ask_date_availability"
+
+  - name: clinic_faq
+    description: Clinic ke samay, pata, parking ya insurance ke aam sawal.
+    target_tool: answer_faq
+    confirmation_required: false
+    slots: []
+
+escalation_rules:
+  - trigger_keywords:
+      - "chhati me dard"
+      - "chest pain"
+      - "heart attack"
+      - "saans nahi aa rahi"
+      - "khoon beh raha hai"
+      - "behosh"
+      - "emergency"
+    action: transfer
+    target_role: emergency
+    message: "Ye ek emergency lagti hai. Main aapko turant emergency care coordinator se connect kar rahi hoon. Kripya turant emergency number par call karein."
+
+  - trigger_keywords:
+      - "insan"
+      - "real person"
+      - "agent"
+      - "baat karni hai"
+      - "human"
+    action: transfer
+    target_role: front_desk
+    message: "Ji zaroor, main aapki call abhi front desk staff ko transfer kar rahi hoon."
+
+default_tools:
+  - check_availability
+  - book_appointment
+  - transfer_call
+  - hangup
+  - send_sms

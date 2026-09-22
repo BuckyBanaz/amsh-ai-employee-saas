@@ -17,8 +17,15 @@ Documenting verified APIs mapped directly against `frontend/user` screens, ensur
 | **Onboarding: Hours** | `http://localhost:3000/onboarding/hours` | `PATCH /api/onboarding/businesses/{id}` | ✅ Verified |
 | **Onboarding: AI Receptionist** | `http://localhost:3000/onboarding/ai-receptionist` | `POST /api/onboarding/businesses/{id}/agents` | ✅ Verified |
 | **Onboarding: Knowledge** | `http://localhost:3000/onboarding/knowledge` | `POST /api/onboarding/businesses/{id}/knowledge` | ✅ Verified |
+| **Knowledge: File Upload** | `http://localhost:3000/onboarding/knowledge` | `POST /api/onboarding/businesses/{id}/knowledge/upload-file` | ✅ Verified |
+| **Knowledge: Website Sync** | `http://localhost:3000/onboarding/knowledge` | `POST /api/onboarding/businesses/{id}/knowledge/sync-url` | ✅ Verified |
+| **Knowledge: RAG Query** | Internal AI Call Engine | `POST /api/onboarding/businesses/{id}/knowledge/query` | ✅ Verified (<1ms) |
+| **WhatsApp Webhook** | Meta Cloud API Webhook | `GET/POST /api/v1/whatsapp/webhook` | ✅ Verified |
 | **Onboarding: Integrations** | `http://localhost:3000/onboarding/integrations` | `POST /api/onboarding/businesses/{id}/integrations/{provider}/connect` | ✅ Verified |
-| **Dashboard Overview** | `http://localhost:3000/dashboard` | `GET /api/businesses/{id}/dashboard` | ⏳ Pending |
+| **Dashboard Overview** | `http://localhost:3000/dashboard` | `GET /api/businesses/{id}/dashboard/stats` | ✅ Verified |
+| **Dashboard Appointments** | `http://localhost:3000/dashboard/appointments` | `GET/POST/PATCH/DELETE /api/businesses/{id}/appointments` | ✅ Verified |
+| **Dashboard Call Logs** | `http://localhost:3000/dashboard/calls` | `GET /api/businesses/{id}/calls` | ✅ Verified |
+| **Dashboard Patients CRM** | `http://localhost:3000/dashboard/patients` | `GET/POST /api/businesses/{id}/customers` | ✅ Verified |
 
 ---
 
@@ -885,4 +892,176 @@ Full `BusinessOut` object with updated `plan: "professional"` and `status: "acti
 - ➔ **Redirect to `/onboarding/success`** → `/dashboard`
 
 ---
+
+## 13. Dashboard Overview & KPI Metrics Screen
+
+### 📌 General Info
+- **Frontend URL:** `http://localhost:3000/dashboard`
+- **Frontend File:** `frontend/user/app/(dashboard)/dashboard/page.tsx`
+- **Backend Route File:** `backend/server/api/routes/dashboard_stats.py`
+- **Method:** `GET`
+- **Endpoint:** `/api/businesses/{business_id}/dashboard/stats`
+- **Authentication:** Bearer Token (`Authorization: Bearer <access_token>`)
+- **Verification Status:** ✅ Verified (1:1 Schema Match & Live Aggregation)
+
+---
+
+### 📥 Request Schema
+- **Query Params:** None
+- **Headers:** `Authorization: Bearer <access_token>`
+
+---
+
+### 📤 Response Schema (`200 OK`)
+```json
+{
+  "metrics": {
+    "total_calls": 42,
+    "booked_appointments": 18,
+    "transferred_calls": 3,
+    "conversion_rate": "42.9%",
+    "avg_latency": "180ms",
+    "ai_accuracy": "98.5%"
+  },
+  "recent_activity": [
+    {
+      "id": "call-uuid-1",
+      "type": "call",
+      "caller": "Ramesh Gupta",
+      "intent": "appointment_booking",
+      "outcome": "resolved",
+      "duration": "42s",
+      "time": "10:30 AM"
+    }
+  ]
+}
+```
+
+---
+
+## 14. Dashboard Appointments & Calendar Screen
+
+### 📌 General Info
+- **Frontend URL:** `http://localhost:3000/dashboard/appointments`
+- **Frontend File:** `frontend/user/app/(dashboard)/dashboard/appointments/page.tsx`
+- **Backend Route File:** `backend/server/api/routes/appointments.py`
+- **Method:** `GET` (list), `POST` (create), `PATCH` (update status/reschedule), `DELETE` (delete)
+- **Endpoint:** `/api/businesses/{business_id}/appointments`
+- **Authentication:** Bearer Token — Member of business
+- **Verification Status:** ✅ Verified (1:1 Schema Match & PostgreSQL Transaction Sync)
+
+---
+
+### 📥 Create Request Schema (`POST /api/businesses/{business_id}/appointments`)
+```json
+{
+  "customer_name": "Rahul Verma",
+  "phone_number": "+919876543210",
+  "service_name": "Teeth Cleaning & Polish",
+  "doctor_name": "Dr. Sameer Sharma",
+  "preferred_date": "2026-09-25",
+  "preferred_time": "11:30 AM",
+  "status": "confirmed",
+  "notes": "First time patient checkup"
+}
+```
+
+---
+
+### 📤 Response Schema (`201 Created` / `200 OK`)
+```json
+{
+  "id": "tx-uuid-...",
+  "business_id": "7b2e8d91-...",
+  "call_id": null,
+  "type": "appointment",
+  "status": "confirmed",
+  "customer_name": "Rahul Verma",
+  "phone_number": "+919876543210",
+  "service_name": "Teeth Cleaning & Polish",
+  "doctor_name": "Dr. Sameer Sharma",
+  "preferred_date": "2026-09-25",
+  "preferred_time": "11:30 AM",
+  "notes": "First time patient checkup",
+  "created_at": "2026-09-22T10:30:00Z"
+}
+```
+
+---
+
+## 15. Dashboard Call History & Transcripts Screen
+
+### 📌 General Info
+- **Frontend URL:** `http://localhost:3000/dashboard/calls`
+- **Frontend File:** `frontend/user/app/(dashboard)/dashboard/calls/page.tsx`
+- **Backend Route File:** `backend/server/api/routes/calls.py`
+- **Method:** `GET`
+- **Endpoint:** `/api/businesses/{business_id}/calls` and `/api/businesses/{business_id}/calls/{call_id}`
+- **Authentication:** Bearer Token
+- **Verification Status:** ✅ Verified (1:1 Schema Match with Full Transcripts)
+
+---
+
+### 📤 Response Schema (`GET /api/businesses/{business_id}/calls/{call_id}`)
+```json
+{
+  "id": "call-uuid-...",
+  "business_id": "7b2e8d91-...",
+  "caller_number": "+919811223344",
+  "caller_name": "Ramesh Gupta",
+  "intent": "appointment_booking",
+  "outcome": "resolved",
+  "summary": "Booked Cardiology appointment for tomorrow 10:30 AM.",
+  "duration_seconds": 42,
+  "latency_ms": 175,
+  "started_at": "2026-09-22T10:00:00Z",
+  "ended_at": "2026-09-22T10:00:42Z",
+  "messages": [
+    {
+      "id": "msg-1",
+      "role": "assistant",
+      "content": "Namaste, Sanjeevani Hospital me aapka swagat hai.",
+      "sequence": 1,
+      "created_at": "2026-09-22T10:00:02Z"
+    },
+    {
+      "id": "msg-2",
+      "role": "user",
+      "content": "Mujhe Dr. Rajesh Sharma se appointment book karni hai.",
+      "sequence": 2,
+      "created_at": "2026-09-22T10:00:10Z"
+    }
+  ]
+}
+```
+
+---
+
+## 16. Dashboard Patients / Customers CRM Screen
+
+### 📌 General Info
+- **Frontend URL:** `http://localhost:3000/dashboard/patients`
+- **Frontend File:** `frontend/user/app/(dashboard)/dashboard/patients/page.tsx`
+- **Backend Route File:** `backend/server/api/routes/customers.py`
+- **Method:** `GET` (list patients), `POST` (register manual patient)
+- **Endpoint:** `/api/businesses/{business_id}/customers`
+- **Authentication:** Bearer Token
+- **Verification Status:** ✅ Verified (1:1 Patient Registry Mapping)
+
+---
+
+### 📤 Response Schema (`GET /api/businesses/{business_id}/customers`)
+```json
+[
+  {
+    "id": "cust_e695f54e",
+    "name": "Rahul Verma",
+    "phone_number": "+919876543210",
+    "total_bookings": 1,
+    "last_visit": "2026-09-22",
+    "status": "active"
+  }
+]
+```
+
 

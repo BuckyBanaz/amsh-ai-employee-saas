@@ -52,6 +52,7 @@ export default function BusinessOnboardingPage() {
       if (response && response.id) {
         StorageService.setBusinessId(response.id);
         localStorage.setItem('onboarding_currency', formData.currency);
+        localStorage.setItem('onboarding_business_data', JSON.stringify(formData));
         router.push('/onboarding/services');
       }
     } catch (err: any) {

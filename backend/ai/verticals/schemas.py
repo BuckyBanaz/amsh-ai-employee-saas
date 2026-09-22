@@ -49,6 +49,7 @@ class VerticalConfig(BaseModel):
     """Complete specification of a business vertical."""
     name: str
     version: str = "1.0.0"
+    language: str = "en"
     display_name: str
     description: str
     terminology: TerminologyConfig = Field(default_factory=TerminologyConfig)

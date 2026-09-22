@@ -25,5 +25,10 @@ export const API_ENDPOINTS = {
   },
   KNOWLEDGE: {
     CREATE: (businessId: string) => `${BASE_URL}/onboarding/businesses/${businessId}/knowledge`,
+    LIST: (businessId: string) => `${BASE_URL}/onboarding/businesses/${businessId}/knowledge`,
+    UPLOAD_FILE: (businessId: string) => `${BASE_URL}/onboarding/businesses/${businessId}/knowledge/upload-file`,
+    SYNC_URL: (businessId: string) => `${BASE_URL}/onboarding/businesses/${businessId}/knowledge/sync-url`,
+    QUERY: (businessId: string) => `${BASE_URL}/onboarding/businesses/${businessId}/knowledge/query`,
+    DELETE: (businessId: string, id: string) => `${BASE_URL}/onboarding/businesses/${businessId}/knowledge/${id}`,
   }
 };

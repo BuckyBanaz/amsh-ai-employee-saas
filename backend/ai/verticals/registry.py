@@ -24,29 +24,34 @@ class VerticalRegistry:
     def _reload(self) -> None:
         self._configs = VerticalLoader.load_all()
 
-    def get_vertical(self, name: str) -> VerticalConfig:
+    def get_vertical(self, name: str, language: str = "en") -> VerticalConfig:
         """
-        Get vertical config by name (e.g. 'clinic', 'restaurant').
+        Get vertical config by name (e.g. 'clinic', 'restaurant') and language ('en', 'hi', 'es', 'nl').
         Falls back to 'clinic' (MVP default) if not found.
         """
         normalized = name.lower().strip()
-        if normalized in self._configs:
+        lang = (language or "en").lower().strip()
+        key_lang = f"{normalized}:{lang}"
+
+        if key_lang in self._configs:
+            return self._configs[key_lang]
+        if normalized in self._configs and self._configs[normalized].language == lang:
             return self._configs[normalized]
         
         # Try loading on-demand if not already loaded
-        loaded = VerticalLoader.load_by_name(normalized)
+        loaded = VerticalLoader.load_by_name(normalized, language=lang)
         if loaded:
-            self._configs[normalized] = loaded
+            self._configs[f"{normalized}:{loaded.language}"] = loaded
             return loaded
 
-        # Fallback to clinic as default vertical
-        if "clinic" in self._configs:
-            return self._configs["clinic"]
-        
-        clinic = VerticalLoader.load_by_name("clinic")
-        if clinic:
-            self._configs["clinic"] = clinic
-            return clinic
+        # Fallback to base vertical name or clinic default
+        if normalized in self._configs:
+            return self._configs[normalized]
+
+        fallback_clinic = VerticalLoader.load_by_name("clinic", language="en")
+        if fallback_clinic:
+            self._configs["clinic:en"] = fallback_clinic
+            return fallback_clinic
 
         raise ValueError(f"Vertical '{name}' not found and default 'clinic' could not be loaded.")
 

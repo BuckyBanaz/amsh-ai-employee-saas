@@ -4,15 +4,21 @@ This document provides a step-by-step onboarding and integration guide for conne
 
 ---
 
-## 1. WhatsApp Business API Setup
-
 There are two primary integration routes for WhatsApp:
-1. **Direct Meta Cloud API (Recommended for Production & Cost-Efficiency)**
-2. **Twilio WhatsApp API (Fastest to set up if already using Twilio for voice)**
+1. **WhatsApp Web QR Code Scanner (Zero-Friction Baileys Engine — Instant 5-Second Pairing)**
+2. **Direct Meta Cloud API (Official Enterprise WABA)**
 
 ---
 
-### Option A: Meta Cloud API (Official & Lowest Cost)
+### Option A: WhatsApp Web QR Code Scanner (Baileys Microservice — Recommended for Instant SaaS Onboarding)
+
+Users simply open the Onboarding WhatsApp page (`/onboarding/integrations/whatsapp`), point their phone camera (WhatsApp Business app ➔ Linked Devices ➔ Link a Device), and scan the live QR code. No Meta Developer Account or API key required.
+
+#### Architectural Flow:
+1. **QR Stream**: Baileys Node.js microservice (`localhost:3001`) initializes an isolated WebSocket multi-device session for `business_id` and streams the QR code matrix to the frontend.
+2. **Session Persistence**: Upon scan completion, E2E Signal encryption credentials are saved under `sessions/business_{id}/auth_info.json`.
+3. **Outbound Automated Cards**: When an AI voice call finishes in Python FastAPI (`dispatcher.py`), an internal HTTP POST is dispatched to Baileys (`POST /api/whatsapp/send`) to deliver instant confirmation cards & Google Maps location links.
+4. **Inbound 2-Way Chat AI**: Inbound WhatsApp text messages trigger Baileys `messages.upsert` event, routing caller queries to Python Groq LLM + Vector DB RAG for real-time 2-way AI text chat & automated booking.
 
 Meta gives **1,000 free service conversations every month**. Beyond that, you only pay Meta's base message rates with zero middleman markup.
 

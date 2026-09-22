@@ -63,24 +63,75 @@ export default function KnowledgeOnboardingPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const [fileUploading, setFileUploading] = useState(false);
+  const [siteSyncing, setSiteSyncing] = useState(false);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setDocList([...docList, { id: Date.now(), name: file.name, status: 'Processing' }]);
+    if (!file) return;
+
+    const tempId = Date.now();
+    setDocList(prev => [...prev, { id: tempId, name: file.name, status: 'Processing' }]);
+    setFileUploading(true);
+    setError('');
+
+    try {
+      const businessId = StorageService.getBusinessId();
+      if (businessId) {
+        await OnboardingController.uploadKnowledgeFile(businessId, file);
+      }
+      setDocList(prev => prev.map(d => (d.id === tempId ? { ...d, status: 'Ready' } : d)));
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || 'File upload failed');
+      setDocList(prev => prev.filter(d => d.id !== tempId));
+    } finally {
+      setFileUploading(false);
     }
   };
 
-  const handleAddSite = () => {
+  const handleAddSite = async () => {
     if (!newUrl.trim()) return;
-    setSiteList([...siteList, { id: Date.now(), url: newUrl.replace(/^https?:\/\//, ''), status: 'Ready' }]);
+    const formattedUrl = newUrl.startsWith('http') ? newUrl : `https://${newUrl}`;
+    const tempId = Date.now();
+    setSiteList(prev => [...prev, { id: tempId, url: formattedUrl.replace(/^https?:\/\//, ''), status: 'Processing' }]);
     setNewUrl('');
+    setSiteSyncing(true);
+    setError('');
+
+    try {
+      const businessId = StorageService.getBusinessId();
+      if (businessId) {
+        await OnboardingController.syncKnowledgeUrl(businessId, formattedUrl);
+      }
+      setSiteList(prev => prev.map(s => (s.id === tempId ? { ...s, status: 'Ready' } : s)));
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || 'Failed to sync website URL');
+    } finally {
+      setSiteSyncing(false);
+    }
   };
 
-  const handleAddFaq = () => {
+  const handleAddFaq = async () => {
     if (!newFaq.question.trim() || !newFaq.answer.trim()) return;
-    setFaqList([...faqList, { id: Date.now(), ...newFaq }]);
+    const tempFaq = { id: Date.now(), ...newFaq };
+    setFaqList(prev => [...prev, tempFaq]);
     setNewFaq({ question: '', answer: '' });
     setIsAddingFaq(false);
+
+    try {
+      const businessId = StorageService.getBusinessId();
+      if (businessId) {
+        await OnboardingController.createKnowledge(businessId, {
+          doc_type: 'faq',
+          question: tempFaq.question,
+          answer: tempFaq.answer,
+        });
+      }
+    } catch (err: any) {
+      console.error(err);
+    }
   };
 
   const startEditFaq = (faq: KnowledgeFaq) => {
@@ -104,34 +155,12 @@ export default function KnowledgeOnboardingPage() {
   const handleFinish = async () => {
     const businessId = StorageService.getBusinessId();
     if (!businessId) {
-      setError('Business ID missing. Please restart onboarding.');
+      router.push('/onboarding/integrations');
       return;
     }
     setLoading(true);
     setError('');
-
-    try {
-      // Save websites
-      for (const site of siteList) {
-        await OnboardingController.createKnowledge(businessId, {
-          doc_type: 'website',
-          source_url: site.url.startsWith('http') ? site.url : `https://${site.url}`,
-        });
-      }
-      // Save FAQs
-      for (const faq of faqList) {
-        await OnboardingController.createKnowledge(businessId, {
-          doc_type: 'faq',
-          question: faq.question,
-          answer: faq.answer,
-        });
-      }
-      router.push('/onboarding/integrations');
-    } catch (err: any) {
-      setError(err.message || 'Failed to save knowledge base');
-    } finally {
-      setLoading(false);
-    }
+    router.push('/onboarding/integrations');
   };
 
   return (
