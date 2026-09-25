@@ -10,9 +10,13 @@ from sqlalchemy.orm import Session
 
 from backend.server.api.routes._shared import get_business_or_404, require_membership, require_owner_or_admin
 from backend.server.auth.security import get_current_user
+from backend.server.database.models.business import Business
 from backend.server.database.models.knowledge_base import KnowledgeDocument
+from backend.server.database.models.service import Service
 from backend.server.database.models.user import User
 from backend.server.database.session import get_db
+from backend.ai.engine.rag.retriever import rag_retriever
+from backend.ai.engine.rag.vector_store import global_vector_store
 
 router = APIRouter(prefix="/api/onboarding/businesses/{business_id}/knowledge", tags=["knowledge"])
 
@@ -49,6 +53,118 @@ class KnowledgeOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+def ensure_business_indexed(business_id: str, db: Session, force_reload: bool = False) -> int:
+    """Ensures all knowledge sources (documents, synced websites, FAQs, bookable services, and business info)
+    are indexed into the sub-50ms RAG vector store for this business.
+    """
+    current_store = global_vector_store._stores.get(business_id)
+    if not force_reload and current_store is not None and len(current_store) > 0:
+        return len(current_store)
+
+    global_vector_store.clear_business(business_id)
+    total_indexed = 0
+
+    # 1. Index Business Profile (Name, Type, Address, Timings, Phone)
+    biz = db.get(Business, business_id)
+    if biz:
+        biz_info = []
+        biz_info.append(f"Business/Clinic Name: {biz.name}")
+        biz_info.append(f"Category: {biz.business_type} ({biz.vertical})")
+        if biz.business_phone:
+            biz_info.append(f"Phone Number: {biz.business_phone}")
+        if biz.address or biz.city:
+            loc_parts = [p for p in [biz.address, biz.city, biz.postal_code, biz.country] if p]
+            biz_info.append(f"Location / Address: {', '.join(loc_parts)}")
+        if biz.working_hours:
+            if isinstance(biz.working_hours, dict):
+                hours_str = ", ".join(f"{k}: {v}" for k, v in biz.working_hours.items() if v)
+                biz_info.append(f"Working Hours / Timings: {hours_str}")
+            else:
+                biz_info.append(f"Working Hours: {biz.working_hours}")
+        if biz.website:
+            biz_info.append(f"Website: {biz.website}")
+
+        biz_text = "\n".join(biz_info)
+        total_indexed += rag_retriever.index_document_text(
+            business_id,
+            biz_text,
+            source_id="business_profile",
+            source_name=f"Clinic Profile: {biz.name}",
+        )
+
+    # 2. Index Bookable Services & Treatments with Pricing
+    services = db.query(Service).filter(Service.business_id == business_id).all()
+    if services:
+        # Grouped summary chunk for general queries like "what is clinic services" / "what services do you offer"
+        service_catalog = [f"Clinic Services & Treatments offered at {biz.name if biz else 'the clinic'}:"]
+        for s in services:
+            price_display = f"{s.price_currency} {s.price_amount}" if s.price_amount is not None else "Price on consultation"
+            desc_part = f" - {s.description}" if s.description else ""
+            service_catalog.append(f"• {s.title} ({price_display}, Duration: {s.duration_minutes} mins){desc_part}")
+
+        catalog_text = "\n".join(service_catalog)
+        total_indexed += rag_retriever.index_document_text(
+            business_id,
+            catalog_text,
+            source_id="services_catalog",
+            source_name="Services & Pricing Catalog",
+        )
+
+        # Also individual chunks for each unique service for high-precision matching
+        for s in services:
+            price_display = f"{s.price_currency} {s.price_amount}" if s.price_amount is not None else "Price on consultation"
+            s_text = (
+                f"Service Name: {s.title}\n"
+                f"Description: {s.description or 'Specialized clinic treatment and consultation'}\n"
+                f"Price / Fee: {price_display}\n"
+                f"Appointment Duration: {s.duration_minutes} minutes"
+            )
+            total_indexed += rag_retriever.index_document_text(
+                business_id,
+                s_text,
+                source_id=f"service_{s.id}",
+                source_name=f"Service: {s.title}",
+            )
+
+    # 3. Index Knowledge Documents (FAQs, Synced Websites, Uploaded Documents)
+    docs = db.query(KnowledgeDocument).filter(
+        KnowledgeDocument.business_id == business_id
+    ).all()
+
+    for doc in docs:
+        if doc.doc_type == "faq":
+            faq_text = f"FAQ:\nQuestion: {doc.question}\nAnswer: {doc.answer}"
+            source_title = f"FAQ: {doc.question[:45]}..." if doc.question and len(doc.question) > 45 else (doc.question or "Clinic FAQ")
+            total_indexed += rag_retriever.index_document_text(
+                business_id,
+                faq_text,
+                source_id=doc.id,
+                source_name=source_title,
+            )
+        elif doc.doc_type == "website":
+            site_text = doc.answer or ""
+            source_title = doc.source_url or "Website Knowledge"
+            if site_text.strip():
+                total_indexed += rag_retriever.index_document_text(
+                    business_id,
+                    site_text,
+                    source_id=doc.id,
+                    source_name=source_title,
+                )
+        elif doc.doc_type == "document":
+            file_text = doc.answer or ""
+            source_title = doc.filename or "Uploaded Document"
+            if file_text.strip():
+                total_indexed += rag_retriever.index_document_text(
+                    business_id,
+                    file_text,
+                    source_id=doc.id,
+                    source_name=source_title,
+                )
+
+    return total_indexed
+
+
 def _validate_doc_type(payload: KnowledgeCreate) -> None:
     if payload.doc_type not in DOC_TYPES:
         raise HTTPException(
@@ -81,6 +197,7 @@ def create_knowledge_entry(
     db.add(entry)
     db.commit()
     db.refresh(entry)
+    ensure_business_indexed(business_id, db, force_reload=True)
     return entry
 
 
@@ -121,6 +238,7 @@ def update_knowledge_entry(
         setattr(entry, field, value)
     db.commit()
     db.refresh(entry)
+    ensure_business_indexed(business_id, db, force_reload=True)
     return entry
 
 
@@ -136,16 +254,17 @@ def delete_knowledge_entry(
     entry = _get_entry_or_404(business_id, entry_id, db)
     db.delete(entry)
     db.commit()
+    ensure_business_indexed(business_id, db, force_reload=True)
 
 
 # -----------------------------------------------------------------------------
 # Document Upload (PDF/DOCX/TXT), Website Sync & RAG Query Endpoints
 # -----------------------------------------------------------------------------
 import io
+import json
 import re
 import urllib.request
 from fastapi import File, UploadFile
-from backend.ai.engine.rag.retriever import rag_retriever
 
 
 def _extract_file_text(filename: str, content_bytes: bytes) -> str:
@@ -176,23 +295,141 @@ def _extract_file_text(filename: str, content_bytes: bytes) -> str:
         return content_bytes.decode("utf-8", errors="ignore")
 
 
-def _scrape_website_text(url: str) -> str:
-    """Scrape and clean raw text from a website URL."""
+def _extract_rich_html(html: str, url: str) -> str:
+    """Extracts semantic structured content from HTML including schema.org JSON-LD, meta tags, and body."""
+    sections: list[str] = []
+
+    # 1. Page Title
+    title_m = re.findall(r"<title>(.*?)</title>", html, re.IGNORECASE)
+    if title_m and title_m[0].strip():
+        sections.append(f"Page Title: {title_m[0].strip()}")
+
+    # 2. Meta Description and Keywords
+    desc_m = re.findall(r'<meta\s+[^>]*name=["\']description["\'][^>]*content=["\']([^"\']+)["\']', html, re.IGNORECASE)
+    if not desc_m:
+        desc_m = re.findall(r'<meta\s+[^>]*content=["\']([^"\']+)["\'][^>]*name=["\']description["\']', html, re.IGNORECASE)
+    if desc_m and desc_m[0].strip():
+        sections.append(f"Clinic Overview: {desc_m[0].strip()}")
+
+    kw_m = re.findall(r'<meta\s+[^>]*name=["\']keywords["\'][^>]*content=["\']([^"\']+)["\']', html, re.IGNORECASE)
+    if not kw_m:
+        kw_m = re.findall(r'<meta\s+[^>]*content=["\']([^"\']+)["\'][^>]*name=["\']keywords["\']', html, re.IGNORECASE)
+    if kw_m and kw_m[0].strip():
+        sections.append(f"Treatments, Specialties & Keywords: {kw_m[0].strip()}")
+
+    # 3. Schema.org JSON-LD (FAQs, Medical Procedures, Doctor details, Reviews)
+    ld_blocks = re.findall(r'<script\s+[^>]*type=["\']application/ld\+json["\'][^>]*>(.*?)</script>', html, re.DOTALL | re.IGNORECASE)
+    for block in ld_blocks:
+        try:
+            data = json.loads(block.strip())
+            items = data if isinstance(data, list) else [data]
+            for item in items:
+                # FAQs
+                if item.get("@type") == "FAQPage" and "mainEntity" in item:
+                    faq_lines = ["\nFrequently Asked Questions:"]
+                    for q in item["mainEntity"]:
+                        q_name = q.get("name", "")
+                        a_text = q.get("acceptedAnswer", {}).get("text", "")
+                        if q_name and a_text:
+                            faq_lines.append(f"Q: {q_name}\nA: {a_text}")
+                    if len(faq_lines) > 1:
+                        sections.append("\n".join(faq_lines))
+
+                # Medical Procedures / Available Services
+                services = item.get("availableService") or []
+                if services:
+                    proc_lines = ["\nDental Treatments & Medical Procedures:"]
+                    for s in services:
+                        s_name = s.get("name", "")
+                        if s_name:
+                            proc_lines.append(f"• {s_name}")
+                    if len(proc_lines) > 1:
+                        sections.append("\n".join(proc_lines))
+
+                # Doctor Profile
+                if item.get("@type") == "Person":
+                    p_name = item.get("name", "")
+                    job = item.get("jobTitle", "")
+                    p_desc = item.get("description", "")
+                    if p_name:
+                        sections.append(f"\nDoctor Profile: {p_name} ({job})\n{p_desc}")
+        except Exception:
+            pass
+
+    # 4. Clean Body Text (strip noscript, scripts, styles, boilerplates)
+    body = re.sub(r"<noscript.*?>.*?</noscript>", " ", html, flags=re.DOTALL | re.IGNORECASE)
+    body = re.sub(r"<script.*?>.*?</script>", " ", body, flags=re.DOTALL | re.IGNORECASE)
+    body = re.sub(r"<style.*?>.*?</style>", " ", body, flags=re.DOTALL | re.IGNORECASE)
+    body = re.sub(r"<header.*?>.*?</header>", " ", body, flags=re.DOTALL | re.IGNORECASE)
+    body = re.sub(r"<footer.*?>.*?</footer>", " ", body, flags=re.DOTALL | re.IGNORECASE)
+    body = re.sub(r"<nav.*?>.*?</nav>", " ", body, flags=re.DOTALL | re.IGNORECASE)
+    body = re.sub(r"<.*?>", " ", body)
+    # Remove boilerplate noise
+    body = re.sub(r"You need to enable JavaScript to run this app\.?", " ", body, flags=re.IGNORECASE)
+    body = " ".join(body.split())
+
+    if len(body) > 100:
+        sections.append(f"\nPage Content:\n{body[:3000]}")
+
+    return "\n\n".join(sections)
+
+
+def _scrape_url_single(url: str) -> str:
+    """Helper to fetch and clean raw HTML text from a single URL."""
     try:
         req = urllib.request.Request(
             url,
             headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AMSh-AI-Crawler/1.0"}
         )
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with urllib.request.urlopen(req, timeout=8) as resp:
             html = resp.read().decode("utf-8", errors="ignore")
-            # Strip script, style, and HTML tags
-            text = re.sub(r"<script.*?>.*?</script>", " ", html, flags=re.DOTALL | re.IGNORECASE)
-            text = re.sub(r"<style.*?>.*?</style>", " ", text, flags=re.DOTALL | re.IGNORECASE)
-            text = re.sub(r"<.*?>", " ", text)
-            clean_text = " ".join(text.split())
-            return clean_text if clean_text else f"Content scraped from {url}"
+            return _extract_rich_html(html, url)
     except Exception:
-        return f"Website content for {url}. Crawled status: active."
+        return ""
+
+
+def _scrape_website_text(url: str) -> str:
+    """Scrapes main page, auto-discovers sitemap.xml & crawls core subpages (about/services/pricing/faq)."""
+    base_url = url.rstrip("/")
+    scraped_texts: list[str] = []
+
+    # 1. Scrape primary URL
+    main_text = _scrape_url_single(url)
+    if main_text:
+        scraped_texts.append(f"--- Main Page ({url}) ---\n{main_text}")
+
+    # 2. Check sitemap.xml for deeper subpage links
+    sitemap_url = f"{base_url}/sitemap.xml"
+    discovered_urls: list[str] = []
+    try:
+        req = urllib.request.Request(sitemap_url, headers={"User-Agent": "AMSh-AI-Crawler/1.0"})
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            xml_content = resp.read().decode("utf-8", errors="ignore")
+            found_locs = re.findall(r"<loc>(.*?)</loc>", xml_content, flags=re.IGNORECASE)
+            for loc in found_locs[:10]:  # Cap at top 10 pages for speed
+                if loc != url and loc != f"{base_url}/":
+                    discovered_urls.append(loc)
+    except Exception:
+        pass
+
+    # 3. Fallback: If no sitemap found, try standard core subpages
+    if not discovered_urls:
+        core_paths = ["/services", "/pricing", "/about", "/about-us", "/faq", "/doctors", "/contact"]
+        discovered_urls = [f"{base_url}{path}" for path in core_paths]
+
+    # 4. Crawl discovered subpages (up to 5 pages max)
+    crawled_count = 0
+    for sub_url in discovered_urls:
+        if crawled_count >= 5:
+            break
+        sub_text = _scrape_url_single(sub_url)
+        # Avoid duplicate SPA pages that return the same HTML as main page
+        if sub_text and len(sub_text) > 100 and sub_text != main_text:
+            scraped_texts.append(f"\n--- Subpage ({sub_url}) ---\n{sub_text}")
+            crawled_count += 1
+
+    combined_text = "\n\n".join(scraped_texts)
+    return combined_text if combined_text.strip() else f"Website content for {url}. Status: Active."
 
 
 class SyncUrlPayload(BaseModel):
@@ -201,7 +438,7 @@ class SyncUrlPayload(BaseModel):
 
 class KnowledgeQueryPayload(BaseModel):
     query: str
-    top_k: int = 2
+    top_k: int = 4
 
 
 @router.post("/upload-file", response_model=KnowledgeOut, status_code=status.HTTP_201_CREATED)
@@ -224,15 +461,14 @@ async def upload_knowledge_file(
         filename=file.filename or "document.txt",
         status="indexed",
         question=f"Document: {file.filename}",
-        answer=extracted_text[:2000] if extracted_text else "Document uploaded and indexed.",
+        answer=extracted_text if extracted_text else "Document uploaded and indexed.",
     )
     db.add(entry)
     db.commit()
     db.refresh(entry)
 
-    # Index text in RAG vector store for sub-50ms call retrieval
-    if extracted_text.strip():
-        rag_retriever.index_document_text(business_id, extracted_text, source_id=entry.id)
+    # Re-index all business knowledge into RAG vector store
+    ensure_business_indexed(business_id, db, force_reload=True)
 
     return entry
 
@@ -256,15 +492,14 @@ def sync_knowledge_url(
         source_url=payload.source_url,
         status="indexed",
         question=f"Website: {payload.source_url}",
-        answer=scraped_text[:2000] if scraped_text else f"Website synced from {payload.source_url}",
+        answer=scraped_text if scraped_text else f"Website synced from {payload.source_url}",
     )
     db.add(entry)
     db.commit()
     db.refresh(entry)
 
-    # Index text in RAG vector store for sub-50ms call retrieval
-    if scraped_text.strip():
-        rag_retriever.index_document_text(business_id, scraped_text, source_id=entry.id)
+    # Re-index all business knowledge into RAG vector store
+    ensure_business_indexed(business_id, db, force_reload=True)
 
     return entry
 
@@ -280,7 +515,19 @@ def query_knowledge_base(
     get_business_or_404(business_id, db)
     require_membership(business_id, current_user)
 
+    ensure_business_indexed(business_id, db, force_reload=False)
     search_meta = rag_retriever.search_with_metadata(business_id, payload.query, top_k=payload.top_k)
     return search_meta
+
+
+dashboard_router = APIRouter(prefix="/api/businesses/{business_id}/knowledge", tags=["knowledge"])
+dashboard_router.add_api_route("", create_knowledge_entry, methods=["POST"], response_model=KnowledgeOut, status_code=status.HTTP_201_CREATED)
+dashboard_router.add_api_route("", list_knowledge_entries, methods=["GET"], response_model=list[KnowledgeOut])
+dashboard_router.add_api_route("/{entry_id}", update_knowledge_entry, methods=["PATCH"], response_model=KnowledgeOut)
+dashboard_router.add_api_route("/{entry_id}", delete_knowledge_entry, methods=["DELETE"], status_code=status.HTTP_204_NO_CONTENT)
+dashboard_router.add_api_route("/upload-file", upload_knowledge_file, methods=["POST"], response_model=KnowledgeOut, status_code=status.HTTP_201_CREATED)
+dashboard_router.add_api_route("/sync-url", sync_knowledge_url, methods=["POST"], response_model=KnowledgeOut, status_code=status.HTTP_201_CREATED)
+dashboard_router.add_api_route("/query", query_knowledge_base, methods=["POST"])
+
 
 

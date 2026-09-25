@@ -15,6 +15,10 @@ export const AuthController = {
         StorageService.setToken(response.access_token);
         if (response.user) {
           StorageService.setUser(response.user);
+          if (response.user.business_id) {
+            StorageService.setBusinessId(response.user.business_id);
+            StorageService.setOnboardingCompleted(true);
+          }
         }
       }
       return response;

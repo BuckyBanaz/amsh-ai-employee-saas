@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { STRINGS } from '../../../utils/strings/en';
 
 import { AuthController } from '../../../controllers/auth.controller';
+import { StorageService } from '../../../services/storage.service';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -27,7 +28,9 @@ export default function RegisterPage() {
 
     try {
       await AuthController.register(name, email, password);
-      router.push('/onboarding');
+      StorageService.setOnboardingCompleted(false);
+      StorageService.setOnboardingStep('/onboarding/business');
+      router.push('/onboarding/business');
     } catch (err: any) {
       setError(err.message || 'Failed to register');
     } finally {
@@ -61,6 +64,7 @@ export default function RegisterPage() {
             value={name}
             onChange={(e) => setName(e.target.value)}
             disabled={loading}
+            autoComplete="name"
             required
           />
         </div>
@@ -74,6 +78,7 @@ export default function RegisterPage() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             disabled={loading}
+            autoComplete="email"
             required
           />
         </div>
@@ -88,6 +93,7 @@ export default function RegisterPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               disabled={loading}
+              autoComplete="new-password"
               required
             />
             <button 
@@ -112,6 +118,7 @@ export default function RegisterPage() {
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               disabled={loading}
+              autoComplete="new-password"
               required
             />
             <button 

@@ -24,9 +24,9 @@ client = TestClient(app)
 def test_whatsapp_webhook_verification():
     print("\n--- 1. Testing Webhook Verification Challenge (GET) ---")
     params = {
-        "hub_mode": "subscribe",
-        "hub_verify_token": "amsh_wa_verify_token_2026",
-        "hub_challenge": "11559933"
+        "hub.mode": "subscribe",
+        "hub.verify_token": "amsh_wa_verify_token_2026",
+        "hub.challenge": "11559933"
     }
     res = client.get("/api/v1/whatsapp/webhook", params=params)
     print(f"Status: {res.status_code}")

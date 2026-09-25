@@ -1,106 +1,170 @@
 "use client";
 import React from 'react';
-import { STRINGS } from '../../utils/strings/en';
+import { AppointmentItem } from '../../controllers/dashboard.controller';
 
-const DAYS = STRINGS.DASHBOARD.COMPONENTS.WEEKLY_CALENDAR.DAYS;
-const HOURS = STRINGS.DASHBOARD.COMPONENTS.WEEKLY_CALENDAR.HOURS;
+export interface DayInfo {
+  dayName: string;
+  dateNumber: number | string;
+  fullDate: string; // YYYY-MM-DD
+  isToday: boolean;
+}
 
-export function WeeklyCalendar() {
+interface WeeklyCalendarProps {
+  weekDays: DayInfo[];
+  appointments: AppointmentItem[];
+  selectedAppointmentId?: string;
+  onSelectAppointment: (appointment: AppointmentItem) => void;
+  isLoading?: boolean;
+}
+
+const HOURS = [
+  '08:00', '09:00', '10:00', '11:00', '12:00',
+  '13:00', '14:00', '15:00', '16:00', '17:00',
+  '18:00', '19:00', '20:00'
+];
+
+export function WeeklyCalendar({
+  weekDays,
+  appointments,
+  selectedAppointmentId,
+  onSelectAppointment,
+  isLoading = false,
+}: WeeklyCalendarProps) {
+  // Helper to get matching appointments for a specific day and hour
+  const getAppointmentsForCell = (fullDate: string, hourStr: string) => {
+    const targetHourNum = parseInt(hourStr.split(':')[0], 10);
+
+    return appointments.filter((app) => {
+      // Check date match
+      const appDate = (app.preferred_date || '').trim();
+      if (appDate !== fullDate) return false;
+
+      // Check hour match
+      const timeLower = (app.preferred_time || '').toLowerCase().trim();
+      const match = timeLower.match(/(\d{1,2}):?(\d{2})?\s*(am|pm)?/);
+      if (!match) return false;
+
+      let h = parseInt(match[1], 10);
+      const ampm = match[3];
+      if (ampm === 'pm' && h < 12) h += 12;
+      if (ampm === 'am' && h === 12) h = 0;
+
+      return h === targetHourNum;
+    });
+  };
+
+  const getCardStyle = (app: AppointmentItem) => {
+    const isSelected = app.id === selectedAppointmentId;
+    const status = (app.status || '').toLowerCase();
+
+    if (status === 'cancelled') {
+      return {
+        container: `bg-red-50/80 border ${isSelected ? 'border-red-600 ring-2 ring-red-400 shadow-md' : 'border-red-200'} text-red-900`,
+        title: 'text-red-700',
+        subtitle: 'text-red-600/80',
+      };
+    }
+    if (status === 'completed') {
+      return {
+        container: `bg-emerald-50/80 border ${isSelected ? 'border-emerald-600 ring-2 ring-emerald-400 shadow-md' : 'border-emerald-200'} text-emerald-900`,
+        title: 'text-emerald-800',
+        subtitle: 'text-emerald-700/80',
+      };
+    }
+    return {
+      container: `bg-[#F0F7FF] border ${isSelected ? 'border-[#0066FF] ring-2 ring-[#0066FF]/40 shadow-md bg-blue-50' : 'border-[#0066FF]/30'} text-[#0066FF]`,
+      title: 'text-[#0066FF]',
+      subtitle: 'text-[#0066FF]/80',
+    };
+  };
+
+  if (isLoading) {
+    return (
+      <div className="bg-white border border-gray-100 rounded-xl shadow-2xs p-12 text-center flex flex-col items-center justify-center min-h-[460px]">
+        <div className="w-8 h-8 border-3 border-[#0066FF]/20 border-t-[#0066FF] rounded-full animate-spin mb-3"></div>
+        <p className="text-xs text-gray-500 font-medium">Loading schedule...</p>
+      </div>
+    );
+  }
+
+  const daysToShow = weekDays.length > 0 ? weekDays : [];
+
   return (
     <div className="bg-white border border-gray-100 rounded-xl shadow-2xs p-3.5 overflow-x-auto">
-      <div className="min-w-[650px]">
+      <div className="min-w-[780px]">
         {/* Header Row */}
-        <div className="grid grid-cols-6 mb-2">
-          <div className="text-[10px] font-bold text-gray-400"></div> {/* Empty corner */}
-          {DAYS.map((d, i) => (
-            <div key={i} className="flex flex-col items-center justify-center">
-              <span className={`text-xs font-bold ${d.active ? 'text-[#0066FF]' : 'text-gray-900'}`}>{d.day}</span>
+        <div 
+          className="grid mb-2"
+          style={{ gridTemplateColumns: `52px repeat(${daysToShow.length}, minmax(0, 1fr))` }}
+        >
+          <div className="text-[10px] font-bold text-gray-400"></div> {/* Corner */}
+          {daysToShow.map((d, i) => (
+            <div key={i} className="flex flex-col items-center justify-center py-1">
+              <span className={`text-xs font-bold ${d.isToday ? 'text-[#0066FF]' : 'text-gray-900'}`}>
+                {d.dayName}
+              </span>
               <span className={`text-[11px] font-medium mt-0.5 ${
-                d.active ? 'w-5 h-5 flex items-center justify-center bg-[#E0E7FF] text-[#0066FF] rounded-md font-bold' : 'text-gray-500'
+                d.isToday
+                  ? 'w-6 h-6 flex items-center justify-center bg-[#E0E7FF] text-[#0066FF] rounded-md font-bold shadow-2xs'
+                  : 'text-gray-500'
               }`}>
-                {d.date}
+                {d.dateNumber}
               </span>
             </div>
           ))}
         </div>
 
-        {/* Calendar Grid */}
-        <div className="relative border-t border-l border-dashed border-gray-100 mt-1">
-          
-          {/* Background Grid Lines */}
-          {HOURS.map((hour, i) => (
-            <div key={i} className="grid grid-cols-6 h-[46px]">
-              <div className="border-b border-r border-dashed border-gray-100 -ml-px flex items-start justify-center pt-1">
+        {/* Calendar Grid Rows */}
+        <div className="relative border-t border-l border-dashed border-gray-200 mt-1">
+          {HOURS.map((hour, hourIdx) => (
+            <div
+              key={hourIdx}
+              className="grid min-h-[52px]"
+              style={{ gridTemplateColumns: `52px repeat(${daysToShow.length}, minmax(0, 1fr))` }}
+            >
+              {/* Hour Label */}
+              <div className="border-b border-r border-dashed border-gray-200 -ml-px flex items-start justify-center pt-1.5 bg-gray-50/30">
                 <span className="text-[10px] font-semibold text-gray-400">{hour}</span>
               </div>
-              <div className="border-b border-r border-dashed border-gray-100"></div>
-              <div className="border-b border-r border-dashed border-gray-100"></div>
-              <div className="border-b border-r border-dashed border-gray-100"></div>
-              <div className="border-b border-r border-dashed border-gray-100"></div>
-              <div className="border-b border-r border-dashed border-gray-100"></div>
+
+              {/* Day Cells */}
+              {daysToShow.map((day, dayIdx) => {
+                const cellApps = getAppointmentsForCell(day.fullDate, hour);
+
+                return (
+                  <div
+                    key={dayIdx}
+                    className="border-b border-r border-dashed border-gray-200 p-0.5 relative flex flex-col gap-1 transition-colors hover:bg-gray-50/40"
+                  >
+                    {cellApps.map((app) => {
+                      const style = getCardStyle(app);
+                      return (
+                        <div
+                          key={app.id}
+                          onClick={() => onSelectAppointment(app)}
+                          className={`w-full rounded p-1.5 cursor-pointer transition-all shadow-2xs z-10 flex flex-col justify-center ${style.container}`}
+                        >
+                          <div className="flex items-center justify-between gap-1">
+                            <p className={`text-[10px] font-bold leading-tight truncate ${style.title}`}>
+                              {app.customer_name || 'Guest Patient'}
+                            </p>
+                            <span className="text-[9px] font-semibold opacity-75 shrink-0">
+                              {app.preferred_time}
+                            </span>
+                          </div>
+                          <p className={`text-[9px] leading-tight truncate mt-0.5 ${style.subtitle}`}>
+                            {app.service_name || 'Consultation'} · {app.doctor_name || 'Duty Doctor'}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
             </div>
           ))}
-
-          {/* Absolute Positioned Appointments (scaled to 46px per hour slot) */}
-          {/* WED 09:00 */}
-          <div className="absolute top-[46px] left-[50%] w-[16.66%] p-0.5 h-[42px]">
-            <div className="w-full h-full bg-[#F0F7FF] border border-[#0066FF]/40 rounded p-1.5 hover:shadow-md cursor-pointer transition-shadow shadow-2xs z-10 flex flex-col justify-center">
-              <p className="text-[10px] font-bold text-[#0066FF] leading-none truncate">{STRINGS.DASHBOARD.COMPONENTS.WEEKLY_CALENDAR.EVENTS.RAHUL_CONSULTATION.name}</p>
-              <p className="text-[9px] text-[#0066FF]/80 leading-none truncate mt-0.5">{STRINGS.DASHBOARD.COMPONENTS.WEEKLY_CALENDAR.EVENTS.RAHUL_CONSULTATION.type} · {STRINGS.DASHBOARD.COMPONENTS.WEEKLY_CALENDAR.EVENTS.RAHUL_CONSULTATION.doc}</p>
-            </div>
-          </div>
-
-          {/* TUE 10:00 */}
-          <div className="absolute top-[92px] left-[33.33%] w-[16.66%] p-0.5 h-[42px]">
-            <div className="w-full h-full bg-[#F0F7FF] border border-[#0066FF]/40 rounded p-1.5 hover:shadow-md cursor-pointer transition-shadow shadow-2xs z-10 flex flex-col justify-center">
-              <p className="text-[10px] font-bold text-[#0066FF] leading-none truncate">{STRINGS.DASHBOARD.COMPONENTS.WEEKLY_CALENDAR.EVENTS.RAHUL_CONSULTATION.name}</p>
-              <p className="text-[9px] text-[#0066FF]/80 leading-none truncate mt-0.5">{STRINGS.DASHBOARD.COMPONENTS.WEEKLY_CALENDAR.EVENTS.RAHUL_CONSULTATION.type} · {STRINGS.DASHBOARD.COMPONENTS.WEEKLY_CALENDAR.EVENTS.RAHUL_CONSULTATION.doc}</p>
-            </div>
-          </div>
-
-          {/* WED 11:00 */}
-          <div className="absolute top-[138px] left-[50%] w-[16.66%] p-0.5 h-[42px]">
-            <div className="w-full h-full bg-[#F0F7FF] border border-[#0066FF]/40 rounded p-1.5 hover:shadow-md cursor-pointer transition-shadow shadow-2xs z-10 flex flex-col justify-center">
-              <p className="text-[10px] font-bold text-[#0066FF] leading-none truncate">{STRINGS.DASHBOARD.COMPONENTS.WEEKLY_CALENDAR.EVENTS.JAMES_WHITENING.name}</p>
-              <p className="text-[9px] text-[#0066FF]/80 leading-none truncate mt-0.5">{STRINGS.DASHBOARD.COMPONENTS.WEEKLY_CALENDAR.EVENTS.JAMES_WHITENING.type} · {STRINGS.DASHBOARD.COMPONENTS.WEEKLY_CALENDAR.EVENTS.JAMES_WHITENING.doc}</p>
-            </div>
-          </div>
-
-          {/* FRI 09:00 */}
-          <div className="absolute top-[46px] left-[83.33%] w-[16.66%] p-0.5 h-[42px]">
-            <div className="w-full h-full bg-[#F0F7FF] border border-[#0066FF]/40 rounded p-1.5 hover:shadow-md cursor-pointer transition-shadow shadow-2xs z-10 flex flex-col justify-center">
-              <p className="text-[10px] font-bold text-[#0066FF] leading-none truncate">{STRINGS.DASHBOARD.COMPONENTS.WEEKLY_CALENDAR.EVENTS.SOPHIE_WHITENING.name}</p>
-              <p className="text-[9px] text-[#0066FF]/80 leading-none truncate mt-0.5">{STRINGS.DASHBOARD.COMPONENTS.WEEKLY_CALENDAR.EVENTS.SOPHIE_WHITENING.type} · {STRINGS.DASHBOARD.COMPONENTS.WEEKLY_CALENDAR.EVENTS.SOPHIE_WHITENING.doc}</p>
-            </div>
-          </div>
-
-          {/* MON 14:00 (Yellow) */}
-          <div className="absolute top-[276px] left-[16.66%] w-[16.66%] p-0.5 h-[42px]">
-            <div className="w-full h-full bg-[#FEF9C3]/70 border border-[#F59E0B]/40 rounded p-1.5 hover:shadow-md cursor-pointer transition-shadow shadow-2xs z-10 flex flex-col justify-center">
-              <p className="text-[10px] font-bold text-[#D97706] leading-none truncate">{STRINGS.DASHBOARD.COMPONENTS.WEEKLY_CALENDAR.EVENTS.EMMA_CLEANING.name}</p>
-              <p className="text-[9px] text-[#D97706]/80 leading-none truncate mt-0.5">{STRINGS.DASHBOARD.COMPONENTS.WEEKLY_CALENDAR.EVENTS.EMMA_CLEANING.type} · {STRINGS.DASHBOARD.COMPONENTS.WEEKLY_CALENDAR.EVENTS.EMMA_CLEANING.doc}</p>
-            </div>
-          </div>
-
-          {/* TUE 15:00 (Yellow) */}
-          <div className="absolute top-[322px] left-[33.33%] w-[16.66%] p-0.5 h-[42px]">
-            <div className="w-full h-full bg-[#FEF9C3]/70 border border-[#F59E0B]/40 rounded p-1.5 hover:shadow-md cursor-pointer transition-shadow shadow-2xs z-10 flex flex-col justify-center">
-              <p className="text-[10px] font-bold text-[#D97706] leading-none truncate">{STRINGS.DASHBOARD.COMPONENTS.WEEKLY_CALENDAR.EVENTS.LUCAS_XRAY.name}</p>
-              <p className="text-[9px] text-[#D97706]/80 leading-none truncate mt-0.5">{STRINGS.DASHBOARD.COMPONENTS.WEEKLY_CALENDAR.EVENTS.LUCAS_XRAY.type} · {STRINGS.DASHBOARD.COMPONENTS.WEEKLY_CALENDAR.EVENTS.LUCAS_XRAY.doc}</p>
-            </div>
-          </div>
-
-          {/* THU 14:00 (Red) */}
-          <div className="absolute top-[276px] left-[66.66%] w-[16.66%] p-0.5 h-[42px]">
-            <div className="w-full h-full bg-[#FEE2E2]/70 border border-[#EF4444]/40 rounded p-1.5 hover:shadow-md cursor-pointer transition-shadow shadow-2xs z-10 flex flex-col justify-center">
-              <p className="text-[10px] font-bold text-[#B91C1C] leading-none truncate">{STRINGS.DASHBOARD.COMPONENTS.WEEKLY_CALENDAR.EVENTS.SOPHIE_ROOT_CANAL.name}</p>
-              <p className="text-[9px] text-[#B91C1C]/80 leading-none truncate mt-0.5">{STRINGS.DASHBOARD.COMPONENTS.WEEKLY_CALENDAR.EVENTS.SOPHIE_ROOT_CANAL.type} · {STRINGS.DASHBOARD.COMPONENTS.WEEKLY_CALENDAR.EVENTS.SOPHIE_ROOT_CANAL.doc}</p>
-            </div>
-          </div>
-
         </div>
       </div>
     </div>
   );
 }
-

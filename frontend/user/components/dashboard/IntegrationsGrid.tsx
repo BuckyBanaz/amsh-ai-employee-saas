@@ -2,6 +2,7 @@
 import React from 'react';
 
 import { STRINGS } from '../../utils/strings/en';
+import { useWhatsappEmbeddedSignup } from '../../hooks/useWhatsappEmbeddedSignup';
 
 const integrationsData = STRINGS.INTEGRATIONS.MOCK_DATA;
 
@@ -29,8 +30,12 @@ const getIconForIntegration = (type: string) => {
 };
 
 export function IntegrationsGrid({ filter = 'All Integrations' }: { filter?: string }) {
-  
-  const filteredIntegrations = integrationsData.filter(int => {
+  const wa = useWhatsappEmbeddedSignup();
+
+  const filteredIntegrations = integrationsData.map(int => {
+    if (int.id !== 'whatsapp' || wa.status !== 'connected') return int;
+    return { ...int, status: wa.connectedNumber ? `Connected · ${wa.connectedNumber}` : 'Connected', action: 'Manage' };
+  }).filter(int => {
     if (filter === 'All Integrations' || filter === 'Developer') return true;
     if (filter === 'Calendar') return ['google-calendar', 'outlook'].includes(int.id);
     if (filter === 'Communication') return ['google-meet', 'twilio', 'whatsapp', 'zoom'].includes(int.id);
@@ -50,13 +55,22 @@ export function IntegrationsGrid({ filter = 'All Integrations' }: { filter?: str
               </div>
               <div>
                 <h3 className="text-xs font-bold text-gray-900 tracking-tight">{integration.name}</h3>
-                <p className={`text-[10px] font-semibold ${integration.status === 'Connected' ? 'text-[#10B981]' : 'text-gray-400'}`}>
+                <p className={`text-[10px] font-semibold ${integration.status.startsWith('Connected') ? 'text-[#10B981]' : 'text-gray-400'}`}>
                   {integration.status}
                 </p>
               </div>
             </div>
             
-            {integration.action === 'Manage' ? (
+            {integration.id === 'whatsapp' && wa.status !== 'connected' ? (
+              <button
+                type="button"
+                onClick={wa.connect}
+                disabled={!wa.sdkReady || wa.status === 'connecting' || wa.status === 'loading'}
+                className="px-2.5 py-1 bg-[#0066FF] text-white rounded-md text-xs font-semibold shadow-xs hover:bg-[#0052cc] transition-colors disabled:opacity-50"
+              >
+                {wa.status === 'connecting' ? 'Connecting…' : STRINGS.INTEGRATIONS.ACTIONS.CONNECT}
+              </button>
+            ) : integration.action === 'Manage' ? (
               <button className="px-2.5 py-1 border border-gray-200 bg-white rounded-md text-xs font-semibold text-gray-700 shadow-2xs hover:bg-gray-50 transition-colors">
                 {STRINGS.INTEGRATIONS.ACTIONS.MANAGE}
               </button>
@@ -74,6 +88,11 @@ export function IntegrationsGrid({ filter = 'All Integrations' }: { filter?: str
           <p className="text-xs text-gray-500 leading-relaxed">
             {integration.description}
           </p>
+          {integration.id === 'whatsapp' && wa.error && (
+            <p role="alert" className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-[11px] font-medium leading-snug text-amber-800">
+              {wa.error}
+            </p>
+          )}
           
         </div>
       ))}

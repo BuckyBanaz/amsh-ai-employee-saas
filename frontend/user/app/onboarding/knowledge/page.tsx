@@ -24,27 +24,9 @@ interface KnowledgeFaq {
   answer: string;
 }
 
-const initialDocuments: KnowledgeDoc[] = [
-  { id: 1, name: 'Pricing Guide.pdf', status: 'Ready' },
-  { id: 2, name: 'Business Policy.docx', status: 'Processing' },
-];
-
-const initialWebsites: KnowledgeSite[] = [
-  { id: 1, url: 'www.smileclinic.com', status: 'Ready' },
-];
-
-const initialFaqs: KnowledgeFaq[] = [
-  {
-    id: 1,
-    question: 'Do you accept walk-ins?',
-    answer: 'Walk-ins are accepted during business hours, subject to availability.'
-  },
-  {
-    id: 2,
-    question: 'What insurance do you accept?',
-    answer: 'We accept most major dental insurance plans.'
-  },
-];
+const initialDocuments: KnowledgeDoc[] = [];
+const initialWebsites: KnowledgeSite[] = [];
+const initialFaqs: KnowledgeFaq[] = [];
 
 export default function KnowledgeOnboardingPage() {
   const router = useRouter();
@@ -62,6 +44,52 @@ export default function KnowledgeOnboardingPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Hydrate from localStorage or derive website from Step 1
+  React.useEffect(() => {
+    try {
+      const rawDocs = localStorage.getItem('onboarding_knowledge_docs');
+      if (rawDocs) {
+        const parsed = JSON.parse(rawDocs);
+        if (Array.isArray(parsed)) setDocList(parsed);
+      }
+      const rawSites = localStorage.getItem('onboarding_knowledge_urls') || localStorage.getItem('onboarding_knowledge_sites');
+      if (rawSites) {
+        const parsed = JSON.parse(rawSites);
+        if (Array.isArray(parsed)) setSiteList(parsed);
+      } else {
+        // Derive real website from Step 1 if user provided one
+        const rawBiz = localStorage.getItem('onboarding_business_data');
+        if (rawBiz) {
+          const biz = JSON.parse(rawBiz);
+          if (biz.website && biz.website.trim()) {
+            setSiteList([{ id: Date.now(), url: biz.website.replace(/^https?:\/\//, ''), status: 'Ready' }]);
+          }
+        }
+      }
+      const rawFaqs = localStorage.getItem('onboarding_knowledge_faqs');
+      if (rawFaqs) {
+        const parsed = JSON.parse(rawFaqs);
+        if (Array.isArray(parsed)) setFaqList(parsed);
+      }
+    } catch (e) {
+      console.error('Failed to parse knowledge data from storage:', e);
+    }
+  }, []);
+
+  // Sync back to localStorage
+  React.useEffect(() => {
+    localStorage.setItem('onboarding_knowledge_docs', JSON.stringify(docList));
+  }, [docList]);
+
+  React.useEffect(() => {
+    localStorage.setItem('onboarding_knowledge_urls', JSON.stringify(siteList));
+    localStorage.setItem('onboarding_knowledge_sites', JSON.stringify(siteList));
+  }, [siteList]);
+
+  React.useEffect(() => {
+    localStorage.setItem('onboarding_knowledge_faqs', JSON.stringify(faqList));
+  }, [faqList]);
 
   const [fileUploading, setFileUploading] = useState(false);
   const [siteSyncing, setSiteSyncing] = useState(false);
@@ -104,6 +132,8 @@ export default function KnowledgeOnboardingPage() {
       if (businessId) {
         await OnboardingController.syncKnowledgeUrl(businessId, formattedUrl);
       }
+      // Min 1.2s animation delay so user sees live scraping progress indicator
+      await new Promise(resolve => setTimeout(resolve, 1200));
       setSiteList(prev => prev.map(s => (s.id === tempId ? { ...s, status: 'Ready' } : s)));
     } catch (err: any) {
       console.error(err);
@@ -206,6 +236,11 @@ export default function KnowledgeOnboardingPage() {
           </div>
 
           <div className="space-y-2">
+            {docList.length === 0 && (
+              <div className="text-center py-3 text-xs text-gray-400 italic bg-gray-50/50 rounded-lg border border-dashed border-gray-200">
+                No documents uploaded yet (Optional — upload pricing or policy PDFs)
+              </div>
+            )}
             {docList.map(doc => (
               <div key={doc.id} className="flex items-center justify-between p-2.5 border border-gray-200 rounded-lg bg-white shadow-xs">
                 <div className="flex items-center gap-2.5">
@@ -268,6 +303,11 @@ export default function KnowledgeOnboardingPage() {
           </div>
 
           <div className="space-y-2">
+            {siteList.length === 0 && (
+              <div className="text-center py-3 text-xs text-gray-400 italic bg-gray-50/50 rounded-lg border border-dashed border-gray-200">
+                No websites synced yet (Optional — add website URL to scrape FAQs and details)
+              </div>
+            )}
             {siteList.map(site => (
               <div key={site.id} className="flex items-center justify-between p-2.5 border border-gray-200 rounded-lg bg-white shadow-xs">
                 <div className="flex items-center gap-2.5">
@@ -281,9 +321,20 @@ export default function KnowledgeOnboardingPage() {
                   <p className="text-xs font-semibold text-gray-900">{site.url}</p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="bg-[#E6FBF3] text-[#10B981] text-[10px] font-bold px-1.5 py-0.5 rounded">
-                    {STRINGS.ONBOARDING.KNOWLEDGE.SECTION_DOCS.STATUS_READY}
-                  </span>
+                  {site.status === 'Ready' ? (
+                    <span className="bg-[#E6FBF3] text-[#10B981] text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1">
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                      {STRINGS.ONBOARDING.KNOWLEDGE.SECTION_DOCS.STATUS_READY}
+                    </span>
+                  ) : (
+                    <span className="bg-[#FEF3C7] text-[#D97706] text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1.5 animate-pulse">
+                      <svg className="animate-spin h-2.5 w-2.5 text-[#D97706]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      {STRINGS.ONBOARDING.KNOWLEDGE.SECTION_DOCS.STATUS_PROCESSING}
+                    </span>
+                  )}
                   <button onClick={() => removeSite(site.id)} title="Remove Website" className="text-gray-400 hover:text-red-500 transition-colors p-1 rounded hover:bg-red-50">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <polyline points="3 6 5 6 21 6"></polyline>
@@ -306,6 +357,11 @@ export default function KnowledgeOnboardingPage() {
           </div>
 
           <div className="space-y-2">
+            {faqList.length === 0 && !isAddingFaq && (
+              <div className="text-center py-3 text-xs text-gray-400 italic bg-gray-50/50 rounded-lg border border-dashed border-gray-200">
+                No custom FAQs added yet (Optional — click &quot;+ Add FAQ&quot; to provide common answers)
+              </div>
+            )}
             {faqList.map(faq => (
               <div key={faq.id}>
                 {editingFaqId === faq.id ? (

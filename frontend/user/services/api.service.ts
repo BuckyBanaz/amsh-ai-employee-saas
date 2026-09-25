@@ -37,7 +37,17 @@ export const ApiService = {
             window.location.href = '/login';
           }
         }
-        throw new Error(data.detail || data.message || 'API request failed');
+        let errorMessage = 'API request failed';
+        if (typeof data?.detail === 'string') {
+          errorMessage = data.detail;
+        } else if (Array.isArray(data?.detail)) {
+          errorMessage = data.detail.map((err: any) => err.msg || JSON.stringify(err)).join(', ');
+        } else if (typeof data?.detail === 'object' && data?.detail !== null) {
+          errorMessage = JSON.stringify(data.detail);
+        } else if (data?.message) {
+          errorMessage = data.message;
+        }
+        throw new Error(errorMessage);
       }
       
       return data as T;
@@ -63,6 +73,14 @@ export const ApiService = {
     return this.request<T>(url, { 
       ...options, 
       method: 'PUT',
+      body: JSON.stringify(body)
+    });
+  },
+
+  patch<T>(url: string, body: any, options?: ApiOptions) {
+    return this.request<T>(url, { 
+      ...options, 
+      method: 'PATCH',
       body: JSON.stringify(body)
     });
   },

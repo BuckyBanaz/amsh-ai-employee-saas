@@ -41,6 +41,37 @@ def _cosine_similarity(vec1: dict[str, float], vec2: dict[str, float]) -> float:
     return dot_product / (norm1 * norm2)
 
 
+def _normalize_token(t: str) -> str:
+    """Lightweight suffix normalization for plurals and common inflections."""
+    t = t.lower()
+    if t.endswith("ies") and len(t) > 4:
+        return t[:-3] + "y"
+    if t.endswith("es") and len(t) > 3:
+        return t[:-2]
+    if t.endswith("s") and not t.endswith("ss") and len(t) > 3:
+        return t[:-1]
+    if t.endswith("ing") and len(t) > 4:
+        return t[:-3]
+    return t
+
+
+import difflib
+
+def _fuzzy_token_match(q: str, token_set: set[str], norm_token_set: set[str]) -> float:
+    """Returns 1.0 for exact/stem match, 0.85 for close fuzzy typo match (e.g. 'canel' -> 'canal')."""
+    nq = _normalize_token(q)
+    if q in token_set or nq in norm_token_set:
+        return 1.0
+    if len(q) >= 4:
+        for t in token_set:
+            if len(t) >= 4:
+                if q in t or t in q:
+                    return 0.85
+                if difflib.SequenceMatcher(None, q, t).ratio() >= 0.75:
+                    return 0.85
+    return 0.0
+
+
 class BusinessVectorStore:
     def __init__(self):
         # business_id -> list of chunk dicts
@@ -55,11 +86,14 @@ class BusinessVectorStore:
         for chunk in chunks:
             tokens = _tokenize(chunk["text"])
             tf_vec = _compute_tf_vector(tokens)
+            norm_tokens = set(_normalize_token(t) for t in tokens)
             item = {
                 "chunk_id": chunk.get("chunk_id"),
                 "source_id": chunk.get("source_id"),
+                "source_name": chunk.get("source_name", "Knowledge Base"),
                 "text": chunk["text"],
                 "tokens": tokens,
+                "norm_tokens": norm_tokens,
                 "tf_vec": tf_vec,
             }
             self._stores[business_id].append(item)
@@ -72,7 +106,7 @@ class BusinessVectorStore:
         if business_id in self._stores:
             self._stores[business_id] = []
 
-    def search(self, business_id: str, query: str, top_k: int = 2) -> list[dict]:
+    def search(self, business_id: str, query: str, top_k: int = 4) -> list[dict]:
         """Performs fast similarity search for a user query. Returns top_k chunks in <50ms."""
         start_time = time.perf_counter()
         chunks = self._stores.get(business_id, [])
@@ -84,6 +118,16 @@ class BusinessVectorStore:
         if not query_tokens:
             return []
 
+        # Common stop words to deprioritize for keyword matching
+        STOP_WORDS = {
+            "what", "is", "are", "a", "an", "the", "in", "on", "at", "for", "to", "of",
+            "and", "or", "do", "does", "did", "you", "your", "have", "can", "i", "we",
+            "how", "much", "many", "when", "where", "why", "who", "which", "tell", "me",
+            "about", "please", "any", "some"
+        }
+        meaningful_tokens = [t for t in query_tokens if t not in STOP_WORDS]
+        tokens_for_scoring = meaningful_tokens if meaningful_tokens else query_tokens
+
         query_vec = _compute_tf_vector(query_tokens)
 
         scored_chunks: list[tuple[float, dict]] = []
@@ -91,15 +135,18 @@ class BusinessVectorStore:
             # Cosine vector similarity score
             cos_sim = _cosine_similarity(query_vec, chunk["tf_vec"])
 
-            # Exact keyword overlap boost for numbers/pricing/terms (e.g. 500, fees, scaling)
+            # Exact, normalized & fuzzy keyword overlap boost (handles typos like 'canel' -> 'canal')
             token_set = set(chunk["tokens"])
-            matching_tokens = sum(1 for qt in query_tokens if qt in token_set)
-            keyword_score = matching_tokens / max(len(query_tokens), 1)
+            norm_token_set = chunk.get("norm_tokens") or set(_normalize_token(t) for t in chunk["tokens"])
 
-            # Combined hybrid score
-            final_score = (0.7 * cos_sim) + (0.3 * keyword_score)
+            matching_weight = sum(_fuzzy_token_match(qt, token_set, norm_token_set) for qt in tokens_for_scoring)
+            keyword_score = min(matching_weight / max(len(tokens_for_scoring), 1), 1.0)
 
-            if final_score > 0.05:
+            # Combined hybrid score (balanced between vector semantics and exact keywords)
+            final_score = (0.35 * cos_sim) + (0.65 * keyword_score)
+
+            # Minimum quality threshold: omit weak random overlaps under 20%
+            if final_score >= 0.20 and keyword_score > 0.15:
                 scored_chunks.append((final_score, chunk))
 
         # Sort descending by score
@@ -112,6 +159,8 @@ class BusinessVectorStore:
             results.append({
                 "chunk_id": item["chunk_id"],
                 "source_id": item["source_id"],
+                "source": item.get("source_name") or "Knowledge Base",
+                "filename": item.get("source_name") or "Knowledge Base",
                 "text": item["text"],
                 "score": round(score, 4),
                 "lookup_ms": round(elapsed_ms, 2),

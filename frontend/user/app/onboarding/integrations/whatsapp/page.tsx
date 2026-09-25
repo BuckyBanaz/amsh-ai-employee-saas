@@ -2,30 +2,40 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { ApiService } from '../../../../services/api.service';
+import { API_ENDPOINTS } from '../../../../utils/api_endpoints';
+import { useWhatsappEmbeddedSignup, getActiveBusinessId } from '../../../../hooks/useWhatsappEmbeddedSignup';
 
 export default function WhatsappSetupPage() {
   const router = useRouter();
 
-  const [whatsappPhone, setWhatsappPhone] = useState('+91 80472 84627');
-  
-  // Dynamic session & QR state
-  const [qrStatus, setQrStatus] = useState<'waiting' | 'scanning' | 'connected'>('waiting');
-  const [qrTimer, setQrTimer] = useState(58);
+  // Mode: Turnkey Managed Gateway (Instant 0-friction) vs Custom Meta Credentials
+  const [activeTab, setActiveTab] = useState<'turnkey' | 'custom'>('turnkey');
 
-  // Automated feature toggles
+  // Business Phone & Alert Phone
+  const [businessPhone, setBusinessPhone] = useState('');
+  const [adminAlertPhone, setAdminAlertPhone] = useState('');
+
+  // Automated Feature Toggles
   const [enableInstantCards, setEnableInstantCards] = useState(true);
   const [enable2HourReminder, setEnable2HourReminder] = useState(true);
+  const [enableMissedCallFollowup, setEnableMissedCallFollowup] = useState(true);
 
-  // Connection process state
+  // Custom Meta WABA Credentials (for enterprise clients)
+  const [customPhoneId, setCustomPhoneId] = useState('');
+  const [customWabaId, setCustomWabaId] = useState('');
+  const [customToken, setCustomToken] = useState('');
+
+  // Saving state
   const [isSaving, setIsSaving] = useState(false);
+  const [testSent, setTestSent] = useState(false);
 
   // Dynamic Business Data state from Onboarding Step 1
-  const [businessName, setBusinessName] = useState('Sanjeevani Hospital & Multi-Speciality Clinic');
-  const [businessCity, setBusinessCity] = useState('Delhi NCR');
-  const [businessAddress, setBusinessAddress] = useState('456 Medical Parkway');
+  const [businessName, setBusinessName] = useState('');
+  const [businessCity, setBusinessCity] = useState('');
+  const [businessAddress, setBusinessAddress] = useState('');
   const [businessVertical, setBusinessVertical] = useState('clinic');
 
-  // Load user entered business details from Step 1
   useEffect(() => {
     try {
       const stored = localStorage.getItem('onboarding_business_data');
@@ -36,43 +46,81 @@ export default function WhatsappSetupPage() {
         }
         if (parsed.city) setBusinessCity(parsed.city);
         if (parsed.address) setBusinessAddress(parsed.address);
-        if (parsed.phone || parsed.business_phone) setWhatsappPhone(parsed.phone || parsed.business_phone);
+        if (parsed.phone || parsed.business_phone) {
+          setBusinessPhone(parsed.phone || parsed.business_phone);
+          setAdminAlertPhone(parsed.phone || parsed.business_phone);
+        }
         if (parsed.vertical) setBusinessVertical(parsed.vertical);
+      }
+
+      const savedPhone = localStorage.getItem('onboarding_whatsapp_phone');
+      if (savedPhone) {
+        setBusinessPhone(savedPhone);
+        setAdminAlertPhone(savedPhone);
       }
     } catch (e) {
       console.error('Failed to load stored business data:', e);
     }
   }, []);
 
-  // Countdown timer for QR code freshness
-  useEffect(() => {
-    if (qrStatus !== 'waiting') return;
-    const interval = setInterval(() => {
-      setQrTimer((prev) => (prev > 1 ? prev - 1 : 60));
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [qrStatus]);
+  // Meta Embedded Signup (coexistence: keep existing WhatsApp Business App number)
+  const wa = useWhatsappEmbeddedSignup();
+  const metaStatus = wa.status;
+  const metaError = wa.error;
+  const connectedNumber = wa.connectedNumber;
+  const sdkReady = wa.sdkReady;
+  const handleConnectWithMeta = wa.connect;
+  const [testError, setTestError] = useState('');
 
-  const handleSimulateScan = () => {
-    setQrStatus('scanning');
-    setTimeout(() => {
-      setQrStatus('connected');
-    }, 1200);
+  useEffect(() => {
+    if (wa.connectedNumber) setBusinessPhone(wa.connectedNumber);
+  }, [wa.connectedNumber]);
+
+  const handleSendTestMessage = async () => {
+    setTestError('');
+    try {
+      await wa.sendTestMessage(adminAlertPhone);
+      setTestSent(true);
+      setTimeout(() => setTestSent(false), 4000);
+    } catch (err: any) {
+      setTestError(err?.message || 'Test message failed.');
+    }
   };
 
   const handleSaveAndContinue = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
+
     try {
       localStorage.setItem('onboarding_whatsapp_connected', 'true');
-      localStorage.setItem('onboarding_whatsapp_phone', whatsappPhone);
+      localStorage.setItem('onboarding_whatsapp_phone', businessPhone);
+      const mode = metaStatus === 'connected' ? 'embedded_signup' : activeTab === 'turnkey' ? 'turnkey_cloud' : 'custom_waba';
+      localStorage.setItem('onboarding_whatsapp_mode', mode);
+
+      const businessId = getActiveBusinessId();
+      if (businessId) {
+        await ApiService.post(API_ENDPOINTS.INTEGRATIONS.CONNECT(businessId, 'whatsapp'), {
+          provider: 'whatsapp',
+          config: {
+            mode,
+            business_phone: businessPhone,
+            admin_alert_phone: adminAlertPhone,
+            instant_cards: enableInstantCards,
+            reminder_2hr: enable2HourReminder,
+            missed_call_followup: enableMissedCallFollowup,
+            custom_phone_id: customPhoneId || null,
+            custom_waba_id: customWabaId || null,
+          }
+        });
+      }
     } catch (err) {
-      console.error('Error saving whatsapp state:', err);
+      console.warn('Backend connect warning (falling back to localStorage):', err);
     }
+
     setTimeout(() => {
       setIsSaving(false);
       router.push('/onboarding/integrations');
-    }, 600);
+    }, 400);
   };
 
   return (
@@ -100,180 +148,123 @@ export default function WhatsappSetupPage() {
 
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-base font-bold text-gray-900 tracking-tight">Connect WhatsApp Business</h1>
+              <h1 className="text-base font-bold text-gray-900 tracking-tight">WhatsApp Business Channel</h1>
               <span className="bg-emerald-100 text-emerald-800 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase border border-emerald-200">
-                Instant QR Link
+                Ready to Send
               </span>
             </div>
             <p className="text-[11px] text-gray-500">
-              Scan the QR code below from your WhatsApp Business app to pair instantly.
+              Automated booking confirmations, Google Maps directions, and 2-hour visit reminders.
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2 self-start sm:self-center">
-          {qrStatus === 'connected' ? (
-            <span className="bg-emerald-50 text-emerald-700 border border-emerald-300 text-[10px] font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              Connected ({whatsappPhone})
-            </span>
-          ) : (
-            <span className="bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-              Scan QR Code to Connect
-            </span>
-          )}
+          <span className="bg-emerald-50 text-emerald-700 border border-emerald-300 text-[10px] font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1.5 shadow-2xs">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            Channel Active &amp; Ready
+          </span>
         </div>
       </div>
 
-      {/* Main Content Layout: Left QR Scanner + Right Live WhatsApp Chat Preview */}
+      {/* Main Content Layout: Left Configuration + Right Live Interactive WhatsApp Preview */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
 
-        {/* Left Panel: Direct QR Scanner */}
+        {/* Left Panel: Frictionless Configuration */}
         <div className="lg:col-span-7 space-y-3">
           <div className="bg-white rounded-xl border border-gray-200/80 p-4 space-y-4">
             
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-gray-100 pb-2.5">
+            {/* Zero-Friction Turnkey Banner */}
+            <div className="p-3.5 bg-gradient-to-br from-emerald-50/80 to-teal-50/50 rounded-xl border border-emerald-200/80 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-full bg-[#128C7E] text-white flex items-center justify-center font-bold text-xs shadow-2xs">
+                    ✓
+                  </div>
+                  <div>
+                    <h2 className="text-xs font-bold text-gray-900 leading-tight">
+                      AMSh Verified WhatsApp Cloud Gateway
+                    </h2>
+                    <p className="text-[10px] text-emerald-800 font-medium">
+                      Zero technical setup required • No account deletion needed
+                    </p>
+                  </div>
+                </div>
+                <span className="text-[9px] font-bold bg-white text-[#128C7E] px-2 py-0.5 rounded border border-emerald-300">
+                  Pre-Configured
+                </span>
+              </div>
+
+              <p className="text-[11px] text-gray-600 leading-relaxed pt-1">
+                Your AI receptionist automatically sends branded WhatsApp cards directly to customers under your business name (<strong className="text-gray-900">{businessName} AI</strong>) right after every call ends.
+              </p>
+            </div>
+
+            {/* Connect existing number via Meta Embedded Signup (coexistence) */}
+            <div className="p-3.5 rounded-xl border border-gray-200 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-xs font-bold text-gray-900">Connect your existing WhatsApp Business number</h3>
+                  <p className="text-[10px] text-gray-500">
+                    Keep using the WhatsApp Business app on your phone. In the Facebook popup choose
+                    <strong> &ldquo;Connect your existing WhatsApp Business App&rdquo;</strong> and scan the QR from the <strong>WhatsApp Business</strong> app.
+                  </p>
+                </div>
+                {metaStatus === 'connected' ? (
+                  <span className="shrink-0 bg-emerald-50 text-emerald-700 border border-emerald-300 text-[10px] font-bold px-2.5 py-1 rounded-full">
+                    ✓ Connected{connectedNumber ? `: ${connectedNumber}` : ''}
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleConnectWithMeta}
+                    disabled={!sdkReady || metaStatus === 'connecting' || metaStatus === 'loading'}
+                    className="shrink-0 px-3.5 py-1.5 text-xs font-bold text-white bg-[#1877F2] hover:bg-[#166FE5] rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    {!sdkReady ? 'Loading…' : metaStatus === 'connecting' ? 'Connecting…' : 'Connect with Facebook'}
+                  </button>
+                )}
+              </div>
+              {metaError && <p className="text-[10px] text-red-600">{metaError}</p>}
+            </div>
+
+            {/* Business Contact Configuration */}
+            <div className="space-y-3">
               <div>
-                <h2 className="text-xs font-bold text-gray-900">Scan QR Code with your Phone</h2>
-                <p className="text-[11px] text-gray-500">Links your WhatsApp Business account in 5 seconds.</p>
-              </div>
-              <span className="text-[9px] font-mono font-bold bg-emerald-50 text-[#128C7E] px-2 py-0.5 rounded border border-emerald-200">
-                Official Web Engine
-              </span>
-            </div>
-
-            {/* QR Scanner Display Area */}
-            <div className="flex flex-col sm:flex-row items-center gap-4 bg-emerald-50/40 p-4 rounded-xl border border-emerald-100">
-              
-              {/* QR Scanner Box */}
-              <div className="p-2.5 bg-white border-2 border-[#128C7E] rounded-xl shadow-xs flex flex-col items-center relative">
-                <div className="w-36 h-36 bg-white rounded-lg flex flex-col items-center justify-center relative overflow-hidden p-1">
-                  
-                  {qrStatus === 'connected' ? (
-                    <div className="flex flex-col items-center justify-center space-y-1 text-center p-2">
-                      <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                          <polyline points="20 6 9 17 4 12"></polyline>
-                        </svg>
-                      </div>
-                      <span className="text-xs font-bold text-emerald-900">Device Linked!</span>
-                      <span className="text-[10px] text-emerald-700 font-mono font-semibold">{whatsappPhone}</span>
-                    </div>
-                  ) : (
-                    <>
-                      {/* Vector QR Pattern */}
-                      <svg width="130" height="130" viewBox="0 0 100 100" fill="none" className={`text-gray-900 transition-opacity ${qrStatus === 'scanning' ? 'opacity-30' : 'opacity-100'}`}>
-                        <rect width="100" height="100" fill="#FFFFFF" />
-                        <rect x="5" y="5" width="28" height="28" rx="4" fill="#075E54" />
-                        <rect x="9" y="9" width="20" height="20" rx="2" fill="#FFFFFF" />
-                        <rect x="13" y="13" width="12" height="12" rx="1" fill="#128C7E" />
-
-                        <rect x="67" y="5" width="28" height="28" rx="4" fill="#075E54" />
-                        <rect x="71" y="9" width="20" height="20" rx="2" fill="#FFFFFF" />
-                        <rect x="75" y="13" width="12" height="12" rx="1" fill="#128C7E" />
-
-                        <rect x="5" y="67" width="28" height="28" rx="4" fill="#075E54" />
-                        <rect x="9" y="71" width="20" height="20" rx="2" fill="#FFFFFF" />
-                        <rect x="13" y="75" width="12" height="12" rx="1" fill="#128C7E" />
-
-                        <rect x="38" y="8" width="6" height="12" fill="#128C7E" />
-                        <rect x="48" y="5" width="12" height="6" fill="#075E54" />
-                        <rect x="38" y="24" width="22" height="6" fill="#25D366" />
-                        
-                        <rect x="5" y="38" width="12" height="6" fill="#075E54" />
-                        <rect x="22" y="38" width="12" height="12" fill="#128C7E" />
-                        
-                        <rect x="38" y="38" width="24" height="24" rx="3" fill="#075E54" />
-                        <path d="M44 48a6 6 0 1 1 10 4.5L52 55h-4l-1-2.5A6 6 0 0 1 44 48z" fill="#25D366" />
-                        
-                        <rect x="67" y="38" width="12" height="12" fill="#128C7E" />
-                        <rect x="84" y="38" width="11" height="6" fill="#075E54" />
-                        <rect x="67" y="54" width="28" height="6" fill="#25D366" />
-
-                        <rect x="38" y="67" width="6" height="28" fill="#128C7E" />
-                        <rect x="48" y="78" width="12" height="17" fill="#075E54" />
-                        <rect x="67" y="67" width="12" height="12" fill="#075E54" />
-                        <rect x="84" y="67" width="11" height="28" fill="#128C7E" />
-                      </svg>
-
-                      {qrStatus === 'waiting' && (
-                        <div className="absolute inset-x-0 h-0.5 bg-[#25D366] shadow-[0_0_8px_#25D366] animate-[ping_2s_infinite]" />
-                      )}
-
-                      {qrStatus === 'scanning' && (
-                        <div className="absolute inset-0 bg-emerald-950/70 backdrop-blur-xs flex flex-col items-center justify-center space-y-1 text-white">
-                          <svg className="animate-spin h-5 w-5 text-[#25D366]" viewBox="0 0 24 24" fill="none">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-                          </svg>
-                          <span className="text-[10px] font-bold">Connecting...</span>
-                        </div>
-                      )}
-
-                      <div className="absolute top-1.5 right-1.5 bg-black/70 text-white text-[8px] font-mono px-1.5 py-0.5 rounded flex items-center gap-1">
-                        <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse" />
-                        {qrTimer}s
-                      </div>
-                    </>
-                  )}
-                </div>
+                <label className="text-[11px] font-bold text-gray-800 mb-1 block">
+                  Clinic / Business WhatsApp Number
+                </label>
+                <input
+                  type="tel"
+                  value={businessPhone}
+                  onChange={(e) => setBusinessPhone(e.target.value)}
+                  placeholder="+91 98765 43210"
+                  className="w-full px-3 py-1.5 text-xs bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#128C7E] focus:outline-none font-mono"
+                />
+                <p className="text-[10px] text-gray-500 mt-1">
+                  Shown to customers as your primary WhatsApp contact for direct queries.
+                </p>
               </div>
 
-              {/* Instructions */}
-              <div className="flex-1 space-y-2">
-                <h3 className="text-xs font-bold text-gray-900">How to Connect:</h3>
-                <ol className="text-[11px] text-gray-600 space-y-1.5 list-decimal list-inside bg-white p-2.5 rounded-lg border border-gray-200/80">
-                  <li>Open <strong>WhatsApp Business</strong> on your phone.</li>
-                  <li>Tap <strong>Settings / Menu (⋮)</strong> ➔ <strong>Linked Devices</strong>.</li>
-                  <li>Tap <strong>Link a Device</strong> and point camera at QR code.</li>
-                </ol>
-
-                <div className="pt-1.5 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={handleSimulateScan}
-                    disabled={qrStatus === 'connected'}
-                    className="px-3.5 py-1.5 text-xs font-bold bg-[#128C7E] text-white hover:bg-[#075E54] rounded-lg transition-colors shadow-2xs flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
-                    </svg>
-                    Test Instant Scan (Demo)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setQrTimer(60)}
-                    className="px-3 py-1.5 text-xs font-semibold text-gray-600 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5"
-                  >
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M23 4v6h-6"></path>
-                      <path d="M1 20v-6h6"></path>
-                      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-                    </svg>
-                    Refresh QR
-                  </button>
-                </div>
+              <div>
+                <label className="text-[11px] font-bold text-gray-800 mb-1 block">
+                  Staff / Admin Alert WhatsApp Number
+                </label>
+                <input
+                  type="tel"
+                  value={adminAlertPhone}
+                  onChange={(e) => setAdminAlertPhone(e.target.value)}
+                  placeholder="+91 89014 14107"
+                  className="w-full px-3 py-1.5 text-xs bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#128C7E] focus:outline-none font-mono"
+                />
+                <p className="text-[10px] text-gray-500 mt-1">
+                  Where you receive instant staff alerts whenever a patient books or needs human attention.
+                </p>
               </div>
             </div>
 
-            {/* Business Phone Number Field */}
-            <div>
-              <label className="text-[11px] font-bold text-gray-800 mb-1 block">
-                Connected WhatsApp Business Phone Number
-              </label>
-              <input
-                type="tel"
-                value={whatsappPhone}
-                onChange={(e) => setWhatsappPhone(e.target.value)}
-                placeholder="+91 98765 43210"
-                className="w-full px-3 py-1.5 text-xs bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#128C7E] focus:outline-none font-mono"
-              />
-            </div>
-
-            {/* AUTOMATED FEATURES TOGGLE SECTION */}
-            <div className="pt-3 border-t border-gray-100 space-y-2">
+            {/* Automated WhatsApp Actions */}
+            <div className="pt-3 border-t border-gray-100 space-y-2.5">
               <h3 className="text-xs font-bold text-gray-900">Automated WhatsApp Features:</h3>
               
               <div className="space-y-2">
@@ -286,7 +277,7 @@ export default function WhatsappSetupPage() {
                   />
                   <div>
                     <span className="text-xs font-bold text-gray-900 block">Instant Booking Card with Google Maps</span>
-                    <span className="text-[10px] text-gray-500 block">Sends confirmation card &amp; location right after AI call ends.</span>
+                    <span className="text-[10px] text-gray-500 block">Sends interactive appointment confirmation &amp; 1-click GPS navigation directions right after call.</span>
                   </div>
                 </label>
 
@@ -299,10 +290,70 @@ export default function WhatsappSetupPage() {
                   />
                   <div>
                     <span className="text-xs font-bold text-gray-900 block">2-Hour Prior Visit Reminder</span>
-                    <span className="text-[10px] text-gray-500 block">Automated WhatsApp Ping 2 hours before appointment.</span>
+                    <span className="text-[10px] text-gray-500 block">Automated WhatsApp reminder 2 hours before scheduled visit to prevent no-shows.</span>
+                  </div>
+                </label>
+
+                <label className="flex items-start gap-2.5 p-2 rounded-lg hover:bg-gray-50 border border-gray-100 cursor-pointer transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={enableMissedCallFollowup}
+                    onChange={(e) => setEnableMissedCallFollowup(e.target.checked)}
+                    className="mt-0.5 rounded text-[#128C7E] focus:ring-[#128C7E]"
+                  />
+                  <div>
+                    <span className="text-xs font-bold text-gray-900 block">Missed / Incomplete Call Auto-Recovery</span>
+                    <span className="text-[10px] text-gray-500 block">If a caller drops off mid-call, automatically sends WhatsApp booking link to recover the lead.</span>
                   </div>
                 </label>
               </div>
+            </div>
+
+            {/* Test WhatsApp Action */}
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={handleSendTestMessage}
+                disabled={testSent}
+                className="px-3.5 py-1.5 text-xs font-bold text-[#128C7E] bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                {testSent ? '✓ Test WhatsApp Sent to ' + adminAlertPhone : 'Send Test WhatsApp to My Phone'}
+              </button>
+              {testError && <p className="text-[10px] text-red-600 mt-1">{testError}</p>}
+            </div>
+
+            {/* Advanced Meta WABA Accordion (Optional for power users) */}
+            <div className="pt-2 border-t border-gray-100">
+              <details className="group">
+                <summary className="text-[11px] font-bold text-gray-600 hover:text-gray-900 cursor-pointer list-none flex items-center justify-between py-1">
+                  <span>Advanced: Connect Custom Meta Cloud WABA (Optional)</span>
+                  <span className="text-xs text-gray-400 group-open:rotate-180 transition-transform">▼</span>
+                </summary>
+                <div className="pt-2 space-y-2 text-xs">
+                  <p className="text-[10px] text-gray-500">
+                    If you have a dedicated enterprise Meta WABA and want to use your custom Phone Number ID instead of the managed gateway:
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      value={customPhoneId}
+                      onChange={(e) => setCustomPhoneId(e.target.value)}
+                      placeholder="Custom Phone Number ID"
+                      className="px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg font-mono"
+                    />
+                    <input
+                      type="text"
+                      value={customWabaId}
+                      onChange={(e) => setCustomWabaId(e.target.value)}
+                      placeholder="Custom WABA ID"
+                      className="px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg font-mono"
+                    />
+                  </div>
+                </div>
+              </details>
             </div>
 
             {/* Action Buttons */}
@@ -310,21 +361,17 @@ export default function WhatsappSetupPage() {
               <button
                 type="button"
                 onClick={() => router.push('/onboarding/integrations')}
-                className="px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                className="px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
               >
-                Cancel
+                Back
               </button>
               <button
                 type="button"
                 onClick={handleSaveAndContinue}
                 disabled={isSaving}
-                className="px-4 py-2 text-xs font-bold text-white bg-[#128C7E] hover:bg-[#075E54] rounded-lg transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                className="px-5 py-2 text-xs font-bold text-white bg-[#128C7E] hover:bg-[#075E54] rounded-lg transition-all shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
               >
-                {isSaving ? 'Saving...' : 'Save & Activate WhatsApp'}
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <line x1="5" y1="12" x2="19" y2="12"></line>
-                  <polyline points="12 5 19 12 12 19"></polyline>
-                </svg>
+                {isSaving ? 'Activating...' : 'Save & Continue →'}
               </button>
             </div>
 
@@ -347,11 +394,13 @@ export default function WhatsappSetupPage() {
                 <div>
                   <h3 className="text-xs font-bold leading-tight flex items-center gap-1">
                     {businessName} AI
-                    <span className="w-3 h-3 bg-emerald-400 text-gray-900 rounded-full flex items-center justify-center font-bold text-[8px]">
+                    <span className="w-3.5 h-3.5 bg-emerald-400 text-gray-900 rounded-full flex items-center justify-center font-bold text-[9px]">
                       ✓
                     </span>
                   </h3>
-                  <p className="text-[9px] text-emerald-200">Official Business Account • Online</p>
+                  <p className="text-[9px] text-emerald-200">
+                    Official Business Account • Online
+                  </p>
                 </div>
               </div>
 

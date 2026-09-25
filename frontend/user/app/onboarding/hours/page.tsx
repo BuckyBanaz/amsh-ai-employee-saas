@@ -25,15 +25,30 @@ const initialSchedule = [
 export default function HoursOnboardingPage() {
   const router = useRouter();
   const [schedule, setSchedule] = useState(initialSchedule);
-  const [holidays, setHolidays] = useState<Holiday[]>([
-    { id: '1', name: 'Christmas Day', date: '2026-12-25' },
-    { id: '2', name: "New Year's Day", date: '2027-01-01' },
-  ]);
+  const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [isAddingHoliday, setIsAddingHoliday] = useState(false);
   const [newHolidayName, setNewHolidayName] = useState('');
   const [newHolidayDate, setNewHolidayDate] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  React.useEffect(() => {
+    const savedHours = localStorage.getItem('onboarding_hours') || localStorage.getItem('onboarding_hours_data');
+    if (savedHours) {
+      try {
+        const parsed = JSON.parse(savedHours);
+        if (parsed.schedule) setSchedule(parsed.schedule);
+        if (parsed.holidays) setHolidays(parsed.holidays);
+      } catch (e) {
+        console.error('Failed to parse saved hours:', e);
+      }
+    }
+  }, []);
+
+  React.useEffect(() => {
+    localStorage.setItem('onboarding_hours', JSON.stringify({ schedule, holidays }));
+    localStorage.setItem('onboarding_hours_data', JSON.stringify({ schedule, holidays }));
+  }, [schedule, holidays]);
 
   const toggleDay = (dayName: string) => {
     setSchedule(schedule.map(d => 

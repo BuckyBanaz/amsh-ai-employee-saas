@@ -13,14 +13,14 @@ class RAGRetriever:
         self.chunker = SemanticChunker(chunk_size=750, min_chunk_size=200, overlap=100)
         self.vector_store = global_vector_store
 
-    def index_document_text(self, business_id: str, text: str, source_id: str | None = None) -> int:
+    def index_document_text(self, business_id: str, text: str, source_id: str | None = None, source_name: str | None = None) -> int:
         """Splits document/website text into semantic chunks and indexes in vector store."""
-        chunks = self.chunker.chunk_text(text, source_id=source_id)
+        chunks = self.chunker.chunk_text(text, source_id=source_id, source_name=source_name)
         if not chunks:
             return 0
         return self.vector_store.index_chunks(business_id, chunks)
 
-    def retrieve_snippets(self, business_id: str, query: str, top_k: int = 2) -> list[str]:
+    def retrieve_snippets(self, business_id: str, query: str, top_k: int = 4) -> list[str]:
         """Retrieves top_k exact policy/pricing snippets for a caller's query in <50ms."""
         start_time = time.perf_counter()
         results = self.vector_store.search(business_id, query, top_k=top_k)
@@ -29,7 +29,7 @@ class RAGRetriever:
         snippets = [res["text"] for res in results]
         return snippets
 
-    def search_with_metadata(self, business_id: str, query: str, top_k: int = 2) -> dict:
+    def search_with_metadata(self, business_id: str, query: str, top_k: int = 4) -> dict:
         """Full retrieval details including latency and match scores."""
         start_time = time.perf_counter()
         results = self.vector_store.search(business_id, query, top_k=top_k)

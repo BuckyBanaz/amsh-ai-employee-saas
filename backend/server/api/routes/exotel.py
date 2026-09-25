@@ -15,6 +15,8 @@ from backend.ai.tools.framework.base import ToolContext
 from backend.server.database.models.business import Business
 from backend.server.database.session import get_db
 
+from backend.server.services.call_recorder import update_call_recording_webhook
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/voice/exotel", tags=["Exotel Telephony"])
@@ -43,9 +45,18 @@ async def handle_exotel_incoming_call(
 
     logger.info(f"[EXOTEL INCOMING] Call {call_sid} from {caller_from} to {dialed_to}")
 
-    # 1. Resolve business by dialed number or fallback to active business
+    # 1. Resolve business — priority order:
+    #    a) business_id query param (set by outbound call-me)
+    #    b) dialed number match
+    #    c) latest registered business (fallback for direct Exotel applet calls)
     business = None
-    if dialed_to:
+    business_id_param = query_params.get("business_id")
+    if business_id_param:
+        business = db.execute(select(Business).where(Business.id == business_id_param)).scalars().first()
+        if business:
+            logger.info(f"[EXOTEL INCOMING] Tenant resolved from business_id param: {business.id} ({business.name})")
+
+    if not business and dialed_to:
         business = (
             db.execute(select(Business).where(Business.business_phone.contains(dialed_to[-10:])))
             .scalars()
@@ -60,7 +71,7 @@ async def handle_exotel_incoming_call(
         logger.warning(f"[EXOTEL INCOMING] No business found for call {call_sid}")
         return Response(content="<Response><Say>No business configured.</Say><Hangup/></Response>", media_type="application/xml")
 
-    # 2. Build Response
+    # 2. Build websocket stream URL
     base_url = build_base_url()
     stream_url = f"{to_ws_url(base_url)}/media-stream/{business.id}?codec=pcm"
     
@@ -83,11 +94,32 @@ async def handle_exotel_status_callback(
     request: Request,
     CallSid: Optional[str] = Form(None),
     Status: Optional[str] = Form(None),
+    RecordingUrl: Optional[str] = Form(None),
+    Duration: Optional[str] = Form(None),
+    ConversationDuration: Optional[str] = Form(None),
 ) -> Response:
-    """Exotel Call Status Callback."""
+    """Exotel Call Status Callback with audio recording URL and duration."""
     query_params = request.query_params
     sid = CallSid or query_params.get("CallSid") or ""
     status = Status or query_params.get("Status") or query_params.get("CallType") or "completed"
+    recording_url = RecordingUrl or query_params.get("RecordingUrl") or query_params.get("recording_url")
     
-    logger.info(f"[EXOTEL STATUS] Call {sid}: {status}")
+    dur_str = Duration or ConversationDuration or query_params.get("Duration") or query_params.get("ConversationDuration")
+    duration_secs = None
+    if dur_str:
+        try:
+            duration_secs = int(float(dur_str))
+        except (ValueError, TypeError):
+            pass
+
+    logger.info(f"[EXOTEL STATUS] Call {sid}: {status} | recording: {recording_url} | duration: {duration_secs}s")
+    
+    if sid:
+        update_call_recording_webhook(
+            call_id=sid,
+            recording_url=recording_url,
+            duration_seconds=duration_secs,
+            status=status,
+        )
+
     return Response(content="OK", media_type="text/plain")

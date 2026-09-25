@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { STRINGS } from '../../../utils/strings/en';
 
 import { AuthController } from '../../../controllers/auth.controller';
+import { StorageService } from '../../../services/storage.service';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -20,8 +21,17 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      await AuthController.login(email, password);
-      router.push('/onboarding');
+      const res = await AuthController.login(email, password);
+      const hasBusiness = Boolean(res?.user?.business_id || StorageService.getBusinessId());
+      const isCompleted = hasBusiness || StorageService.isOnboardingCompleted();
+
+      if (isCompleted) {
+        StorageService.setOnboardingCompleted(true);
+        router.push('/dashboard');
+      } else {
+        const pendingStep = StorageService.getOnboardingStep() || '/onboarding/business';
+        router.push(pendingStep);
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to login');
     } finally {
@@ -55,6 +65,7 @@ export default function LoginPage() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             disabled={loading}
+            autoComplete="email"
             required
           />
         </div>
@@ -69,6 +80,7 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               disabled={loading}
+              autoComplete="current-password"
               required
             />
             <button 

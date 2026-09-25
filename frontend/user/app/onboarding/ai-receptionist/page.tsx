@@ -38,12 +38,12 @@ const initialCapabilities = [
 
 export default function AiReceptionistOnboardingPage() {
   const router = useRouter();
-  const [aiName, setAiName] = useState('Sarah');
-  const [greeting, setGreeting] = useState('Hi, welcome to Smile Dental Clinic. How can I help you today?');
+  const [aiName, setAiName] = useState('Aria');
+  const [greeting, setGreeting] = useState('');
   const [selectedVoice, setSelectedVoice] = useState('rachel');
   const [selectedPersonality, setSelectedPersonality] = useState('professional');
   const [playingVoice, setPlayingVoice] = useState<string | null>(null);
-  const [transferPhone, setTransferPhone] = useState('+1 (555) 019-2834');
+  const [transferPhone, setTransferPhone] = useState('');
   const [escalation, setEscalation] = useState(STRINGS.ONBOARDING.AI_RECEPTIONIST.ESCALATION_OPTIONS.ASK_HUMAN);
   const [caps, setCaps] = useState(initialCapabilities);
   const [primaryLanguage, setPrimaryLanguage] = useState('en');
@@ -58,6 +58,45 @@ export default function AiReceptionistOnboardingPage() {
   const [audioObj, setAudioObj] = useState<HTMLAudioElement | null>(null);
 
   React.useEffect(() => {
+    let hasLoadedAgent = false;
+    const savedAgent = localStorage.getItem('onboarding_ai_receptionist');
+    if (savedAgent) {
+      try {
+        const parsed = JSON.parse(savedAgent);
+        if (parsed.aiName) setAiName(parsed.aiName);
+        if (parsed.greeting) setGreeting(parsed.greeting);
+        if (parsed.selectedVoice) setSelectedVoice(parsed.selectedVoice);
+        if (parsed.selectedPersonality) setSelectedPersonality(parsed.selectedPersonality);
+        if (parsed.transferPhone) setTransferPhone(parsed.transferPhone);
+        if (parsed.primaryLanguage) setPrimaryLanguage(parsed.primaryLanguage);
+        hasLoadedAgent = true;
+      } catch (e) {
+        console.error('Failed to parse saved AI agent settings:', e);
+      }
+    }
+
+    // Load real business name & phone if no custom agent saved yet
+    const rawBiz = localStorage.getItem('onboarding_business_data');
+    if (rawBiz) {
+      try {
+        const parsedBiz = JSON.parse(rawBiz);
+        const bName = parsedBiz.businessName || parsedBiz.name;
+        const bPhone = parsedBiz.phone || parsedBiz.business_phone;
+        if (!hasLoadedAgent) {
+          if (bName) {
+            setGreeting(`Hi, welcome to ${bName}. How can I help you today?`);
+          } else {
+            setGreeting('Hi, welcome! How can I help you today?');
+          }
+          if (bPhone) {
+            setTransferPhone(bPhone);
+          }
+        }
+      } catch (e) {}
+    } else if (!hasLoadedAgent) {
+      setGreeting('Hi, welcome! How can I help you today?');
+    }
+
     OnboardingController.fetchVoices()
       .then(data => {
         const voicesArr = Array.isArray(data.voices) ? data.voices : (data.voices?.data || []);
@@ -69,11 +108,21 @@ export default function AiReceptionistOnboardingPage() {
             type: `${v.language || 'English'} • ${v.description || 'Professional'}`
           }));
           setVoices(formatted);
-          if (formatted.length > 0) setSelectedVoice(formatted[0].id);
+          if (formatted.length > 0 && !localStorage.getItem('onboarding_ai_receptionist')) {
+            setSelectedVoice(formatted[0].id);
+          }
         }
       })
       .catch(err => console.error('Failed to fetch voices:', err));
   }, []);
+
+  React.useEffect(() => {
+    if (greeting) {
+      localStorage.setItem('onboarding_ai_receptionist', JSON.stringify({
+        aiName, greeting, selectedVoice, selectedPersonality, transferPhone, primaryLanguage
+      }));
+    }
+  }, [aiName, greeting, selectedVoice, selectedPersonality, transferPhone, primaryLanguage]);
 
   const togglePlay = (e: React.MouseEvent, voiceId: string) => {
     e.stopPropagation();

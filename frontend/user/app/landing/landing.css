@@ -1,0 +1,77 @@
+/* Landing-only effects. Tailwind utilities cover the rest. */
+
+.lp-grid-floor {
+  position: absolute;
+  inset: auto -20% -10% -20%;
+  height: 55%;
+  background-image:
+    linear-gradient(rgba(125, 211, 252, 0.18) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(125, 211, 252, 0.18) 1px, transparent 1px);
+  background-size: 64px 64px;
+  transform: perspective(600px) rotateX(62deg);
+  transform-origin: top center;
+  mask-image: linear-gradient(to bottom, transparent, #000 30%, transparent 95%);
+  animation: lp-floor 18s linear infinite;
+}
+@keyframes lp-floor {
+  to { background-position: 0 64px, 0 0; }
+}
+
+.lp-gradient-text {
+  background: linear-gradient(100deg, #67e8f9 0%, #a5b4fc 40%, #c4b5fd 70%, #67e8f9 100%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: lp-shine 6s linear infinite;
+}
+@keyframes lp-shine {
+  to { background-position: 200% center; }
+}
+
+.lp-marquee {
+  mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+}
+.lp-marquee-track {
+  animation: lp-marquee 36s linear infinite;
+}
+.lp-marquee:hover .lp-marquee-track { animation-play-state: paused; }
+@keyframes lp-marquee {
+  to { transform: translateX(-50%); }
+}
+
+.lp-border-glow {
+  position: relative;
+  isolation: isolate;
+}
+.lp-border-glow::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  z-index: -1;
+  border-radius: inherit;
+  padding: 1px;
+  background: conic-gradient(from var(--lp-angle, 0deg), #22d3ee, #6366f1, #a855f7, #22d3ee);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: lp-spin 5s linear infinite;
+}
+@property --lp-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+@keyframes lp-spin {
+  to { --lp-angle: 360deg; }
+}
+
+.lp-faq summary::-webkit-details-marker { display: none; }
+.lp-faq[open] .lp-faq-chevron { transform: rotate(180deg); }
+
+@media (prefers-reduced-motion: reduce) {
+  .lp-grid-floor,
+  .lp-gradient-text,
+  .lp-marquee-track,
+  .lp-border-glow::before { animation: none; }
+}

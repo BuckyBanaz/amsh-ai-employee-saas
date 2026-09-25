@@ -19,6 +19,7 @@ from backend.server.database.session import get_db
 router = APIRouter(prefix="/api/businesses/{business_id}/dashboard", tags=["dashboard"])
 
 
+@router.get("", response_model=Dict[str, Any])
 @router.get("/stats", response_model=Dict[str, Any])
 def get_dashboard_stats(
     business_id: str,

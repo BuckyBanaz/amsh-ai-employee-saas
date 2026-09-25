@@ -51,14 +51,18 @@ class ExotelClient:
 
         url = f"{self.base_url}/Calls/connect.json"
 
-        data = {
+        flow_url = callback_url or f"{getattr(self.settings, 'PUBLIC_BASE_URL', '')}/api/voice/exotel/incoming"
+
+        data: Dict[str, Any] = {
             "From": clean_to,
-            "To": clean_to,
             "CallerId": from_number,
             "CallType": "trans",
         }
-        if callback_url:
-            data["StatusCallback"] = callback_url
+        if flow_url and "http" in flow_url:
+            data["Url"] = flow_url
+        else:
+            data["To"] = from_number
+
         if custom_field:
             data["CustomField"] = custom_field
 

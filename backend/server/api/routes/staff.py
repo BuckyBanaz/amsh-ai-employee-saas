@@ -158,3 +158,13 @@ def delete_staff(
     staff = _get_staff_or_404(business_id, staff_id, db)
     db.delete(staff)
     db.commit()
+
+
+dashboard_router = APIRouter(prefix="/api/businesses/{business_id}/staff", tags=["staff"])
+dashboard_router.add_api_route("", create_staff, methods=["POST"], response_model=StaffOut, status_code=status.HTTP_201_CREATED)
+dashboard_router.add_api_route("", list_staff, methods=["GET"], response_model=list[StaffOut])
+dashboard_router.add_api_route("/{staff_id}", update_staff, methods=["PATCH"], response_model=StaffOut)
+dashboard_router.add_api_route("/{staff_id}", delete_staff, methods=["DELETE"], status_code=status.HTTP_204_NO_CONTENT)
+
+doctors_router = APIRouter(prefix="/api/businesses/{business_id}/doctors", tags=["staff"])
+doctors_router.add_api_route("", list_staff, methods=["GET"], response_model=list[StaffOut])

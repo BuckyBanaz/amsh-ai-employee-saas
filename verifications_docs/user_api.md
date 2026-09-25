@@ -22,10 +22,16 @@ Documenting verified APIs mapped directly against `frontend/user` screens, ensur
 | **Knowledge: RAG Query** | Internal AI Call Engine | `POST /api/onboarding/businesses/{id}/knowledge/query` | ✅ Verified (<1ms) |
 | **WhatsApp Webhook** | Meta Cloud API Webhook | `GET/POST /api/v1/whatsapp/webhook` | ✅ Verified |
 | **Onboarding: Integrations** | `http://localhost:3000/onboarding/integrations` | `POST /api/onboarding/businesses/{id}/integrations/{provider}/connect` | ✅ Verified |
+| **Onboarding: Checkout Config** | `http://localhost:3000/onboarding/checkout` | `GET /api/billing/config` | ✅ Verified |
+| **Onboarding: Razorpay Order** | `http://localhost:3000/onboarding/checkout` | `POST /api/billing/razorpay/create-order` | ✅ Verified |
+| **Onboarding: Payment Verify** | `http://localhost:3000/onboarding/checkout` | `POST /api/billing/razorpay/verify` | ✅ Verified |
 | **Dashboard Overview** | `http://localhost:3000/dashboard` | `GET /api/businesses/{id}/dashboard/stats` | ✅ Verified |
-| **Dashboard Appointments** | `http://localhost:3000/dashboard/appointments` | `GET/POST/PATCH/DELETE /api/businesses/{id}/appointments` | ✅ Verified |
-| **Dashboard Call Logs** | `http://localhost:3000/dashboard/calls` | `GET /api/businesses/{id}/calls` | ✅ Verified |
-| **Dashboard Patients CRM** | `http://localhost:3000/dashboard/patients` | `GET/POST /api/businesses/{id}/customers` | ✅ Verified |
+| **Dashboard Appointments** | `http://localhost:3000/appointments` | `GET/POST/PATCH/DELETE /api/businesses/{id}/appointments` | ✅ Verified |
+| **Dashboard Call Logs** | `http://localhost:3000/calls` | `GET /api/businesses/{id}/calls` | ✅ Verified |
+| **Dashboard Patients CRM** | `http://localhost:3000/patients` | `GET/POST /api/businesses/{id}/customers` & `/patients` | ✅ Verified |
+| **Dashboard Services** | `http://localhost:3000/services` | `GET/POST/PATCH/DELETE /api/businesses/{id}/services` | ✅ Verified |
+| **Dashboard Staff / Doctors** | `http://localhost:3000/doctors` | `GET/POST/PATCH/DELETE /api/businesses/{id}/staff` & `/doctors` | ✅ Verified |
+| **Dashboard Billing** | `http://localhost:3000/billing` | `GET /api/billing/businesses/{id}` | ✅ Verified |
 
 ---
 
@@ -1064,4 +1070,160 @@ Full `BusinessOut` object with updated `plan: "professional"` and `status: "acti
 ]
 ```
 
+---
 
+## 17. Razorpay Checkout & Billing APIs
+
+### 📌 General Info
+- **Frontend URL:** `http://localhost:3000/onboarding/checkout` & `http://localhost:3000/billing`
+- **Frontend Files:** `frontend/user/app/onboarding/checkout/page.tsx`, `frontend/user/controllers/billing.controller.ts`
+- **Backend Route File:** `backend/server/api/routes/billing.py`, `backend/server/billing/razorpay_gateway.py`
+- **Methods:** `GET`, `POST`
+- **Endpoints:**
+  - `GET /api/billing/config` — Returns public Razorpay key ID
+  - `POST /api/billing/razorpay/create-order` — Creates server-to-server Razorpay order
+  - `POST /api/billing/razorpay/verify` — Verifies HMAC SHA-256 signature and activates tenant plan
+  - `GET /api/billing/businesses/{business_id}` — Returns active subscription status and limits
+- **Authentication:** Bearer Token
+- **Verification Status:** ✅ Verified (100% HMAC SHA-256 signature verification)
+
+---
+
+### 📥 Request Schema (`POST /api/billing/razorpay/create-order`)
+```json
+{
+  "business_id": "2137d850-cc11-458e-a37f-48a1531aeaf5",
+  "plan": "Growth",
+  "cycle": "monthly",
+  "amount_inr": 4999
+}
+```
+
+---
+
+### 📤 Response Schema (`POST /api/billing/razorpay/create-order`)
+```json
+{
+  "order_id": "order_PxY9823kLm1234",
+  "amount": 499900,
+  "currency": "INR",
+  "key_id": "rzp_test_..."
+}
+```
+
+---
+
+### 📥 Request Schema (`POST /api/billing/razorpay/verify`)
+```json
+{
+  "business_id": "2137d850-cc11-458e-a37f-48a1531aeaf5",
+  "razorpay_order_id": "order_PxY9823kLm1234",
+  "razorpay_payment_id": "pay_PxZ8712aBc5678",
+  "razorpay_signature": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "plan": "Growth"
+}
+```
+
+---
+
+### 📤 Response Schema (`POST /api/billing/razorpay/verify`)
+```json
+{
+  "success": true,
+  "message": "Payment verified and plan activated successfully",
+  "business_id": "2137d850-cc11-458e-a37f-48a1531aeaf5",
+  "plan": "Growth",
+  "status": "active"
+}
+```
+
+---
+
+## 18. Dashboard Catalog Sub-Resources (Services, Staff, Doctors)
+
+### 📌 General Info
+- **Frontend URLs:** `http://localhost:3000/services`, `http://localhost:3000/doctors`
+- **Frontend Files:** `frontend/user/app/(dashboard)/services/page.tsx`, `frontend/user/app/(dashboard)/doctors/page.tsx`, `frontend/user/controllers/dashboard.controller.ts`
+- **Backend Route Files:** `backend/server/api/routes/services.py`, `backend/server/api/routes/staff.py`
+- **Endpoints:**
+  - `GET, POST, PATCH, DELETE /api/businesses/{business_id}/services`
+  - `GET, POST, PATCH, DELETE /api/businesses/{business_id}/staff`
+  - `GET /api/businesses/{business_id}/doctors` (Staff alias)
+  - `GET /api/businesses/{business_id}/patients` (Customers alias)
+- **Authentication:** Bearer Token
+- **Verification Status:** ✅ Verified (Full CRUD & Multi-Tenant Isolated)
+
+---
+
+### 📤 Response Schema (`GET /api/businesses/{business_id}/services`)
+```json
+[
+  {
+    "id": "srv_8923a1",
+    "business_id": "2137d850-cc11-458e-a37f-48a1531aeaf5",
+    "title": "General Consultation",
+    "description": "Routine clinical checkup and consultation",
+    "duration_minutes": 30,
+    "price_amount": 500.0,
+    "price_currency": "INR",
+    "created_at": "2026-09-25T12:00:00Z"
+  }
+]
+```---
+
+## 19. Dashboard Call Logs & Audio Playback
+
+### 📌 General Info
+- **Frontend URL:** `http://localhost:3000/calls`
+- **Frontend Files:** `frontend/user/app/(dashboard)/calls/page.tsx`, `frontend/user/components/dashboard/CallDetailPanel.tsx`, `frontend/user/components/dashboard/CallLogsTable.tsx`
+- **Backend Route Files:** `backend/server/api/routes/calls.py`, `backend/server/services/call_recorder.py`, `backend/server/api/routes/exotel.py`, `backend/server/api/routes/voice.py`
+- **Endpoints:**
+  - `GET /api/businesses/{business_id}/calls` (Lists calls with duration, caller info, outcome, recording URL)
+  - `GET /api/businesses/{business_id}/calls/{call_id}` (Returns single call with full multi-turn conversation messages)
+  - `POST /api/voice/exotel/status` (Exotel post-call webhook capturing RecordingUrl & duration)
+  - `POST /api/voice/recording-status` (Twilio recording callback capturing RecordingUrl & duration)
+- **Authentication:** Bearer Token for Dashboard APIs; Telephony Webhook for Provider Status
+- **Verification Status:** ✅ Verified (Full multi-turn transcript and HTML5 audio player playback)
+
+---
+
+### 📤 Response Schema (`GET /api/businesses/{business_id}/calls/{call_id}`)
+```json
+{
+  "id": "c1380add-e725-4b4d-9c34-0f65323ee9bc",
+  "business_id": "0ac58233-3103-44d0-af72-bfc6a586f935",
+  "caller_number": "+918901414107",
+  "caller_name": "Parikshit",
+  "intent": "appointment_booking",
+  "outcome": "resolved",
+  "summary": "Confirmed consultation with Dr. Sarah Wilson for Saturday at 12:00 PM.",
+  "duration_seconds": 45,
+  "latency_ms": 175,
+  "recording_url": "https://telephony-bucket.s3.amazonaws.com/recordings/call_0138.mp3",
+  "started_at": "2026-09-25T13:00:00Z",
+  "ended_at": "2026-09-25T13:00:45Z",
+  "messages": [
+    {
+      "id": "m1",
+      "role": "assistant",
+      "content": "Hello, thank you for calling Smile Dental Clinic! How can I help you today?",
+      "sequence": 0,
+      "created_at": "2026-09-25T13:00:01Z"
+    },
+    {
+      "id": "m2",
+      "role": "user",
+      "content": "Hi, I would like to schedule an appointment for a dental consultation.",
+      "sequence": 1,
+      "created_at": "2026-09-25T13:00:05Z"
+    },
+    {
+      "id": "m3",
+      "role": "assistant",
+      "content": "I would be happy to help with that. What day and time works best for your schedule?",
+      "sequence": 2,
+      "created_at": "2026-09-25T13:00:08Z"
+    }
+  ]
+}
+```

@@ -258,5 +258,103 @@ Read `frontend/user/app/onboarding/*` (business, services, staff, hours, ai-rece
 ### 🎯 41-Day Master Daily Execution Roadmap & Tracker (20-Sep to 31-Oct):
 See **[`DOCS/roadmap/AMSh_Master_Daily_Roadmap_and_Tracker.md`](file:///c:/Users/Parikshit/Desktop/saas/DOCS/roadmap/AMSh_Master_Daily_Roadmap_and_Tracker.md)** for the complete date-by-date sprint checklist across Frontend User, Frontend Admin, Backend Server, and Backend AI.
 
+---
+
+## 2026-09-25 — Onboarding Real Data Cleanup, Razorpay Gateway, & Dashboard API Wiring
+
+1. **Onboarding Real Data Transition (100% Completed)**:
+   - Eliminated all hardcoded mock clinic data ("Smile Dental Clinic", "Dr. Sarah Wilson", fake dental FAQs, Christmas/New Year holidays) across 11 onboarding views.
+   - Refactored all onboarding wizard pages to pull and store real tenant state dynamically:
+     - `frontend/user/app/onboarding/services/page.tsx`
+     - `frontend/user/app/onboarding/staff/page.tsx`
+     - `frontend/user/app/onboarding/hours/page.tsx`
+     - `frontend/user/app/onboarding/knowledge/page.tsx`
+     - `frontend/user/app/onboarding/ai-receptionist/page.tsx`
+     - `frontend/user/app/onboarding/integrations/page.tsx`
+     - `frontend/user/app/onboarding/integrations/whatsapp/page.tsx`
+     - `frontend/user/app/onboarding/integrations/twilio/page.tsx`
+     - `frontend/user/app/onboarding/review/page.tsx`
+     - `frontend/user/app/onboarding/plans/page.tsx`
+     - `frontend/user/app/onboarding/success/page.tsx`
+
+2. **Razorpay Billing Architecture & Checkout Wiring**:
+   - Built server-to-server Razorpay integration in [`backend/server/billing/razorpay_gateway.py`](file:///c:/Users/Parikshit/Desktop/saas/backend/server/billing/razorpay_gateway.py) with HMAC SHA-256 signature verification.
+   - Created billing route handler [`backend/server/api/routes/billing.py`](file:///c:/Users/Parikshit/Desktop/saas/backend/server/api/routes/billing.py) implementing `/api/billing/config`, `/api/billing/razorpay/create-order`, `/api/billing/razorpay/verify`, and `/api/billing/businesses/{id}`. Upon verification, updates `Business.plan` and sets `status = "active"`.
+   - Registered `billing.router` and `payments.router` in `backend/server/api/router.py`.
+   - Created [`frontend/user/controllers/billing.controller.ts`](file:///c:/Users/Parikshit/Desktop/saas/frontend/user/controllers/billing.controller.ts) eliminating raw `fetch()` calls.
+   - Wired [`frontend/user/app/onboarding/checkout/page.tsx`](file:///c:/Users/Parikshit/Desktop/saas/frontend/user/app/onboarding/checkout/page.tsx) with live Razorpay Checkout modal.
+
+3. **Dashboard Controller & Architecture Layer**:
+   - Built [`frontend/user/controllers/dashboard.controller.ts`](file:///c:/Users/Parikshit/Desktop/saas/frontend/user/controllers/dashboard.controller.ts) with fully typed methods:
+     - `getStats(businessId)`
+     - `getAppointments(businessId, params)` & `createAppointment`, `updateAppointment`, `deleteAppointment`
+     - `getCalls(businessId, params)` & `getCallDetail(callId)`
+     - `getServices(businessId)` & `createService`, `updateService`, `deleteService`
+     - `getStaff(businessId)` & `createStaff`, `updateStaff`, `deleteStaff`
+     - `getCustomers(businessId)` & `createCustomer`
+     - `getBusinessInfo(businessId)` & `getKnowledge(businessId)`
+   - Updated [`frontend/user/utils/api_endpoints.ts`](file:///c:/Users/Parikshit/Desktop/saas/frontend/user/utils/api_endpoints.ts) with `DASHBOARD`, `APPOINTMENTS`, `CALLS`, `CUSTOMERS`, `SERVICES`, and `STAFF`.
+   - Added `getBusiness()` / `setBusiness()` in [`frontend/user/services/storage.service.ts`](file:///c:/Users/Parikshit/Desktop/saas/frontend/user/services/storage.service.ts).
+
+4. **Backend Route Aliasing for Dashboard Compatibility**:
+   - Added `dashboard_router` in `backend/server/api/routes/services.py` (`/api/businesses/{business_id}/services`).
+   - Added `dashboard_router` and `doctors_router` in `backend/server/api/routes/staff.py` (`/api/businesses/{business_id}/staff`, `/api/businesses/{business_id}/doctors`).
+   - Added `patients_router` in `backend/server/api/routes/customers.py` (`/api/businesses/{business_id}/patients`).
+   - Added `/api/businesses/{business_id}/dashboard` alias to `/stats` in `backend/server/api/routes/dashboard_stats.py`.
+   - Mounted all aliases into `api_router` in `backend/server/api/router.py`.
+
+5. **Tenant Identity & Dashboard UI Wiring**:
+   - **`TopBar.tsx`**: Dynamic time-of-day greeting ("Good morning / afternoon / evening"), dynamic business name, dynamic user initials, and live formatted current date.
+   - **`Sidebar.tsx`**: Dynamic tenant business name, city/country location badge, user full name, email, initials avatar, and clean logout action.
+   - **`layout.tsx`**: Dynamic mobile topbar showing tenant business name and user initials.
+   - **`AppointmentsTable.tsx`**: Wired to `DashboardController.getAppointments()` with live data rendering, loading state indicator, and modern empty-state display.
+
+6. **Appointments Hub & AI Operations Layer Wiring**:
+   - **Backend AI Operations**:
+     - Upgraded [`backend/ai/capabilities/operations/clinic/write_operations.py`](file:///c:/Users/Parikshit/Desktop/saas/backend/ai/capabilities/operations/clinic/write_operations.py) with `store_appointment`, `update_appointment`, and `delete_appointment` saving directly to PostgreSQL `Transaction` (type="appointment", details JSON, status).
+     - Upgraded [`backend/ai/capabilities/operations/clinic/read_operations.py`](file:///c:/Users/Parikshit/Desktop/saas/backend/ai/capabilities/operations/clinic/read_operations.py) with `get_appointments` (supporting date, status, doctor filters) and `get_appointment_by_id`.
+     - Exported operations in `backend/ai/capabilities/operations/clinic/__init__.py`.
+   - **Backend API & Voice AI Unification**:
+     - Connected [`backend/server/api/routes/appointments.py`](file:///c:/Users/Parikshit/Desktop/saas/backend/server/api/routes/appointments.py) CRUD directly to `ClinicReadOperations` and `ClinicWriteOperations`.
+     - Unified voice AI booking tool [`backend/ai/tools/vertical/clinic/book_appointment.py`](file:///c:/Users/Parikshit/Desktop/saas/backend/ai/tools/vertical/clinic/book_appointment.py) to delegate to `ClinicWriteOperations.store_appointment`.
+   - **Frontend Hub (`/appointments`)**:
+     - Built [`NewAppointmentModal.tsx`](file:///c:/Users/Parikshit/Desktop/saas/frontend/user/components/dashboard/NewAppointmentModal.tsx) to allow manual scheduling of patient appointments with dynamic service/doctor inputs (mock fallback names removed).
+     - Built [`AppointmentsListView.tsx`](file:///c:/Users/Parikshit/Desktop/saas/frontend/user/components/dashboard/AppointmentsListView.tsx) providing a full tabular list view with status actions and a direct "Calendar" jump button.
+     - Updated [`WeeklyCalendar.tsx`](file:///c:/Users/Parikshit/Desktop/saas/frontend/user/components/dashboard/WeeklyCalendar.tsx) expanding from 5 weekdays (Mon-Fri) to full 7-day calendar (Mon-Sun: Mon 21 to Sun 27), allowing Saturday (`2026-09-26`) and Sunday appointments to render accurately, and expanded hours from 08:00 to 20:00.
+     - Updated [`AppointmentsFilterBar.tsx`](file:///c:/Users/Parikshit/Desktop/saas/frontend/user/components/dashboard/AppointmentsFilterBar.tsx) removing hardcoded fallback doctors/services; now pulls dynamic staff and services from real tenant DB + appointments.
+     - Updated [`AppointmentsHeader.tsx`](file:///c:/Users/Parikshit/Desktop/saas/frontend/user/components/dashboard/AppointmentsHeader.tsx) with dynamic week navigation, quick "Today" reset, and hidden date picker jump to browse any future week.
+     - Added auto-jump algorithm (`getWeekOffsetForDate`) in [`page.tsx`](file:///c:/Users/Parikshit/Desktop/saas/frontend/user/app/%28dashboard%29/appointments/page.tsx) so creating or selecting any future appointment immediately jumps the calendar to that week.
+     - Removed hardcoded numbers (`37`, `8`, `84%`) in [`AIBanner.tsx`](file:///c:/Users/Parikshit/Desktop/saas/frontend/user/components/dashboard/AIBanner.tsx) and wired to live stats.
+     - Removed mock texts in [`AlertsCard.tsx`](file:///c:/Users/Parikshit/Desktop/saas/frontend/user/components/dashboard/AlertsCard.tsx) and [`InsightsCard.tsx`](file:///c:/Users/Parikshit/Desktop/saas/frontend/user/components/dashboard/InsightsCard.tsx).
+
+7. **Calls, Doctors & Patients Hubs Wiring**:
+   - **Calls Hub (`/calls`)**:
+     - Updated [`calls.py`](file:///c:/Users/Parikshit/Desktop/saas/backend/server/api/routes/calls.py) to return `recording_url` alongside turns.
+     - Built HTML5 Audio Recording Player in [`CallDetailPanel.tsx`](file:///c:/Users/Parikshit/Desktop/saas/frontend/user/components/dashboard/CallDetailPanel.tsx) featuring Play/Pause, scrubber range seeker, elapsed/total time, playback speed toggle (`1x`, `1.25x`, `1.5x`, `2x`), and call-back action.
+     - Built full conversation transcript thread rendering multi-turn chat bubbles (Aura AI assistant vs caller).
+     - Updated [`CallLogsTable.tsx`](file:///c:/Users/Parikshit/Desktop/saas/frontend/user/components/dashboard/CallLogsTable.tsx) with live PostgreSQL calls loading, audio indicator, and selection state (mock array removed).
+     - Updated [`CallLogsFilterBar.tsx`](file:///c:/Users/Parikshit/Desktop/saas/frontend/user/components/dashboard/CallLogsFilterBar.tsx) and [`CallLogsHeader.tsx`](file:///c:/Users/Parikshit/Desktop/saas/frontend/user/components/dashboard/CallLogsHeader.tsx) with search and refresh actions.
+   - **Doctors Hub (`/doctors`)**:
+     - Built [`NewStaffModal.tsx`](file:///c:/Users/Parikshit/Desktop/saas/frontend/user/components/dashboard/NewStaffModal.tsx) enabling manual addition of doctors/staff to the roster.
+     - Connected `DoctorsHeader.tsx` trigger and [`doctors/page.tsx`](file:///c:/Users/Parikshit/Desktop/saas/frontend/user/app/%28dashboard%29/doctors/page.tsx) to reload roster dynamically via `DashboardController.createStaff(...)`.
+   - **Patients CRM Hub (`/patients`)**:
+     - Built [`NewPatientModal.tsx`](file:///c:/Users/Parikshit/Desktop/saas/frontend/user/components/dashboard/NewPatientModal.tsx) to register patients into CRM via `DashboardController.createCustomer(...)`.
+     - Updated [`PatientsHeader.tsx`](file:///c:/Users/Parikshit/Desktop/saas/frontend/user/components/dashboard/PatientsHeader.tsx) with live date and modal trigger.
+     - Updated [`PatientsFilterBar.tsx`](file:///c:/Users/Parikshit/Desktop/saas/frontend/user/components/dashboard/PatientsFilterBar.tsx) with real-time text search and status filter.
+     - Connected [`patients/page.tsx`](file:///c:/Users/Parikshit/Desktop/saas/frontend/user/app/%28dashboard%29/patients/page.tsx) and [`PatientsTable.tsx`](file:///c:/Users/Parikshit/Desktop/saas/frontend/user/components/dashboard/PatientsTable.tsx) with live patient data.
+8. **Call Recording, Audio Playback & Live Turn Persistence Pipeline**:
+   - **Database Persistence Service ([`call_recorder.py`](file:///c:/Users/Parikshit/Desktop/saas/backend/server/services/call_recorder.py))**:
+     - `record_call_start`: Records initial `Call` row with `outcome='live'` and saves greeting message turn (sequence 0).
+     - `record_call_turn`: Persists user utterance (speaker="User") and AI response (speaker="AI") to the `messages` table with accurate sequences.
+     - `record_call_end`: Finalizes call duration, outcome, intent, caller name, and recording URL on hangup.
+     - `update_call_recording_webhook`: Captures `RecordingUrl` and duration from telephony provider status callbacks.
+   - **Telephony Webhook Integration**:
+     - **Exotel** ([`exotel.py`](file:///c:/Users/Parikshit/Desktop/saas/backend/server/api/routes/exotel.py)): Status callback `/api/voice/exotel/status` extracts `RecordingUrl`, `Duration`, and call status, linking the audio recording directly to the call record in PostgreSQL.
+     - **Twilio** ([`voice.py`](file:///c:/Users/Parikshit/Desktop/saas/backend/server/api/routes/voice.py)): Updated `/status` and added `/recording-status` webhook to ingest Twilio `RecordingUrl` and duration.
+   - **Live WebSocket Streams & Playground Simulator ([`gateway.py`](file:///c:/Users/Parikshit/Desktop/saas/backend/ai/realtime/twilio/gateway.py))**:
+     - Both live incoming media streams and UI test simulator calls automatically write conversation turns into the database in real time.
+   - **Audio Playback in Dashboard ([`CallDetailPanel.tsx`](file:///c:/Users/Parikshit/Desktop/saas/frontend/user/components/dashboard/CallDetailPanel.tsx))**:
+     - Built-in audio player streams and plays the recorded audio URL directly with seeker bar, play/pause, time tracker, and speed toggles (1x to 2x).
+     - Renders complete chat bubbles for each message turn in the dialogue.
 
 

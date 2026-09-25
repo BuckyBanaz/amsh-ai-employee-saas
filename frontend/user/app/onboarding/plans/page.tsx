@@ -7,6 +7,17 @@ export default function PlansSelectionPage() {
   const router = useRouter();
   const [cycle, setCycle] = useState<'Monthly' | 'Yearly'>('Monthly');
   const [selectedPlan, setSelectedPlan] = useState<string>('professional');
+  const [agentName, setAgentName] = useState('your AI receptionist');
+
+  React.useEffect(() => {
+    try {
+      const saved = localStorage.getItem('onboarding_ai_receptionist');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.aiName) setAgentName(parsed.aiName);
+      }
+    } catch (e) {}
+  }, []);
 
   const plans = [
     {
@@ -68,7 +79,7 @@ export default function PlansSelectionPage() {
       <div className="mb-6 text-center">
         <h1 className="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">Select your subscription plan</h1>
         <p className="mt-2 text-xs sm:text-sm leading-relaxed text-gray-500 max-w-xl mx-auto">
-          Choose the right plan to activate Sarah, your practice&apos;s AI receptionist. Transparent pricing with no hidden carrier surcharges.
+          Choose the right plan to activate {agentName}, your practice&apos;s AI receptionist. Transparent pricing with no hidden carrier surcharges.
         </p>
       </div>
 

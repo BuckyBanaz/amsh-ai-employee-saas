@@ -32,7 +32,7 @@ export const OnboardingController = {
 
   updateBusiness: async (id: string, businessData: any) => {
     try {
-      const response = await ApiService.put<any>(
+      const response = await ApiService.patch<any>(
         API_ENDPOINTS.BUSINESS.UPDATE(id),
         businessData,
         { requireAuth: true }

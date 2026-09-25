@@ -7,19 +7,64 @@ export default function TwilioSetupPage() {
   const router = useRouter();
 
   const [telephonyMode, setTelephonyMode] = useState<'new_number' | 'forwarding'>('new_number');
-  const [selectedCountry, setSelectedCountry] = useState('US (+1)');
-  const [areaCode, setAreaCode] = useState('555');
+  const [businessCountry, setBusinessCountry] = useState('India');
+  const [selectedCountry, setSelectedCountry] = useState('IN (+91)');
+  const [areaCode, setAreaCode] = useState('080');
   const [isSearching, setIsSearching] = useState(false);
 
-  const availableNumbers = [
-    { number: `+1 (${areaCode}) 019-2834`, locality: `Local Direct Line • Area Code (${areaCode})`, feature: 'Voice HD • Ultra Low Latency' },
-    { number: `+1 (${areaCode}) 019-7741`, locality: `Standard VoIP Line • Area Code (${areaCode})`, feature: 'Voice HD • SIP Trunk' },
-    { number: `+1 (${areaCode}) 019-9210`, locality: `Digital Carrier Line • Area Code (${areaCode})`, feature: 'Voice HD • Call Recording' },
+  React.useEffect(() => {
+    try {
+      let savedEscalation = '';
+      const savedAgent = localStorage.getItem('onboarding_ai_receptionist');
+      if (savedAgent) {
+        const parsedAgent = JSON.parse(savedAgent);
+        if (parsedAgent.transferPhone) {
+          savedEscalation = parsedAgent.transferPhone;
+        }
+      }
+
+      const storedData = localStorage.getItem('onboarding_business_data');
+      if (storedData) {
+        const parsed = JSON.parse(storedData);
+        if (parsed.country) {
+          setBusinessCountry(parsed.country);
+          if (parsed.country === 'India') {
+            setSelectedCountry('IN (+91)');
+            setAreaCode('080');
+            setSelectedNumber('+91 80472 84627');
+            setExistingPhone(parsed.phone || '');
+            setHumanTransferPhone(savedEscalation || parsed.phone || '');
+          } else {
+            setSelectedCountry('US (+1)');
+            setAreaCode('656');
+            setSelectedNumber('+1 (656) 254-7488');
+            setExistingPhone(parsed.phone || '');
+            setHumanTransferPhone(savedEscalation || parsed.phone || '');
+          }
+        }
+      } else if (savedEscalation) {
+        setHumanTransferPhone(savedEscalation);
+      }
+    } catch (e) {
+      console.error('Failed to parse business country:', e);
+    }
+  }, []);
+
+  const isIndia = businessCountry === 'India' || selectedCountry.includes('+91');
+
+  const availableNumbers = isIndia ? [
+    { number: `+91 ${areaCode === '080' ? '80472 84627' : '80472 84627'}`, locality: `Exotel Direct Indian Line • STD (${areaCode})`, feature: 'Exotel HD • Sub-50ms Latency' },
+    { number: `+91 ${areaCode === '080' ? '80472 84628' : '80472 84628'}`, locality: `Exotel Toll-Free Line • India`, feature: 'Exotel HD • Toll Free' },
+    { number: `+91 ${areaCode === '080' ? '80472 84629' : '80472 84629'}`, locality: `Exotel Smart Trunk Line • India`, feature: 'Exotel HD • Call Recording' },
+  ] : [
+    { number: `+1 (${areaCode}) 254-7488`, locality: `Twilio US Direct Line • Area Code (${areaCode})`, feature: 'Twilio HD • Ultra Low Latency' },
+    { number: `+1 (${areaCode}) 254-7489`, locality: `Twilio Toll-Free Line • Area Code (${areaCode})`, feature: 'Twilio HD • SIP Trunk' },
+    { number: `+1 (${areaCode}) 254-7490`, locality: `Twilio Digital Carrier • Area Code (${areaCode})`, feature: 'Twilio HD • Call Recording' },
   ];
 
   const [selectedNumber, setSelectedNumber] = useState(availableNumbers[0].number);
-  const [existingPhone, setExistingPhone] = useState('+1 (555) 234-5678');
-  const [humanTransferPhone, setHumanTransferPhone] = useState('+1 (555) 987-6543');
+  const [existingPhone, setExistingPhone] = useState('');
+  const [humanTransferPhone, setHumanTransferPhone] = useState('');
 
   const [isSaving, setIsSaving] = useState(false);
 
@@ -33,10 +78,27 @@ export default function TwilioSetupPage() {
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
+    try {
+      localStorage.setItem('onboarding_telephony_connected', 'true');
+      localStorage.setItem('onboarding_telephony_phone', selectedNumber);
+      localStorage.setItem('onboarding_telephony_provider', isIndia ? 'exotel' : 'twilio');
+      localStorage.setItem('onboarding_telephony_escalation', humanTransferPhone);
+
+      try {
+        const savedAgent = localStorage.getItem('onboarding_ai_receptionist');
+        const agentData = savedAgent ? JSON.parse(savedAgent) : {};
+        agentData.transferPhone = humanTransferPhone;
+        localStorage.setItem('onboarding_ai_receptionist', JSON.stringify(agentData));
+      } catch (err) {
+        console.error('Error syncing transfer phone to agent settings:', err);
+      }
+    } catch (err) {
+      console.error('Error saving telephony settings:', err);
+    }
     setTimeout(() => {
       setIsSaving(false);
       router.push('/onboarding/integrations');
-    }, 800);
+    }, 600);
   };
 
   return (
@@ -64,13 +126,17 @@ export default function TwilioSetupPage() {
 
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-base font-bold text-gray-900 tracking-tight">Telephony Carrier &amp; Phone Line</h1>
+              <h1 className="text-base font-bold text-gray-900 tracking-tight">
+                {isIndia ? 'Exotel Telephony Carrier (+91 India)' : 'Twilio Telephony & Phone Line'}
+              </h1>
               <span className="bg-blue-100 text-blue-800 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase border border-blue-200">
-                SIP Trunk Engine
+                {isIndia ? 'Exotel Indian Voice Engine' : 'Twilio Global Voice Engine'}
               </span>
             </div>
             <p className="text-[11px] text-gray-500">
-              Allocate a dedicated HD voice line or set up smart forwarding for your AI Receptionist.
+              {isIndia 
+                ? 'Allocate a dedicated +91 Indian HD voice line (Exotel) or set up smart forwarding for your AI Receptionist.' 
+                : 'Allocate a dedicated HD voice line (Twilio) or set up smart forwarding for your AI Receptionist.'}
             </p>
           </div>
         </div>

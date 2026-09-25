@@ -52,7 +52,18 @@ class Settings(BaseSettings):
     EXOTEL_API_KEY: str | None = None
     EXOTEL_API_TOKEN: str | None = None
     EXOTEL_PHONE_NUMBER: str | None = None
-    EXOTEL_SUBDOMAIN: str = "api.exotel.com"
+    # Meta WhatsApp Cloud API
+    META_WHATSAPP_TOKEN: str | None = None
+    META_WHATSAPP_PHONE_NUMBER_ID: str | None = None
+    META_WHATSAPP_VERIFY_TOKEN: str = "amsh_wa_verify_token_2026"
+    # Embedded Signup (per-business WABA onboarding via FB.login popup)
+    META_APP_ID: str = "2495665704244136"
+    META_APP_SECRET: str | None = None
+    META_GRAPH_VERSION: str = "v23.0"
+
+    # Razorpay Payments
+    RAZORPAY_KEY_ID: str | None = None
+    RAZORPAY_KEY_SECRET: str | None = None
 
 
 @lru_cache

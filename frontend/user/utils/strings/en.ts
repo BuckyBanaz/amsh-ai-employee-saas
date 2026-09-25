@@ -5,11 +5,11 @@ export const STRINGS = {
   },
   AUTH: {
     LAYOUT: {
-      LOGO: "Amsh",
+      LOGO: "AMSh",
       CHAT_USER: "Hi, I'd like to book a dental cleaning for next Tuesday afternoon.",
       CHAT_AI: "I can help with that! We have openings at 2:00 PM and 4:30 PM on Tuesday. Which works best?",
-      HERO_TITLE: "Empower your business with non-stop AI receptionist support.",
-      HERO_DESC: "Designed exclusively for businesses seeking operational elegance and infinite availability."
+      HERO_TITLE: "Your clinic's 24/7 AI employee.",
+      HERO_DESC: "AMSh answers calls, replies on WhatsApp and books appointments — even when your team is busy or the clinic is closed."
     },
     COMMON: {
       EMAIL_LABEL: "Work Email",
@@ -24,7 +24,7 @@ export const STRINGS = {
     },
     LOGIN: {
       TITLE: "Welcome back",
-      DESC: "Enter your credentials to access the Aira portal.",
+      DESC: "Enter your credentials to access the AMSh portal.",
       REMEMBER_ME: "Remember me",
       FORGOT_PASSWORD: "Forgot password?",
       SUBMIT: "Sign In",
@@ -33,7 +33,7 @@ export const STRINGS = {
     },
     REGISTER: {
       TITLE: "Create your account",
-      DESC: "Get started with your free trial of Aira.",
+      DESC: "Get started with your free trial of AMSh.",
       NAME_PLACEHOLDER: "Jane Doe",
       NEW_PASSWORD_PLACEHOLDER: "Create strong password",
       CONFIRM_PASSWORD_PLACEHOLDER: "Repeat your password",
@@ -275,7 +275,7 @@ export const STRINGS = {
   ONBOARDING: {
     SUCCESS: {
       TITLE: "Your AI Receptionist is ready!",
-      SUBTITLE: "Smile Dental Clinic is configured and ready for testing. Sarah is now on standby to manage appointments, call routing, and patient inquiries.",
+      SUBTITLE: "Your business is configured and ready for live operations. Your AI receptionist is now on standby to manage appointments, call routing, and caller inquiries.",
       TEST_BTN: "Test AI Receptionist",
       DASHBOARD_BTN: "Go to Dashboard",
     },
@@ -315,7 +315,7 @@ export const STRINGS = {
     },
     HOURS: {
       TITLE: "Set your business hours",
-      SUBTITLE: "Configure your standard operating schedule. Aira receptionist will only book patient appointments during active hours.",
+      SUBTITLE: "Configure your standard operating schedule. Amsh will only book patient appointments during active hours.",
       DAY_HEADER: "Day",
       TIME_RANGES_HEADER: "Operating Time Ranges",
       TO: "to",
@@ -358,7 +358,7 @@ export const STRINGS = {
     },
     INTEGRATIONS: {
       TITLE: "Connect your tools",
-      SUBTITLE: "Sync Aira with calendars, channels, and payment systems to establish a fully-automated modern practice pipeline.",
+      SUBTITLE: "Sync Amsh with calendars, channels, and payment systems to establish a fully-automated modern practice pipeline.",
       STATUS_CONNECTED: "Connected",
       BTN_MANAGE: "Manage",
       BTN_CONNECT: "Connect",

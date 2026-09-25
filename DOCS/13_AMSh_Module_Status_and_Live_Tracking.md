@@ -66,7 +66,10 @@ This document provides a single source of truth for tracking what is **Completed
 | **WhatsApp Webhook**| Meta WhatsApp Cloud API |  **DONE** | `GET/POST /api/v1/whatsapp/webhook` verification & inbound webhook handler in `integrations.py`. |
 | **Telephony Route**| Exotel Inbound Webhook |  **DONE** | `/api/voice/exotel/incoming`, `/api/voice/exotel/status` returning dynamic JSON for Exotel Voicebot Applet. |
 | **Schema Upgrade** | Agents Table Extended |  **DONE** | Added `primary_language`, `languages`, `greeting_message`, `config` columns to DB. |
-| **Appointments** | Bookings / Transactions API | ⏳ **PENDING** | Need dedicated `/api/businesses/{id}/appointments` CRUD with slot filtering and calendar view sync. |
+| **Appointments** | Bookings / Transactions API |  **DONE** | Dedicated `/api/businesses/{id}/appointments` full CRUD with slot/date filtering and calendar sync. |
+| **Billing & Payments** | Razorpay Gateway & Verification |  **DONE** | Server-to-server Razorpay order creation (`/api/billing/razorpay/create-order`) and HMAC SHA-256 signature verification (`/api/billing/razorpay/verify`). |
+| **Dashboard Stats** | Tenant Overview KPIs & Stream |  **DONE** | `/api/businesses/{id}/dashboard/stats` aggregating call totals, appointment counts, transfer rates, and recent activity. |
+| **Calls & Transcripts**| AI Calls & Logs API |  **DONE** | `/api/businesses/{id}/calls` and `/{call_id}` returning full multi-turn transcripts and latencies. |
 | **Admin API** | SuperAdmin Management API | ⏳ **PENDING** | Route `/api/admin` scaffolded; tenant suspension, global usage, and audit log endpoints need business logic. |
 | **Phone Numbers** | Provider Number Provisioning | ⏳ **PENDING** | API to link Exotel/Twilio numbers to business tenants with carrier forwarding instructions. |
 | **Post-Call Hook** | Automated Owner Notifications | ⏳ **PENDING** | Background worker dispatching SMS / Email summary to clinic staff when a call completes. |
@@ -91,7 +94,7 @@ This document provides a single source of truth for tracking what is **Completed
 | **Conversation UX**| **In-Flow FAQ / Services Answering** | ⚠️ **ATKA HUA (FIX IN PROGRESS)** | If caller asks "konsi services dete ho" during booking, AI must answer from DB service catalog before resuming slot collection. |
 | **Audio Latency** | **Greeting Pre-Buffering** | ⚠️ **ATKA HUA (FIX IN PROGRESS)** | Greeting audio has ~1.5-2.5s delay. Need pre-buffering (<100ms) welcome audio frames. |
 | **Interruption** | Barge-In / VAD Sensitivity | ⏳ **PENDING** | Tuning VAD thresholds for instant audio cancellation when user speaks over the AI. |
-| **Persistence** | PostgreSQL DB Booking Hook | ⏳ **PENDING** | Ensure `book_appointment` tool persists confirmed row directly into `appointments`/`transactions` DB table. |
+| **Persistence** | PostgreSQL DB Booking Hook |  **DONE** | `ClinicWriteOperations` (`store_appointment`, `update_appointment`, `delete_appointment`) and `ClinicReadOperations` (`get_appointments`, `get_appointment_by_id`) persist and query confirmed appointments directly into `transactions` DB table for both AI voice tool (`BookAppointmentTool`) and REST API. |
 
 ---
 
@@ -100,12 +103,18 @@ This document provides a single source of truth for tracking what is **Completed
 | Area | Feature / Task | Status | Details / Location |
 |---|---|---|---|
 | **Design System** | Clean Modern Layout |  **DONE** | Next.js 14, Tailwind CSS, Plus Jakarta Sans typography, light theme with dark accents. |
-| **Onboarding** | 8-Step Wizard Flow |  **DONE** | Business Info, Services, Staff, Hours, AI Receptionist, Knowledge Base, Integrations, Review. |
+| **Onboarding Wiring** | Real Data & APIs (100%) |  **DONE** | Eliminated all mock clinic data across 11 onboarding steps. Pulls & updates real tenant data via `OnboardingController` and `StorageService`. |
+| **Razorpay Checkout** | Real Order Creation & Payment |  **DONE** | `BillingController` and `checkout/page.tsx` wired with Razorpay modal, HMAC verification, and automatic tenant activation. |
 | **Terminology** | Multi-Vertical String Dictionary |  **DONE** | `utils/strings/en.ts` dynamically maps terminology (Doctor vs. Stylist vs. Table). |
-| **Dashboard** | Core Tenant Views |  **DONE** | Dashboard KPIs, Appointments Calendar, Call History, Customer CRM, Settings. |
+| **Dashboard Controller**| Centralized API Controller |  **DONE** | `DashboardController.ts` with typed methods (`getStats`, `getAppointments`, `getCalls`, `getServices`, `getStaff`, `getCustomers`). Zero raw fetch. |
+| **Tenant Identity** | Dynamic TopBar, Sidebar, Layout |  **DONE** | Dynamic business badge, location, greeting, current date, user profile & logout action. |
+| **Appointments Hub** | Live 7-Day Calendar & Future Sync |  **DONE** | Full 7-day week calendar (Mon-Sun), auto-jump to future appointment dates/weeks, dynamic date-picker navigation, `AppointmentsListView` with calendar sync, and elimination of all mock doctor/service options. |
+| **Calls & Recording Hub** | Live Calls, Player & Transcripts |  **DONE** | `/calls` fully wired: HTML5 Audio Recording Player (seek scrubber, speed toggle, timer, download), real multi-turn conversation transcripts (AI vs User chat bubbles), call summary, filters, and live DB loading. |
+| **Doctors & Staff Hub** | Live Roster & Staff Modal |  **DONE** | `/doctors` wired with live staff roster, specialty tags, role badges, and `NewStaffModal` allowing registration of doctors/practitioners. |
+| **Patients CRM Hub** | Live Patient Registry & Modal |  **DONE** | `/patients` wired with live patient records derived from transactions and calls, search filtering, and `NewPatientModal` for registering new patients. |
+| **Dashboard Tables** | Live Appointments & Empty States|  **DONE** | `AppointmentsTable` and `CallStreamsTable` wired to live DB records with graceful empty states. |
 | **Playground** | Interactive AI Test Playground |  **DONE** | `TestPlaygroundModal.tsx` supports scripted testing, free chat, and simulated call flow. |
 | **Compilation** | TypeScript Health |  **DONE** | 0 TypeScript errors platform-wide. |
-| **API Wiring** | Live Backend Connection | ⏳ **PENDING** | Connect Onboarding and Dashboard data fetching to real FastAPI backend endpoints. |
 | **Live Playground**| WebRTC In-Browser Audio Call | ⏳ **PENDING** | Stream browser microphone directly to `/api/voice` WebSocket for live testing without a phone call. |
 | **Realtime Alert** | Inbound Call Toast / Popup | ⏳ **PENDING** | Real-time WebSocket indicator showing active live call on the tenant dashboard. |
 

@@ -104,3 +104,10 @@ def delete_service(
     service = _get_service_or_404(business_id, service_id, db)
     db.delete(service)
     db.commit()
+
+
+dashboard_router = APIRouter(prefix="/api/businesses/{business_id}/services", tags=["services"])
+dashboard_router.add_api_route("", create_service, methods=["POST"], response_model=ServiceOut, status_code=status.HTTP_201_CREATED)
+dashboard_router.add_api_route("", list_services, methods=["GET"], response_model=list[ServiceOut])
+dashboard_router.add_api_route("/{service_id}", update_service, methods=["PATCH"], response_model=ServiceOut)
+dashboard_router.add_api_route("/{service_id}", delete_service, methods=["DELETE"], status_code=status.HTTP_204_NO_CONTENT)

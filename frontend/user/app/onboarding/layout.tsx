@@ -18,9 +18,18 @@ const ALL_STEPS = [
   { id: 11, name: 'Checkout', href: '/onboarding/checkout' },
 ];
 
+import { StorageService } from '../../services/storage.service';
+
 export default function OnboardingLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() || '';
-  
+
+  // Track and save active onboarding step for auto-resume
+  React.useEffect(() => {
+    if (pathname && pathname.startsWith('/onboarding') && !pathname.includes('success')) {
+      StorageService.setOnboardingStep(pathname);
+    }
+  }, [pathname]);
+
   // Default to Business (index 1) if we can't match the route
   let currentStepIndex = ALL_STEPS.findIndex(s => pathname.includes(s.href));
   if (currentStepIndex === -1) currentStepIndex = 1;

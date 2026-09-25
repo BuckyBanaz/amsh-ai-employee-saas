@@ -1,8 +1,30 @@
-import React from 'react';
+"use client";
+
+import React, { useEffect } from 'react';
 import Link from 'next/link';
 import { STRINGS } from '../../../utils/strings/en';
+import { StorageService } from '../../../services/storage.service';
 
 export default function OnboardingSuccessPage() {
+  const [bizName, setBizName] = React.useState('');
+  const [agentName, setAgentName] = React.useState('Your AI receptionist');
+
+  useEffect(() => {
+    StorageService.setOnboardingCompleted(true);
+    try {
+      const rawBiz = localStorage.getItem('onboarding_business_data');
+      if (rawBiz) {
+        const parsed = JSON.parse(rawBiz);
+        if (parsed.businessName || parsed.name) setBizName(parsed.businessName || parsed.name);
+      }
+      const rawAgent = localStorage.getItem('onboarding_ai_receptionist');
+      if (rawAgent) {
+        const parsed = JSON.parse(rawAgent);
+        if (parsed.aiName) setAgentName(parsed.aiName);
+      }
+    } catch (e) {}
+  }, []);
+
   return (
     <div className="w-full max-w-md mx-auto bg-white rounded-xl shadow-sm border border-gray-100 p-6 sm:p-8 text-center">
       
@@ -29,7 +51,8 @@ export default function OnboardingSuccessPage() {
       <div className="mb-6 space-y-2">
         <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight leading-snug" dangerouslySetInnerHTML={{ __html: STRINGS.ONBOARDING.SUCCESS.TITLE.replace('ready!', '<br />ready!') }} />
         <p className="text-xs sm:text-sm text-gray-500 leading-relaxed max-w-xs mx-auto">
-          {STRINGS.ONBOARDING.SUCCESS.SUBTITLE}
+          {bizName ? `${bizName} is configured and ready for live operations. ` : 'Your business is configured and ready. '}
+          {agentName} is on standby to manage incoming calls, appointments, and inquiries.
         </p>
       </div>
 

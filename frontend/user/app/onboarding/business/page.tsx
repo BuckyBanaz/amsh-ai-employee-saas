@@ -9,21 +9,46 @@ import { StorageService } from '../../../services/storage.service';
 export default function BusinessOnboardingPage() {
   const router = useRouter();
   const [formData, setFormData] = useState({
-    businessName: 'Smile Dental Clinic',
+    businessName: '',
     vertical: 'clinic',
-    country: 'United States',
-    address: '456 Medical Parkway, Suite 100',
-    website: 'https://www.smiledentalclinic.com',
-    city: 'Austin',
-    email: 'reception@smiledental.com',
-    postalCode: '78701',
-    phone: '+1 (555) 234-5678',
-    timezone: 'America/Chicago',
-    currency: 'USD',
+    country: 'India',
+    address: '',
+    website: '',
+    city: '',
+    email: '',
+    postalCode: '',
+    phone: '',
+    timezone: 'Asia/Kolkata',
+    currency: 'INR',
   });
   const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [savedLogoName, setSavedLogoName] = useState<string>('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  React.useEffect(() => {
+    try {
+      const saved = localStorage.getItem('onboarding_business_data');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        setFormData((prev) => ({ ...prev, ...parsed }));
+      }
+      const savedLogo = localStorage.getItem('onboarding_logo_name');
+      if (savedLogo) {
+        setSavedLogoName(savedLogo);
+      }
+    } catch (e) {
+      console.error('Failed to parse saved business data:', e);
+    }
+  }, []);
+
+  const handleLogoUpload = (file: File | null) => {
+    if (file) {
+      setLogoFile(file);
+      setSavedLogoName(file.name);
+      localStorage.setItem('onboarding_logo_name', file.name);
+    }
+  };
 
   const handleNext = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -97,9 +122,14 @@ export default function BusinessOnboardingPage() {
               onChange={(e) => setFormData({...formData, country: e.target.value})}
               className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#0066FF] focus:border-transparent transition-all appearance-none bg-white"
             >
-              <option>United States</option>
-              <option>Canada</option>
-              <option>United Kingdom</option>
+              <option value="India">India</option>
+              <option value="United States">United States</option>
+              <option value="United Arab Emirates">United Arab Emirates</option>
+              <option value="United Kingdom">United Kingdom</option>
+              <option value="Canada">Canada</option>
+              <option value="Australia">Australia</option>
+              <option value="Singapore">Singapore</option>
+              <option value="Germany">Germany</option>
             </select>
           </div>
 
@@ -223,9 +253,12 @@ export default function BusinessOnboardingPage() {
               type="file" 
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" 
               accept="image/png, image/jpeg"
-              onChange={(e) => setLogoFile(e.target.files?.[0] || null)}
+              onChange={(e) => {
+                const file = e.target.files?.[0] || null;
+                handleLogoUpload(file);
+              }}
             />
-            {logoFile ? (
+            {logoFile || savedLogoName ? (
               <div className="flex flex-col items-center">
                 <div className="w-10 h-10 mb-2 bg-[#E6FBF3] rounded-full flex items-center justify-center">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#10B981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -233,7 +266,7 @@ export default function BusinessOnboardingPage() {
                     <polyline points="22 4 12 14.01 9 11.01"></polyline>
                   </svg>
                 </div>
-                <p className="text-xs font-bold text-gray-900">{logoFile.name}</p>
+                <p className="text-xs font-bold text-gray-900">{logoFile?.name || savedLogoName}</p>
                 <p className="text-[11px] text-[#0066FF] mt-0.5 font-medium hover:underline">Click to change logo</p>
               </div>
             ) : (
@@ -253,22 +286,22 @@ export default function BusinessOnboardingPage() {
         </div>
 
         {/* Footer Buttons */}
-        <div className="pt-2 flex justify-between items-center border-t border-gray-100 mt-2">
+        <div className="pt-3 flex justify-between items-center border-t border-gray-100 mt-4">
           <button 
             type="button" 
             onClick={handleBack}
             disabled={loading}
-            className="text-gray-500 hover:text-gray-900 font-semibold text-xs px-4 py-2 transition-colors disabled:opacity-50"
+            className="text-gray-600 hover:text-gray-900 font-semibold text-xs px-4 py-2 transition-colors disabled:opacity-50"
           >
-            {STRINGS.ONBOARDING.BUSINESS.BACK}
+            Back
           </button>
           
           <button 
             type="submit" 
             disabled={loading}
-            className="bg-[#0066FF] hover:bg-[#0052cc] text-white font-medium px-6 py-2 rounded-lg text-sm transition-colors shadow-sm disabled:bg-blue-300"
+            className="bg-[#0066FF] hover:bg-[#0052cc] text-white font-bold px-6 py-2.5 rounded-lg text-sm transition-all shadow-sm disabled:bg-blue-300 min-w-[140px] flex items-center justify-center cursor-pointer"
           >
-            {loading ? 'Saving...' : STRINGS.ONBOARDING.BUSINESS.NEXT}
+            {loading ? 'Saving...' : 'Save & Next →'}
           </button>
         </div>
       </form>

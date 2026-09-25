@@ -1,16 +1,60 @@
 "use client";
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { STRINGS } from '../../utils/strings/en';
+import { StorageService } from '../../services/storage.service';
+import { DashboardController } from '../../controllers/dashboard.controller';
 
 interface AIHeaderProps {
   onTestClick?: () => void;
 }
 
-const MOCK_AI_NUMBER = '+1 (555) 018-2947';
-
 export function AIHeader({ onTestClick }: AIHeaderProps = {}) {
+  const [phoneNumber, setPhoneNumber] = useState('+91 80472 84627');
+  const [isOnline, setIsOnline] = useState(true);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [userInitials, setUserInitials] = useState('AM');
+
+  useEffect(() => {
+    const savedAiLine = typeof window !== 'undefined' ? localStorage.getItem('onboarding_telephony_phone') : null;
+    const business = StorageService.getBusiness();
+
+    if (savedAiLine) {
+      setPhoneNumber(savedAiLine);
+    } else if (business?.country === 'India' || business?.currency === 'INR') {
+      setPhoneNumber('+91 80472 84627');
+    } else {
+      setPhoneNumber('+1 (656) 254-7488');
+    }
+    const user = StorageService.getUser();
+    if (user?.name) {
+      const parts = user.name.trim().split(' ');
+      setUserInitials(parts.length > 1 ? (parts[0][0] + parts[1][0]).toUpperCase() : parts[0].slice(0, 2).toUpperCase());
+    }
+
+    DashboardController.getAgent()
+      .then((agent) => {
+        if (agent) {
+          setIsOnline(agent.status !== 'paused');
+        }
+      })
+      .catch((err) => console.warn('Failed to fetch agent status in header:', err));
+  }, []);
+
+  const handleToggleStatus = async () => {
+    try {
+      setIsUpdating(true);
+      const newStatus = isOnline ? 'paused' : 'active';
+      await DashboardController.updateAgent({ status: newStatus });
+      setIsOnline(!isOnline);
+    } catch (err) {
+      console.error('Failed to toggle agent status:', err);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
   return (
-    <header className="flex items-center justify-between mb-3 py-1">
+    <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 py-1">
       <div>
         <h1 className="text-xl font-bold text-gray-900 tracking-tight leading-tight">
           {STRINGS.DASHBOARD.HEADERS.AI.TITLE}
@@ -20,47 +64,63 @@ export function AIHeader({ onTestClick }: AIHeaderProps = {}) {
         </p>
       </div>
 
-      <div className="flex items-center gap-2.5">
-        {/* AI Number (Twilio) */}
+      <div className="flex flex-wrap items-center gap-2.5">
+        {/* AI Phone Line */}
         <div className="hidden md:flex items-center gap-2 px-2.5 py-1.5 border border-gray-200 bg-white rounded-lg shadow-2xs whitespace-nowrap">
-          <span className="text-[10px] text-gray-400 font-semibold">AI Number</span>
-          <span className="text-xs font-mono font-bold text-gray-900 tracking-tight">{MOCK_AI_NUMBER}</span>
+          <span className="text-[10px] text-gray-400 font-semibold">AI Line</span>
+          <span className="text-xs font-mono font-bold text-gray-900 tracking-tight">{phoneNumber}</span>
         </div>
 
         {/* Status Indicator */}
-        <div className="flex items-center gap-1.5 px-2.5 py-1.5 border border-gray-200 bg-white rounded-lg text-[10px] font-bold tracking-wider text-[#10B981] shadow-2xs uppercase whitespace-nowrap">
-          <div className="w-1.5 h-1.5 rounded-full bg-[#10B981]"></div>
-          {STRINGS.DASHBOARD.HEADERS.AI.STATUS_ONLINE}
+        <div className={`flex items-center gap-1.5 px-2.5 py-1.5 border rounded-lg text-[10px] font-bold tracking-wider shadow-2xs uppercase whitespace-nowrap ${
+          isOnline
+            ? 'border-emerald-200 bg-emerald-50/60 text-emerald-700'
+            : 'border-amber-200 bg-amber-50/60 text-amber-700'
+        }`}>
+          <div className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`}></div>
+          {isOnline ? STRINGS.DASHBOARD.HEADERS.AI.STATUS_ONLINE : 'AI PAUSED'}
         </div>
 
         {/* Test AI Button */}
         <button
           onClick={onTestClick}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0066FF] text-white rounded-lg text-xs font-semibold shadow-xs hover:bg-[#0052cc] transition-colors whitespace-nowrap"
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0066FF] text-white rounded-lg text-xs font-semibold shadow-xs hover:bg-[#0052cc] transition-colors whitespace-nowrap cursor-pointer"
         >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
             <polygon points="5 3 19 12 5 21 5 3"></polygon>
           </svg>
           {STRINGS.DASHBOARD.HEADERS.AI.BTN_TEST}
         </button>
 
-        {/* Pause AI Button */}
-        <button className="flex items-center gap-1.5 px-3 py-1.5 border border-[#EF4444] text-[#EF4444] bg-white rounded-lg text-xs font-semibold shadow-xs hover:bg-red-50 transition-colors whitespace-nowrap">
+        {/* Pause/Resume AI Button */}
+        <button
+          onClick={handleToggleStatus}
+          disabled={isUpdating}
+          className={`flex items-center gap-1.5 px-3 py-1.5 border rounded-lg text-xs font-semibold shadow-xs transition-colors whitespace-nowrap cursor-pointer disabled:opacity-50 ${
+            isOnline
+              ? 'border-[#EF4444] text-[#EF4444] bg-white hover:bg-red-50'
+              : 'border-[#10B981] text-[#10B981] bg-white hover:bg-emerald-50'
+          }`}
+        >
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="10"></circle>
-            <circle cx="12" cy="12" r="4"></circle>
+            {isOnline ? (
+              <>
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="10" y1="15" x2="10" y2="9"></line>
+                <line x1="14" y1="15" x2="14" y2="9"></line>
+              </>
+            ) : (
+              <>
+                <polygon points="5 3 19 12 5 21 5 3" fill="currentColor"></polygon>
+              </>
+            )}
           </svg>
-          {STRINGS.DASHBOARD.HEADERS.AI.BTN_PAUSE}
+          {isUpdating ? 'Updating...' : (isOnline ? STRINGS.DASHBOARD.HEADERS.AI.BTN_PAUSE : 'Resume AI')}
         </button>
 
-        {/* Notification Bell */}
-        <button className="w-8 h-8 rounded-full border border-gray-200 bg-white flex items-center justify-center text-gray-500 hover:bg-gray-50 transition-colors shadow-2xs">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
-        </button>
-
-        {/* Profile Circle */}
-        <div className="w-8 h-8 rounded-full bg-[#F0F7FF] text-[#0066FF] flex items-center justify-center font-bold text-xs cursor-pointer hover:bg-blue-100 transition-colors">
-          SW
+        {/* User Initials Badge */}
+        <div className="w-8 h-8 rounded-full bg-[#F0F7FF] text-[#0066FF] border border-blue-100 flex items-center justify-center font-bold text-xs">
+          {userInitials}
         </div>
       </div>
     </header>

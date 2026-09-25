@@ -68,7 +68,8 @@ def connect_integration(
             secured_config[sensitive_key] = CryptoManager.encrypt(secured_config[sensitive_key])
 
     integration.status = "connected"
-    integration.config = secured_config
+    # Merge so settings saved later don't wipe credentials from Embedded Signup
+    integration.config = {**(integration.config or {}), **secured_config}
     integration.connected_at = datetime.utcnow()
     db.commit()
     db.refresh(integration)
@@ -99,21 +100,174 @@ def disconnect_integration(
 
 
 # -----------------------------------------------------------------------------
+# Meta WhatsApp Embedded Signup (Coexistence: keep existing WhatsApp Business App number)
+# -----------------------------------------------------------------------------
+import secrets
+
+import httpx
+
+from backend.server.auth.crypto import CryptoManager
+from backend.server.common.config import get_settings
+
+
+class WhatsappEmbeddedSignup(BaseModel):
+    code: str
+    waba_id: str
+    phone_number_id: str
+    # True when the business kept its WhatsApp Business App number (coexistence);
+    # such numbers are already live and must not be re-registered.
+    coexistence: bool = False
+
+
+class WhatsappTestMessage(BaseModel):
+    to: str
+
+
+def _graph_url(path: str) -> str:
+    return f"https://graph.facebook.com/{get_settings().META_GRAPH_VERSION}/{path}"
+
+
+def _graph_error(resp: httpx.Response) -> str:
+    try:
+        err = resp.json().get("error", {})
+        return err.get("error_user_msg") or err.get("message") or resp.text
+    except ValueError:
+        return resp.text
+
+
+@router.post("/whatsapp/embedded-signup", response_model=IntegrationOut)
+async def whatsapp_embedded_signup(
+    business_id: str,
+    payload: WhatsappEmbeddedSignup,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    get_business_or_404(business_id, db)
+    require_owner_or_admin(business_id, current_user)
+    settings = get_settings()
+    if not settings.META_APP_SECRET:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="META_APP_SECRET is not configured on the server")
+
+    async with httpx.AsyncClient(timeout=20) as client:
+        # 1. Exchange the short-lived code from FB.login for a business integration token
+        resp = await client.get(
+            _graph_url("oauth/access_token"),
+            params={"client_id": settings.META_APP_ID, "client_secret": settings.META_APP_SECRET, "code": payload.code},
+        )
+        if resp.status_code != 200:
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Meta token exchange failed: {_graph_error(resp)}")
+        access_token = resp.json()["access_token"]
+        auth = {"Authorization": f"Bearer {access_token}"}
+
+        # 2. Subscribe our app to the WABA so inbound messages hit our webhook
+        resp = await client.post(_graph_url(f"{payload.waba_id}/subscribed_apps"), headers=auth)
+        if resp.status_code != 200:
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Webhook subscription failed: {_graph_error(resp)}")
+
+        # 3. New numbers must be registered on Cloud API before they can send
+        pin = None
+        if not payload.coexistence:
+            pin = f"{secrets.randbelow(10**6):06d}"
+            resp = await client.post(
+                _graph_url(f"{payload.phone_number_id}/register"),
+                headers=auth,
+                json={"messaging_product": "whatsapp", "pin": pin},
+            )
+            if resp.status_code != 200:
+                raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Phone number registration failed: {_graph_error(resp)}")
+
+        # 4. Fetch the connected number for display
+        resp = await client.get(
+            _graph_url(payload.phone_number_id),
+            params={"fields": "display_phone_number,verified_name"},
+            headers=auth,
+        )
+        number_info = resp.json() if resp.status_code == 200 else {}
+
+    integration = (
+        db.query(Integration)
+        .filter(Integration.business_id == business_id, Integration.provider == "whatsapp")
+        .first()
+    )
+    if not integration:
+        integration = Integration(business_id=business_id, provider="whatsapp")
+        db.add(integration)
+
+    integration.status = "connected"
+    integration.config = {
+        **(integration.config or {}),
+        "mode": "embedded_signup",
+        "waba_id": payload.waba_id,
+        "phone_number_id": payload.phone_number_id,
+        "display_phone_number": number_info.get("display_phone_number"),
+        "verified_name": number_info.get("verified_name"),
+        "access_token": CryptoManager.encrypt(access_token),
+        "coexistence": payload.coexistence,
+        **({"two_step_pin": CryptoManager.encrypt(pin)} if pin else {}),
+    }
+    integration.connected_at = datetime.utcnow()
+    db.commit()
+    db.refresh(integration)
+    return integration
+
+
+@router.post("/whatsapp/test-message")
+async def whatsapp_test_message(
+    business_id: str,
+    payload: WhatsappTestMessage,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    get_business_or_404(business_id, db)
+    require_owner_or_admin(business_id, current_user)
+    integration = (
+        db.query(Integration)
+        .filter(Integration.business_id == business_id, Integration.provider == "whatsapp")
+        .first()
+    )
+    config = (integration.config or {}) if integration else {}
+    if not config.get("access_token") or not config.get("phone_number_id"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="WhatsApp is not connected via Meta yet")
+
+    to = "".join(ch for ch in payload.to if ch.isdigit())
+    async with httpx.AsyncClient(timeout=20) as client:
+        # Free-form text only delivers inside the 24h customer-service window;
+        # the recipient must have messaged this number recently.
+        resp = await client.post(
+            _graph_url(f"{config['phone_number_id']}/messages"),
+            headers={"Authorization": f"Bearer {CryptoManager.decrypt(config['access_token'])}"},
+            json={
+                "messaging_product": "whatsapp",
+                "to": to,
+                "type": "text",
+                "text": {"body": "✅ Test message from Amsh: your WhatsApp is connected!"},
+            },
+        )
+    if resp.status_code != 200:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Meta send failed: {_graph_error(resp)}")
+    return {"success": True, "message_id": resp.json().get("messages", [{}])[0].get("id")}
+
+
+# -----------------------------------------------------------------------------
 # Meta WhatsApp Cloud API Webhook Endpoints
 # -----------------------------------------------------------------------------
 wa_webhook_router = APIRouter(prefix="/api/v1/whatsapp/webhook", tags=["whatsapp-webhook"])
 
 
+from fastapi import Query, Response
+
 @wa_webhook_router.get("")
 def verify_whatsapp_webhook(
-    hub_mode: str | None = None,
-    hub_challenge: str | None = None,
-    hub_verify_token: str | None = None,
+    hub_mode: str | None = Query(None, alias="hub.mode"),
+    hub_challenge: str | None = Query(None, alias="hub.challenge"),
+    hub_verify_token: str | None = Query(None, alias="hub.verify_token"),
 ):
-    """Meta Webhook Challenge Verification (GET)."""
-    expected_verify_token = "amsh_wa_verify_token_2026"
-    if hub_mode == "subscribe" and hub_verify_token == expected_verify_token:
-        return int(hub_challenge) if hub_challenge and hub_challenge.isdigit() else hub_challenge
+    """Meta Webhook Challenge Verification (GET). Accepts hub.mode, hub.challenge, hub.verify_token."""
+    from backend.server.common.config import get_settings
+    settings = get_settings()
+    valid_tokens = {"amsh_whatsapp_secret_token_2026", "amsh_wa_verify_token_2026", settings.META_WHATSAPP_VERIFY_TOKEN}
+    if hub_mode == "subscribe" and hub_verify_token in valid_tokens:
+        return Response(content=hub_challenge or "", media_type="text/plain")
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid verify token")
 
 

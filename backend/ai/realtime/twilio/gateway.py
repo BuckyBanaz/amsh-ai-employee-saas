@@ -17,11 +17,17 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from backend.ai.engine.conversation.state_machine import ConversationStateMachine, load_agent_settings, load_business_context, load_tone
+from backend.ai.engine.conversation.states import CallState
 from backend.ai.llm.client import llm_client
 from backend.ai.memory.session_memory import session_memory
 from backend.ai.realtime.audio.mulaw import FRAME_BYTES, FRAME_DURATION_S, PCM_FRAME_BYTES, frame_stream
 from backend.ai.realtime.barge_in.coordinator import BargeInCoordinator
 from backend.ai.realtime.twilio.call_control import redirect_call
+from backend.server.services.call_recorder import (
+    record_call_start,
+    record_call_turn,
+    record_call_end,
+)
 from backend.ai.realtime.vad.detector import SimpleVAD
 from backend.ai.speech.stt.deepgram import DeepgramLiveConnection
 from backend.ai.speech.tts.cartesia import cartesia_tts
@@ -93,6 +99,14 @@ class CallSession:
         print(f"🤖 AI GREETING: \"{greeting}\"", flush=True)
         print(f"========================================================\n", flush=True)
         logger.info(f"[TWILIO WS] Started call {call_id} for business {self.business_id}")
+
+        await asyncio.to_thread(
+            record_call_start,
+            call_id=call_id,
+            business_id=self.business_id,
+            caller_number=self.caller_number,
+            greeting=greeting,
+        )
 
         # Connect STT in the background with country-aware accent recognition
         stt_lang = self.agent_settings.get("stt_language") or (
@@ -167,6 +181,14 @@ class CallSession:
         if bot_text:
             await self._speak_turn(bot_text)
 
+        await asyncio.to_thread(
+            record_call_turn,
+            call_id=self.call_id,
+            user_transcript=transcript,
+            bot_response=bot_text,
+            turn_sequence=self.state_machine.sequence,
+        )
+
         if result.get("should_transfer"):
             twiml = (result.get("tool_result") or {}).get("twiml")
             if twiml and self.call_id:
@@ -231,6 +253,26 @@ class CallSession:
             self._stt_task.cancel()
         if self.stt:
             await self.stt.close()
+        if self.call_id and self.state_machine:
+            try:
+                intent_name = self.state_machine.current_intent.name if self.state_machine.current_intent else None
+                slots = self.state_machine.collected_slots or {}
+                caller_name = slots.get("patient_name") or slots.get("customer_name")
+                outcome = "transferred" if self.state_machine.current_state == CallState.ESCALATED else "resolved"
+                summary = (
+                    f"AI Receptionist assisted {caller_name or self.caller_number}. "
+                    f"Intent: {intent_name or 'Inquiry'}. Outcome: {outcome}."
+                )
+                await asyncio.to_thread(
+                    record_call_end,
+                    call_id=self.call_id,
+                    outcome=outcome,
+                    summary=summary,
+                    intent=intent_name,
+                    caller_name=caller_name,
+                )
+            except Exception as e:
+                logger.error(f"[WS GATEWAY] Failed to persist call end for {self.call_id}: {e}")
         if self.call_id:
             session_memory.remove_session(self.call_id)
 
@@ -319,7 +361,13 @@ async def simulate_voice_turn(
         )
         session_memory.store_session(call_id, state_machine)
         # Advance initial greeting
-        state_machine.start_call()
+        initial_greeting = state_machine.start_call()
+        record_call_start(
+            call_id=call_id,
+            business_id=payload.business_id,
+            caller_number=payload.caller_number,
+            greeting=initial_greeting,
+        )
 
     # Extract intent & slots via LLM
     available_intents = [
@@ -338,6 +386,27 @@ async def simulate_voice_turn(
         extracted_intent=extracted.get("intent"),
         extracted_slots=extracted.get("slots"),
     )
+
+    bot_resp = result.get("bot_response") or ""
+    record_call_turn(
+        call_id=call_id,
+        user_transcript=payload.user_transcript,
+        bot_response=bot_resp,
+        turn_sequence=state_machine.sequence,
+    )
+
+    if result.get("should_hangup") or result.get("should_transfer"):
+        intent_name = state_machine.current_intent.name if state_machine.current_intent else None
+        slots = state_machine.collected_slots or {}
+        caller_name = slots.get("patient_name") or slots.get("customer_name")
+        outcome = "transferred" if result.get("should_transfer") else "resolved"
+        record_call_end(
+            call_id=call_id,
+            outcome=outcome,
+            summary=f"Playground simulation: {intent_name or 'General Discussion'}",
+            intent=intent_name,
+            caller_name=caller_name,
+        )
 
     return {
         "call_id": call_id,

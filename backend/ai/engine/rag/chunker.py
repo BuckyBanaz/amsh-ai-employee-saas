@@ -12,7 +12,7 @@ class SemanticChunker:
         self.min_chunk_size = min_chunk_size
         self.overlap = overlap
 
-    def chunk_text(self, text: str, source_id: str | None = None) -> list[dict]:
+    def chunk_text(self, text: str, source_id: str | None = None, source_name: str | None = None) -> list[dict]:
         """Splits raw document or website text into clean semantic chunks with metadata."""
         if not text or not text.strip():
             return []
@@ -34,7 +34,7 @@ class SemanticChunker:
                         current_chunk = f"{current_chunk} {sentence}".strip()
                     else:
                         if len(current_chunk) >= self.min_chunk_size:
-                            chunks.append(self._make_chunk_item(current_chunk, chunk_index, source_id))
+                            chunks.append(self._make_chunk_item(current_chunk, chunk_index, source_id, source_name))
                             chunk_index += 1
                             # Retain overlap from end of previous chunk
                             current_chunk = current_chunk[-self.overlap:] + " " + sentence
@@ -45,21 +45,22 @@ class SemanticChunker:
                     current_chunk = f"{current_chunk}\n\n{para}".strip()
                 else:
                     if len(current_chunk) >= self.min_chunk_size:
-                        chunks.append(self._make_chunk_item(current_chunk, chunk_index, source_id))
+                        chunks.append(self._make_chunk_item(current_chunk, chunk_index, source_id, source_name))
                         chunk_index += 1
                         current_chunk = current_chunk[-self.overlap:] + "\n\n" + para
                     else:
                         current_chunk = f"{current_chunk}\n\n{para}".strip()
 
         if current_chunk.strip():
-            chunks.append(self._make_chunk_item(current_chunk.strip(), chunk_index, source_id))
+            chunks.append(self._make_chunk_item(current_chunk.strip(), chunk_index, source_id, source_name))
 
         return chunks
 
-    def _make_chunk_item(self, text: str, index: int, source_id: str | None) -> dict:
+    def _make_chunk_item(self, text: str, index: int, source_id: str | None, source_name: str | None = None) -> dict:
         return {
             "chunk_id": f"{source_id or 'doc'}_chunk_{index}",
             "source_id": source_id,
+            "source_name": source_name or "Knowledge Base",
             "text": text,
             "char_count": len(text),
         }

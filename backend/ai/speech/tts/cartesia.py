@@ -19,9 +19,9 @@ class CartesiaTTS:
         self.settings = get_settings()
         self.api_key = getattr(self.settings, "CARTESIA_API_KEY", "")
         # Cartesia Sonic model & Voice ID
-        self.model_id = "sonic-3"
+        self.model_id = "sonic-3.5"
         self.voice_id = "a631bc8b-ea1c-49bb-8dab-7a118afd11b8"
-        self.api_version = "2025-04-16"
+        self.api_version = "2024-11-13"
         # Reused across calls: skips TCP+TLS setup (~100-200ms) per utterance.
         self._client = httpx.AsyncClient(timeout=10.0)
         # Full-audio cache for the scripted prompts (greeting, slot questions) that

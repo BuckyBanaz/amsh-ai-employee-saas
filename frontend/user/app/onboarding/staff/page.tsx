@@ -6,38 +6,7 @@ import { STRINGS } from '../../../utils/strings/en';
 import { OnboardingController } from '../../../controllers/onboarding.controller';
 import { StorageService } from '../../../services/storage.service';
 
-const initialStaffMembers = [
-  {
-    id: 1,
-    initials: 'DSW',
-    name: 'Dr. Sarah Wilson',
-    role: 'Doctor',
-    specialty: 'General Dentistry',
-    email: 'sarah@smileclinic.com',
-    phone: '+1 (555) 019-2831',
-    treatments: ['Dental Consultation', 'Teeth Whitening'],
-  },
-  {
-    id: 2,
-    initials: 'DJM',
-    name: 'Dr. John Miller',
-    role: 'Doctor',
-    specialty: 'Orthodontics',
-    email: 'john@smileclinic.com',
-    phone: '+1 (555) 019-2831',
-    treatments: ['Dental Cleaning', 'Braces Check'],
-  },
-  {
-    id: 3,
-    initials: 'DEC',
-    name: 'Dr. Emily Carter',
-    role: 'Doctor',
-    specialty: 'Cosmetic Dentistry',
-    email: 'emily@smileclinic.com',
-    phone: '+1 (555) 019-2831',
-    treatments: ['Teeth Whitening', 'Veneers Consultation'],
-  },
-];
+const initialStaffMembers: any[] = [];
 
 export default function StaffOnboardingPage() {
   const router = useRouter();
@@ -52,8 +21,35 @@ export default function StaffOnboardingPage() {
   const [editForm,  setEditForm]  = useState<StaffForm>(emptyForm);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [availableServices, setAvailableServices] = useState<string[]>([]);
 
-  const mockServices = ['Dental Consultation', 'Dental Cleaning', 'Teeth Whitening', 'Root Canal'];
+  React.useEffect(() => {
+    try {
+      const savedServices = localStorage.getItem('onboarding_services') || localStorage.getItem('onboarding_services_data');
+      if (savedServices) {
+        const parsed = JSON.parse(savedServices);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setAvailableServices(parsed.map((s: any) => s.title));
+        }
+      }
+    } catch (e) {}
+  }, []);
+
+  React.useEffect(() => {
+    const savedStaff = localStorage.getItem('onboarding_staff');
+    if (savedStaff) {
+      try {
+        setStaffList(JSON.parse(savedStaff));
+      } catch (e) {
+        console.error('Failed to parse saved staff:', e);
+      }
+    }
+  }, []);
+
+  React.useEffect(() => {
+    localStorage.setItem('onboarding_staff', JSON.stringify(staffList));
+    localStorage.setItem('onboarding_staff_data', JSON.stringify(staffList));
+  }, [staffList]);
 
   // ── Add ──────────────────────────────────────────────────────────────
   const handleAddStaff = () => {
@@ -133,7 +129,7 @@ export default function StaffOnboardingPage() {
         <div>
           <label className="text-[11px] font-semibold text-gray-700 mb-1 block">Full Name</label>
           <input type="text" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}
-            placeholder="e.g. Dr. Sarah Wilson" autoFocus
+            placeholder="e.g. Dr. John Doe" autoFocus
             className="w-full px-3 py-1.5 rounded-md border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#0066FF] text-xs" />
         </div>
         <div>
@@ -164,7 +160,7 @@ export default function StaffOnboardingPage() {
         <div className="md:col-span-2">
           <label className="text-[11px] font-semibold text-gray-700 mb-1.5 block">Assign Treatments</label>
           <div className="flex flex-wrap gap-1.5">
-            {mockServices.map(t => (
+            {availableServices.map(t => (
               <button key={t} type="button" onClick={() => toggleTreatment(form, setForm, t)}
                 className={`text-xs font-medium px-2.5 py-1 rounded-full border transition-colors ${
                   form.treatments.includes(t) ? 'bg-[#0066FF] text-white border-[#0066FF]' : 'bg-white text-gray-600 border-gray-200 hover:border-[#0066FF] hover:text-[#0066FF]'
@@ -256,7 +252,7 @@ export default function StaffOnboardingPage() {
                   <div>
                     <p className="text-[11px] font-semibold text-gray-900 uppercase tracking-wide mb-1.5">{STRINGS.ONBOARDING.STAFF.ASSIGNED_TREATMENTS}</p>
                     <div className="flex flex-wrap gap-1.5">
-                      {staff.treatments.map((t, idx) => (
+                      {staff.treatments.map((t: string, idx: number) => (
                         <span key={idx} className="bg-gray-50 text-gray-700 border border-gray-200 text-[10px] font-medium px-2 py-0.5 rounded">{t}</span>
                       ))}
                     </div>
@@ -267,6 +263,22 @@ export default function StaffOnboardingPage() {
           </div>
         ))}
 
+        {staffList.length === 0 && !isAdding && (
+          <div className="text-center py-8 px-4 border border-dashed border-gray-200 rounded-xl bg-gray-50/50 space-y-2 mb-3">
+            <div className="w-10 h-10 rounded-full bg-blue-50 text-[#0066FF] flex items-center justify-center mx-auto">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                <circle cx="9" cy="7" r="4"></circle>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+              </svg>
+            </div>
+            <h3 className="text-xs font-bold text-gray-800">No Staff Members Added Yet</h3>
+            <p className="text-[11px] text-gray-500 max-w-sm mx-auto">
+              Add your practitioners, doctors, or team members so appointments can be assigned to them.
+            </p>
+          </div>
+        )}
 
         {isAdding ? (
           <div className="border-2 border-[#0066FF] rounded-xl p-4 bg-blue-50/30">

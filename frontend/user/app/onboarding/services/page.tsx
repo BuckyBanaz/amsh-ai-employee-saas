@@ -35,11 +35,7 @@ type Service = {
   price_amount: number;
 };
 
-const initialServices: Service[] = [
-  { id: 1, title: 'Dental Consultation', description: 'Standard clinic appointment slot', duration_minutes: 30,  price_amount: 50  },
-  { id: 2, title: 'Dental Cleaning',     description: 'Professional teeth cleaning',      duration_minutes: 45,  price_amount: 80  },
-  { id: 3, title: 'Teeth Whitening',     description: 'In-office whitening treatment',    duration_minutes: 60,  price_amount: 150 },
-];
+const initialServices: Service[] = [];
 
 const emptyForm = { title: '', description: '', duration_minutes: 30, price_amount: '' as number | '' };
 
@@ -60,7 +56,21 @@ export default function ServicesOnboardingPage() {
       const map: Record<string, string> = { USD: '$', EUR: '€', GBP: '£', INR: '₹', CAD: '$', AUD: '$' };
       setCurrencySymbol(map[saved] || '$');
     }
+
+    const savedServices = localStorage.getItem('onboarding_services');
+    if (savedServices) {
+      try {
+        setServicesList(JSON.parse(savedServices));
+      } catch (e) {
+        console.error('Failed to parse saved services:', e);
+      }
+    }
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem('onboarding_services', JSON.stringify(servicesList));
+    localStorage.setItem('onboarding_services_data', JSON.stringify(servicesList));
+  }, [servicesList]);
 
   // ── Add ──────────────────────────────────────────────────────────────
   const handleAddService = () => {
@@ -107,13 +117,14 @@ export default function ServicesOnboardingPage() {
     setError('');
 
     try {
-      // Create all services sequentially (or in parallel)
+      const currency = localStorage.getItem('onboarding_currency') || 'INR';
       for (const svc of servicesList) {
         await OnboardingController.createService(businessId, {
-          name: svc.title,
-          description: svc.description,
-          duration_minutes: svc.duration_minutes,
-          price: svc.price_amount,
+          title: svc.title,
+          description: svc.description || '',
+          duration_minutes: Number(svc.duration_minutes) || 30,
+          price_amount: Number(svc.price_amount) || 0,
+          price_currency: currency,
         });
       }
       router.push('/onboarding/staff');
@@ -206,6 +217,20 @@ export default function ServicesOnboardingPage() {
       {error && <div className="mb-4 text-red-500 text-xs font-medium p-2.5 bg-red-50 rounded-lg border border-red-100">{error}</div>}
 
       <div className="space-y-3 mb-6">
+        {servicesList.length === 0 && !isAdding && (
+          <div className="text-center py-8 px-4 border border-dashed border-gray-200 rounded-xl bg-gray-50/50 space-y-2">
+            <div className="w-10 h-10 rounded-full bg-blue-50 text-[#0066FF] flex items-center justify-center mx-auto">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+                <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+              </svg>
+            </div>
+            <h3 className="text-xs font-bold text-gray-800">No Services Added Yet</h3>
+            <p className="text-[11px] text-gray-500 max-w-sm mx-auto">
+              Add the consultation, treatment, or appointment types your business provides.
+            </p>
+          </div>
+        )}
         {servicesList.map((service) => (
           <div key={service.id} className="border border-gray-200 rounded-lg overflow-hidden hover:border-gray-300 transition-colors bg-white group">
 

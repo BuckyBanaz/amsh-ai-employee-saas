@@ -30,6 +30,7 @@ def _format_call(call: Call, include_messages: bool = False) -> Dict[str, Any]:
         "summary": call.summary or "Call completed.",
         "duration_seconds": call.duration_seconds or 0,
         "latency_ms": call.latency_ms or 180,
+        "recording_url": call.recording_url,
         "started_at": call.started_at.isoformat() if call.started_at else None,
         "ended_at": call.ended_at.isoformat() if call.ended_at else None,
     }

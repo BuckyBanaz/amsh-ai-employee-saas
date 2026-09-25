@@ -100,3 +100,7 @@ def create_customer(
         "last_visit": new_tx.created_at.strftime("%Y-%m-%d"),
         "status": "active",
     }
+
+
+patients_router = APIRouter(prefix="/api/businesses/{business_id}/patients", tags=["customers"])
+patients_router.add_api_route("", list_customers, methods=["GET"], response_model=List[Dict[str, Any]])

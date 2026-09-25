@@ -3,6 +3,8 @@ import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { STRINGS } from '../../utils/strings/en';
+import { StorageService } from '../../services/storage.service';
+import { DashboardController } from '../../controllers/dashboard.controller';
 
 const navGroups = [
   {
@@ -70,6 +72,32 @@ interface SidebarProps {
 
 export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
   const pathname = usePathname();
+  const [business, setBusiness] = React.useState<any>(null);
+  const [user, setUser] = React.useState<any>(null);
+
+  React.useEffect(() => {
+    const cachedBusiness = StorageService.getBusiness();
+    const cachedUser = StorageService.getUser();
+    if (cachedBusiness) setBusiness(cachedBusiness);
+    if (cachedUser) setUser(cachedUser);
+
+    DashboardController.getBusinessInfo()
+      .then((b) => {
+        if (b) setBusiness(b);
+      })
+      .catch(() => {});
+  }, []);
+
+  const businessName = business?.name || 'My Business';
+  const businessLocation = [business?.city, business?.country].filter(Boolean).join(', ') || 'Online Console';
+  const userName = user?.full_name || user?.name || user?.email?.split('@')[0] || 'Business Owner';
+  const userEmail = user?.email || 'owner@amsh.ai';
+  const userInitials = (userName.slice(0, 2) || 'BO').toUpperCase();
+
+  const handleLogout = () => {
+    StorageService.clearAll();
+    window.location.href = '/login';
+  };
 
   const sidebarContent = (
     <div className="flex flex-col h-full w-full">
@@ -99,14 +127,12 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
           )}
         </div>
 
-        <div className="w-full flex items-center justify-between px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-md cursor-pointer hover:bg-gray-100 transition-colors">
-          <div>
-            <h3 className="text-xs font-bold text-gray-900 leading-tight">Smile Dental Clinic</h3>
-            <p className="text-[10px] text-gray-500 font-medium">Amsterdam, NL</p>
+        <div className="w-full flex items-center justify-between px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-md">
+          <div className="min-w-0 pr-2">
+            <h3 className="text-xs font-bold text-gray-900 leading-tight truncate">{businessName}</h3>
+            <p className="text-[10px] text-gray-500 font-medium truncate">{businessLocation}</p>
           </div>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-gray-500">
-            <polyline points="6 9 12 15 18 9"></polyline>
-          </svg>
+          <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 shrink-0" title="Active"></span>
         </div>
       </div>
 
@@ -155,14 +181,27 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
 
       {/* Bottom Profile */}
       <div className="p-3 border-t border-gray-100 mt-auto">
-        <div className="flex items-center gap-2.5 cursor-pointer hover:bg-gray-50 p-1.5 rounded-md transition-colors">
-          <div className="w-7 h-7 rounded-full bg-[#F0F7FF] text-[#0066FF] flex items-center justify-center font-bold text-xs">
-            SW
+        <div className="flex items-center justify-between p-1.5 rounded-md hover:bg-gray-50 transition-colors">
+          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+            <div className="w-7 h-7 rounded-full bg-[#F0F7FF] text-[#0066FF] flex items-center justify-center font-bold text-xs shrink-0">
+              {userInitials}
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <h2 className="text-xs font-bold text-gray-900 truncate">{userName}</h2>
+              <p className="text-[10px] text-gray-500 truncate">{userEmail}</p>
+            </div>
           </div>
-          <div className="flex-1 overflow-hidden">
-            <h2 className="text-xs font-bold text-gray-900 truncate">Dr. Sarah Wilson</h2>
-            <p className="text-[10px] text-gray-500 truncate">sarah@smileclinic.com</p>
-          </div>
+          <button
+            onClick={handleLogout}
+            title="Log out"
+            className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors ml-1"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+              <polyline points="16 17 21 12 16 7"></polyline>
+              <line x1="21" y1="12" x2="9" y2="12"></line>
+            </svg>
+          </button>
         </div>
       </div>
     </div>

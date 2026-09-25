@@ -2,9 +2,23 @@
 
 import React, { useState } from 'react';
 import { Sidebar } from '../../components/dashboard/Sidebar';
+import { StorageService } from '../../services/storage.service';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [businessName, setBusinessName] = useState<string>('My Business');
+  const [initials, setInitials] = useState<string>('BO');
+
+  React.useEffect(() => {
+    const cachedB = StorageService.getBusiness();
+    if (cachedB?.name) setBusinessName(cachedB.name);
+
+    const cachedU = StorageService.getUser();
+    if (cachedU) {
+      const name = cachedU.full_name || cachedU.name || cachedU.email?.split('@')[0] || '';
+      setInitials(name.slice(0, 2).toUpperCase() || 'BO');
+    }
+  }, []);
 
   return (
     <div className="flex h-screen bg-[#F9FAFB] font-sans antialiased text-gray-900 overflow-hidden">
@@ -42,10 +56,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold text-gray-600 truncate max-w-[120px] sm:max-w-[180px]">
-              Smile Dental Clinic
+              {businessName}
             </span>
             <div className="w-7 h-7 rounded-full bg-[#E0E7FF] text-[#0066FF] flex items-center justify-center text-xs font-bold">
-              SW
+              {initials}
             </div>
           </div>
         </header>

@@ -37,6 +37,18 @@ class AnswerFaqTool(BaseTool):
             
             services_text = ", ".join([f"{s['title']} ({s.get('price', 'price varies')})" for s in services]) or "various treatments"
             doctors_text = ", ".join([d["name"] for d in doctors]) or "our experienced staff"
+
+            # Retrieve top matching snippets from RAG Knowledge Base (<50ms)
+            rag_snippets = []
+            try:
+                from backend.server.api.routes.knowledge import ensure_business_indexed
+                from backend.ai.engine.rag.retriever import rag_retriever
+                ensure_business_indexed(context.business_id, context.db, force_reload=False)
+                rag_snippets = rag_retriever.retrieve_snippets(context.business_id, context.user_transcript, top_k=3)
+            except Exception as rag_err:
+                logger.warning(f"RAG lookup in answer_faq: {rag_err}")
+
+            rag_text = "\n".join([f"- {s}" for s in rag_snippets]) if rag_snippets else "None"
             
             system_prompt = f"""
 You are the AI Receptionist for {business.name}.
@@ -46,6 +58,9 @@ Services Offered: {services_text}
 Doctors Available: {doctors_text}
 Country: {business.country}
 Timezone: {business.timezone}
+
+Relevant Knowledge Base & Policy Snippets:
+{rag_text}
 
 If the user's question cannot be answered using this information, politely state that you can help with scheduling appointments or they can speak to the front desk.
 Respond in the language the user is speaking in (Hindi, English, or Hinglish).
