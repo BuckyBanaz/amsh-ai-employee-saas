@@ -59,7 +59,11 @@ async def trigger_test_call(payload: CallMeRequest, db: Session = Depends(get_db
     # Resolve business_id – use payload value or fall back to latest active business
     business_id = payload.business_id
     if not business_id:
-        biz = db.execute(select(Business).order_by(Business.created_at.desc())).scalars().first()
+        biz = db.execute(
+            select(Business)
+            .where(Business.status == "active")
+            .order_by(Business.created_at.desc())
+        ).scalars().first()
         if biz:
             business_id = biz.id
 

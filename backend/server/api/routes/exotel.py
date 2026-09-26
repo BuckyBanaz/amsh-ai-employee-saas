@@ -64,8 +64,15 @@ async def handle_exotel_incoming_call(
         )
 
     if not business:
-        # Fallback to latest registered business
-        business = db.execute(select(Business).order_by(Business.created_at.desc())).scalars().first()
+        # Fallback: pick the most-recently-created ACTIVE business
+        business = db.execute(
+            select(Business)
+            .where(Business.status == "active")
+            .order_by(Business.created_at.desc())
+        ).scalars().first()
+        # Last resort: any business
+        if not business:
+            business = db.execute(select(Business).order_by(Business.created_at.desc())).scalars().first()
 
     if not business:
         logger.warning(f"[EXOTEL INCOMING] No business found for call {call_sid}")
