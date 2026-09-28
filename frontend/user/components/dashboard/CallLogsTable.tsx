@@ -2,6 +2,7 @@
 import React from 'react';
 import { STRINGS } from '../../utils/strings/en';
 import { CallLogItem } from '../../controllers/dashboard.controller';
+import { ShimmerBlock } from '../common/ShimmerSkeleton';
 
 interface CallLogsTableProps {
   calls: CallLogItem[];
@@ -62,14 +63,49 @@ export function CallLogsTable({
           </thead>
           <tbody className="divide-y divide-gray-50 text-xs">
             {isLoading ? (
-              <tr>
-                <td colSpan={7} className="px-4 py-12 text-center text-xs text-gray-400">
-                  <div className="flex items-center justify-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-[#0066FF] animate-ping"></span>
-                    <span>Loading call history...</span>
-                  </div>
-                </td>
-              </tr>
+              Array.from({ length: 6 }).map((_, i) => {
+                const delay = ((i % 4) + 1) as 1 | 2 | 3 | 4;
+                return (
+                  <tr key={i} className="hover:bg-gray-50/30 transition-colors">
+                    {/* Caller */}
+                    <td className="px-3.5 py-3 whitespace-nowrap">
+                      <div className="flex items-center gap-2.5">
+                        <ShimmerBlock delay={delay} className="w-7 h-7 rounded-full shrink-0" />
+                        <div className="space-y-1.5">
+                          <ShimmerBlock delay={delay} className="h-3.5 w-24 rounded-md" />
+                          <ShimmerBlock delay={delay} className="h-2.5 w-16 rounded-md opacity-60" />
+                        </div>
+                      </div>
+                    </td>
+                    {/* Date */}
+                    <td className="px-3.5 py-3 whitespace-nowrap">
+                      <ShimmerBlock delay={delay} className="h-3 w-16 rounded-md" />
+                    </td>
+                    {/* Time */}
+                    <td className="px-3.5 py-3 whitespace-nowrap">
+                      <ShimmerBlock delay={delay} className="h-3 w-14 rounded-md" />
+                    </td>
+                    {/* Duration */}
+                    <td className="px-3.5 py-3 whitespace-nowrap">
+                      <ShimmerBlock delay={delay} className="h-3 w-12 rounded-md" />
+                    </td>
+                    {/* Intent */}
+                    <td className="px-3.5 py-3 whitespace-nowrap">
+                      <ShimmerBlock delay={delay} className="h-4 w-20 rounded-full" />
+                    </td>
+                    {/* Outcome */}
+                    <td className="px-3.5 py-3 whitespace-nowrap">
+                      <ShimmerBlock delay={delay} className="h-4 w-16 rounded-full" />
+                    </td>
+                    {/* Recording button */}
+                    <td className="px-3.5 py-3 whitespace-nowrap text-right">
+                      <div className="flex items-center justify-end">
+                        <ShimmerBlock delay={delay} className="h-6 w-14 rounded-md" />
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
             ) : calls.length === 0 ? (
               <tr>
                 <td colSpan={7} className="py-12 text-center text-xs text-gray-500">
@@ -122,7 +158,7 @@ export function CallLogsTable({
                       {call.duration_seconds ? `${call.duration_seconds}s` : '32s'}
                     </td>
                     <td className="px-3.5 py-2.5 text-xs text-gray-700 whitespace-nowrap max-w-[140px] truncate">
-                      {call.intent || 'Appointment Booking'}
+                      {call.intent ? call.intent.charAt(0).toUpperCase() + call.intent.slice(1) : 'Analysing...'}
                     </td>
                     <td className="px-3.5 py-2.5 whitespace-nowrap">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${

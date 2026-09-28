@@ -58,7 +58,7 @@ export default function KnowledgeBasePage() {
   };
 
   return (
-    <div className="animate-in fade-in duration-500 pt-4 pb-6 flex flex-col h-full w-full">
+    <div className="space-y-3.5 animate-in fade-in duration-300 pb-8 flex flex-col h-full w-full">
       <KnowledgeHeader
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}

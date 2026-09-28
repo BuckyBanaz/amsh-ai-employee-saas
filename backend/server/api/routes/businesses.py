@@ -1,6 +1,8 @@
+import os
+import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -171,3 +173,42 @@ def update_business(
     db.commit()
     db.refresh(business)
     return business
+
+
+UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static", "uploads", "logos")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+
+@router.post("/{business_id}/logo")
+def upload_business_logo(
+    business_id: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    business = db.get(Business, business_id)
+    if not business:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Business not found")
+    if current_user.scope != "platform" and current_user.business_id != business.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed")
+
+    ext = os.path.splitext(file.filename or "")[1] or ".png"
+    filename = f"{business_id}_{uuid.uuid4().hex[:8]}{ext}"
+    filepath = os.path.join(UPLOAD_DIR, filename)
+
+    with open(filepath, "wb") as f:
+        f.write(file.file.read())
+
+    logo_url = f"/static/uploads/logos/{filename}"
+    business.logo_url = logo_url
+    db.commit()
+    db.refresh(business)
+
+    return {"logo_url": logo_url}
+
+
+dashboard_router = APIRouter(prefix="/api/businesses", tags=["businesses"])
+dashboard_router.add_api_route("/{business_id}", get_business, methods=["GET"], response_model=BusinessOut)
+dashboard_router.add_api_route("/{business_id}", update_business, methods=["PATCH"], response_model=BusinessOut)
+dashboard_router.add_api_route("/{business_id}/logo", upload_business_logo, methods=["POST"])
+

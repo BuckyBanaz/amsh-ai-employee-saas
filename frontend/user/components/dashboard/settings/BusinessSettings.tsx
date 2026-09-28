@@ -2,6 +2,10 @@
 import React, { useState, useEffect } from 'react';
 import { STRINGS } from '../../../utils/strings/en';
 
+import { DashboardController } from '../../../controllers/dashboard.controller';
+import { StorageService } from '../../../services/storage.service';
+import { GlobalLoader } from '../../../components/common/GlobalLoader';
+
 interface DaySchedule {
   day: string;
   active: boolean;
@@ -19,29 +23,28 @@ const defaultSchedule: DaySchedule[] = [
 ];
 
 export function BusinessSettings({ focusDangerZone }: { focusDangerZone?: boolean }) {
-  useEffect(() => {
-    if (focusDangerZone) {
-      document.getElementById('danger-zone')?.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [focusDangerZone]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [tenantId, setTenantId] = useState('');
+
   const [formData, setFormData] = useState({
-    name: 'Smile Dental Clinic',
+    name: '',
     vertical: 'Dental Clinic',
-    businessSubtype: 'General Dentistry & Orthodontics',
-    taxId: 'NL-88392019B01',
-    description: 'Smile Dental Clinic provides preventative checkups, cosmetic dentistry, orthodontics, and emergency appointments in central Amsterdam.',
-    email: 'reception@smileclinic.com',
-    phone: '+31 20 123 4567',
-    emergencyPhone: '+31 6 9876 5432',
-    website: 'https://www.smileclinic.com',
-    country: 'Netherlands',
-    address: '123 Keizersgracht, Suite 200',
-    city: 'Amsterdam',
-    state: 'North Holland',
-    postalCode: '1015 AB',
-    timezone: 'Europe/Amsterdam',
-    currency: 'EUR',
-    language: 'English (US)',
+    businessSubtype: '',
+    taxId: '',
+    description: '',
+    email: '',
+    phone: '',
+    emergencyPhone: '',
+    website: '',
+    country: 'India',
+    address: '',
+    city: '',
+    state: '',
+    postalCode: '',
+    timezone: 'Asia/Kolkata',
+    currency: 'INR',
+    language: 'English (IN)',
     dateFormat: 'DD/MM/YYYY',
   });
 
@@ -51,22 +54,114 @@ export function BusinessSettings({ focusDangerZone }: { focusDangerZone?: boolea
   const [showDeactivateModal, setShowDeactivateModal] = useState(false);
   const [businessStatus, setBusinessStatus] = useState<'active' | 'deactivated'>('active');
 
+  useEffect(() => {
+    if (focusDangerZone) {
+      document.getElementById('danger-zone')?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [focusDangerZone]);
+
+  useEffect(() => {
+    let isMounted = true;
+    DashboardController.getBusinessInfo()
+      .then((b) => {
+        if (!isMounted || !b) return;
+        setTenantId(b.id || '');
+        setFormData({
+          name: b.name || '',
+          vertical: b.vertical === 'clinic' ? 'Dental Clinic' : (b.vertical || 'Dental Clinic'),
+          businessSubtype: b.business_subtype || b.business_type || 'General Clinic',
+          taxId: b.postal_code ? `GST-${b.postal_code}` : 'GST-IN994829',
+          description: b.business_type ? `${b.name} provides professional healthcare and patient consultation services.` : '',
+          email: b.business_email || '',
+          phone: b.business_phone || '',
+          emergencyPhone: b.business_phone || '',
+          website: b.website || '',
+          country: b.country || 'India',
+          address: b.address || '',
+          city: b.city || '',
+          state: b.city ? `${b.city} Region` : 'Haryana',
+          postalCode: b.postal_code || '',
+          timezone: b.timezone || 'Asia/Kolkata',
+          currency: b.currency || 'INR',
+          language: 'English (IN)',
+          dateFormat: 'DD/MM/YYYY',
+        });
+        const savedLocalLogo = typeof window !== 'undefined' ? localStorage.getItem('business_logo') : null;
+        if (b.logo_url) {
+          const fullLogo = b.logo_url.startsWith('http') ? b.logo_url : `http://localhost:8010${b.logo_url}`;
+          setLogoPreview(fullLogo);
+        } else if (savedLocalLogo) {
+          setLogoPreview(savedLocalLogo);
+        }
+        if (b.working_hours && typeof b.working_hours === 'object' && Array.isArray(b.working_hours)) {
+          setSchedule(b.working_hours);
+        }
+      })
+      .catch((err) => {
+        console.warn('Failed to load business profile:', err);
+      })
+      .finally(() => {
+        if (isMounted) setLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
     setIsSaved(false);
   };
 
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const url = URL.createObjectURL(file);
-      setLogoPreview(url);
+      // Immediate local preview via FileReader
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (typeof reader.result === 'string') {
+          setLogoPreview(reader.result);
+          try {
+            localStorage.setItem('business_logo', reader.result);
+          } catch {}
+        }
+      };
+      reader.readAsDataURL(file);
+
+      try {
+        const res = await DashboardController.uploadBusinessLogo(file);
+        if (res?.logo_url) {
+          const fullLogo = res.logo_url.startsWith('http') ? res.logo_url : `http://localhost:8010${res.logo_url}`;
+          setLogoPreview(fullLogo);
+          const currentBiz = StorageService.getBusiness() || {};
+          StorageService.setBusiness({ ...currentBiz, logo_url: res.logo_url });
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new Event('business_updated'));
+          }
+        }
+      } catch (err) {
+        console.error('Failed to upload logo to server:', err);
+      }
       setIsSaved(false);
     }
   };
 
-  const handleRemoveLogo = () => {
+  const handleRemoveLogo = async () => {
     setLogoPreview(null);
+    try {
+      localStorage.removeItem('business_logo');
+    } catch {}
+    try {
+      await DashboardController.updateBusiness({ logo_url: null });
+      const currentBiz = StorageService.getBusiness();
+      if (currentBiz) {
+        StorageService.setBusiness({ ...currentBiz, logo_url: null });
+      }
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('business_updated'));
+      }
+    } catch {}
     setIsSaved(false);
   };
 
@@ -145,10 +240,51 @@ export function BusinessSettings({ focusDangerZone }: { focusDangerZone?: boolea
     setIsSaved(false);
   };
 
-  const handleSave = () => {
-    setIsSaved(true);
-    setTimeout(() => setIsSaved(false), 3000);
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await DashboardController.updateBusiness({
+        name: formData.name,
+        business_subtype: formData.businessSubtype,
+        business_email: formData.email,
+        business_phone: formData.phone,
+        website: formData.website,
+        country: formData.country,
+        address: formData.address,
+        city: formData.city,
+        postal_code: formData.postalCode,
+        timezone: formData.timezone,
+        currency: formData.currency,
+        working_hours: schedule,
+      });
+
+      const currentBiz = StorageService.getBusiness();
+      if (currentBiz) {
+        StorageService.setBusiness({
+          ...currentBiz,
+          name: formData.name,
+          country: formData.country,
+          city: formData.city,
+          currency: formData.currency,
+        });
+      }
+
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 3000);
+    } catch (err: any) {
+      console.error('Failed to save business settings:', err);
+    } finally {
+      setSaving(false);
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="py-12">
+        <GlobalLoader message="Loading business configuration & profile..." />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 max-w-4xl pb-8">
@@ -173,8 +309,8 @@ export function BusinessSettings({ focusDangerZone }: { focusDangerZone?: boolea
             <h3 className="text-sm font-bold text-gray-900 tracking-tight">Business Profile</h3>
             <p className="text-[11px] text-gray-500">Primary business classification, branding, and description used across caller dialogues.</p>
           </div>
-          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-[#0066FF] border border-blue-100">
-            Tenant ID: biz_9942a1
+          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-[#0066FF] border border-blue-100 font-mono">
+            Tenant ID: {tenantId || 'biz_live'}
           </span>
         </div>
 
@@ -624,11 +760,21 @@ export function BusinessSettings({ focusDangerZone }: { focusDangerZone?: boolea
           </button>
           <button
             type="button"
+            disabled={saving}
             onClick={handleSave}
-            className="px-5 py-1.5 bg-[#0066FF] text-white rounded-md text-xs font-semibold shadow-xs hover:bg-[#0052cc] transition-colors flex items-center gap-1.5"
+            className="px-5 py-1.5 bg-[#0066FF] text-white rounded-md text-xs font-semibold shadow-xs hover:bg-[#0052cc] transition-colors flex items-center gap-1.5 disabled:opacity-60 cursor-pointer"
           >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
-            Save Changes
+            {saving ? (
+              <>
+                <span className="w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin"></span>
+                <span>Saving...</span>
+              </>
+            ) : (
+              <>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                <span>Save Changes</span>
+              </>
+            )}
           </button>
         </div>
       </div>

@@ -96,6 +96,31 @@ async def send_text(config: Dict[str, Any], to: str, body: str) -> bool:
         return False
 
 
+async def send_template(config: Dict[str, Any], to: str, template: str, language: str, params: List[str]) -> bool:
+    """Send an approved WhatsApp template message (the only kind allowed outside the 24 h window, e.g. reminders)."""
+    try:
+        token = CryptoManager.decrypt(config["access_token"])
+        url = f"https://graph.facebook.com/{get_settings().META_GRAPH_VERSION}/{config['phone_number_id']}/messages"
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": to,
+            "type": "template",
+            "template": {
+                "name": template,
+                "language": {"code": language},
+                "components": [{"type": "body", "parameters": [{"type": "text", "text": p} for p in params]}],
+            },
+        }
+        async with httpx.AsyncClient(timeout=20) as client:
+            resp = await client.post(url, headers={"Authorization": f"Bearer {token}"}, json=payload)
+        if resp.status_code != 200:
+            logger.warning("[WHATSAPP] template send failed (%s): %s", resp.status_code, resp.text[:200])
+        return resp.status_code == 200
+    except Exception as e:
+        logger.warning("[WHATSAPP] template send failed: %s", e)
+        return False
+
+
 class WhatsAppAgent:
     def __init__(self) -> None:
         self._runtimes: Dict[str, Any] = {}

@@ -36,17 +36,17 @@ export function AppointmentsHeader({
   };
 
   return (
-    <div className="flex items-center justify-between mb-2 py-0.5 flex-wrap gap-2">
+    <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3 py-1">
       <div>
-        <h1 className="text-lg font-bold text-gray-900 tracking-tight leading-tight">
+        <h1 className="text-xl font-extrabold text-gray-900 tracking-tight leading-tight">
           {STRINGS.HEADERS.APPOINTMENTS.TITLE}
         </h1>
-        <p className="text-[11px] text-gray-500 mt-0.5">
+        <p className="text-xs text-gray-500 font-medium mt-0.5">
           {STRINGS.HEADERS.APPOINTMENTS.SUBTITLE}
         </p>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2.5 flex-wrap">
         {/* Hidden Date Picker Input for jumping to any future date */}
         <input
           ref={dateInputRef}
@@ -126,6 +126,6 @@ export function AppointmentsHeader({
           <span>{STRINGS.COMMON.BUTTONS.NEW_APPOINTMENT}</span>
         </button>
       </div>
-    </div>
+    </header>
   );
 }

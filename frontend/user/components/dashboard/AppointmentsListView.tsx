@@ -2,6 +2,8 @@
 import React from 'react';
 import { AppointmentItem } from '../../controllers/dashboard.controller';
 
+import { TableSkeleton } from '../common/ShimmerSkeleton';
+
 interface AppointmentsListViewProps {
   appointments: AppointmentItem[];
   selectedAppointmentId?: string;
@@ -21,10 +23,11 @@ export function AppointmentsListView({
 }: AppointmentsListViewProps) {
   if (isLoading) {
     return (
-      <div className="bg-white border border-gray-100 rounded-xl shadow-2xs p-12 text-center flex flex-col items-center justify-center min-h-[360px]">
-        <div className="w-8 h-8 border-3 border-[#0066FF]/20 border-t-[#0066FF] rounded-full animate-spin mb-3"></div>
-        <p className="text-xs text-gray-500 font-medium">Loading appointments...</p>
-      </div>
+      <TableSkeleton
+        rows={6}
+        headers={["PATIENT", "DOCTOR", "SERVICE", "DATE & TIME", "STATUS"]}
+        statusMessage="Loading clinic appointment calendar & roster..."
+      />
     );
   }
 

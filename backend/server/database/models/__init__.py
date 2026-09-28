@@ -13,3 +13,5 @@ from backend.server.database.models.transaction import Transaction  # noqa: F401
 from backend.server.database.models.knowledge_base import KnowledgeDocument  # noqa: F401
 from backend.server.database.models.integration import Integration  # noqa: F401
 from backend.server.database.models.usage import Usage  # noqa: F401
+from backend.server.database.models.audit_log import AuditLog  # noqa: F401
+from backend.server.database.models.plan import Plan  # noqa: F401

@@ -1,6 +1,7 @@
 "use client";
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { createPlan, fetchPlans, updatePlan, PlanApi, PlanBody } from '../../../lib/api';
 
 type PlanStatus = 'Active' | 'Draft' | 'Archived';
 type BillingCycle = 'Monthly' | 'Yearly';
@@ -9,27 +10,27 @@ type BillingCycle = 'Monthly' | 'Yearly';
 type PlanKind = 'Catalog' | 'Enterprise';
 
 type FeatureKey =
-  | 'callRecording'
-  | 'multiLanguage'
-  | 'customVoice'
-  | 'apiAccess'
-  | 'advancedAnalytics'
-  | 'calendarSync'
-  | 'paymentsIntegration'
+  | 'call_recording'
+  | 'multi_language'
+  | 'custom_voice'
+  | 'api_access'
+  | 'advanced_analytics'
+  | 'calendar_sync'
+  | 'payments_integration'
   | 'whatsapp'
-  | 'whiteLabel'
-  | 'prioritySupport';
+  | 'white_label'
+  | 'priority_support';
 
 interface PlanQuotas {
-  voiceMinutes: number;
-  messages: number;
-  concurrentCalls: number;
-  aiTokensMillions: number;
-  knowledgeDocs: number;
-  audioStorageGb: number;
-  vectorStorageGb: number;
-  conversationRetentionDays: number;
-  seats: number;
+  voiceMinutes: number | null;
+  messages: number | null;
+  concurrentCalls: number | null;
+  aiTokensMillions: number | null;
+  knowledgeDocs: number | null;
+  audioStorageGb: number | null;
+  vectorStorageGb: number | null;
+  conversationRetentionDays: number | null;
+  seats: number | null;
 }
 
 interface PlanOverage {
@@ -40,6 +41,12 @@ interface PlanOverage {
 
 interface Plan {
   id: string;
+  key: string;
+  description: string;
+  currency: string;
+  priceYearly: number | null;
+  highlighted: boolean;
+  sortOrder: number;
   name: string;
   kind: PlanKind;
   client?: string;
@@ -54,145 +61,16 @@ interface Plan {
 }
 
 const FEATURE_CATALOG: { key: FeatureKey; label: string; hint: string }[] = [
-  { key: 'callRecording', label: 'Call Recording', hint: 'Store call audio for playback' },
-  { key: 'multiLanguage', label: 'Multi-language AI', hint: 'More than one spoken language' },
-  { key: 'customVoice', label: 'Custom Voice Clone', hint: 'Branded TTS voice' },
-  { key: 'apiAccess', label: 'API Access', hint: 'Public REST + webhooks' },
-  { key: 'advancedAnalytics', label: 'Advanced Analytics', hint: 'Cohorts and exports' },
-  { key: 'calendarSync', label: 'Calendar Sync', hint: 'Google / Microsoft calendars' },
-  { key: 'paymentsIntegration', label: 'Payments', hint: 'Deposits and prepayments' },
+  { key: 'call_recording', label: 'Call Recording', hint: 'Store call audio for playback' },
+  { key: 'multi_language', label: 'Multi-language AI', hint: 'More than one spoken language' },
+  { key: 'custom_voice', label: 'Custom Voice Clone', hint: 'Branded TTS voice' },
+  { key: 'api_access', label: 'API Access', hint: 'Public REST + webhooks' },
+  { key: 'advanced_analytics', label: 'Advanced Analytics', hint: 'Cohorts and exports' },
+  { key: 'calendar_sync', label: 'Calendar Sync', hint: 'Google / Microsoft calendars' },
+  { key: 'payments_integration', label: 'Payments', hint: 'Deposits and prepayments' },
   { key: 'whatsapp', label: 'WhatsApp Channel', hint: 'Messaging on WhatsApp Business' },
-  { key: 'whiteLabel', label: 'White Label', hint: 'Remove platform branding' },
-  { key: 'prioritySupport', label: 'Priority Support', hint: 'SLA-backed response times' },
-];
-
-const initialPlans: Plan[] = [
-  {
-    id: 'plan-starter',
-    name: 'Starter',
-    kind: 'Catalog',
-    price: 99,
-    cycle: 'Monthly',
-    status: 'Active',
-    customPricing: false,
-    subscribers: 28,
-    quotas: {
-      voiceMinutes: 500,
-      messages: 1000,
-      concurrentCalls: 2,
-      aiTokensMillions: 1,
-      knowledgeDocs: 50,
-      audioStorageGb: 5,
-      vectorStorageGb: 1,
-      conversationRetentionDays: 30,
-      seats: 3,
-    },
-    overage: { perMinute: 0.22, perMessage: 0.02, perGb: 0.5 },
-    features: ['calendarSync'],
-  },
-  {
-    id: 'plan-professional',
-    name: 'Professional',
-    kind: 'Catalog',
-    price: 199,
-    cycle: 'Monthly',
-    status: 'Active',
-    customPricing: false,
-    subscribers: 48,
-    quotas: {
-      voiceMinutes: 2000,
-      messages: 5000,
-      concurrentCalls: 5,
-      aiTokensMillions: 4,
-      knowledgeDocs: 250,
-      audioStorageGb: 25,
-      vectorStorageGb: 5,
-      conversationRetentionDays: 90,
-      seats: 10,
-    },
-    overage: { perMinute: 0.18, perMessage: 0.015, perGb: 0.4 },
-    features: ['callRecording', 'multiLanguage', 'calendarSync', 'whatsapp', 'advancedAnalytics'],
-  },
-  {
-    id: 'plan-business',
-    name: 'Business',
-    kind: 'Catalog',
-    price: 399,
-    cycle: 'Monthly',
-    status: 'Active',
-    customPricing: false,
-    subscribers: 23,
-    quotas: {
-      voiceMinutes: 6000,
-      messages: 20000,
-      concurrentCalls: 15,
-      aiTokensMillions: 12,
-      knowledgeDocs: 1000,
-      audioStorageGb: 100,
-      vectorStorageGb: 20,
-      conversationRetentionDays: 180,
-      seats: 25,
-    },
-    overage: { perMinute: 0.15, perMessage: 0.012, perGb: 0.3 },
-    features: [
-      'callRecording',
-      'multiLanguage',
-      'customVoice',
-      'apiAccess',
-      'advancedAnalytics',
-      'calendarSync',
-      'paymentsIntegration',
-      'whatsapp',
-    ],
-  },
-  {
-    id: 'plan-ent-medigroup',
-    name: 'Enterprise - MediGroup NL',
-    kind: 'Enterprise',
-    client: 'MediGroup Netherlands',
-    price: 1450,
-    cycle: 'Monthly',
-    status: 'Active',
-    customPricing: true,
-    subscribers: 4,
-    quotas: {
-      voiceMinutes: 25000,
-      messages: 100000,
-      concurrentCalls: 50,
-      aiTokensMillions: 50,
-      knowledgeDocs: 5000,
-      audioStorageGb: 500,
-      vectorStorageGb: 100,
-      conversationRetentionDays: 365,
-      seats: 100,
-    },
-    overage: { perMinute: 0.11, perMessage: 0.008, perGb: 0.2 },
-    features: FEATURE_CATALOG.map((f) => f.key),
-  },
-  {
-    id: 'plan-ent-nordic',
-    name: 'Enterprise - Nordic Wellness',
-    kind: 'Enterprise',
-    client: 'Nordic Wellness Group',
-    price: 2100,
-    cycle: 'Yearly',
-    status: 'Active',
-    customPricing: true,
-    subscribers: 6,
-    quotas: {
-      voiceMinutes: 40000,
-      messages: 150000,
-      concurrentCalls: 80,
-      aiTokensMillions: 75,
-      knowledgeDocs: 8000,
-      audioStorageGb: 750,
-      vectorStorageGb: 150,
-      conversationRetentionDays: 730,
-      seats: 150,
-    },
-    overage: { perMinute: 0.09, perMessage: 0.006, perGb: 0.18 },
-    features: FEATURE_CATALOG.map((f) => f.key),
-  },
+  { key: 'white_label', label: 'White Label', hint: 'Remove platform branding' },
+  { key: 'priority_support', label: 'Priority Support', hint: 'SLA-backed response times' },
 ];
 
 const revenueTrend = [48, 56, 60, 72, 68, 84, 96];
@@ -240,6 +118,12 @@ const kindStyles: Record<PlanKind, string> = {
 
 const emptyPlan = (kind: PlanKind = 'Catalog'): Plan => ({
   id: '',
+  key: '',
+  description: '',
+  currency: 'USD',
+  priceYearly: null,
+  highlighted: false,
+  sortOrder: 0,
   name: '',
   kind,
   client: '',
@@ -276,10 +160,74 @@ const quotaFields: { key: keyof PlanQuotas; label: string; unit: string; hint: s
 ];
 
 // Locale is pinned so SSR and client hydration produce identical digit grouping.
-const money = (value: number) => `€${value.toLocaleString('en-US')}`;
+const CURRENCY_SYMBOL: Record<string, string> = { USD: '$', INR: '₹', EUR: '€', GBP: '£' };
+const money = (value: number, currency = 'USD') => `${CURRENCY_SYMBOL[currency] ?? currency + ' '}${value.toLocaleString('en-US')}`;
 
 const numberInputClass =
   'w-full px-2.5 py-1.5 bg-white border border-[#E2E8F0] rounded-lg text-[13px] text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB]';
+
+const QUOTA_MAP: [keyof PlanQuotas, string][] = [
+  ['voiceMinutes', 'voice_minutes'],
+  ['messages', 'messages'],
+  ['concurrentCalls', 'concurrent_calls'],
+  ['aiTokensMillions', 'ai_tokens_millions'],
+  ['knowledgeDocs', 'knowledge_docs'],
+  ['audioStorageGb', 'audio_storage_gb'],
+  ['vectorStorageGb', 'vector_storage_gb'],
+  ['conversationRetentionDays', 'conversation_retention_days'],
+  ['seats', 'seats'],
+];
+/** A quota left empty means unlimited. */
+const amount = (value: number | null, unit = '') => (value === null ? 'Unlimited' : `${value.toLocaleString('en-US')}${unit}`);
+const capitalize = (v: string) => v.charAt(0).toUpperCase() + v.slice(1);
+
+function fromApi(p: PlanApi): Plan {
+  const quotas = {} as PlanQuotas;
+  QUOTA_MAP.forEach(([ui, api]) => {
+    quotas[ui] = p.quotas[api] ?? null;
+  });
+  return {
+    id: p.id,
+    key: p.key,
+    description: p.description ?? '',
+    name: p.name,
+    kind: p.kind === 'enterprise' ? 'Enterprise' : 'Catalog',
+    client: p.client ?? undefined,
+    currency: p.currency,
+    price: p.price,
+    priceYearly: p.price_yearly,
+    cycle: p.cycle === 'yearly' ? 'Yearly' : 'Monthly',
+    status: capitalize(p.status) as PlanStatus,
+    customPricing: p.custom_pricing,
+    highlighted: p.highlighted,
+    sortOrder: p.sort_order,
+    subscribers: p.subscribers,
+    quotas,
+    overage: { perMinute: p.overage.per_minute ?? 0, perMessage: p.overage.per_message ?? 0, perGb: p.overage.per_gb ?? 0 },
+    features: p.features as FeatureKey[],
+  };
+}
+
+function toBody(p: Plan, isNew: boolean): PlanBody {
+  return {
+    ...(isNew && p.key.trim() ? { key: p.key.trim() } : {}),
+    name: p.name.trim(),
+    description: p.description.trim(),
+    kind: p.kind === 'Enterprise' ? 'enterprise' : 'catalog',
+    client: p.kind === 'Enterprise' ? (p.client ?? '').trim() : '',
+    price: p.price,
+    cycle: p.cycle === 'Yearly' ? 'yearly' : 'monthly',
+    price_yearly: p.cycle === 'Monthly' && !p.customPricing ? p.priceYearly : null,
+    currency: p.currency,
+    custom_pricing: p.customPricing,
+    status: p.status.toLowerCase() as PlanApi['status'],
+    highlighted: p.highlighted,
+    sort_order: p.sortOrder,
+    quotas: Object.fromEntries(QUOTA_MAP.map(([ui, api]) => [api, p.quotas[ui]])),
+    overage: { per_minute: p.overage.perMinute, per_message: p.overage.perMessage, per_gb: p.overage.perGb },
+    features: p.features,
+  };
+}
 
 interface PlanEditorProps {
   draft: Plan;
@@ -288,9 +236,10 @@ interface PlanEditorProps {
   onSave: () => void;
   onClose: () => void;
   error: string | null;
+  saving: boolean;
 }
 
-function PlanEditor({ draft, isNew, onChange, onSave, onClose, error }: PlanEditorProps) {
+function PlanEditor({ draft, isNew, onChange, onSave, onClose, error, saving }: PlanEditorProps) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -307,7 +256,7 @@ function PlanEditor({ draft, isNew, onChange, onSave, onClose, error }: PlanEdit
     };
   }, []);
 
-  const setQuota = (key: keyof PlanQuotas, value: number) =>
+  const setQuota = (key: keyof PlanQuotas, value: number | null) =>
     onChange({ ...draft, quotas: { ...draft.quotas, [key]: value } });
 
   const toggleFeature = (key: FeatureKey) =>
@@ -423,7 +372,7 @@ function PlanEditor({ draft, isNew, onChange, onSave, onClose, error }: PlanEdit
                 />
               </label>
               <label className="block">
-                <span className="text-[12px] font-semibold text-[#475569]">Price (€)</span>
+                <span className="text-[12px] font-semibold text-[#475569]">Price ({draft.currency})</span>
                 <input
                   type="number"
                   min={0}
@@ -456,6 +405,62 @@ function PlanEditor({ draft, isNew, onChange, onSave, onClose, error }: PlanEdit
                   <option value="Archived">Archived</option>
                 </select>
               </label>
+              <label className="block">
+                <span className="text-[12px] font-semibold text-[#475569]">Currency</span>
+                <select
+                  value={draft.currency}
+                  onChange={(e) => onChange({ ...draft, currency: e.target.value })}
+                  className={`${numberInputClass} mt-1`}
+                >
+                  {['USD', 'INR', 'EUR', 'GBP'].map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </label>
+              {draft.cycle === 'Monthly' && !draft.customPricing && (
+                <label className="block">
+                  <span className="text-[12px] font-semibold text-[#475569]">Yearly price ({draft.currency}, optional)</span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={draft.priceYearly ?? ''}
+                    placeholder="No yearly option"
+                    onChange={(e) => onChange({ ...draft, priceYearly: e.target.value === '' ? null : Number(e.target.value) })}
+                    className={`${numberInputClass} mt-1`}
+                  />
+                </label>
+              )}
+              <label className="block">
+                <span className="text-[12px] font-semibold text-[#475569]">Plan key {isNew ? '' : '(fixed)'}</span>
+                <input
+                  type="text"
+                  value={draft.key}
+                  disabled={!isNew}
+                  onChange={(e) => onChange({ ...draft, key: e.target.value.toLowerCase() })}
+                  placeholder="auto from the name"
+                  className={`${numberInputClass} mt-1 disabled:bg-[#F1F5F9] disabled:text-[#94A3B8]`}
+                />
+              </label>
+              <label className="md:col-span-4 block">
+                <span className="text-[12px] font-semibold text-[#475569]">Description (shown on pricing screens)</span>
+                <input
+                  type="text"
+                  maxLength={300}
+                  value={draft.description}
+                  onChange={(e) => onChange({ ...draft, description: e.target.value })}
+                  placeholder="One line about who this plan is for"
+                  className={`${numberInputClass} mt-1`}
+                />
+              </label>
+              <label className="md:col-span-4 flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={draft.highlighted}
+                  onChange={(e) => onChange({ ...draft, highlighted: e.target.checked })}
+                  className="w-4 h-4 accent-[#2563EB]"
+                />
+                <span className="text-[13px] text-[#475569]">Show as &quot;Most popular&quot; on pricing screens</span>
+              </label>
               <label className="md:col-span-3 flex items-center gap-2 mt-6">
                 <input
                   type="checkbox"
@@ -479,12 +484,13 @@ function PlanEditor({ draft, isNew, onChange, onSave, onClose, error }: PlanEdit
                   <input
                     type="number"
                     min={0}
-                    value={draft.quotas[field.key]}
-                    onChange={(e) => setQuota(field.key, Number(e.target.value))}
+                    value={draft.quotas[field.key] ?? ''}
+                    placeholder="Unlimited"
+                    onChange={(e) => setQuota(field.key, e.target.value === '' ? null : Number(e.target.value))}
                     className={`${numberInputClass} mt-1`}
                   />
                   <span className="text-[11px] text-[#94A3B8] block mt-1">
-                    {field.unit} · {field.hint}
+                    {field.unit} · {field.hint} · leave empty for unlimited
                   </span>
                 </label>
               ))}
@@ -495,7 +501,7 @@ function PlanEditor({ draft, isNew, onChange, onSave, onClose, error }: PlanEdit
             <h3 className="text-[12px] font-bold text-[#94A3B8] uppercase tracking-wider mb-3">Overage Rates</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <label className="block">
-                <span className="text-[12px] font-semibold text-[#475569]">Per extra minute (€)</span>
+                <span className="text-[12px] font-semibold text-[#475569]">Per extra minute ({draft.currency})</span>
                 <input
                   type="number"
                   min={0}
@@ -506,7 +512,7 @@ function PlanEditor({ draft, isNew, onChange, onSave, onClose, error }: PlanEdit
                 />
               </label>
               <label className="block">
-                <span className="text-[12px] font-semibold text-[#475569]">Per extra message (€)</span>
+                <span className="text-[12px] font-semibold text-[#475569]">Per extra message ({draft.currency})</span>
                 <input
                   type="number"
                   min={0}
@@ -517,7 +523,7 @@ function PlanEditor({ draft, isNew, onChange, onSave, onClose, error }: PlanEdit
                 />
               </label>
               <label className="block">
-                <span className="text-[12px] font-semibold text-[#475569]">Per extra GB (€)</span>
+                <span className="text-[12px] font-semibold text-[#475569]">Per extra GB ({draft.currency})</span>
                 <input
                   type="number"
                   min={0}
@@ -563,9 +569,10 @@ function PlanEditor({ draft, isNew, onChange, onSave, onClose, error }: PlanEdit
           </button>
           <button
             onClick={onSave}
-            className="px-3.5 py-2 bg-[#2563EB] hover:bg-blue-700 text-white rounded-lg text-[13px] font-semibold transition-colors"
+            disabled={saving}
+            className="px-3.5 py-2 bg-[#2563EB] hover:bg-blue-700 disabled:opacity-60 text-white rounded-lg text-[13px] font-semibold transition-colors"
           >
-            {isNew ? 'Create Plan' : 'Save Changes'}
+            {saving ? 'Saving...' : isNew ? 'Create Plan' : 'Save Changes'}
           </button>
         </div>
       </div>
@@ -575,11 +582,33 @@ function PlanEditor({ draft, isNew, onChange, onSave, onClose, error }: PlanEdit
 }
 
 export default function BillingPage() {
-  const [plans, setPlans] = useState<Plan[]>(initialPlans);
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [loadError, setLoadError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
+  const [saving, setSaving] = useState(false);
   const [draft, setDraft] = useState<Plan | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [kindFilter, setKindFilter] = useState<'All' | PlanKind>('All');
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchPlans()
+      .then((res) => {
+        if (cancelled) return;
+        setPlans(res.items.map(fromApi));
+        setLoadState('ready');
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setLoadError(err instanceof Error ? err.message : 'Could not load plans.');
+        setLoadState('error');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadKey]);
 
   const visibleGroups = useMemo(() => {
     const groups: { kind: PlanKind; description: string; plans: Plan[] }[] = [
@@ -621,7 +650,7 @@ export default function BillingPage() {
     setError(null);
   };
 
-  const savePlan = () => {
+  const savePlan = async () => {
     if (!draft) return;
     const name = draft.name.trim();
     if (!name) {
@@ -648,12 +677,17 @@ export default function BillingPage() {
       client: draft.kind === 'Enterprise' ? (draft.client ?? '').trim() : undefined,
     };
 
-    setPlans((current) =>
-      isNew
-        ? [...current, { ...next, id: `plan-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}` }]
-        : current.map((plan) => (plan.id === next.id ? next : plan))
-    );
-    closeEditor();
+    setSaving(true);
+    try {
+      if (isNew) await createPlan(toBody(next, true));
+      else await updatePlan(next.id, toBody(next, false));
+      closeEditor();
+      setReloadKey((k) => k + 1);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Could not save the plan.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const duplicatePlan = (plan: Plan) => {
@@ -671,12 +705,15 @@ export default function BillingPage() {
     setError(null);
   };
 
-  const archivePlan = (id: string) => {
-    setPlans((current) =>
-      current.map((plan) =>
-        plan.id === id ? { ...plan, status: plan.status === 'Archived' ? 'Active' : 'Archived' } : plan
-      )
-    );
+  const archivePlan = async (id: string) => {
+    const plan = plans.find((p) => p.id === id);
+    if (!plan) return;
+    try {
+      await updatePlan(id, { status: plan.status === 'Archived' ? 'active' : 'archived' });
+      setReloadKey((k) => k + 1);
+    } catch (err: unknown) {
+      setLoadError(err instanceof Error ? err.message : 'Could not change the plan.');
+    }
   };
 
   return (
@@ -712,6 +749,18 @@ export default function BillingPage() {
           </button>
         </div>
       </header>
+
+      {loadState === 'error' && (
+        <div role="alert" className="mb-3 flex items-center justify-between text-xs text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2">
+          <span>{loadError}</span>
+          <button type="button" onClick={() => { setLoadState('loading'); setReloadKey((k) => k + 1); }} className="font-semibold underline">Try again</button>
+        </div>
+      )}
+      {loadState === 'loading' && <div className="mb-3 text-xs text-[#94A3B8]">Loading plans...</div>}
+      <div className="mb-3 text-[11px] text-[#64748B] bg-[#F8FAFC] border border-[#E2E8F0] rounded-md px-3 py-2">
+        <strong>Plans are live:</strong> what you create or edit here is saved and is what the tenant app can show. The revenue figures,
+        tenant subscriptions and invoices below are <strong>sample data</strong> until real billing analytics are built.
+      </div>
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2.5 mb-3.5">
@@ -750,7 +799,7 @@ export default function BillingPage() {
                 <div key={plan.id} className="space-y-1">
                   <div className="flex justify-between text-[11px]">
                     <span className="text-[#475569]">
-                      {plan.name} ({plan.customPricing ? 'Quoted' : `${money(plan.price)}/mo`})
+                      {plan.name} ({plan.customPricing ? 'Quoted' : `${money(plan.price, plan.currency)}/mo`})
                     </span>
                     <span className="font-bold text-[#0F172A]">
                       {plan.subscribers} ({share}%)
@@ -840,8 +889,8 @@ export default function BillingPage() {
                         <div className="text-sm font-bold text-[#0F172A]">{plan.name}</div>
                         <div className="text-[11px] text-[#64748B]">
                           {plan.customPricing
-                            ? `${money(plan.price)} / ${plan.cycle.toLowerCase()} (quoted)`
-                            : `${money(plan.price)} / ${plan.cycle.toLowerCase()}`}
+                            ? `${money(plan.price, plan.currency)} / ${plan.cycle.toLowerCase()} (quoted)`
+                            : `${money(plan.price, plan.currency)} / ${plan.cycle.toLowerCase()}`}
                         </div>
                         {plan.client && (
                           <div className="text-[10px] font-semibold text-[#7C3AED] mt-0.5">{plan.client}</div>
@@ -855,27 +904,27 @@ export default function BillingPage() {
               <div className="bg-[#F8FAFC] rounded-md p-2 space-y-1">
                 <div className="flex justify-between text-[11px]">
                   <span className="text-[#64748B]">Minutes</span>
-                  <span className="font-semibold text-[#0F172A]">{plan.quotas.voiceMinutes.toLocaleString('en-US')}</span>
+                  <span className="font-semibold text-[#0F172A]">{amount(plan.quotas.voiceMinutes)}</span>
                 </div>
                 <div className="flex justify-between text-[11px]">
                   <span className="text-[#64748B]">Messages</span>
-                  <span className="font-semibold text-[#0F172A]">{plan.quotas.messages.toLocaleString('en-US')}</span>
+                  <span className="font-semibold text-[#0F172A]">{amount(plan.quotas.messages)}</span>
                 </div>
                 <div className="flex justify-between text-[11px]">
                   <span className="text-[#64748B]">Audio storage</span>
-                  <span className="font-semibold text-[#0F172A]">{plan.quotas.audioStorageGb} GB</span>
+                  <span className="font-semibold text-[#0F172A]">{amount(plan.quotas.audioStorageGb, ' GB')}</span>
                 </div>
                 <div className="flex justify-between text-[11px]">
                   <span className="text-[#64748B]">Vector storage</span>
-                  <span className="font-semibold text-[#0F172A]">{plan.quotas.vectorStorageGb} GB</span>
+                  <span className="font-semibold text-[#0F172A]">{amount(plan.quotas.vectorStorageGb, ' GB')}</span>
                 </div>
                 <div className="flex justify-between text-[11px]">
                   <span className="text-[#64748B]">Conversation history</span>
-                  <span className="font-semibold text-[#0F172A]">{plan.quotas.conversationRetentionDays} days</span>
+                  <span className="font-semibold text-[#0F172A]">{amount(plan.quotas.conversationRetentionDays, ' days')}</span>
                 </div>
                 <div className="flex justify-between text-[11px]">
                   <span className="text-[#64748B]">Concurrent calls</span>
-                  <span className="font-semibold text-[#0F172A]">{plan.quotas.concurrentCalls}</span>
+                  <span className="font-semibold text-[#0F172A]">{amount(plan.quotas.concurrentCalls)}</span>
                 </div>
               </div>
 
@@ -1032,6 +1081,7 @@ export default function BillingPage() {
           onChange={setDraft}
           onSave={savePlan}
           onClose={closeEditor}
+          saving={saving}
         />
       )}
     </div>

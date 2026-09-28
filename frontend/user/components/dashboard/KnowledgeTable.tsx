@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { STRINGS } from '../../utils/strings/en';
 import { KnowledgeItem } from '../../controllers/dashboard.controller';
+import { GlobalLoader } from '../common/GlobalLoader';
 
 interface KnowledgeTableProps {
   items: KnowledgeItem[];
@@ -112,10 +113,7 @@ export function KnowledgeTable({
       {/* Table Content */}
       <div className="overflow-x-auto scrollbar-hide flex-1">
         {loading ? (
-          <div className="flex items-center justify-center p-12 text-xs text-gray-400">
-            <div className="w-5 h-5 border-2 border-[#0066FF]/20 border-t-[#0066FF] rounded-full animate-spin mr-2.5"></div>
-            Loading knowledge documents and vector sources...
-          </div>
+          <GlobalLoader message="Loading knowledge base & RAG documents..." size="md" />
         ) : filteredItems.length === 0 ? (
           <div className="flex flex-col items-center justify-center p-12 text-center">
             <div className="w-12 h-12 rounded-full bg-blue-50 text-[#0066FF] flex items-center justify-center mb-3">

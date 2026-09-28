@@ -2080,6 +2080,15 @@ class HindiVoiceConsistency(unittest.TestCase):
         self.assertEqual(fit("मैं समझ गई", "male"), "मैं समझ गया")
         self.assertEqual(fit("दिन निकल गया", "female"), "दिन निकल गया")  # not first person: untouched
         self.assertEqual(fit("समझ गया", None), "समझ गया")  # unknown gender: no guessing
+        # Transcript: "मैं बहुत अच्छा हूँ" from a female voice, then feminine forms two turns later.
+        self.assertEqual(fit("मैं बहुत अच्छा हूँ, धन्यवाद! आप कैसे हैं?", "female"), "मैं बहुत अच्छी हूँ, धन्यवाद! आप कैसे हैं?")
+        self.assertEqual(fit("मैं थका हूँ और मैं समझा हूँ", "female"), "मैं थकी हूँ और मैं समझी हूँ")
+        self.assertEqual(fit("मैं बहुत अच्छी हूँ", "male"), "मैं बहुत अच्छा हूँ")
+        self.assertEqual(fit("Main bahut achha hoon", "female"), "Main bahut achhi hoon")
+        self.assertEqual(fit("Main accha hun", "female"), "Main acchi hun")
+        self.assertEqual(fit("Main Asha hoon", "female"), "Main Asha hoon")  # a name that ends in "a" is not an adjective
+        self.assertEqual(fit("आप कैसे हैं? मैं क्या हूँ", "female"), "आप कैसे हैं? मैं क्या हूँ")  # only listed words change
+        self.assertEqual(fit("मैं ठीक हूँ, और आपसे बात करके खुश हूँ", "female"), "मैं ठीक हूँ, और आपसे बात करके खुश हूँ")  # invariant words untouched
 
     def test_english_sentence_detection(self):
         from backend.ai.engine.agent.hindi import looks_english
@@ -2403,6 +2412,1351 @@ class WhatsAppChannel(unittest.TestCase):
         run(agent.handle(Inbound("111", "9198", "wamid.8", "Thursday", None)))
         contents = [m.get("content") for m in backend.seen[-1]["messages"]]
         self.assertIn("I want a whitening appointment", contents)  # the earlier turn came back from the database
+
+
+class BrowserSpeechToText(unittest.TestCase):
+    """Playground speech recognition through Deepgram (relay in routes/stt.py)."""
+
+    @staticmethod
+    def results(text, final=False, speech_final=False):
+        return {"type": "Results", "is_final": final, "speech_final": speech_final, "channel": {"alternatives": [{"transcript": text}]}}
+
+    def test_interim_then_one_final_per_utterance(self):
+        from backend.server.api.routes.stt import TranscriptAssembler
+
+        a = TranscriptAssembler()
+        self.assertEqual(a.feed(self.results("hello I")), [{"type": "interim", "text": "hello I"}])
+        self.assertEqual(a.feed(self.results("hello I want", final=True)), [{"type": "interim", "text": "hello I want"}])
+        self.assertEqual(a.feed(self.results("to book", final=True, speech_final=True)), [{"type": "final", "text": "hello I want to book"}])
+        self.assertEqual(a.feed(self.results("next sentence")), [{"type": "interim", "text": "next sentence"}])  # a fresh utterance
+
+    def test_utterance_end_flushes_and_noise_is_ignored(self):
+        from backend.server.api.routes.stt import TranscriptAssembler
+
+        a = TranscriptAssembler()
+        a.feed(self.results("मुझे अपॉइंटमेंट चाहिए", final=True))
+        self.assertEqual(a.feed({"type": "UtteranceEnd"}), [{"type": "final", "text": "मुझे अपॉइंटमेंट चाहिए"}])
+        self.assertEqual(a.feed({"type": "UtteranceEnd"}), [])  # nothing pending
+        self.assertEqual(a.feed({"type": "SpeechStarted"}), [])
+        self.assertEqual(a.feed(self.results("", final=True, speech_final=True)), [])  # an empty result is not an utterance
+
+    def test_config_and_auth(self):
+        from unittest.mock import patch
+
+        from backend.server.api.routes import stt
+
+        with patch.object(stt, "get_settings", lambda: type("S", (), {"DEEPGRAM_API_KEY": "k"})()):
+            self.assertEqual(stt.stt_config(), {"deepgram": True})
+        with patch.object(stt, "get_settings", lambda: type("S", (), {"DEEPGRAM_API_KEY": None})()):
+            self.assertEqual(stt.stt_config(), {"deepgram": False})
+        self.assertIsNone(stt._authorised("not-a-token"))
+
+
+class AuthPasswordFlows(unittest.TestCase):
+    """Forgot / reset / change password, and single-purpose tokens must never work as a login."""
+
+    def setUp(self):
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+        from unittest.mock import patch
+
+        from backend.server.api.routes import auth
+        from backend.server.database.session import get_db
+
+        factory, _ = make_db_factory()
+        self.factory = factory
+        app = FastAPI()
+        app.include_router(auth.router)
+
+        def override():
+            with factory() as db:
+                yield db
+
+        app.dependency_overrides[get_db] = override
+        self.client = TestClient(app)
+        self.emails = []
+
+        async def fake_send(to, subject, text, html=None):
+            self.emails.append((to, subject, text))
+            return {"sent": True, "provider": "test"}
+
+        p = patch.object(auth, "send_email", fake_send)
+        p.start()
+        self.addCleanup(p.stop)
+        r = self.client.post("/api/auth/register", json={"name": "Asha", "email": "asha@example.com", "password": "old-password-1"})
+        self.assertEqual(r.status_code, 201)
+        self.user_id = r.json()["user"]["id"]
+        self.token = r.json()["access_token"]
+        self.emails.clear()  # registering also sends a verification email; these tests look at the mails that come after
+
+    def _link_token(self):
+        import re
+
+        return re.search(r"token=([\w.\-]+)", self.emails[-1][2]).group(1)
+
+    def test_forgot_password_answers_the_same_for_unknown_emails(self):
+        known = self.client.post("/api/auth/forgot-password", json={"email": "asha@example.com"})
+        unknown = self.client.post("/api/auth/forgot-password", json={"email": "nobody@example.com"})
+        self.assertEqual(known.status_code, 200)
+        self.assertEqual(known.json(), unknown.json())  # no way to learn which emails have accounts
+        self.assertEqual([e[0] for e in self.emails], ["asha@example.com"])  # and only the real one got a mail
+
+    def test_reset_link_works_once_and_changes_the_login(self):
+        self.client.post("/api/auth/forgot-password", json={"email": "asha@example.com"})
+        token = self._link_token()
+        r = self.client.post("/api/auth/reset-password", json={"token": token, "password": "brand-new-pass"})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(self.client.post("/api/auth/login", json={"email": "asha@example.com", "password": "brand-new-pass"}).status_code, 200)
+        self.assertEqual(self.client.post("/api/auth/login", json={"email": "asha@example.com", "password": "old-password-1"}).status_code, 401)
+        again = self.client.post("/api/auth/reset-password", json={"token": token, "password": "another-pass-2"})
+        self.assertEqual(again.status_code, 400)  # the link died when the password changed
+
+    def test_bad_expired_and_weak_resets_are_refused(self):
+        from backend.server.auth.security import create_reset_token
+        from backend.server.database.models.user import User
+
+        self.assertEqual(self.client.post("/api/auth/reset-password", json={"token": "garbage", "password": "long-enough-1"}).status_code, 400)
+        with self.factory() as db:
+            hashed = db.get(User, self.user_id).hashed_password
+        expired = create_reset_token(self.user_id, hashed, minutes=-1)
+        self.assertEqual(self.client.post("/api/auth/reset-password", json={"token": expired, "password": "long-enough-1"}).status_code, 400)
+        fresh = create_reset_token(self.user_id, hashed)
+        self.assertEqual(self.client.post("/api/auth/reset-password", json={"token": fresh, "password": "short"}).status_code, 400)
+
+    def test_invite_and_reset_tokens_are_not_logins(self):
+        from backend.server.auth.security import create_invite_token, create_reset_token
+
+        for bad in (create_invite_token(self.user_id), create_reset_token(self.user_id, "x")):
+            r = self.client.get("/api/auth/me", headers={"Authorization": f"Bearer {bad}"})
+            self.assertEqual(r.status_code, 401)
+        ok = self.client.get("/api/auth/me", headers={"Authorization": f"Bearer {self.token}"})
+        self.assertEqual(ok.status_code, 200)  # the real login token still works
+
+    def test_change_password_needs_the_current_one(self):
+        headers = {"Authorization": f"Bearer {self.token}"}
+        wrong = self.client.post("/api/auth/change-password", headers=headers, json={"current_password": "nope", "new_password": "fresh-password-9"})
+        self.assertEqual(wrong.status_code, 400)
+        weak = self.client.post("/api/auth/change-password", headers=headers, json={"current_password": "old-password-1", "new_password": "short"})
+        self.assertEqual(weak.status_code, 400)
+        good = self.client.post("/api/auth/change-password", headers=headers, json={"current_password": "old-password-1", "new_password": "fresh-password-9"})
+        self.assertEqual(good.status_code, 200)
+        self.assertEqual(self.client.post("/api/auth/login", json={"email": "asha@example.com", "password": "fresh-password-9"}).status_code, 200)
+        self.assertEqual(self.client.post("/api/auth/change-password", json={"current_password": "x", "new_password": "y" * 9}).status_code in (401, 403), True)  # needs login
+
+
+class DatabaseMigrations(unittest.TestCase):
+    """Alembic: a new database is built from migrations, and a pre-Alembic database is stamped and upgraded, keeping its data."""
+
+    def _url(self):
+        import tempfile
+
+        d = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)  # Windows keeps the sqlite file open a moment
+        self.addCleanup(d.cleanup)
+        return "sqlite:///" + d.name.replace("\\", "/") + "/t.db"
+
+    def test_a_new_database_gets_every_table_at_the_latest_revision(self):
+        from sqlalchemy import create_engine, inspect, text
+
+        from backend.server.database.migrate import run_migrations
+
+        url = self._url()
+        self.assertEqual(run_migrations(url), "created")
+        eng = create_engine(url)
+        tables = set(inspect(eng).get_table_names())
+        self.assertTrue({"users", "businesses", "calls", "messages", "audit_logs", "alembic_version"} <= tables)
+        self.assertIn("email_verified_at", {c["name"] for c in inspect(eng).get_columns("users")})
+        self.assertTrue({"sentiment", "action_items", "analyzed_at"} <= {c["name"] for c in inspect(eng).get_columns("calls")})
+        with eng.connect() as c:
+            self.assertEqual(c.execute(text("select version_num from alembic_version")).scalar(), "0004")
+            self.assertEqual([r[0] for r in c.execute(text("select key from plans order by sort_order"))], ["starter", "professional", "business"])
+        self.assertEqual(run_migrations(url), "upgraded")  # running twice is harmless
+
+    def test_a_database_from_before_alembic_keeps_its_data(self):
+        from alembic import command
+        from sqlalchemy import create_engine, inspect, text
+
+        from backend.server.database.migrate import _config, run_migrations
+
+        url = self._url()
+        cfg = _config(url)
+        command.upgrade(cfg, "0001")  # the old schema, built the way create_all used to
+        eng = create_engine(url)
+        with eng.begin() as c:
+            c.execute(text("insert into users (id, email, hashed_password, name, scope, role, is_active, created_at) "
+                           "values ('u1', 'a@b.com', 'x', 'Asha', 'business', 'owner', 1, '2026-01-01')"))
+            c.execute(text("drop table alembic_version"))  # ...and it never had migration history
+        self.assertEqual(run_migrations(url), "stamped+upgraded")
+        with eng.connect() as c:
+            self.assertEqual(c.execute(text("select email from users where id = 'u1'")).scalar(), "a@b.com")
+            self.assertEqual(c.execute(text("select email_verified_at from users where id = 'u1'")).scalar(), None)
+        self.assertIn("audit_logs", inspect(eng).get_table_names())
+
+
+class AuthHardening(unittest.TestCase):
+    """Audit trail, login lockout, email verification and the platform-admin login."""
+
+    def setUp(self):
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+        from unittest.mock import patch
+
+        from backend.server.api.routes import admin, auth
+        from backend.server.database.session import get_db
+
+        factory, self.biz = make_db_factory()
+        self.factory = factory
+        app = FastAPI()
+        app.include_router(auth.router)
+        app.include_router(admin.router)
+
+        def override():
+            with factory() as db:
+                yield db
+
+        app.dependency_overrides[get_db] = override
+        self.client = TestClient(app)
+        self.emails = []
+
+        async def fake_send(to, subject, text, html=None):
+            self.emails.append((to, subject, text))
+            return {"sent": True, "provider": "test"}
+
+        p = patch.object(auth, "send_email", fake_send)
+        p.start()
+        self.addCleanup(p.stop)
+        r = self.client.post("/api/auth/register", json={"name": "Asha", "email": "asha@example.com", "password": "old-password-1"})
+        self.assertEqual(r.status_code, 201)
+        self.user_id = r.json()["user"]["id"]
+        self.token = r.json()["access_token"]
+
+    def _audit(self, action=None):
+        from backend.server.database.models.audit_log import AuditLog
+
+        with self.factory() as db:
+            rows = db.query(AuditLog).all()
+            return [(r.action, r.outcome, r.actor_email) for r in rows if action is None or r.action == action]
+
+    def _login(self, password, email="asha@example.com"):
+        return self.client.post("/api/auth/login", json={"email": email, "password": password})
+
+    def test_sign_ins_are_audited_and_repeated_failures_lock_the_account(self):
+        self.assertEqual(self._login("old-password-1").status_code, 200)
+        for _ in range(5):
+            self.assertEqual(self._login("wrong").status_code, 401)
+        self.assertEqual(self._login("old-password-1").status_code, 429)  # even the right password waits out the lockout
+        actions = self._audit()
+        self.assertIn(("auth.register", "success", "asha@example.com"), actions)
+        self.assertIn(("auth.login", "success", "asha@example.com"), actions)
+        self.assertEqual(len([a for a in actions if a[:2] == ("auth.login", "failure")]), 5)
+        self.assertIn(("auth.login_blocked", "failure", "asha@example.com"), actions)
+        self.assertEqual(self._login("wrong", email="other@example.com").status_code, 401)  # other accounts are unaffected
+
+    def test_a_good_sign_in_resets_the_failure_count(self):
+        for _ in range(4):
+            self._login("wrong")
+        self.assertEqual(self._login("old-password-1").status_code, 200)
+        for _ in range(4):
+            self.assertEqual(self._login("wrong").status_code, 401)  # 4 more failures: still under the limit
+        self.assertEqual(self._login("old-password-1").status_code, 200)
+
+    def test_email_verification_flow(self):
+        import re
+
+        self.assertEqual(len(self.emails), 1)  # registering sent the verification mail
+        token = re.search(r"token=([\w.\-]+)", self.emails[0][2]).group(1)
+        headers = {"Authorization": f"Bearer {self.token}"}
+        self.assertIsNone(self.client.get("/api/auth/me", headers=headers).json()["email_verified_at"])
+        self.assertEqual(self.client.post("/api/auth/verify-email", json={"token": "garbage"}).status_code, 400)
+        self.assertEqual(self.client.post("/api/auth/verify-email", json={"token": token}).status_code, 200)
+        self.assertIsNotNone(self.client.get("/api/auth/me", headers=headers).json()["email_verified_at"])
+        self.assertEqual(self.client.post("/api/auth/send-verification", headers=headers).json().get("already_verified"), True)
+        self.assertIn(("auth.email_verified", "success", "asha@example.com"), self._audit())
+
+    def test_verify_links_are_not_logins_and_only_fit_their_own_email(self):
+        from backend.server.auth.security import create_verify_token
+        from backend.server.database.models.user import User
+
+        link = create_verify_token(self.user_id, "asha@example.com")
+        self.assertEqual(self.client.get("/api/auth/me", headers={"Authorization": f"Bearer {link}"}).status_code, 401)
+        stale = create_verify_token(self.user_id, "old-address@example.com")  # the email changed since it was sent
+        self.assertEqual(self.client.post("/api/auth/verify-email", json={"token": stale}).status_code, 400)
+        with self.factory() as db:
+            self.assertIsNone(db.get(User, self.user_id).email_verified_at)
+
+    def test_resend_needs_a_signed_in_user(self):
+        self.assertIn(self.client.post("/api/auth/send-verification").status_code, (401, 403))
+        ok = self.client.post("/api/auth/send-verification", headers={"Authorization": f"Bearer {self.token}"})
+        self.assertEqual(ok.status_code, 200)
+        self.assertEqual(len(self.emails), 2)
+
+    def test_platform_admin_login_and_isolation(self):
+        from backend.scripts.create_platform_admin import create_platform_admin
+
+        headers = {"Authorization": f"Bearer {self.token}"}
+        # a clinic user can neither sign in to the admin portal nor use its routes
+        self.assertEqual(self.client.post("/api/admin/auth/login", json={"email": "asha@example.com", "password": "old-password-1"}).status_code, 401)
+        self.assertEqual(self.client.get("/api/admin/auth/me", headers=headers).status_code, 403)
+        with self.factory() as db:
+            with self.assertRaises(ValueError):
+                create_platform_admin(db, "root@amsh.ai", "Root", "short")
+            with self.assertRaises(ValueError):
+                create_platform_admin(db, "asha@example.com", "Asha", "a-long-enough-pass")  # that email is a clinic account
+            admin = create_platform_admin(db, "root@amsh.ai", "Root", "a-long-enough-pass")
+            self.assertEqual((admin.scope, admin.business_id), ("platform", None))
+        r = self.client.post("/api/admin/auth/login", json={"email": "root@amsh.ai", "password": "a-long-enough-pass"})
+        self.assertEqual(r.status_code, 200)
+        admin_headers = {"Authorization": f"Bearer {r.json()['access_token']}"}
+        self.assertEqual(self.client.get("/api/admin/auth/me", headers=admin_headers).status_code, 200)
+        self.assertEqual(self.client.post("/api/admin/auth/login", json={"email": "root@amsh.ai", "password": "wrong"}).status_code, 401)
+        self.assertIn(("admin.login", "success", "root@amsh.ai"), self._audit())
+        for _ in range(5):
+            self.client.post("/api/admin/auth/login", json={"email": "root@amsh.ai", "password": "nope"})
+        locked = self.client.post("/api/admin/auth/login", json={"email": "root@amsh.ai", "password": "a-long-enough-pass"})
+        self.assertEqual(locked.status_code, 429)  # the admin login has its own lockout
+
+
+class PostCallProcessing(unittest.TestCase):
+    """After a call: real summary / intent / sentiment / action items, missed-call text-back, staff alerts."""
+
+    def setUp(self):
+        from unittest.mock import patch
+
+        from backend.server.database.models.agent import Agent
+        from backend.server.services import post_call
+
+        self.factory, self.biz = make_db_factory()
+        self.pc = post_call
+        self.sms = []
+        self.emails = []
+
+        def fake_sms(to, body):
+            self.sms.append((to, body))
+            return {"queued": True}
+
+        async def fake_email(to, subject, text, html=None):
+            self.emails.append((to, subject, text))
+            return {"sent": True}
+
+        patches = [
+            patch.object(post_call, "SessionLocal", self.factory),
+            patch("backend.server.database.session.SessionLocal", self.factory),
+            patch("backend.ai.tools.common.send_sms.send_sms_sync", fake_sms),
+            patch("backend.server.services.email_service.send_email", fake_email),
+        ]
+        for pt in patches:
+            pt.start()
+            self.addCleanup(pt.stop)
+        self.Agent = Agent
+
+    def _config(self, **config):
+        with self.factory() as db:
+            agent = db.query(self.Agent).filter(self.Agent.business_id == self.biz).one()
+            agent.config = config
+            db.commit()
+
+    def _call(self, call_id="CA1", number="+919876500001", turns=(), outcome="resolved", booked=None):
+        from datetime import datetime, timedelta, timezone
+
+        from backend.server.database.models.call import Call
+        from backend.server.database.models.message import Message
+        from backend.server.database.models.transaction import Transaction
+
+        with self.factory() as db:
+            db.add(Call(id=call_id, business_id=self.biz, caller_number=number, outcome=outcome, started_at=datetime.now(timezone.utc) - timedelta(minutes=2)))
+            db.add(Message(id=f"{call_id}-0", call_id=call_id, speaker="AI", text="Hello, welcome.", sequence=0))
+            for n, (who, text) in enumerate(turns, start=1):
+                db.add(Message(id=f"{call_id}-{n}", call_id=call_id, speaker=who, text=text, sequence=n))
+            if booked:
+                db.add(Transaction(business_id=self.biz, call_id=call_id, type="appointment", status="confirmed", details=booked))
+            db.commit()
+
+    def _get(self, call_id="CA1"):
+        from backend.server.database.models.call import Call
+
+        with self.factory() as db:
+            c = db.get(Call, call_id)
+            return c.summary, c.intent, c.sentiment, c.action_items, c.analyzed_at, c.caller_name
+
+    def _run(self, call_id="CA1", *responses):
+        backend = ScriptedBackend(*responses) if responses else ScriptedBackend(Exception("model down"))
+        return run(self.pc.process_call_end(call_id, backend=backend))
+
+    BOOKED = {"customer_name": "Asha", "preferred_date": "2026-09-29", "preferred_time": "10:00 AM", "doctor_name": "Dr. Sharma", "service_name": "Whitening"}
+
+    def test_the_model_writes_the_record_and_the_database_decides_the_facts(self):
+        import json
+
+        self._call(turns=[("User", "I would like to book a whitening appointment"), ("AI", "Sure, which day?"), ("User", "tomorrow at ten, I am Asha")], booked=self.BOOKED)
+        answer = json.dumps({"summary": "Asha booked a teeth whitening visit for tomorrow at 10.", "intent": "inquiry", "sentiment": "positive", "action_items": ["Send the whitening prep sheet"], "caller_name": "Asha"})
+        self._run("CA1", reply(answer))
+        summary, intent, sentiment, items, analyzed, name = self._get()
+        self.assertEqual(summary, "Asha booked a teeth whitening visit for tomorrow at 10.")
+        self.assertEqual((intent, sentiment, name), ("booking", "positive", "Asha"))  # the model said inquiry; a booking exists, so booking
+        self.assertTrue(items[0].startswith("Appointment booked: 2026-09-29 10:00 AM with Dr. Sharma"))
+        self.assertIn("Send the whitening prep sheet", items)
+        self.assertIsNotNone(analyzed)
+        self.assertIsNone(run(self.pc.process_call_end("CA1", backend=ScriptedBackend())))  # a call is analysed once
+
+    def test_without_a_model_a_keyword_record_is_still_written(self):
+        self._call(turns=[("User", "I want to cancel my appointment please"), ("AI", "Sure")])
+        self._run("CA1")
+        summary, intent, sentiment, items, analyzed, _ = self._get()
+        self.assertEqual(intent, "cancel")
+        self.assertIn("cancel my appointment", summary)
+        self.assertEqual(sentiment, "neutral")
+        self.assertIsNotNone(analyzed)
+
+    def test_nonsense_from_the_model_falls_back_field_by_field(self):
+        import json
+
+        self._call(turns=[("User", "what are your timings"), ("AI", "9 to 5")])
+        self._run("CA1", reply(json.dumps({"summary": "", "intent": "world domination", "sentiment": "ecstatic", "action_items": "not a list"})))
+        summary, intent, sentiment, items, _, _ = self._get()
+        self.assertEqual((intent, sentiment, items), ("inquiry", "neutral", []))
+        self.assertIn("timings", summary)
+        self._call(call_id="CA2", turns=[("User", "hello"), ("AI", "hi")])
+        self._run("CA2", reply("this is not json at all"))
+        self.assertEqual(self._get("CA2")[1], "inquiry")
+
+    def test_an_emergency_is_a_rule_not_the_models_opinion(self):
+        import json
+
+        self._config(alerts={"phone": "+911111111111"})
+        self._call(turns=[("User", "mujhe seene mein dard hai aur saans nahi aa rahi"), ("AI", "transferring")], outcome="transferred")
+        self._run("CA1", reply(json.dumps({"summary": "Caller asked something.", "intent": "inquiry", "sentiment": "positive", "action_items": []})))
+        _, intent, sentiment, items, _, _ = self._get()
+        self.assertEqual((intent, sentiment), ("emergency", "negative"))
+        self.assertTrue(any("handed to staff" in i for i in items))
+        self.assertEqual(len(self.sms), 1)
+        self.assertIn("EMERGENCY", self.sms[0][1])
+        self.assertEqual(self.sms[0][0], "+911111111111")
+
+    def test_missed_call_text_back_is_opt_in_once_a_day_and_not_for_tests(self):
+        self._call(call_id="CA1", turns=[])  # hung up before saying anything
+        self._run("CA1")
+        self.assertEqual(self.sms, [])  # switched off by default
+        self.assertIn("Missed call", " ".join(self._get("CA1")[3]))
+        self._config(toggles={"missed_call_followup": True})
+        self._call(call_id="CA2", turns=[])
+        self._run("CA2")
+        self.assertEqual(len(self.sms), 1)
+        self.assertEqual(self.sms[0][0], "+919876500001")
+        self.assertIn("Sorry we missed your call", self.sms[0][1])
+        self._call(call_id="CA3", turns=[])  # same number again within 24 hours
+        self._run("CA3")
+        self.assertEqual(len(self.sms), 1)
+        self._call(call_id="webcall_x", number="+919876500002", turns=[])  # a playground call is never texted
+        self._run("webcall_x")
+        self._call(call_id="CA4", number="12345", turns=[])  # not a real number
+        self._run("CA4")
+        self.assertEqual(len(self.sms), 1)
+
+    def test_staff_alerts_respect_the_owners_choices(self):
+        self._config(alerts={"phone": "+911111111111", "email": "owner@clinic.example", "events": ["booking"]})
+        self._call(turns=[("User", "book me tomorrow at ten"), ("AI", "done")], booked=self.BOOKED)
+        self._run("CA1")
+        self.assertEqual(len(self.sms), 1)
+        self.assertIn("New booking", self.sms[0][1])
+        self.assertEqual(self.emails[0][0], "owner@clinic.example")
+        self._call(call_id="CA2", turns=[])  # a missed call is not in the chosen events
+        self._run("CA2")
+        self.assertEqual(len(self.sms), 1)
+
+    def test_no_alert_contact_means_no_alert_and_test_calls_never_alert(self):
+        self._call(turns=[("User", "book me tomorrow"), ("AI", "ok")], booked=self.BOOKED)
+        self._run("CA1")
+        self.assertEqual((self.sms, self.emails), ([], []))
+        self._config(alerts={"phone": "+911111111111"})
+        self._call(call_id="studio_abc", turns=[("User", "book me tomorrow"), ("AI", "ok")], booked=self.BOOKED)
+        self._run("studio_abc")
+        self.assertEqual(self.sms, [])  # analysed, but no alert for a playground call
+        self.assertIsNotNone(self._get("studio_abc")[4])
+
+    def test_the_calls_api_returns_the_analysis(self):
+        from backend.server.api.routes import calls
+        from backend.server.database.models.call import Call
+
+        self._call(turns=[("User", "hello"), ("AI", "hi")])
+        self._run("CA1")
+        with self.factory() as db:
+            out = calls._format_call(db.get(Call, "CA1"))
+        self.assertIn(out["sentiment"], ("positive", "neutral", "negative"))
+        self.assertIsInstance(out["action_items"], list)
+
+    def test_saving_one_alert_field_keeps_the_others(self):
+        from backend.server.api.routes.agents import merge_agent_config
+
+        current = {"alerts": {"phone": "+911111111111", "events": ["booking"]}, "reminders": {"lead_hours": 12}, "toggles": {"reminders": True}}
+        merged = merge_agent_config(current, {"alerts": {"email": "owner@clinic.example"}, "toggles": {"record": True}})
+        self.assertEqual(merged["alerts"], {"phone": "+911111111111", "events": ["booking"], "email": "owner@clinic.example"})
+        self.assertEqual(merged["reminders"], {"lead_hours": 12})
+        self.assertEqual(merged["toggles"], {"reminders": True, "record": True})
+
+    def test_scheduling_is_a_no_op_when_disabled(self):
+        import os
+        from unittest.mock import patch
+
+        with patch.dict(os.environ, {"AMSH_DISABLE_POST_CALL": "1"}), patch("threading.Thread", side_effect=AssertionError("must not start")):
+            self.pc.schedule("CA1")
+
+
+class AppointmentReminders(unittest.TestCase):
+    """Reminders message real patients: off by default, once per appointment, inside the clinic's window."""
+
+    NOW = None  # set in setUp: 10:00 in Kolkata on Monday 28 September 2026
+
+    def setUp(self):
+        from datetime import datetime, timezone
+        from unittest.mock import patch
+
+        from backend.server.database.models.agent import Agent
+
+        self.factory, self.biz = make_db_factory()
+        self.NOW = datetime(2026, 9, 28, 4, 30, tzinfo=timezone.utc)
+        self.sms, self.templates = [], []
+        self.sms_queued = True
+
+        def fake_sms(to, body):
+            self.sms.append((to, body))
+            return {"queued": self.sms_queued}
+
+        async def fake_template(config, to, template, language, params):
+            self.templates.append((to, template, language, params))
+            return True
+
+        for pt in (
+            patch("backend.ai.tools.common.send_sms.send_sms_sync", fake_sms),
+            patch("backend.server.services.whatsapp_agent.send_template", fake_template),
+        ):
+            pt.start()
+            self.addCleanup(pt.stop)
+        self.Agent = Agent
+
+    def _config(self, **config):
+        with self.factory() as db:
+            db.query(self.Agent).filter(self.Agent.business_id == self.biz).one().config = config
+            db.commit()
+
+    def _appt(self, date="2026-09-29", time="09:30 AM", status="confirmed", phone="+919876500001", **extra):
+        from backend.server.database.models.transaction import Transaction
+
+        with self.factory() as db:
+            t = Transaction(business_id=self.biz, type="appointment", status=status,
+                            details={"customer_name": "Asha", "phone_number": phone, "preferred_date": date, "preferred_time": time, "doctor_name": "Dr. Sharma", **extra})
+            db.add(t)
+            db.commit()
+            return t.id
+
+    def _cycle(self):
+        from backend.server.workers.jobs.reminders import run_cycle
+
+        return run(run_cycle(self.factory, self.NOW))
+
+    def _details(self, tid):
+        from backend.server.database.models.transaction import Transaction
+
+        with self.factory() as db:
+            return dict(db.get(Transaction, tid).details)
+
+    def test_nothing_is_sent_unless_the_clinic_switched_reminders_on(self):
+        self._appt()
+        self.assertEqual(self._cycle(), 0)
+        self.assertEqual(self.sms, [])
+
+    def test_one_reminder_per_appointment_with_the_details(self):
+        self._config(toggles={"reminders": True})
+        tid = self._appt()
+        self.assertEqual(self._cycle(), 1)
+        to, body = self.sms[0]
+        self.assertEqual(to, "+919876500001")
+        for part in ("Hi Asha", "Sanjeevani Clinic", "Dr. Sharma", "Tuesday, 29 September at 9:30 AM", "+912000000000"):
+            self.assertIn(part, body)
+        self.assertIn("reminder_sent_at", self._details(tid))
+        self.assertEqual(self._cycle(), 0)  # never twice
+        self.assertEqual(len(self.sms), 1)
+
+    def test_only_confirmed_appointments_inside_the_window(self):
+        self._config(toggles={"reminders": True})
+        self._appt(date="2026-10-01")  # three days away: too early
+        self._appt(date="2026-09-28", time="10:30 AM")  # 30 minutes away: too close
+        self._appt(date="2026-09-27", time="09:00 AM")  # already past
+        self._appt(status="cancelled")
+        self.assertEqual(self._cycle(), 0)
+        self._config(toggles={"reminders": True}, reminders={"lead_hours": 96})  # a longer window brings the 3-day one in
+        self.assertEqual(self._cycle(), 1)
+
+    def test_failed_or_impossible_sends_are_not_marked_so_they_can_retry(self):
+        self._config(toggles={"reminders": True})
+        no_phone = self._appt(phone="")
+        self.assertEqual(self._cycle(), 0)
+        self.assertNotIn("reminder_sent_at", self._details(no_phone))
+        self.sms_queued = False  # SMS switched off or refused
+        ok = self._appt(date="2026-09-29", time="08:00 AM")
+        self.assertEqual(self._cycle(), 0)
+        self.assertNotIn("reminder_sent_at", self._details(ok))
+        self.sms_queued = True
+        self.assertEqual(self._cycle(), 1)  # the next cycle retries it
+
+    def test_whatsapp_template_is_used_only_when_configured_and_connected(self):
+        from backend.server.database.models.integration import Integration
+
+        self._config(toggles={"reminders": True}, reminders={"whatsapp_template": "appt_reminder", "whatsapp_language": "en"})
+        self._appt()
+        self.assertEqual(self._cycle(), 1)
+        self.assertEqual(self.templates, [])  # no connected WhatsApp number yet
+        with self.factory() as db:
+            db.add(Integration(business_id=self.biz, provider="whatsapp", status="connected", config={"phone_number_id": "111", "access_token": "x"}))
+            db.commit()
+        self._appt(date="2026-09-29", time="08:00 AM")
+        self.assertEqual(self._cycle(), 1)
+        to, template, language, params = self.templates[0]
+        self.assertEqual((to, template, language), ("919876500001", "appt_reminder", "en"))
+        self.assertEqual(params[:2], ["Asha", "Sanjeevani Clinic"])
+
+
+class CalendarFeed(unittest.TestCase):
+    """The clinic's bookings as an .ics subscription for Google / Outlook / Apple Calendar."""
+
+    def setUp(self):
+        self.factory, self.biz = make_db_factory()
+
+    def _appt(self, date, time="09:30 AM", status="confirmed", **details):
+        from backend.server.database.models.transaction import Transaction
+
+        with self.factory() as db:
+            db.add(Transaction(business_id=self.biz, type="appointment", status=status,
+                               details={"customer_name": "Asha, K", "phone_number": "+919876500001", "preferred_date": date, "preferred_time": time,
+                                        "service_name": "Whitening; deep", "doctor_name": "Dr. Sharma", **details}))
+            db.commit()
+
+    def test_ics_content_escaping_and_utc_times(self):
+        from datetime import datetime, timezone
+
+        from backend.server.api.routes.calendar_feed import build_ics
+        from backend.server.database.models.business import Business
+        from backend.server.database.models.transaction import Transaction
+
+        self._appt("2026-09-29")
+        with self.factory() as db:
+            ics = build_ics(db.get(Business, self.biz), db.query(Transaction).all(), datetime(2026, 9, 28, tzinfo=timezone.utc))
+        self.assertTrue(ics.startswith("BEGIN:VCALENDAR\r\n") and ics.endswith("END:VCALENDAR\r\n"))
+        self.assertIn("DTSTART:20260929T040000Z", ics)  # 09:30 in Kolkata is 04:00 UTC
+        self.assertIn("DTEND:20260929T043000Z", ics)
+        self.assertIn("SUMMARY:Whitening\\; deep: Asha\\, K", ics)  # ; and , are escaped
+        self.assertTrue(all(len(line.encode("utf-8")) <= 75 for line in ics.split("\r\n")))  # long lines are folded
+
+    def test_unreadable_times_are_skipped_not_fatal(self):
+        from datetime import datetime, timezone
+
+        from backend.server.api.routes.calendar_feed import build_ics
+        from backend.server.database.models.business import Business
+        from backend.server.database.models.transaction import Transaction
+
+        self._appt("someday", "whenever")
+        with self.factory() as db:
+            ics = build_ics(db.get(Business, self.biz), db.query(Transaction).all(), datetime(2026, 9, 28, tzinfo=timezone.utc))
+        self.assertNotIn("BEGIN:VEVENT", ics)
+
+    def test_the_feed_needs_the_secret_token_and_lists_only_confirmed_upcoming_bookings(self):
+        from datetime import date, timedelta
+
+        from fastapi import HTTPException
+
+        from backend.server.api.routes import calendar_feed as cf
+
+        tomorrow = (date.today() + timedelta(days=1)).isoformat()
+        self._appt(tomorrow)
+        self._appt(tomorrow, time="11:00 AM", status="cancelled")
+        self._appt((date.today() - timedelta(days=400)).isoformat())  # far in the past
+        with self.factory() as db:
+            with self.assertRaises(HTTPException) as cm:
+                cf.calendar_feed(self.biz, "wrong-token", db)
+            self.assertEqual(cm.exception.status_code, 404)
+            resp = cf.calendar_feed(self.biz, cf.feed_token(self.biz), db)
+        body = resp.body.decode()
+        self.assertEqual(resp.media_type, "text/calendar; charset=utf-8")
+        self.assertEqual(body.count("BEGIN:VEVENT"), 1)
+        self.assertNotEqual(cf.feed_token(self.biz), cf.feed_token("another-business"))
+        self.assertEqual(cf.feed_token(self.biz), cf.feed_token(self.biz))
+
+
+class AdminTenants(unittest.TestCase):
+    """Platform-admin tenant directory: who may call it, what it returns, suspend / plan changes, and what suspension does."""
+
+    def setUp(self):
+        from datetime import datetime, timedelta, timezone
+
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from backend.scripts.create_platform_admin import create_platform_admin
+        from backend.server.api.routes import admin
+        from backend.server.auth.security import create_access_token, hash_password
+        from backend.server.database.models.agent import Agent
+        from backend.server.database.models.business import Business
+        from backend.server.database.models.call import Call
+        from backend.server.database.models.plan import Plan
+        from backend.server.database.models.user import User
+        from backend.server.database.session import get_db
+
+        self.factory, self.biz1 = make_db_factory()
+        self.biz2 = "biz-two"
+        app = FastAPI()
+        app.include_router(admin.router)
+
+        def override():
+            with self.factory() as db:
+                yield db
+
+        app.dependency_overrides[get_db] = override
+        self.client = TestClient(app)
+        now = datetime.now(timezone.utc)
+        with self.factory() as db:
+            one = db.get(Business, self.biz1)
+            one.country, one.plan, one.status = "IN", "starter", "active"
+            db.add(Business(id=self.biz2, name="Amsterdam Dental Care", country="NL", plan="business", status="pending", business_subtype="dental_clinic", city="Amsterdam", timezone="Europe/Amsterdam"))
+            db.add(User(email="owner1@clinic.example", hashed_password=hash_password("x" * 10), name="Dr. Asha Rao", scope="business", role="owner", business_id=self.biz1))
+            db.add(User(email="staff1@clinic.example", hashed_password=hash_password("x" * 10), name="Ravi", scope="business", role="staff", business_id=self.biz1))
+            db.add(User(email="owner2@clinic.example", hashed_password=hash_password("x" * 10), name="Dr. Mark de Jong", scope="business", role="owner", business_id=self.biz2))
+            db.add(Agent(business_id=self.biz2, name="Anna", status="active", config={}))
+            for key, status in (("starter", "active"), ("business", "active"), ("professional", "active"), ("growth", "draft")):
+                db.add(Plan(key=key, name=key.title(), status=status, quotas={}, overage={}, features=[]))
+            for n, secs in enumerate((120, 60)):
+                db.add(Call(id=f"c{n}", business_id=self.biz1, caller_number="+911", outcome="resolved", duration_seconds=secs, started_at=now - timedelta(days=n + 1)))
+            db.add(Call(id="c-old", business_id=self.biz1, caller_number="+911", outcome="resolved", duration_seconds=999, started_at=now - timedelta(days=40)))
+            db.commit()
+            admin_user = create_platform_admin(db, "root@amsh.ai", "Root", "a-long-enough-pass")
+            owner = db.query(User).filter(User.email == "owner1@clinic.example").one()
+            self.admin_h = {"Authorization": f"Bearer {create_access_token(admin_user.id)}"}
+            self.owner_h = {"Authorization": f"Bearer {create_access_token(owner.id)}"}
+
+    def _audit(self, action):
+        from backend.server.database.models.audit_log import AuditLog
+
+        with self.factory() as db:
+            return [(r.action, r.business_id, r.meta) for r in db.query(AuditLog).filter(AuditLog.action == action).all()]
+
+    def test_only_platform_admins_get_in(self):
+        for path in ("/api/admin/tenants", f"/api/admin/tenants/{self.biz1}"):
+            self.assertIn(self.client.get(path).status_code, (401, 403))
+            self.assertEqual(self.client.get(path, headers=self.owner_h).status_code, 403)  # a clinic owner can never see other clinics
+            self.assertEqual(self.client.get(path, headers=self.admin_h).status_code, 200)
+        self.assertEqual(self.client.patch(f"/api/admin/tenants/{self.biz1}", headers=self.owner_h, json={"status": "suspended"}).status_code, 403)
+
+    def test_list_has_owner_agent_and_thirty_day_usage(self):
+        data = self.client.get("/api/admin/tenants", headers=self.admin_h).json()
+        self.assertEqual(data["total"], 2)
+        by_id = {t["id"]: t for t in data["items"]}
+        one, two = by_id[self.biz1], by_id[self.biz2]
+        self.assertEqual((one["owner_name"], one["owner_email"], one["users_count"]), ("Dr. Asha Rao", "owner1@clinic.example", 2))
+        self.assertEqual((one["calls_30d"], one["minutes_30d"]), (2, 3.0))  # the 40-day-old call is not counted
+        self.assertEqual((two["owner_name"], two["ai_receptionist"], two["type"], two["calls_30d"]), ("Dr. Mark de Jong", "Anna", "Dental Clinic", 0))
+        self.assertTrue(one["ai_receptionist"])  # the seeded clinic has an agent
+        facets = data["facets"]
+        self.assertEqual((facets["countries"], facets["plans"]), (["IN", "NL"], ["business", "starter"]))
+        self.assertEqual(facets["statuses"], ["active", "paused", "suspended", "pending"])
+        self.assertIn("Dental Clinic", facets["types"])
+
+    def test_search_and_filters(self):
+        def ids(**params):
+            return {t["id"] for t in self.client.get("/api/admin/tenants", headers=self.admin_h, params=params).json()["items"]}
+
+        self.assertEqual(ids(search="amsterdam"), {self.biz2})
+        self.assertEqual(ids(search="mark de jong"), {self.biz2})  # matches the owner's name
+        self.assertEqual(ids(search="owner1@clinic"), {self.biz1})  # and the owner's email
+        self.assertEqual(ids(status="active"), {self.biz1})
+        self.assertEqual(ids(plan="business"), {self.biz2})
+        self.assertEqual(ids(country="NL"), {self.biz2})
+        self.assertEqual(ids(type="Dental Clinic"), {self.biz2})
+        self.assertEqual(ids(search="zzz"), set())
+        self.assertEqual(len(ids(limit=1)), 1)
+        self.assertEqual(self.client.get("/api/admin/tenants", headers=self.admin_h, params={"limit": 1000}).status_code, 422)  # capped
+
+    def test_detail_and_unknown_id(self):
+        d = self.client.get(f"/api/admin/tenants/{self.biz2}", headers=self.admin_h).json()
+        self.assertEqual((d["name"], d["city"], d["timezone"], d["totals"]), ("Amsterdam Dental Care", "Amsterdam", "Europe/Amsterdam", {"calls": 0, "appointments": 0}))
+        self.assertEqual([a["name"] for a in d["agents"]], ["Anna"])
+        one = self.client.get(f"/api/admin/tenants/{self.biz1}", headers=self.admin_h).json()
+        self.assertEqual(one["totals"]["calls"], 3)
+        self.assertIsNotNone(one["last_call_at"])
+        self.assertEqual(self.client.get("/api/admin/tenants/nope", headers=self.admin_h).status_code, 404)
+
+    def test_suspend_reactivate_and_plan_change_are_audited(self):
+        url = f"/api/admin/tenants/{self.biz1}"
+        r = self.client.patch(url, headers=self.admin_h, json={"status": "suspended"})
+        self.assertEqual((r.status_code, r.json()["status"]), (200, "suspended"))
+        self.client.patch(url, headers=self.admin_h, json={"plan": "  Professional  "})  # any case, extra spaces
+        self.assertEqual(self.client.get(url, headers=self.admin_h).json()["plan"], "professional")  # trimmed, stored as the plan key
+        self.client.patch(url, headers=self.admin_h, json={"status": "active"})
+        log = self._audit("admin.tenant_updated")
+        self.assertEqual(len(log), 3)
+        self.assertEqual(log[0][1], self.biz1)
+        self.assertEqual(log[0][2], {"before": {"status": "active", "plan": "starter"}, "after": {"status": "suspended", "plan": "starter"}})
+
+    def test_bad_changes_are_refused(self):
+        url = f"/api/admin/tenants/{self.biz1}"
+        self.assertEqual(self.client.patch(url, headers=self.admin_h, json={"status": "deleted"}).status_code, 422)
+        self.assertEqual(self.client.patch(url, headers=self.admin_h, json={}).status_code, 400)
+        self.assertEqual(self.client.patch(url, headers=self.admin_h, json={"plan": "   "}).status_code, 400)
+        unknown = self.client.patch(url, headers=self.admin_h, json={"plan": "platinum"})
+        self.assertEqual((unknown.status_code, "Unknown plan" in unknown.json()["detail"]), (400, True))
+        draft = self.client.patch(url, headers=self.admin_h, json={"plan": "growth"})  # a draft plan cannot be given to a business
+        self.assertEqual((draft.status_code, "draft" in draft.json()["detail"]), (400, True))
+        self.assertEqual(self.client.patch("/api/admin/tenants/nope", headers=self.admin_h, json={"status": "active"}).status_code, 404)
+        self.assertEqual(self._audit("admin.tenant_updated"), [])  # refused changes leave no trace of a change
+
+    def test_a_suspended_clinic_is_not_answered_on_either_provider(self):
+        from types import SimpleNamespace
+
+        from backend.server.api.routes import exotel, voice
+        from backend.server.database.models.business import Business
+
+        def call_both():
+            with self.factory() as db:
+                request = SimpleNamespace(query_params={"business_id": self.biz1})
+                ex = run(exotel.handle_exotel_incoming_call(request, CallSid="EXO1", From="+911", To="+912000000000", CallType=None, Direction=None, db=db))
+                tw = run(voice.handle_incoming_call(To="+912000000000", From="+911", CallSid="CA1", ForwardedFrom=None, db=db))
+            return ex, tw
+
+        ex, tw = call_both()
+        self.assertIsInstance(ex, dict)  # active: the normal stream hand-over
+        self.assertIn(b"<Connect>", tw.body)
+        with self.factory() as db:
+            db.get(Business, self.biz1).status = "suspended"
+            db.commit()
+        ex, tw = call_both()
+        for refused in (ex, tw):
+            self.assertIn(b"temporarily unavailable", refused.body)
+            self.assertIn(b"<Hangup/>", refused.body)
+
+
+def valid_plan(**over):
+    plan = {
+        "name": "Growth Plus", "price": 149, "cycle": "monthly", "price_yearly": 1490, "currency": "USD", "status": "active",
+        "quotas": {k: 100 for k in ("voice_minutes", "messages", "concurrent_calls", "ai_tokens_millions", "knowledge_docs", "audio_storage_gb",
+                                    "vector_storage_gb", "conversation_retention_days", "seats")},
+        "overage": {"per_minute": 0.2, "per_message": 0.02, "per_gb": 0.5}, "features": ["whatsapp", "call_recording"],
+    }
+    plan.update(over)
+    return plan
+
+
+class AdminPlans(unittest.TestCase):
+    """Plans are created by platform admins and read (publicly) by the tenant app's pricing screens."""
+
+    def setUp(self):
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from backend.scripts.create_platform_admin import create_platform_admin
+        from backend.server.api.routes import admin_plans, plans as public_plans
+        from backend.server.auth.security import create_access_token, hash_password
+        from backend.server.database.models.user import User
+        from backend.server.database.session import get_db
+
+        self.factory, self.biz = make_db_factory()
+        app = FastAPI()
+        app.include_router(admin_plans.router)
+        app.include_router(public_plans.router)
+
+        def override():
+            with self.factory() as db:
+                yield db
+
+        app.dependency_overrides[get_db] = override
+        self.client = TestClient(app)
+        with self.factory() as db:
+            db.add(User(email="owner@clinic.example", hashed_password=hash_password("x" * 10), name="Owner", scope="business", role="owner", business_id=self.biz))
+            db.commit()
+            admin_user = create_platform_admin(db, "root@amsh.ai", "Root", "a-long-enough-pass")
+            owner = db.query(User).filter(User.email == "owner@clinic.example").one()
+            self.admin_h = {"Authorization": f"Bearer {create_access_token(admin_user.id)}"}
+            self.owner_h = {"Authorization": f"Bearer {create_access_token(owner.id)}"}
+
+    def _create(self, **over):
+        return self.client.post("/api/admin/plans", headers=self.admin_h, json=valid_plan(**over))
+
+    def _audit(self, action):
+        from backend.server.database.models.audit_log import AuditLog
+
+        with self.factory() as db:
+            return [r.meta for r in db.query(AuditLog).filter(AuditLog.action == action).all()]
+
+    def _put_business_on(self, key):
+        from backend.server.database.models.business import Business
+
+        with self.factory() as db:
+            db.get(Business, self.biz).plan = key
+            db.commit()
+
+    def test_only_platform_admins_manage_plans_but_anyone_can_read_public_ones(self):
+        for method, path in (("get", "/api/admin/plans"), ("get", "/api/admin/plans/meta"), ("post", "/api/admin/plans")):
+            self.assertIn(getattr(self.client, method)(path).status_code, (401, 403, 422))
+            self.assertEqual(getattr(self.client, method)(path, headers=self.owner_h).status_code, 403)  # a clinic owner cannot edit prices
+        self.assertEqual(self.client.get("/api/admin/plans", headers=self.admin_h).status_code, 200)
+        self.assertEqual(self.client.get("/api/plans").status_code, 200)  # pricing is public
+
+    def test_meta_lists_the_features_and_quotas_the_editor_offers(self):
+        meta = self.client.get("/api/admin/plans/meta", headers=self.admin_h).json()
+        self.assertIn("whatsapp", [f["key"] for f in meta["features"]])
+        self.assertEqual(len(meta["quotas"]), 9)
+        self.assertEqual(meta["currencies"], ["USD", "INR", "EUR", "GBP"])
+
+    def test_create_derives_the_key_starts_as_draft_and_is_audited(self):
+        r = self._create(status=None) if False else self.client.post("/api/admin/plans", headers=self.admin_h, json={k: v for k, v in valid_plan().items() if k != "status"})
+        self.assertEqual(r.status_code, 201)
+        plan = r.json()
+        self.assertEqual((plan["key"], plan["status"], plan["subscribers"], plan["kind"]), ("growth-plus", "draft", 0, "catalog"))
+        self.assertEqual(self._audit("admin.plan_created"), [{"key": "growth-plus", "name": "Growth Plus"}])
+        got = self.client.get(f"/api/admin/plans/{plan['id']}", headers=self.admin_h)
+        self.assertEqual(got.json()["quotas"]["voice_minutes"], 100)
+
+    def test_every_invalid_plan_is_refused_with_a_reason(self):
+        cases = [
+            ({"key": "Bad Key!"}, "Plan key"),
+            ({"name": "A"}, "Plan name"),
+            ({"kind": "enterprise"}, "name the client"),
+            ({"price": -1}, "cannot be negative"),
+            ({"currency": "XYZ"}, "Currency"),
+            ({"features": ["teleportation"]}, "Unknown feature"),
+            ({"overage": {"per_minute": 0.1}}, "overage"),
+            ({"quotas": {"voice_minutes": 5}}, "every quota"),
+            ({"cycle": "yearly", "price_yearly": 100}, "single price"),
+            ({"quotas": {**valid_plan()["quotas"], "seats": -3}}, "cannot be negative"),
+        ]
+        for over, needle in cases:
+            r = self._create(**over)
+            self.assertEqual(r.status_code, 400, over)
+            self.assertIn(needle.lower(), r.json()["detail"].lower(), over)
+        self.assertEqual(self._create(status="deleted").status_code, 422)
+        self.assertEqual(self._create(quotas={**valid_plan()["quotas"], "seats": "many"}).status_code, 422)  # not a number: rejected by the API's type check
+        self.assertEqual(self.client.get("/api/admin/plans", headers=self.admin_h).json()["items"], [])  # nothing half-saved
+
+    def test_keys_and_names_are_unique(self):
+        self.assertEqual(self._create().status_code, 201)
+        self.assertIn("key already exists", self._create(name="Other Name", key="growth-plus").json()["detail"])
+        self.assertIn("name already exists", self._create(name="growth PLUS", key="another-key").json()["detail"])
+
+    def test_update_changes_fields_but_never_the_key_and_unlimited_is_allowed(self):
+        plan = self._create().json()
+        url = f"/api/admin/plans/{plan['id']}"
+        quotas = {**plan["quotas"], "voice_minutes": None}  # unlimited
+        r = self.client.patch(url, headers=self.admin_h, json={"price": 179, "key": "hacked", "quotas": quotas, "features": ["whatsapp"], "highlighted": True})
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertEqual((body["key"], body["price"], body["highlighted"], body["features"]), ("growth-plus", 179, True, ["whatsapp"]))
+        self.assertIsNone(body["quotas"]["voice_minutes"])
+        self.assertEqual(self.client.patch(url, headers=self.admin_h, json={}).status_code, 400)
+        self.assertEqual(self.client.patch(url, headers=self.admin_h, json={"price": -5}).status_code, 400)
+        self.assertEqual(self.client.patch("/api/admin/plans/nope", headers=self.admin_h, json={"price": 1}).status_code, 404)
+        self.assertIn("price", self._audit("admin.plan_updated")[0]["changed"])
+
+    def test_subscribers_are_counted_and_a_plan_with_customers_cannot_be_deleted(self):
+        plan = self._create().json()
+        self._put_business_on("Growth-Plus")  # case does not matter
+        listed = self.client.get("/api/admin/plans", headers=self.admin_h).json()["items"]
+        self.assertEqual(listed[0]["subscribers"], 1)
+        blocked = self.client.delete(f"/api/admin/plans/{plan['id']}", headers=self.admin_h)
+        self.assertEqual(blocked.status_code, 409)
+        self.assertIn("Archive", blocked.json()["detail"])
+        archived = self.client.patch(f"/api/admin/plans/{plan['id']}", headers=self.admin_h, json={"status": "archived"})  # the safe way out
+        self.assertEqual(archived.json()["status"], "archived")
+        self._put_business_on("starter")
+        self.assertEqual(self.client.delete(f"/api/admin/plans/{plan['id']}", headers=self.admin_h).status_code, 204)
+        self.assertEqual(self.client.delete(f"/api/admin/plans/{plan['id']}", headers=self.admin_h).status_code, 404)
+        self.assertEqual(len(self._audit("admin.plan_deleted")), 1)
+
+    def test_the_public_list_shows_only_plans_that_can_be_bought(self):
+        self._create(name="Public Pro", highlighted=True)
+        self._create(name="Still Draft", status="draft")
+        self._create(name="Old One", status="archived")
+        self._create(name="Quoted Deal", custom_pricing=True)
+        self._create(name="Acme Enterprise", kind="enterprise", client="Acme Clinics")
+        r = self.client.get("/api/plans")
+        items = r.json()["items"]
+        self.assertEqual([p["key"] for p in items], ["public-pro"])
+        pro = items[0]
+        self.assertEqual((pro["price_monthly"], pro["price_yearly"], pro["currency"], pro["highlighted"]), (149, 1490, "USD", True))
+        self.assertEqual(pro["features"], [{"key": "whatsapp", "label": "WhatsApp Channel"}, {"key": "call_recording", "label": "Call Recording"}])
+        for private in ("id", "client", "subscribers", "status", "custom_pricing", "kind"):
+            self.assertNotIn(private, pro)
+        self.assertEqual(self.client.get("/api/plans/public-pro").status_code, 200)
+        for hidden in ("still-draft", "old-one", "quoted-deal", "acme-enterprise", "nope"):
+            self.assertEqual(self.client.get(f"/api/plans/{hidden}").status_code, 404, hidden)
+
+    def test_a_yearly_billed_plan_reports_its_price_as_yearly(self):
+        self._create(name="Annual Only", cycle="yearly", price=1200, price_yearly=None)
+        item = self.client.get("/api/plans").json()["items"][0]
+        self.assertEqual((item["price_monthly"], item["price_yearly"]), (None, 1200))
+
+
+class BillingSecurity(unittest.TestCase):
+    """The price and the plan come from the catalog and from Razorpay's own order, never from the browser."""
+
+    def setUp(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from backend.server.api.routes import billing
+        from backend.server.database.models.plan import Plan
+        from backend.server.database.session import get_db
+
+        self.factory, self.biz = make_db_factory()
+        self.billing = billing
+        self.keys = True  # Razorpay keys configured
+        self.dev_fallbacks = False
+        self.sig_ok = True
+        self.order = None
+        self.created = []
+        self.fetched = []
+
+        def base(key, **over):
+            fields = dict(key=key, name=key.title(), status="active", kind="catalog", price=99, cycle="monthly", price_yearly=990, currency="USD",
+                          custom_pricing=False, quotas={}, overage={}, features=[])
+            fields.update(over)
+            return Plan(**fields)
+
+        with self.factory() as db:
+            db.add_all([
+                base("starter"),
+                base("lite", price_yearly=None),
+                Plan(key="annual", name="Annual", status="active", kind="catalog", price=1200, cycle="yearly", currency="USD", custom_pricing=False, quotas={}, overage={}, features=[]),
+                Plan(key="growth", name="Growth", status="draft", kind="catalog", price=149, cycle="monthly", currency="USD", custom_pricing=False, quotas={}, overage={}, features=[]),
+                Plan(key="quoted", name="Quoted", status="active", kind="catalog", price=500, cycle="monthly", currency="USD", custom_pricing=True, quotas={}, overage={}, features=[]),
+                Plan(key="acme", name="Acme", status="active", kind="enterprise", client="Acme", price=900, cycle="monthly", currency="USD", custom_pricing=False, quotas={}, overage={}, features=[]),
+                Plan(key="freebie", name="Freebie", status="active", kind="catalog", price=0, cycle="monthly", currency="USD", custom_pricing=False, quotas={}, overage={}, features=[]),
+            ])
+            db.commit()
+
+        async def fake_create(amount, currency, plan_id, cycle, business_id):
+            self.created.append({"amount": amount, "currency": currency, "plan_id": plan_id, "cycle": cycle, "business_id": business_id})
+            return self.create_result if hasattr(self, "create_result") else {"success": True, "order_id": "order_1", "amount": int(amount * 100), "currency": currency, "key_id": "k", "test_mode": False}
+
+        async def fake_fetch(order_id):
+            self.fetched.append(order_id)
+            return self.order
+
+        app = FastAPI()
+        app.include_router(billing.router)
+
+        def override():
+            with self.factory() as db:
+                yield db
+
+        app.dependency_overrides[get_db] = override
+        self.client = TestClient(app)
+        patches = [
+            patch.object(billing, "get_settings", lambda: SimpleNamespace(
+                RAZORPAY_KEY_ID="rzp_live_x" if self.keys else None, RAZORPAY_KEY_SECRET="secret" if self.keys else None, ALLOW_DEV_FALLBACKS=self.dev_fallbacks)),
+            patch.object(billing.RazorpayGateway, "create_order", fake_create),
+            patch.object(billing.RazorpayGateway, "fetch_order", fake_fetch),
+            patch.object(billing.RazorpayGateway, "verify_signature", lambda order_id, payment_id, signature: self.sig_ok),
+        ]
+        for pt in patches:
+            pt.start()
+            self.addCleanup(pt.stop)
+
+    def _order(self, **over):
+        body = {"plan_id": "starter", "cycle": "monthly", "business_id": self.biz, "amount": 1, "currency": "INR"}
+        body.update(over)
+        return self.client.post("/api/billing/razorpay/create-order", json=body)
+
+    def _verify(self, **over):
+        body = {"razorpay_order_id": "order_1", "razorpay_payment_id": "pay_1", "razorpay_signature": "sig", "plan_id": "starter", "business_id": self.biz}
+        body.update(over)
+        return self.client.post("/api/billing/razorpay/verify", json=body)
+
+    def _biz(self):
+        from backend.server.database.models.business import Business
+
+        with self.factory() as db:
+            b = db.get(Business, self.biz)
+            return b.plan, b.status
+
+    def _paid_order(self, **over):
+        order = {"id": "order_1", "status": "paid", "amount": 9900, "currency": "USD", "notes": {"plan_id": "starter", "cycle": "monthly", "business_id": self.biz}}
+        order.update(over)
+        self.order = order
+
+    # ---- create-order: the price is the plan's
+    def test_the_amount_and_currency_the_browser_sends_are_ignored(self):
+        r = self._order(amount=1, currency="INR")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(self.created, [{"amount": 99.0, "currency": "USD", "plan_id": "starter", "cycle": "monthly", "business_id": self.biz}])
+
+    def test_yearly_and_yearly_only_plans_are_priced_from_the_catalog(self):
+        self._order(cycle="yearly")
+        self._order(plan_id="annual", cycle="yearly")
+        self.assertEqual([c["amount"] for c in self.created], [990.0, 1200.0])
+
+    def test_plans_that_cannot_be_bought_online_are_refused(self):
+        for over in ({"plan_id": "nope"}, {"plan_id": "growth"}, {"plan_id": "quoted"}, {"plan_id": "acme"}, {"plan_id": "freebie"},
+                     {"plan_id": "lite", "cycle": "yearly"}, {"plan_id": "annual", "cycle": "monthly"}, {"cycle": "weekly"}):
+            self.assertEqual(self._order(**over).status_code, 400, over)
+        self.assertEqual(self.created, [])
+
+    def test_a_provider_failure_is_an_error_not_a_fake_order(self):
+        self.create_result = {"success": False, "error": "Could not reach Razorpay"}
+        r = self._order()
+        self.assertEqual((r.status_code, r.json()["detail"]), (502, "Could not reach Razorpay"))
+
+    def test_without_keys_payments_are_off_unless_dev_mode(self):
+        self.keys = False
+        self.assertEqual(self._order().status_code, 503)
+        self.assertEqual(self._verify().status_code, 503)
+        self.dev_fallbacks = True
+        self.assertEqual(self._order().status_code, 200)  # local development still works with test orders
+
+    # ---- verify: only what Razorpay says about the order counts
+    def test_a_genuine_payment_activates_the_plan_for_the_business(self):
+        self._paid_order()
+        r = self._verify()
+        self.assertEqual((r.status_code, r.json()["plan_id"]), (200, "starter"))
+        self.assertEqual(self._biz(), ("starter", "active"))
+        self.assertEqual(self.fetched, ["order_1"])
+
+    def test_paying_for_a_cheap_plan_cannot_unlock_a_dearer_one(self):
+        self._paid_order()  # the order is for "starter"
+        r = self._verify(plan_id="annual")  # the browser claims the yearly plan
+        self.assertEqual(r.status_code, 400)
+        self.assertNotEqual(self._biz()[0], "annual")
+
+    def test_a_payment_cannot_be_pointed_at_another_business(self):
+        self._paid_order(notes={"plan_id": "starter", "cycle": "monthly", "business_id": "someone-else"})
+        self.assertEqual(self._verify().status_code, 400)
+
+    def test_bad_signature_wrong_amount_unpaid_and_unreadable_orders_are_refused(self):
+        self._paid_order()
+        self.sig_ok = False
+        self.assertEqual(self._verify().status_code, 400)
+        self.sig_ok = True
+        self._paid_order(amount=100)  # paid one rupee-equivalent, not the plan price
+        self.assertEqual(self._verify().status_code, 400)
+        self._paid_order(currency="INR")
+        self.assertEqual(self._verify().status_code, 400)
+        self._paid_order(status="created")
+        self.assertEqual(self._verify().status_code, 400)
+        self.order = None
+        self.assertEqual(self._verify().status_code, 502)
+        self.assertEqual(self._verify(plan_id="nope").status_code, 400)
+        self.assertEqual(self._biz()[1], "pending")  # nothing was activated by any of these
+
+    def test_dev_mode_without_keys_still_activates_for_local_testing(self):
+        self.keys = False
+        self.dev_fallbacks = True
+        self.assertEqual(self._verify().status_code, 200)
+        self.assertEqual(self._biz(), ("starter", "active"))
+        self.assertEqual(self.fetched, [])  # there is no real order to look up
+
+
+class AdminTenantData(unittest.TestCase):
+    """Read-only views of one business for the admin detail page: platform admins only, one business only, no secrets."""
+
+    PATHS = ("users", "agents", "appointments", "calls", "services", "knowledge", "integrations", "activity")
+
+    def setUp(self):
+        from datetime import datetime, timedelta, timezone
+
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from backend.scripts.create_platform_admin import create_platform_admin
+        from backend.server.api.routes import admin_tenant_data
+        from backend.server.auth.security import create_access_token, hash_password
+        from backend.server.database.models.business import Business
+        from backend.server.database.models.call import Call
+        from backend.server.database.models.integration import Integration
+        from backend.server.database.models.knowledge_base import KnowledgeDocument
+        from backend.server.database.models.service import Service
+        from backend.server.database.models.transaction import Transaction
+        from backend.server.database.models.user import User
+        from backend.server.database.session import get_db
+        from backend.server.services.audit import audit
+
+        self.factory, self.biz = make_db_factory()
+        self.other = "other-biz"
+        app = FastAPI()
+        app.include_router(admin_tenant_data.router)
+
+        def override():
+            with self.factory() as db:
+                yield db
+
+        app.dependency_overrides[get_db] = override
+        self.client = TestClient(app)
+        now = datetime.now(timezone.utc)
+        with self.factory() as db:
+            db.add(Business(id=self.other, name="Other Clinic"))
+            for bid, tag in ((self.biz, "mine"), (self.other, "theirs")):
+                db.add(User(email=f"owner-{tag}@x.example", hashed_password=hash_password("x" * 10), name=f"Owner {tag}", scope="business", role="owner", business_id=bid))
+                db.add(Transaction(business_id=bid, type="appointment", status="confirmed", details={"customer_name": f"Patient {tag}", "phone_number": "+911", "service_name": "Cleaning", "doctor_name": "Dr. A", "preferred_date": "2026-10-01", "preferred_time": "10:00 AM"}))
+                db.add(Service(business_id=bid, title=f"Service {tag}", duration_minutes=30, price_amount=500, price_currency="INR"))
+                db.add(KnowledgeDocument(business_id=bid, doc_type="faq", status="ready", question=f"Question {tag}?", answer="a"))
+                db.add(Integration(business_id=bid, provider="whatsapp", status="connected", config={"access_token": "SECRET-TOKEN", "two_step_pin": "SECRET-PIN", "display_phone_number": "+91 99999", "verified_name": f"Verified {tag}"}))
+            for cid, delta in (("CA111", 3), ("studio_x", 2), ("wa_abcd_91_20260928", 1)):
+                db.add(Call(id=cid, business_id=self.biz, caller_number="+911", outcome="resolved", sentiment="positive", intent="booking", duration_seconds=60, started_at=now - timedelta(minutes=delta)))
+            db.add(Call(id="CA-other", business_id=self.other, caller_number="+912", outcome="resolved", started_at=now))
+            db.commit()
+            audit(db, "admin.tenant_updated", business_id=self.biz, actor_email="root@amsh.ai", target_type="business", target_id=self.biz, meta={"after": {"status": "active"}})
+            audit(db, "admin.tenant_updated", business_id=self.other, actor_email="root@amsh.ai")
+            admin_user = create_platform_admin(db, "root@amsh.ai", "Root", "a-long-enough-pass")
+            owner = db.query(User).filter(User.email == "owner-mine@x.example").one()
+            self.admin_h = {"Authorization": f"Bearer {create_access_token(admin_user.id)}"}
+            self.owner_h = {"Authorization": f"Bearer {create_access_token(owner.id)}"}
+
+    def _get(self, path, business=None, **params):
+        return self.client.get(f"/api/admin/tenants/{business or self.biz}/{path}", headers=self.admin_h, params=params)
+
+    def test_platform_admins_only(self):
+        for path in self.PATHS:
+            url = f"/api/admin/tenants/{self.biz}/{path}"
+            self.assertIn(self.client.get(url).status_code, (401, 403), path)
+            self.assertEqual(self.client.get(url, headers=self.owner_h).status_code, 403, path)  # not even the business's own owner
+            self.assertEqual(self.client.get(url, headers=self.admin_h).status_code, 200, path)
+
+    def test_an_unknown_business_is_a_404_everywhere(self):
+        for path in self.PATHS:
+            self.assertEqual(self._get(path, business="nope").status_code, 404, path)
+
+    def test_each_view_returns_only_this_businesss_rows(self):
+        users = self._get("users").json()["items"]
+        self.assertEqual([u["email"] for u in users], ["owner-mine@x.example"])
+        self.assertFalse(users[0]["email_verified"])
+        self.assertEqual([a["patient"] for a in self._get("appointments").json()["items"]], ["Patient mine"])
+        services = [x["title"] for x in self._get("services").json()["items"]]  # the seeded clinic already has services of its own
+        self.assertIn("Service mine", services)
+        self.assertNotIn("Service theirs", services)
+        knowledge = [k["title"] for k in self._get("knowledge").json()["items"]]
+        self.assertIn("Question mine?", knowledge)
+        self.assertNotIn("Question theirs?", knowledge)
+        calls = {c["id"]: c for c in self._get("calls").json()["items"]}
+        self.assertEqual(set(calls), {"CA111", "studio_x", "wa_abcd_91_20260928"})  # not CA-other
+        self.assertEqual((calls["CA111"]["channel"], calls["studio_x"]["channel"], calls["wa_abcd_91_20260928"]["channel"]), ("phone", "playground", "whatsapp"))
+        activity = self._get("activity").json()["items"]
+        self.assertEqual([(a["action"], a["actor"]) for a in activity], [("admin.tenant_updated", "root@amsh.ai")])
+
+    def test_agents_show_which_one_answers(self):
+        agents = self._get("agents").json()["items"]
+        self.assertTrue(agents)
+        self.assertTrue(agents[0]["is_primary"])
+        self.assertEqual([a["is_primary"] for a in agents].count(True), 1)
+        for key in ("name", "status", "primary_language", "languages", "recording"):
+            self.assertIn(key, agents[0])
+
+    def test_integration_credentials_never_leave_the_server(self):
+        r = self._get("integrations")
+        self.assertNotIn("SECRET-TOKEN", r.text)
+        self.assertNotIn("SECRET-PIN", r.text)
+        self.assertNotIn("access_token", r.text)
+        item = r.json()["items"][0]
+        self.assertEqual((item["provider"], item["status"]), ("whatsapp", "connected"))
+        self.assertEqual(item["details"], {"display_phone_number": "+91 99999", "verified_name": "Verified mine"})
+
+    def test_limits_are_bounded(self):
+        self.assertEqual(self._get("calls", limit=1000).status_code, 422)
+        self.assertEqual(len(self._get("calls", limit=1).json()["items"]), 1)
+
+
+class NaturalFillers(unittest.TestCase):
+    """Human sounds around a reply ("hmm...", "achha...", "one moment..."): chosen by code, rare, never for a worried caller."""
+
+    EN_THINK = ("Hmm…", "Let me see…", "Okay…")
+    HI_THINK = ("हम्म…", "अच्छा…", "देखिए…")
+
+    def _engine(self, *responses, on=True):
+        engine, _ = make_engine(ScriptedBackend(*responses))
+        engine.fillers_on = on
+        return engine
+
+    def _events(self, engine, text):
+        async def go():
+            return [ev async for ev in engine.turn_events(text, stream=True)]
+
+        return run(go())
+
+    def test_choice_rules(self):
+        from backend.ai.engine.agent.fillers import choose_backchannel as pick
+
+        q, first = "what time do you open on Sundays?", "We are closed on Sundays, sorry."
+        self.assertIn(pick(q, first, None, 2, -99, 2), self.EN_THINK)
+        self.assertIsNone(pick(q, first, None, 1, -99, 1))  # never on the first turn
+        self.assertIsNone(pick(q, first, None, 4, 2, 4))  # not twice within three turns
+        self.assertIsNotNone(pick(q, first, None, 5, 2, 5))
+        self.assertIsNone(pick(q, first, "worried", 5, -99, 5))  # never for a worried or upset caller
+        self.assertIsNone(pick(q, first, "upset", 5, -99, 5))
+        self.assertIsNone(pick(q, "Sure, we are closed on Sundays.", None, 5, -99, 5))  # it already starts with a sound
+        self.assertIsNone(pick(q, "Closed Sundays.", None, 5, -99, 5))  # too short to bother
+        self.assertIsNone(pick("ok", first, None, 5, -99, 5))  # nothing the caller said calls for one
+        self.assertIsNone(pick(q, "Aap kis din aana chahenge, bataiye zara", None, 5, -99, 5))  # Roman Hindi: no guess
+        self.assertIn(pick("I told you my name is Asha and I want to book", first, None, 5, -99, 5), ("Right…", "Okay…", "I see…"))
+        self.assertIn(pick("hahaha you are funny you know", first, "amused", 5, -99, 5), ("Oh nice!", "Oh, great!"))
+        self.assertIn(pick("क्लिनिक कब खुलता है?", "क्लिनिक सुबह नौ बजे खुलता है।", None, 2, -99, 2), self.HI_THINK)
+
+    def test_a_question_gets_a_thinking_sound_from_the_second_turn_and_not_too_often(self):
+        answer = "We are closed on Sundays, sorry."
+        engine = self._engine(reply("Hello, how can I help you today?"), reply(answer), reply(answer), reply("Sure."), reply(answer))
+        first = run(engine.turn("hello there my friend, how are you doing?"))
+        self.assertNotIn("…", first.reply)  # turn 1: none
+        second = run(engine.turn("what time do you open on Sundays?"))
+        self.assertTrue(any(second.reply.startswith(f) for f in self.EN_THINK), second.reply)
+        self.assertTrue(second.reply.endswith(answer))
+        third = run(engine.turn("and what about Saturdays then?"))
+        self.assertEqual(third.reply, answer)  # too soon after the last one
+        run(engine.turn("thanks"))
+        fifth = run(engine.turn("what time do you close on Sundays?"))
+        self.assertTrue(any(fifth.reply.startswith(f) for f in self.EN_THINK), fifth.reply)
+
+    def test_hindi_gets_a_devanagari_sound(self):
+        engine = self._engine(reply("नमस्ते! मैं आपकी कैसे मदद कर सकती हूँ?"), reply("क्लिनिक सुबह नौ बजे खुलता है।"))
+        engine.language_pref = "hi"
+        run(engine.turn("नमस्ते"))
+        out = run(engine.turn("क्लिनिक कब खुलता है?"))
+        self.assertTrue(any(out.reply.startswith(f) for f in self.HI_THINK), out.reply)
+
+    def test_a_worried_caller_never_gets_one_and_neither_does_an_engine_with_them_off(self):
+        engine = self._engine(reply("Hello, how can I help you today?"), reply("Please come in, we can see you today."))
+        run(engine.turn("hello there my friend, how are you doing?"))
+        out = run(engine.turn("mujhe bahut dard ho raha hai, kya main aa sakta hoon?"))
+        self.assertEqual(out.reply, "Please come in, we can see you today.")
+        off = self._engine(reply("Hello, how can I help you today?"), reply("We are closed on Sundays, sorry."), on=False)
+        run(off.turn("hello there my friend, how are you doing?"))
+        self.assertEqual(run(off.turn("what time do you open on Sundays?")).reply, "We are closed on Sundays, sorry.")
+        self.assertFalse(make_engine(ScriptedBackend())[0].fillers_on)  # off unless the runtime turns it on for a spoken call
+
+    def test_the_caller_hears_one_moment_while_a_tool_runs(self):
+        engine = self._engine(call("check_availability", date="tomorrow"), reply("We have openings tomorrow. What time suits you?"))
+        events = self._events(engine, "any slot tomorrow please")
+        sentences = [e for e in events if e["type"] == "sentence"]
+        self.assertEqual((sentences[0]["text"], sentences[0].get("filler")), ("One moment…", True))
+        self.assertEqual([s["text"] for s in sentences[1:]], ["We have openings tomorrow.", "What time suits you?"])
+        done = events[-1]["turn"]
+        self.assertEqual(done.reply, "One moment… We have openings tomorrow. What time suits you?")  # the transcript matches what was heard
+        self.assertIsNotNone(done.first_sentence_ms)
+
+    def test_the_wait_sound_is_hindi_in_a_hindi_call_and_skipped_when_it_is_not_needed(self):
+        hindi = self._engine(call("check_availability", date="tomorrow"), reply("कल कई स्लॉट खाली हैं। आप कौन सा समय चाहेंगे?"))
+        hindi.language_pref = "hi"
+        self.assertEqual(self._events(hindi, "कल का कोई स्लॉट")[0]["text"], "जी, एक सेकंड…")
+        spoke_first = {"content": "Let me check that.", "tool_calls": call("check_availability", date="tomorrow")["tool_calls"]}
+        engine = self._engine(spoke_first, reply("We have openings tomorrow. What time suits you?"))
+        texts = [e["text"] for e in self._events(engine, "any slot tomorrow please") if e["type"] == "sentence"]
+        self.assertNotIn("One moment…", texts)  # the model already said something
+        ending = self._engine(call("end_call"), reply("Goodbye!"))
+        self.assertFalse(any(e.get("filler") for e in self._events(ending, "bye, that is all")))  # no filler before hanging up
+
+    def test_the_profile_default_and_the_owner_switch(self):
+        from backend.ai.engine.agent.facts import AgentProfile, load_all
+        from backend.server.database.models.agent import Agent
+
+        self.assertTrue(AgentProfile().natural_fillers)
+        factory, biz = make_db_factory()
+        with factory() as db:
+            db.query(Agent).filter(Agent.business_id == biz).one().config = {"toggles": {"natural_fillers": False}}
+            db.commit()
+        self.assertFalse(load_all(factory, biz)[1].natural_fillers)
 
 
 class OneQuestionRule(unittest.TestCase):

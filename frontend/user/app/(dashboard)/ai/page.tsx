@@ -39,20 +39,11 @@ function AIPageContent() {
   }
 
   return (
-    <div className="animate-in fade-in duration-500 pt-4 pb-6 flex flex-col h-full w-full">
-      <div className="flex items-center justify-between mb-3 px-1">
-        <button
-          onClick={() => setViewMode('workbench')}
-          className="px-3.5 py-1.5 bg-blue-50 text-[#0066FF] border border-blue-200 hover:bg-blue-100 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-            <polygon points="5 3 19 12 5 21 5 3"></polygon>
-          </svg>
-          Switch to AI Studio Workbench
-        </button>
-      </div>
-
-      <AIHeader onTestClick={() => setIsTestOpen(true)} />
+    <div className="space-y-3.5 animate-in fade-in duration-300 flex flex-col h-full w-full pb-8">
+      <AIHeader
+        onTestClick={() => setIsTestOpen(true)}
+        onSwitchWorkbench={() => setViewMode('workbench')}
+      />
       <AITabs activeTab={activeTab} setActiveTab={setActiveTab} />
       <TestPlaygroundModal isOpen={isTestOpen} onClose={() => setIsTestOpen(false)} />
       

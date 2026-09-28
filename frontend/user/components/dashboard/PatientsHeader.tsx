@@ -15,12 +15,12 @@ export function PatientsHeader({ onAddPatient }: PatientsHeaderProps) {
   });
 
   return (
-    <header className="flex items-center justify-between mb-3 py-1 flex-wrap gap-2">
+    <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3 py-1">
       <div>
-        <h1 className="text-xl font-bold text-gray-900 tracking-tight leading-tight flex items-center gap-2">
+        <h1 className="text-xl font-extrabold text-gray-900 tracking-tight leading-tight flex items-center gap-2">
           {STRINGS.HEADERS.PATIENTS.TITLE}
         </h1>
-        <p className="text-xs text-gray-500 mt-0.5">
+        <p className="text-xs text-gray-500 font-medium mt-0.5">
           {STRINGS.HEADERS.PATIENTS.SUBTITLE}
         </p>
       </div>
@@ -33,7 +33,7 @@ export function PatientsHeader({ onAddPatient }: PatientsHeaderProps) {
         {onAddPatient && (
           <button
             onClick={onAddPatient}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0066FF] hover:bg-[#0052cc] text-white rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer active:scale-95"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#0066FF] hover:bg-[#0052cc] text-white rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer active:scale-95"
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <line x1="12" y1="5" x2="12" y2="19"></line>

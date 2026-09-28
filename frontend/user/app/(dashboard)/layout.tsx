@@ -8,16 +8,30 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [businessName, setBusinessName] = useState<string>('My Business');
   const [initials, setInitials] = useState<string>('BO');
+  const [logo, setLogo] = useState<string | null>(null);
 
   React.useEffect(() => {
-    const cachedB = StorageService.getBusiness();
-    if (cachedB?.name) setBusinessName(cachedB.name);
+    const refreshData = () => {
+      const cachedB = StorageService.getBusiness();
+      const localLogo = typeof window !== 'undefined' ? localStorage.getItem('business_logo') : null;
+      if (cachedB?.name) setBusinessName(cachedB.name);
+      if (cachedB?.logo_url || localLogo) {
+        const raw = cachedB?.logo_url || localLogo;
+        setLogo(raw?.startsWith('http') || raw?.startsWith('data:') ? raw : `http://localhost:8010${raw}`);
+      }
 
-    const cachedU = StorageService.getUser();
-    if (cachedU) {
-      const name = cachedU.full_name || cachedU.name || cachedU.email?.split('@')[0] || '';
-      setInitials(name.slice(0, 2).toUpperCase() || 'BO');
-    }
+      const cachedU = StorageService.getUser();
+      if (cachedU) {
+        const name = cachedU.full_name || cachedU.name || cachedU.email?.split('@')[0] || '';
+        setInitials(name.slice(0, 2).toUpperCase() || 'BO');
+      }
+    };
+
+    refreshData();
+    window.addEventListener('business_updated', refreshData);
+    return () => {
+      window.removeEventListener('business_updated', refreshData);
+    };
   }, []);
 
   return (
@@ -58,9 +72,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <span className="text-xs font-semibold text-gray-600 truncate max-w-[120px] sm:max-w-[180px]">
               {businessName}
             </span>
-            <div className="w-7 h-7 rounded-full bg-[#E0E7FF] text-[#0066FF] flex items-center justify-center text-xs font-bold">
-              {initials}
-            </div>
+            {logo ? (
+              <img src={logo} alt="Logo" className="w-7 h-7 rounded-full object-cover border border-gray-200" />
+            ) : (
+              <div className="w-7 h-7 rounded-full bg-[#E0E7FF] text-[#0066FF] flex items-center justify-center text-xs font-bold">
+                {initials}
+              </div>
+            )}
           </div>
         </header>
 

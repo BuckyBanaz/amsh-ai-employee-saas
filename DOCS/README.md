@@ -276,29 +276,106 @@ run, **Stub** = placeholder, **Missing** = does not exist.
 | SMS confirmations | Written | Guarded by `AMSH_DISABLE_SMS`; it will send real SMS when enabled |
 | Billing / Razorpay / plans | Written | Not re-tested |
 | Workers, calendar, CRM, e-commerce, payments integrations, analytics | Stub | Folders contain only `__init__.py` |
-| Admin portal (`frontend/admin`) | Unknown | Not inspected this session |
+| **Admin portal (`frontend/admin`)** | **3 areas real, 21 pages still mock** | Real: admin login and guard, Businesses list (search, filters, suspend / reactivate / change plan), **Business detail** (overview with 30-day usage, users, AI receptionist, appointments, calls, services, knowledge base, integrations, activity; read-only except suspend / plan), **Billing plan catalog** (create / edit / archive plans). Backend tested (admin tenants, tenant data, plans); `tsc`, eslint and `next build` pass; read against live data for the Demo clinic; **not clicked through in a browser**. Removed from the detail page because nothing real backs them: impersonate, emergency forwarding, direct password reset, customers, usage and billing tabs. Still mock: dashboard, business-users, admin-users, appointments, calls, conversations, customers, services, receptionists, usage, analytics, health, integrations, security, audit, tickets, announcements, verticals, and the revenue / subscriptions / invoices parts of Billing. Sidebar links `/notifications` and `/settings` point to pages that do not exist |
+| Post-call record: real summary, intent, sentiment, action items (model + keyword fallback; booking and emergency decided by the database and rules) | Tested + model output checked live | Runs in the background when any call ends; shown in `/calls`; Postgres at migration 0003 |
+| Appointment reminders (SMS; WhatsApp template optional) | Tested with fakes | **Off by default** (`REMINDERS_ENABLED` and the clinic's `toggles.reminders`); no dashboard switch yet; not tried with a real SMS provider |
+| Missed-call text-back and staff alerts (SMS / email) | Tested with fakes | Opt-in per clinic through `Agent.config` (`toggles.missed_call_followup`, `alerts`); no dashboard UI yet |
+| Calendar feed (`.ics` subscription for Google / Outlook / Apple) | Tested | Read-only subscription, not two-way sync; URL from `GET /api/businesses/{id}/calendar-feed`; no dashboard button yet |
+| Auth: forgot / reset / change password, email verification, audit log, login lockout, admin login | Tested (backend, 24 tests) | Frontend: forgot, reset, change-password wired; verify-email page not wired; emails only proven with a fake sender + log fallback |
+| Database migrations (Alembic) | Tested + Live | Real Postgres stamped at 0001 and upgraded to 0002 |
+| User app pages: team, billing, integrations, conversations, notifications, analytics, most settings tabs | Static UI | No backend for several of them. See section 9 |
 | Backend tests folder | Empty | The tests live in `backend/ai/evals/test_agent_core.py` |
 
 ---
 
-## 9. What is pending
+## 9. What is pending (full list, 2026-09-28)
 
-**Owner actions**
-1. Groq paid tier (Dev tier) or another provider; the free caps make live use unreliable.
-2. Top up Cartesia credits (or decide how to spend them: previews are billed per character).
-3. Rotate every key that was ever printed in a terminal (one alias printed keys earlier).
-4. Delete the duplicate agents in the demo business (4 agents; the oldest wins).
-5. Decide: enable `AMSH_DISABLE_SMS=0` only when ready to send real SMS.
-6. Make one real phone call (Exotel or Twilio) to verify nova-3 multi, streaming, barge-in and the recording URL.
-7. Listen-test: laugh/emotion quality, interruption thresholds, Indian voices, `/calls` playback.
+Plan and order for the big items: [`18_AMSh_Completion_Plan_User_and_Admin.md`](18_AMSh_Completion_Plan_User_and_Admin.md).
+Legend: **[A]** admin portal, **[U]** user app, **[V]** voice/AI, **[W]** WhatsApp, **[P]** platform/infra, **[O]** owner action.
 
-**Engineering, next in line**
-1. Try the WhatsApp agent with a real connected number; then media, templates, human takeover.
-2. Deepgram-based STT for the playgrounds (backend WebSocket proxy).
-3. Move `availability.py`, `datetime_utils.py`, `progress.py`, `emotion.py` into `capabilities/` with shims.
-4. Live eval re-run once the quota allows; then retire the old template engine.
-5. Tune the interruption detector after listening tests.
-6. Make the "open now" line refresh during long calls.
+### Who is working on what (2026-09-28): READ THIS BEFORE STARTING ANY PENDING ITEM
+- **User side (`frontend/user`, and the user-facing analytics backend such as `backend/server/api/routes/dashboard_stats.py`) is being
+  worked on by Antigravity right now.** Its uncommitted work already includes: many dashboard headers, analytics KPIs and charts
+  (`AIPerformanceCard`, `CallVolumeChart`, `CallVolumeTrendChart`, `CallOutcomesChart`, `AppointmentSourcesChart`,
+  `BusiestCallingHoursHeatmap`, `TopCallReasonsList`, `RecentAIConversations`), `ServiceModal`, `analytics.controller.ts`, and edits to the
+  dashboard, analytics, appointments, billing, conversations, integrations, notifications, services, settings and team pages.
+  **Do not start the user-app items in section 9 (U) from this list without checking `git status` and asking who has them.**
+  Some of those items (analytics, services, conversations, notifications, billing, team, settings) may already be in progress or done there.
+- **Admin portal (`frontend/admin`, `backend/server/api/routes/admin.py`) is being worked on by Claude.**
+- **Overlap to reconcile:** on the user side Claude also changed these files today (uncommitted, may conflict with Antigravity's edits):
+  `(auth)/forgot-password`, `(auth)/reset-password` (new), `(auth)/verify-email`, `settings/SecuritySettings.tsx`,
+  `settings/NotificationSettings.tsx` (rewritten into a real "Automations and alerts" tab), `middleware.ts` (public auth paths),
+  `controllers/auth.controller.ts`, `controllers/dashboard.controller.ts` (calendar feed, config types, call fields),
+  `utils/api_endpoints.ts`, `CallDetailPanel.tsx`, `CallLogsTable.tsx`, `calls/page.tsx`. If a merge conflict appears, keep both sets of changes.
+- Claude's backend-only work (auth, migrations, post-call analysis, reminders, alerts, calendar feed, WhatsApp chat, admin) does not overlap with the user side.
+
+### Admin portal: batch 1 done, the rest pending (23 of 25 pages are still mock)
+Built so far: admin login and session guard, `GET /api/admin/tenants` (+ detail), `PATCH /api/admin/tenants/{id}` (suspend, reactivate,
+plan; audited; a suspended clinic's phone calls are refused), the real Businesses page, and the `create_platform_admin` script.
+Still to do: blocking a suspended clinic's dashboard login, admin password reset, and everything below:
+1. **[A]** Business detail page wired to `GET /api/admin/tenants/{id}`; remove or build the sidebar's `/notifications` and `/settings` links; a shared loading / empty / error component for the other pages; plan limits (tenants have no stored usage limits, so there is no usage percentage yet).
+2. **[A]** Plan catalog is built (create / edit / archive at `/billing`, public `GET /api/plans`). Still to do: **enforce** a plan's quotas per business (minutes, messages, seats, ... are stored but nothing counts or blocks yet), real billing analytics (the billing page's revenue, subscriptions and invoices are sample data), and wiring the tenant app's pricing screens to `GET /api/plans` (user side, Antigravity): its checkout still shows hard-coded prices while the server now charges the plan's price. Razorpay orders now take price and currency from the plan and `verify` checks Razorpay's own order (done, tested with fakes, not tried with real keys); the seeded plans are USD, so set INR on a plan if the Razorpay account cannot charge USD. `GET /api/billing/businesses/{id}` is still unauthenticated.
+3. **[A]** Users: business-users and admin-users (create, deactivate, roles, reset link).
+4. **[A]** Cross-tenant reads: appointments, calls (+ recordings), conversations, customers, services, receptionists (agents).
+5. **[A]** Billing, usage and platform analytics (revenue, subscriptions, invoices, failed payments).
+6. **[A]** Health page (API, DB, Redis, Qdrant, Deepgram, Cartesia, Groq/Gemini status and credits).
+7. **[A]** Security and audit pages (the `audit_logs` table exists and is being written; no read endpoint or page yet).
+8. **[A]** Tickets and announcements (new models, endpoints, email on reply), integrations overview, verticals.
+9. **[A]** Remove the mock data from all 25 pages; some screens may need small redesigns once real data shapes are known.
+
+### User app
+1. **[U]** Team page: list, invite by email, change role, deactivate, resend/revoke (backend has only create + list).
+2. **[U]** Settings: profile, notification preferences, AI defaults, sessions (Business tab is wired; the rest is static).
+3. **[U]** Conversations inbox (calls + WhatsApp), with human takeover for WhatsApp. No backend yet.
+4. **[U]** Analytics (KPIs and charts are hard-coded; needs real queries). Someone else has uncommitted dashboard-home work in
+   progress (`dashboard_stats.py`, new chart components): check it before starting analytics.
+5. **[U]** Notifications (model, list, mark read, events from bookings / missed calls / escalations).
+6. **[U]** Billing page (plan, usage vs limits, invoices, cancel / change plan, payment method); Razorpay create/verify exists.
+7. **[U]** Integrations page grid and Developer settings (static); Twilio connect step; Google/Outlook calendar OAuth (stubs).
+8. **[U]** Onboarding: plans, review (submit) and Twilio pages are UI-only.
+9. **[U]** Verify-email page is not wired to the new endpoint; no "please verify" banner; accept-invite page makes no call.
+10. **[U]** Patients: edit, delete, appointment and call history. Services header actions. Landing page links and pricing text.
+11. **[U]** Two-factor sign-in (button now says "Coming soon"), refresh token, logout everywhere, session list.
+12. **[U]** Register still accepts any password length (reset/change require 8).
+
+### Voice and AI
+1. **[V]** Deepgram in the playgrounds: backend relay done and verified live; the browser adapter replacing Chrome speech
+   recognition is not written.
+2. **[V]** One real phone call (Exotel or Twilio) to verify nova-3 multi, streaming, interrupt and the recording URL.
+3. **[V]** Listening tests: laugh / emotion quality, interruption thresholds (`barge_in.ts`), Indian voices, `/calls` playback.
+4. **[V]** Move `availability.py`, `datetime_utils.py`, `progress.py`, `emotion.py` into `capabilities/` with shims.
+5. **[V]** Live eval re-run when the Groq quota allows; then retire the old template engine.
+6. **[V]** "Open now" line refresh on long calls; Qdrant not ready at startup (knowledge search returns nothing).
+7. **[V]** Deeper human behaviour (backchannels, hold sounds while tools run, per-personality emotion strength).
+8. **[U]** Owner switches with no UI yet: reminders (`toggles.reminders`, `reminders.lead_hours`, `reminders.whatsapp_template`), missed-call text-back (`toggles.missed_call_followup`), staff alerts (`alerts.phone` / `email` / `events`), calendar feed button. They are set through the agent config API today.
+9. **[U]** Live call take-over: the admin portal has a mock screen for it and the tenant dashboard has none; the backend has only transfer-to-human. Real take-over needs a signalling path (join or redirect the live Twilio / Exotel call) and belongs in the tenant dashboard first.
+10. **[V]** Also from the market comparison, still to build: returning-patient recognition and intake, website widget, analytics with revenue estimate, outbound campaigns, compliance basics (recording disclosure, retention), agent versions and simulations, more Indian languages.
+
+### WhatsApp
+1. **[W]** Try the agent with a real connected number (needs `META_APP_SECRET`).
+2. **[W]** Template messages (needed after 24 h and for reminders), media / voice notes, human takeover, per-business switch.
+3. **[W]** Reminders exist (SMS; WhatsApp needs an approved template). To do: real-provider test, reply handling (a reply on WhatsApp starts a fresh conversation that does not know about the reminder), dashboard switch.
+
+### Platform and infrastructure
+1. **[P]** Email delivery: set `RESEND_API_KEY` (and `EMAIL_FROM`, `FRONTEND_URL`); until then reset / verify links only appear in the API log.
+2. **[P]** Email verification policy: currently informational (no feature is blocked for unverified users).
+3. **[P]** Provider signature checks for Twilio and Exotel; rate limiting on public endpoints (login lockout exists).
+4. **[P]** Production: `ALLOW_DEV_FALLBACKS=false`, uvicorn without `--reload`, sessions in Redis, recordings in object storage.
+5. **[P]** Tests: `backend/tests` is empty (all tests are in `backend/ai/evals`); add tenant-isolation tests per new endpoint; CI.
+6. **[P]** Per-call metrics and cost tracking for the investor story; PII redaction in every log line.
+
+### Owner actions
+1. **[O]** Groq paid tier (the free caps make live use unreliable). 2. Cartesia credits are nearly used up.
+3. Put `META_APP_SECRET` and `RESEND_API_KEY` in `.env`. 4. Rotate keys that were once printed in a terminal.
+5. Delete the duplicate agents in the demo business. 6. Run `python -m backend.scripts.create_platform_admin <email>`.
+7. Keep `AMSH_DISABLE_SMS` on until real SMS is wanted. 8. Try everything in a browser and on a real call: most of the
+   voice, recording and auth work has unit tests but was not clicked through.
+
+### Housekeeping
+1. Uncommitted work (about 36 files on `v0.7`) needs a commit plan; keep the other person's dashboard files in a separate commit.
+2. `scratch/test_cartesia*.py` and `scratch/test_models.py` were committed by accident.
+3. Status docs overlap. Source of truth: this README (status + pending), `17` (change log), `18` (plan). The others
+   (`06`, `13`, `04`, `roadmap/*`, `.brain/progress.md`) are history; the roadmap file is marked superseded.
 
 ---
 
@@ -333,7 +410,9 @@ run, **Stub** = placeholder, **Missing** = does not exist.
 | Doc | About | State |
 |---|---|---|
 | `README.md` (this file) | overview, pipelines, status | current |
-| `17_AMSh_Claude_Change_Tracker.md` | every change with evidence and limits | current (entries 1-48) |
+| `17_AMSh_Claude_Change_Tracker.md` | every change with evidence and limits | current (entries 1-51) |
+| `18_AMSh_Completion_Plan_User_and_Admin.md` | audit and phased plan for the user app and the admin portal | current |
+| `features_list.md` | what the AI can do, with honest status tags, target features from docs 01-03, landing-page copy and claims to avoid | current |
 | `16_...Tool_Calling_Architecture_Plan.md` | agent design | current |
 | `15_...Conversational_NLU_and_Persona...` | persona/NLU spec | partly superseded by 16 |
 | `14_...Telephony_Tunnels_and_AI_Capabilities_Spec.md` | tunnels + capabilities | see section 7 for the current mapping |
@@ -342,5 +421,8 @@ run, **Stub** = placeholder, **Missing** = does not exist.
 | `08_...Integrations_Setup_Guide.md` | provider setup | check keys/URLs before use |
 | `06_...Project_Status_Review.md` | earlier status review | older; see section 8 above |
 | `flowcharts/*` | login, onboarding, integrations, conversation engine | onboarding and login still valid; conversation flow predates the agent (use section 3a) |
-| `04`, `05`, `07`, `09`, `10`, `12`, PRD, structure specs, `roadmap/*`, `01-03 .docx` | planning and history | not re-checked this session |
+| `04_AMSh_MVP_Scope_and_Roadmap.md` | MVP scope and an old checklist | **section 0 (ground rules) and 4 (not MVP) are valid; the rest is stale**, marked at the top |
+| `roadmap/AMSh_Master_Daily_Roadmap_and_Tracker.md` | daily roadmap from 20 Sep | superseded, marked at the top |
+| `01-03 .docx` | target features from the research (already / missing / roadmap) | still the feature target; mapped to real status in `features_list.md` |
+| `05`, `07`, `09`, `10`, `12`, PRD, structure specs | planning and history | not re-checked this session |
 | `../ai generated docs/*` | RAG and agent plans | RAG docs not re-checked |

@@ -1,182 +1,148 @@
 "use client";
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { fetchPlans, fetchTenants, updateTenant, PlanApi, TenantItem, TenantList } from '../../../lib/api';
 
-interface BusinessItem {
-  id: string;
-  name: string;
-  type: string;
-  typeColor: { bg: string; text: string };
-  owner: string;
-  country: string;
-  aiReceptionist: string;
-  plan: string;
-  usagePercent: number;
-  status: 'Active' | 'Suspended' | 'Pending';
-  statusColor: { bg: string; text: string };
-  created: string;
+const STATUS_STYLES: Record<string, { bg: string; text: string }> = {
+  active: { bg: 'bg-[#D1FAE5]', text: 'text-[#065F46]' },
+  pending: { bg: 'bg-[#FEF3C7]', text: 'text-[#92400E]' },
+  suspended: { bg: 'bg-[#FEE2E2]', text: 'text-[#991B1B]' },
+  paused: { bg: 'bg-[#E2E8F0]', text: 'text-[#334155]' },
+};
+const TYPE_PALETTE = [
+  { bg: 'bg-[#DBEAFE]', text: 'text-[#1D4ED8]' },
+  { bg: 'bg-[#EDE9FE]', text: 'text-[#6D28D9]' },
+  { bg: 'bg-[#D1FAE5]', text: 'text-[#065F46]' },
+  { bg: 'bg-[#FEF3C7]', text: 'text-[#92400E]' },
+];
+const typeStyle = (type: string) => TYPE_PALETTE[[...type].reduce((n, c) => n + c.charCodeAt(0), 0) % TYPE_PALETTE.length];
+const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+const selectClass =
+  'px-2.5 py-1.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg text-[12px] font-semibold text-[#475569] hover:bg-gray-100/80 transition-colors focus:outline-none focus:ring-2 focus:ring-[#2563EB]';
+
+type DialogKind = 'suspend' | 'reactivate' | 'plan';
+interface Dialog {
+  tenant: TenantItem;
+  kind: DialogKind;
 }
 
-const businessesData: BusinessItem[] = [
-  {
-    id: 'b-1',
-    name: 'Smile Dental Clinic',
-    type: 'Dental Clinic',
-    typeColor: { bg: 'bg-[#DBEAFE]', text: 'text-[#1D4ED8]' },
-    owner: 'Dr. Sarah Wilson',
-    country: 'NL',
-    aiReceptionist: 'Sarah',
-    plan: 'Professional',
-    usagePercent: 78,
-    status: 'Active',
-    statusColor: { bg: 'bg-[#D1FAE5]', text: 'text-[#065F46]' },
-    created: '2025-10-13',
-  },
-  {
-    id: 'b-2',
-    name: 'Amsterdam Dental Care',
-    type: 'Dental Clinic',
-    typeColor: { bg: 'bg-[#DBEAFE]', text: 'text-[#1D4ED8]' },
-    owner: 'Dr. Mark de Jong',
-    country: 'NL',
-    aiReceptionist: 'Anna',
-    plan: 'Business',
-    usagePercent: 92,
-    status: 'Active',
-    statusColor: { bg: 'bg-[#D1FAE5]', text: 'text-[#065F46]' },
-    created: '2025-11-05',
-  },
-  {
-    id: 'b-3',
-    name: 'Berlin Health Center',
-    type: 'Medical Center',
-    typeColor: { bg: 'bg-[#EDE9FE]', text: 'text-[#6D28D9]' },
-    owner: 'Dr. Klaus Schmidt',
-    country: 'DE',
-    aiReceptionist: 'Dieter',
-    plan: 'Starter',
-    usagePercent: 12,
-    status: 'Suspended',
-    statusColor: { bg: 'bg-[#FEE2E2]', text: 'text-[#991B1B]' },
-    created: '2025-08-15',
-  },
-  {
-    id: 'b-4',
-    name: 'Bella Rosa Ristorante',
-    type: 'Restaurant',
-    typeColor: { bg: 'bg-[#FFEDD5]', text: 'text-[#C2410C]' },
-    owner: 'Marco Rossi',
-    country: 'IT',
-    aiReceptionist: 'Sofia',
-    plan: 'Professional',
-    usagePercent: 45,
-    status: 'Active',
-    statusColor: { bg: 'bg-[#D1FAE5]', text: 'text-[#065F46]' },
-    created: '2025-12-01',
-  },
-  {
-    id: 'b-5',
-    name: 'Glow & Shine Salon',
-    type: 'Beauty Salon',
-    typeColor: { bg: 'bg-[#FCE7F3]', text: 'text-[#BE185D]' },
-    owner: 'Marie Dubois',
-    country: 'FR',
-    aiReceptionist: 'Chloé',
-    plan: 'Business',
-    usagePercent: 60,
-    status: 'Active',
-    statusColor: { bg: 'bg-[#D1FAE5]', text: 'text-[#065F46]' },
-    created: '2025-12-20',
-  },
-  {
-    id: 'b-6',
-    name: 'FitLife Studio',
-    type: 'Fitness Studio',
-    typeColor: { bg: 'bg-[#D1FAE5]', text: 'text-[#065F46]' },
-    owner: 'James Smith',
-    country: 'GB',
-    aiReceptionist: 'Oliver',
-    plan: 'Starter',
-    usagePercent: 85,
-    status: 'Pending',
-    statusColor: { bg: 'bg-[#FEF3C7]', text: 'text-[#92400E]' },
-    created: '2026-01-02',
-  },
-];
-
-// Derive filter options dynamically from data
-const countries = ['All', ...Array.from(new Set(businessesData.map(b => b.country)))];
-const plans = ['All', ...Array.from(new Set(businessesData.map(b => b.plan)))];
-const statuses = ['All', 'Active', 'Suspended', 'Pending'];
-const businessTypes = ['All', ...Array.from(new Set(businessesData.map(b => b.type)))];
-
-const selectClass = "px-2.5 py-1.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg text-[12px] font-semibold text-[#475569] hover:bg-gray-100/80 transition-colors focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 cursor-pointer";
-
 export default function BusinessesPage() {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCountry, setSelectedCountry] = useState('All');
-  const [selectedPlan, setSelectedPlan] = useState('All');
-  const [selectedStatus, setSelectedStatus] = useState('All');
-  const [selectedType, setSelectedType] = useState('All');
+  const [search, setSearch] = useState('');
+  const [debounced, setDebounced] = useState('');
+  const [country, setCountry] = useState('');
+  const [plan, setPlan] = useState('');
+  const [status, setStatus] = useState('');
+  const [type, setType] = useState('');
+  const [data, setData] = useState<TenantList | null>(null);
+  const [facets, setFacets] = useState<TenantList['facets'] | null>(null);
+  const [answeredKey, setAnsweredKey] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
+  const [error, setError] = useState('');
+  const [menuFor, setMenuFor] = useState<string | null>(null);
+  const [dialog, setDialog] = useState<Dialog | null>(null);
+  const [planDraft, setPlanDraft] = useState('');
+  const [planOptions, setPlanOptions] = useState<PlanApi[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [dialogError, setDialogError] = useState('');
+  const [notice, setNotice] = useState('');
 
-  const hasActiveFilters = selectedCountry !== 'All' || selectedPlan !== 'All' || selectedStatus !== 'All' || selectedType !== 'All' || searchQuery;
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(search.trim()), 300);
+    return () => clearTimeout(t);
+  }, [search]);
 
-  const filteredBusinesses = businessesData.filter((b) => {
-    const matchesSearch =
-      b.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      b.owner.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      b.type.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCountry = selectedCountry === 'All' || b.country === selectedCountry;
-    const matchesPlan = selectedPlan === 'All' || b.plan === selectedPlan;
-    const matchesStatus = selectedStatus === 'All' || b.status === selectedStatus;
-    const matchesType = selectedType === 'All' || b.type === selectedType;
-    return matchesSearch && matchesCountry && matchesPlan && matchesStatus && matchesType;
-  });
+  // One request per distinct query. State is only set in the callbacks, after the response arrives.
+  const queryKey = JSON.stringify([debounced, status, plan, country, type, reloadKey]);
+  const loading = answeredKey !== queryKey;
+  const load = () => setReloadKey((k) => k + 1);
 
-  const resetFilters = () => {
-    setSelectedCountry('All');
-    setSelectedPlan('All');
-    setSelectedStatus('All');
-    setSelectedType('All');
-    setSearchQuery('');
+  useEffect(() => {
+    let cancelled = false;
+    fetchTenants({ search: debounced, status, plan, country, type })
+      .then((res) => {
+        if (cancelled) return;
+        setData(res);
+        setError('');
+        setFacets((prev) => prev ?? res.facets); // dropdown options come from the unfiltered first load
+        setAnsweredKey(queryKey);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : 'Could not load businesses.');
+        setAnsweredKey(queryKey);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [queryKey, debounced, status, plan, country, type]);
+
+  const hasFilters = !!(search || country || plan || status || type);
+  const reset = () => {
+    setSearch('');
+    setCountry('');
+    setPlan('');
+    setStatus('');
+    setType('');
   };
 
+  const openDialog = (tenant: TenantItem, kind: DialogKind) => {
+    setMenuFor(null);
+    setDialogError('');
+    setPlanDraft(tenant.plan);
+    setDialog({ tenant, kind });
+    if (kind === 'plan') {
+      fetchPlans()
+        .then((res) => setPlanOptions(res.items))
+        .catch(() => setDialogError('Could not load the plans.'));
+    }
+  };
+
+  const confirm = async () => {
+    if (!dialog) return;
+    setBusy(true);
+    setDialogError('');
+    try {
+      const body = dialog.kind === 'plan' ? { plan: planDraft.trim() } : { status: dialog.kind === 'suspend' ? 'suspended' : 'active' };
+      await updateTenant(dialog.tenant.id, body);
+      setNotice(
+        dialog.kind === 'plan'
+          ? `${dialog.tenant.name} is now on the ${planDraft.trim()} plan.`
+          : dialog.kind === 'suspend'
+            ? `${dialog.tenant.name} is suspended. Its phone calls are no longer answered.`
+            : `${dialog.tenant.name} is active again.`
+      );
+      setDialog(null);
+      load();
+    } catch (err: unknown) {
+      setDialogError(err instanceof Error ? err.message : 'Could not save the change.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const items = data?.items ?? [];
+
   return (
-    <div className="flex-1 overflow-y-auto scrollbar-hide p-4 sm:p-5 animate-in fade-in duration-500">
+    <div className="flex-1 overflow-y-auto scrollbar-hide p-4 sm:p-5 animate-in fade-in duration-500" onClick={() => setMenuFor(null)}>
       {/* Header */}
       <header className="mb-4 pb-3 border-b border-[#E2E8F0] flex justify-between items-center">
         <div>
-          <h1 className="text-lg font-bold text-[#0F172A] tracking-tight leading-tight">
-            Businesses
-          </h1>
-          <p className="text-xs text-[#475569] mt-0.5 font-normal">
-            Manage all businesses using the Amsh platform.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button className="flex items-center gap-1.5 border border-[#E2E8F0] rounded-md py-1.5 px-2.5 text-xs font-medium text-[#475569] bg-white shadow-2xs hover:bg-gray-50 transition-colors">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-              <line x1="16" y1="2" x2="16" y2="6"></line>
-              <line x1="8" y1="2" x2="8" y2="6"></line>
-              <line x1="3" y1="10" x2="21" y2="10"></line>
-            </svg>
-            Jan 1 - Jan 30, 2026
-          </button>
-          <button className="flex items-center justify-center border border-[#E2E8F0] rounded-full w-7 h-7 text-[#475569] bg-white shadow-2xs hover:bg-gray-50 transition-colors">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
-              <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
-            </svg>
-          </button>
+          <h1 className="text-lg font-bold text-[#0F172A] tracking-tight leading-tight">Businesses</h1>
+          <p className="text-xs text-[#475569] mt-0.5 font-normal">Manage all businesses using the Amsh platform.</p>
         </div>
       </header>
+
+      {notice && (
+        <div role="status" className="mb-3 flex items-center justify-between text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-md px-3 py-2">
+          <span>{notice}</span>
+          <button type="button" onClick={() => setNotice('')} className="font-semibold hover:underline">Dismiss</button>
+        </div>
+      )}
 
       {/* Filter & Action Bar */}
       <div className="bg-white border border-[#E2E8F0] rounded-lg p-2.5 mb-3.5 shadow-2xs flex flex-wrap items-center justify-between gap-2.5">
         <div className="flex flex-wrap items-center gap-2">
-          {/* Search Box */}
-          <div className="relative w-[180px]">
+          <div className="relative w-[200px]">
             <span className="absolute inset-y-0 left-0 flex items-center pl-2.5 pointer-events-none text-[#94A3B8]">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="11" cy="11" r="8"></circle>
@@ -185,54 +151,55 @@ export default function BusinessesPage() {
             </span>
             <input
               type="text"
-              placeholder="Search businesses..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-8 pr-2.5 py-1 bg-[#F8FAFC] border border-[#E2E8F0] rounded-md text-xs text-[#0F172A] placeholder-[#94A3B8] focus:outline-none focus:ring-1 focus:ring-[#2563EB] focus:border-[#2563EB]"
+              placeholder="Search name, owner, email..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-8 pr-2.5 py-1 bg-[#F8FAFC] border border-[#E2E8F0] rounded-md text-xs text-[#0F172A] placeholder-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
             />
           </div>
-
-          {/* Country Filter */}
-          <select value={selectedCountry} onChange={(e) => setSelectedCountry(e.target.value)} className={selectClass}>
-            {countries.map(c => <option key={c} value={c}>{c === 'All' ? 'Country: All' : c}</option>)}
+          <select value={country} onChange={(e) => setCountry(e.target.value)} className={selectClass} aria-label="Country">
+            <option value="">Country: All</option>
+            {(facets?.countries ?? []).map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
-
-          {/* Plan Filter */}
-          <select value={selectedPlan} onChange={(e) => setSelectedPlan(e.target.value)} className={selectClass}>
-            {plans.map(p => <option key={p} value={p}>{p === 'All' ? 'Plan: All' : p}</option>)}
+          <select value={plan} onChange={(e) => setPlan(e.target.value)} className={selectClass} aria-label="Plan">
+            <option value="">Plan: All</option>
+            {(facets?.plans ?? []).map((p) => <option key={p} value={p}>{p}</option>)}
           </select>
-
-          {/* Status Filter */}
-          <select value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)} className={selectClass}>
-            {statuses.map(s => <option key={s} value={s}>{s === 'All' ? 'Status: All' : s}</option>)}
+          <select value={status} onChange={(e) => setStatus(e.target.value)} className={selectClass} aria-label="Status">
+            <option value="">Status: All</option>
+            {(facets?.statuses ?? []).map((s) => <option key={s} value={s}>{capital(s)}</option>)}
           </select>
-
-          {/* Business Type Filter */}
-          <select value={selectedType} onChange={(e) => setSelectedType(e.target.value)} className={selectClass}>
-            {businessTypes.map(t => <option key={t} value={t}>{t === 'All' ? 'Type: All' : t}</option>)}
+          <select value={type} onChange={(e) => setType(e.target.value)} className={selectClass} aria-label="Type">
+            <option value="">Type: All</option>
+            {(facets?.types ?? []).map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
-
-          {/* Reset */}
-          {hasActiveFilters && (
-            <button onClick={resetFilters} className="text-[11px] font-semibold text-[#2563EB] hover:underline px-1">
-              Reset
-            </button>
+          {hasFilters && (
+            <button onClick={reset} className="text-[11px] font-semibold text-[#2563EB] hover:underline px-1">Reset</button>
           )}
         </div>
-
-        {/* Add Business Button */}
-        <button className="flex items-center gap-1.5 px-3 py-1.5 bg-[#2563EB] hover:bg-blue-700 text-white rounded-md text-xs font-semibold shadow-2xs transition-colors">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-          </svg>
+        {/* Clinics sign themselves up through the tenant app, so there is no "add business" here. */}
+        <button
+          disabled
+          title="Clinics create their own account in the tenant app"
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-[#E2E8F0] text-[#94A3B8] rounded-md text-xs font-semibold cursor-not-allowed"
+        >
           Add Business
         </button>
       </div>
 
       {/* Results Count */}
       <div className="mb-2 text-[11px] font-semibold text-[#94A3B8]">
-        Showing <span className="text-[#0F172A]">{filteredBusinesses.length}</span> of {businessesData.length} businesses
+        {data && !error ? (
+          <>
+            Showing <span className="text-[#0F172A]">{items.length}</span> of {data.total} businesses
+            {data.total > items.length && ' (narrow the filters to see the rest)'}
+            {loading && ' · updating...'}
+          </>
+        ) : error ? (
+          ''
+        ) : (
+          'Loading...'
+        )}
       </div>
 
       {/* Businesses Table */}
@@ -241,83 +208,145 @@ export default function BusinessesPage() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0]">
-                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider min-w-[140px]">Business Name</th>
-                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider min-w-[110px]">Type</th>
-                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider min-w-[120px]">Owner</th>
-                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider min-w-[70px]">Country</th>
-                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider min-w-[110px]">AI Receptionist</th>
-                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider min-w-[90px]">Plan</th>
-                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider min-w-[110px]">Usage (API)</th>
-                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider min-w-[80px]">Status</th>
-                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider min-w-[90px]">Created</th>
-                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider w-8 text-center">
-                  <span className="sr-only">Actions</span>
-                </th>
+                {['Business Name', 'Type', 'Owner', 'Country', 'AI Receptionist', 'Plan', 'Usage (30 days)', 'Status', 'Created'].map((h) => (
+                  <th key={h} className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider whitespace-nowrap">{h}</th>
+                ))}
+                <th className="px-3.5 py-2 w-8"><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#E2E8F0]">
-              {filteredBusinesses.length === 0 ? (
+              {error ? (
+                <tr>
+                  <td colSpan={10} className="px-3.5 py-8 text-center text-xs text-red-600">
+                    {error}{' '}
+                    <button onClick={load} className="font-semibold underline">Try again</button>
+                  </td>
+                </tr>
+              ) : loading && !data ? (
+                <tr>
+                  <td colSpan={10} className="px-3.5 py-8 text-center text-xs text-[#94A3B8]">Loading businesses...</td>
+                </tr>
+              ) : items.length === 0 ? (
                 <tr>
                   <td colSpan={10} className="px-3.5 py-8 text-center text-xs text-[#94A3B8]">
-                    No businesses match your filters.
+                    {hasFilters ? 'No businesses match your filters.' : 'No businesses have signed up yet.'}
                   </td>
                 </tr>
               ) : (
-                filteredBusinesses.map((b) => (
-                  <tr key={b.id} className="hover:bg-[#F8FAFC]/70 transition-colors">
-                    <td className="px-3.5 py-2.5 text-xs font-semibold text-[#0F172A] whitespace-nowrap">
-                      <Link href={`/businesses/${b.id}`} className="hover:text-[#2563EB] transition-colors">
-                        {b.name}
-                      </Link>
-                    </td>
-                    <td className="px-3.5 py-2.5 whitespace-nowrap">
-                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold ${b.typeColor.bg} ${b.typeColor.text}`}>
-                        {b.type}
-                      </span>
-                    </td>
-                    <td className="px-3.5 py-2.5 text-xs text-[#475569] whitespace-nowrap">{b.owner}</td>
-                    <td className="px-3.5 py-2.5 text-xs text-[#475569] whitespace-nowrap">{b.country}</td>
-                    <td className="px-3.5 py-2.5 text-xs font-medium whitespace-nowrap">
-                      <Link href="/receptionists" className="text-[#2563EB] hover:underline flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#10B981]"></span>
-                        {b.aiReceptionist}
-                      </Link>
-                    </td>
-                    <td className="px-3.5 py-2.5 text-xs font-medium text-[#475569] whitespace-nowrap">{b.plan}</td>
-                    <td className="px-3.5 py-2.5 whitespace-nowrap">
-                      <div className="flex items-center gap-1.5">
-                        <div className="w-[80px] h-1.5 bg-[#E2E8F0] rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full transition-all duration-300 ${b.usagePercent >= 90 ? 'bg-red-500' : b.usagePercent >= 70 ? 'bg-amber-500' : 'bg-[#2563EB]'}`}
-                            style={{ width: `${b.usagePercent}%` }}
-                          />
-                        </div>
-                        <span className="text-[10px] text-[#94A3B8]">{b.usagePercent}%</span>
-                      </div>
-                    </td>
-                    <td className="px-3.5 py-2.5 whitespace-nowrap">
-                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold ${b.statusColor.bg} ${b.statusColor.text}`}>
-                        {b.status}
-                      </span>
-                    </td>
-                    <td className="px-3.5 py-2.5 text-[11px] text-[#94A3B8] whitespace-nowrap">{b.created}</td>
-                    <td className="px-3.5 py-2.5 text-center whitespace-nowrap">
-                      <button className="p-1 text-[#94A3B8] hover:text-[#0F172A] hover:bg-gray-100 rounded-md transition-colors">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <circle cx="12" cy="12" r="1"></circle>
-                          <circle cx="19" cy="12" r="1"></circle>
-                          <circle cx="5" cy="12" r="1"></circle>
-                        </svg>
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                items.map((b) => {
+                  const st = STATUS_STYLES[b.status] ?? STATUS_STYLES.paused;
+                  const ty = typeStyle(b.type);
+                  return (
+                    <tr key={b.id} className="hover:bg-[#F8FAFC]/70 transition-colors">
+                      <td className="px-3.5 py-2.5 text-xs font-semibold text-[#0F172A] whitespace-nowrap">
+                        <Link href={`/businesses/${b.id}`} className="hover:text-[#2563EB] transition-colors">{b.name}</Link>
+                      </td>
+                      <td className="px-3.5 py-2.5 whitespace-nowrap">
+                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold ${ty.bg} ${ty.text}`}>{b.type}</span>
+                      </td>
+                      <td className="px-3.5 py-2.5 text-xs text-[#475569] whitespace-nowrap">
+                        {b.owner_name || '—'}
+                        {b.owner_email && <div className="text-[10px] text-[#94A3B8]">{b.owner_email}</div>}
+                      </td>
+                      <td className="px-3.5 py-2.5 text-xs text-[#475569] whitespace-nowrap">{b.country || '—'}</td>
+                      <td className="px-3.5 py-2.5 text-xs font-medium whitespace-nowrap">
+                        {b.ai_receptionist ? (
+                          <Link href="/receptionists" className="text-[#2563EB] hover:underline flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#10B981]"></span>
+                            {b.ai_receptionist}
+                          </Link>
+                        ) : (
+                          <span className="text-[#94A3B8]">Not set up</span>
+                        )}
+                      </td>
+                      <td className="px-3.5 py-2.5 text-xs font-medium text-[#475569] whitespace-nowrap capitalize">{b.plan}</td>
+                      <td className="px-3.5 py-2.5 text-xs text-[#475569] whitespace-nowrap">
+                        {b.calls_30d} {b.calls_30d === 1 ? 'call' : 'calls'}
+                        <div className="text-[10px] text-[#94A3B8]">{b.minutes_30d} min</div>
+                      </td>
+                      <td className="px-3.5 py-2.5 whitespace-nowrap">
+                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold ${st.bg} ${st.text}`}>{capital(b.status)}</span>
+                      </td>
+                      <td className="px-3.5 py-2.5 text-[11px] text-[#94A3B8] whitespace-nowrap">{b.created_at ? b.created_at.slice(0, 10) : '—'}</td>
+                      <td className="px-3.5 py-2.5 text-center whitespace-nowrap relative">
+                        <button
+                          aria-label={`Actions for ${b.name}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMenuFor(menuFor === b.id ? null : b.id);
+                          }}
+                          className="p-1 text-[#94A3B8] hover:text-[#0F172A] hover:bg-gray-100 rounded-md transition-colors"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="1"></circle>
+                            <circle cx="19" cy="12" r="1"></circle>
+                            <circle cx="5" cy="12" r="1"></circle>
+                          </svg>
+                        </button>
+                        {menuFor === b.id && (
+                          <div className="absolute right-3 top-8 z-20 w-40 bg-white border border-[#E2E8F0] rounded-md shadow-lg py-1 text-left" onClick={(e) => e.stopPropagation()}>
+                            <Link href={`/businesses/${b.id}`} className="block px-3 py-1.5 text-xs text-[#334155] hover:bg-[#F8FAFC]">View details</Link>
+                            <button onClick={() => openDialog(b, 'plan')} className="block w-full text-left px-3 py-1.5 text-xs text-[#334155] hover:bg-[#F8FAFC]">Change plan</button>
+                            {b.status === 'suspended' ? (
+                              <button onClick={() => openDialog(b, 'reactivate')} className="block w-full text-left px-3 py-1.5 text-xs text-emerald-700 hover:bg-[#F8FAFC]">Reactivate</button>
+                            ) : (
+                              <button onClick={() => openDialog(b, 'suspend')} className="block w-full text-left px-3 py-1.5 text-xs text-red-600 hover:bg-[#F8FAFC]">Suspend</button>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
       </div>
+
+      {/* Confirmation dialog (an in-page dialog: the browser's confirm() is not reliable inside embedded views) */}
+      {dialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" role="dialog" aria-modal="true">
+          <div className="w-full max-w-sm bg-white rounded-xl border border-[#E2E8F0] shadow-xl p-5 space-y-3">
+            <h2 className="text-sm font-bold text-[#0F172A]">
+              {dialog.kind === 'plan' ? 'Change plan' : dialog.kind === 'suspend' ? 'Suspend this business?' : 'Reactivate this business?'}
+            </h2>
+            <p className="text-xs text-[#475569] leading-relaxed">
+              {dialog.kind === 'plan' && <>Choose the plan for <strong>{dialog.tenant.name}</strong>. Plans are created under Billing. This is recorded in the audit log.</>}
+              {dialog.kind === 'suspend' && <><strong>{dialog.tenant.name}</strong> will stop being answered by the AI: callers hear that the service is unavailable. Its users can still sign in. This is recorded in the audit log.</>}
+              {dialog.kind === 'reactivate' && <><strong>{dialog.tenant.name}</strong> will be answered by the AI again. This is recorded in the audit log.</>}
+            </p>
+            {dialog.kind === 'plan' && (
+              <select
+                value={planDraft}
+                onChange={(e) => setPlanDraft(e.target.value)}
+                className="w-full px-3 py-1.5 rounded-md border border-[#CBD5E1] text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
+                aria-label="Plan"
+              >
+                {!planOptions.some((p) => p.key === planDraft) && <option value={planDraft}>{planDraft}</option>}
+                {planOptions
+                  .filter((p) => p.status === 'active' || p.key === dialog.tenant.plan)
+                  .map((p) => (
+                    <option key={p.key} value={p.key}>
+                      {p.name}{p.kind === 'enterprise' ? ` (enterprise: ${p.client ?? ''})` : ''}{p.status !== 'active' ? ` (${p.status})` : ''}
+                    </option>
+                  ))}
+              </select>
+            )}
+            {dialogError && <div role="alert" className="text-xs text-red-700 bg-red-50 border border-red-100 rounded-md px-3 py-2">{dialogError}</div>}
+            <div className="flex justify-end gap-2 pt-1">
+              <button onClick={() => setDialog(null)} disabled={busy} className="px-3 py-1.5 text-xs font-semibold text-[#475569] border border-[#E2E8F0] rounded-md hover:bg-[#F8FAFC]">Cancel</button>
+              <button
+                onClick={confirm}
+                disabled={busy || (dialog.kind === 'plan' && !planDraft.trim())}
+                className={`px-3 py-1.5 text-xs font-semibold text-white rounded-md disabled:opacity-60 ${dialog.kind === 'suspend' ? 'bg-red-600 hover:bg-red-700' : 'bg-[#2563EB] hover:bg-blue-700'}`}
+              >
+                {busy ? 'Saving...' : dialog.kind === 'plan' ? 'Save plan' : dialog.kind === 'suspend' ? 'Suspend' : 'Reactivate'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-

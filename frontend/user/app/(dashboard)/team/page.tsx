@@ -1,31 +1,57 @@
 "use client";
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { TeamHeader } from '../../../components/dashboard/TeamHeader';
-import { TeamTable } from '../../../components/dashboard/TeamTable';
-import { STRINGS } from '../../../utils/strings/en';
+import { TeamTable, TeamMemberItem } from '../../../components/dashboard/TeamTable';
 import { InviteMemberModal } from '../../../components/dashboard/InviteMemberModal';
+import { DashboardController } from '../../../controllers/dashboard.controller';
 
 export default function TeamPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [members, setMembers] = useState<TeamMemberItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchMembers = async () => {
+    try {
+      setLoading(true);
+      const data = await DashboardController.getTeamMembers();
+      setMembers(data || []);
+    } catch (err) {
+      console.error('Failed to load team members:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchMembers();
+  }, []);
+
+  const handleDeleteMember = async (userId: string) => {
+    try {
+      await DashboardController.deleteTeamMember(userId);
+      setMembers((prev) => prev.filter((m) => m.id !== userId));
+    } catch (err) {
+      console.error('Failed to remove team member:', err);
+    }
+  };
 
   return (
-    <div className="animate-in fade-in duration-500 pt-4 pb-6 flex flex-col h-full w-full relative">
+    <div className="space-y-3.5 animate-in fade-in duration-300 pb-8 flex flex-col h-full w-full relative">
       <TeamHeader onInviteClick={() => setIsModalOpen(true)} />
-      
-      <div className="flex justify-end mb-6">
-        <button 
-          onClick={() => setIsModalOpen(true)}
-          className="px-5 py-2.5 bg-[#0066FF] text-white rounded-lg text-[13px] font-bold shadow-sm hover:bg-[#0052cc] transition-colors"
-        >
-          {STRINGS.DASHBOARD.TEAM.INVITE_BTN}
-        </button>
-      </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide">
-        <TeamTable />
+        <TeamTable 
+          members={members} 
+          loading={loading} 
+          onDeleteMember={handleDeleteMember} 
+        />
       </div>
 
-      <InviteMemberModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+      <InviteMemberModal 
+        isOpen={isModalOpen} 
+        onClose={() => setIsModalOpen(false)} 
+        onMemberInvited={fetchMembers}
+      />
     </div>
   );
 }

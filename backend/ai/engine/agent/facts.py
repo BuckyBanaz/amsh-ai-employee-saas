@@ -33,6 +33,7 @@ class AgentProfile:
     instructions: Optional[str] = None
     temperature: Optional[float] = None  # 0.0-1.0 (the UI stores 0-100)
     small_talk: bool = True
+    natural_fillers: bool = True  # "hmm..." and "one moment..." in spoken calls; off with toggles.natural_fillers = false
     require_confirmation: bool = True
     capabilities: Dict[str, bool] = field(default_factory=dict)
     # Dashboard "Voice" tab (Agent.config.voice_settings)
@@ -164,6 +165,7 @@ def load_profile(db: Session, business_id: str) -> AgentProfile:
         instructions=(str(cfg.get("system_prompt") or "").strip() or None),
         temperature=(min(max(temp / 100, 0.0), 1.0) if isinstance(temp, (int, float)) and not isinstance(temp, bool) else None),
         small_talk=toggles.get("small_talk") is not False,
+        natural_fillers=toggles.get("natural_fillers") is not False,
         require_confirmation=toggles.get("confirm") is not False,
         capabilities=capabilities,
         speed=resolve_speed(voice.get("speed"), cfg.get("personality")),

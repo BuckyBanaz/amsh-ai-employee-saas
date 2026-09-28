@@ -6,9 +6,10 @@ import { DashboardController } from '../../controllers/dashboard.controller';
 
 interface AIHeaderProps {
   onTestClick?: () => void;
+  onSwitchWorkbench?: () => void;
 }
 
-export function AIHeader({ onTestClick }: AIHeaderProps = {}) {
+export function AIHeader({ onTestClick, onSwitchWorkbench }: AIHeaderProps = {}) {
   const [phoneNumber, setPhoneNumber] = useState('+91 80472 84627');
   const [isOnline, setIsOnline] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -54,17 +55,31 @@ export function AIHeader({ onTestClick }: AIHeaderProps = {}) {
   };
 
   return (
-    <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 py-1">
+    <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3 py-1">
       <div>
-        <h1 className="text-xl font-bold text-gray-900 tracking-tight leading-tight">
+        <h1 className="text-xl font-extrabold text-gray-900 tracking-tight leading-tight flex items-center gap-2">
           {STRINGS.DASHBOARD.HEADERS.AI.TITLE}
         </h1>
-        <p className="text-xs text-gray-500 mt-0.5">
+        <p className="text-xs text-gray-500 font-medium mt-0.5">
           {STRINGS.DASHBOARD.HEADERS.AI.SUBTITLE}
         </p>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2.5">
+      <div className="flex flex-wrap items-center gap-2">
+        {/* Switch to AI Studio Workbench */}
+        {onSwitchWorkbench && (
+          <button
+            onClick={onSwitchWorkbench}
+            type="button"
+            className="px-3 py-1.5 bg-blue-50 text-[#0066FF] border border-blue-200 hover:bg-blue-100 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+              <polygon points="5 3 19 12 5 21 5 3"></polygon>
+            </svg>
+            <span>AI Studio Workbench</span>
+          </button>
+        )}
+
         {/* AI Phone Line */}
         <div className="hidden md:flex items-center gap-2 px-2.5 py-1.5 border border-gray-200 bg-white rounded-lg shadow-2xs whitespace-nowrap">
           <span className="text-[10px] text-gray-400 font-semibold">AI Line</span>
@@ -84,9 +99,10 @@ export function AIHeader({ onTestClick }: AIHeaderProps = {}) {
         {/* Test AI Button */}
         <button
           onClick={onTestClick}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0066FF] text-white rounded-lg text-xs font-semibold shadow-xs hover:bg-[#0052cc] transition-colors whitespace-nowrap cursor-pointer"
+          type="button"
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0066FF] text-white rounded-lg text-xs font-semibold shadow-xs hover:bg-[#0052cc] transition-colors whitespace-nowrap cursor-pointer active:scale-95"
         >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
             <polygon points="5 3 19 12 5 21 5 3"></polygon>
           </svg>
           {STRINGS.DASHBOARD.HEADERS.AI.BTN_TEST}
@@ -96,32 +112,15 @@ export function AIHeader({ onTestClick }: AIHeaderProps = {}) {
         <button
           onClick={handleToggleStatus}
           disabled={isUpdating}
-          className={`flex items-center gap-1.5 px-3 py-1.5 border rounded-lg text-xs font-semibold shadow-xs transition-colors whitespace-nowrap cursor-pointer disabled:opacity-50 ${
+          type="button"
+          className={`flex items-center gap-1.5 px-3 py-1.5 border rounded-lg text-xs font-semibold shadow-xs transition-colors whitespace-nowrap cursor-pointer disabled:opacity-50 active:scale-95 ${
             isOnline
               ? 'border-[#EF4444] text-[#EF4444] bg-white hover:bg-red-50'
               : 'border-[#10B981] text-[#10B981] bg-white hover:bg-emerald-50'
           }`}
         >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            {isOnline ? (
-              <>
-                <circle cx="12" cy="12" r="10"></circle>
-                <line x1="10" y1="15" x2="10" y2="9"></line>
-                <line x1="14" y1="15" x2="14" y2="9"></line>
-              </>
-            ) : (
-              <>
-                <polygon points="5 3 19 12 5 21 5 3" fill="currentColor"></polygon>
-              </>
-            )}
-          </svg>
           {isUpdating ? 'Updating...' : (isOnline ? STRINGS.DASHBOARD.HEADERS.AI.BTN_PAUSE : 'Resume AI')}
         </button>
-
-        {/* User Initials Badge */}
-        <div className="w-8 h-8 rounded-full bg-[#F0F7FF] text-[#0066FF] border border-blue-100 flex items-center justify-center font-bold text-xs">
-          {userInitials}
-        </div>
       </div>
     </header>
   );

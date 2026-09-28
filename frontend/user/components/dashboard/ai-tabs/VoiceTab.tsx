@@ -3,6 +3,7 @@ import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { DashboardController, AgentItem } from '../../../controllers/dashboard.controller';
 import { API_ENDPOINTS } from '../../../utils/api_endpoints';
 import { StorageService } from '../../../services/storage.service';
+import { GlobalLoader } from '../../common/GlobalLoader';
 import {
   VoiceOption,
   AVAILABLE_VOICES,
@@ -270,11 +271,8 @@ export function VoiceTab() {
 
   if (loading) {
     return (
-      <div className="bg-white border border-gray-100 rounded-2xl p-10 shadow-xs flex flex-col items-center justify-center min-h-[360px]">
-        <div className="w-7 h-7 border-2 border-[#0066FF]/20 border-t-[#0066FF] rounded-full animate-spin mb-3"></div>
-        <span className="text-xs text-gray-500 font-semibold tracking-wide">
-          Loading neural voice models &amp; regional accents...
-        </span>
+      <div className="bg-white border border-gray-100 rounded-2xl shadow-xs overflow-hidden">
+        <GlobalLoader message="Loading neural voice models & regional accents..." size="md" />
       </div>
     );
   }

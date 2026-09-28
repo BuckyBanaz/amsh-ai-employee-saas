@@ -154,6 +154,9 @@ _FEMALE_FORMS = [
     (re.compile(r"(समझ|जान|मिल|सुन)\s+गया(?![ऀ-ॣ०-ॿ])"), r"\1 गई"),
     (re.compile(r"\b(karung|dung|bataung|dekhung|milung|bhejung|book karung)a\b", re.I), r"\1i"),
     (re.compile(r"\b(sakt|chaht|kar rah|de rah|bata rah|dekh rah|samajh\s+gay|dhund rah)a\b", re.I), r"\1i"),
+    # adjectives and participles that change with the speaker: "मैं बहुत अच्छा हूँ" -> "अच्छी हूँ" (a whitelist: "आप क्या हूँ" style words are left alone)
+    (re.compile(r"(?<![ऀ-ॿ])(अच्छा|बुरा|थका|अकेला|सुना|समझा|चुका)(\s+ह[ूु][ँं])"), lambda m: {"अच्छा": "अच्छी", "बुरा": "बुरी", "थका": "थकी", "अकेला": "अकेली", "सुना": "सुनी", "समझा": "समझी", "चुका": "चुकी"}[m[1]] + m[2]),
+    (re.compile(r"\b(achh?a|accha)(\s+ho+n\b|\s+hun\b)", re.I), lambda m: m[1][:-1] + "i" + m[2]),
 ]
 _MALE_FORMS = [
     (re.compile(r"(ू[ँं]|ऊ[ँं])गी(?![ऀ-ॣ०-ॿ])"), r"\1गा"),
@@ -161,6 +164,8 @@ _MALE_FORMS = [
     (re.compile(r"(समझ|जान|मिल|सुन)\s+गई(?![ऀ-ॣ०-ॿ])"), r"\1 गया"),
     (re.compile(r"\b(karung|dung|bataung|dekhung|milung|bhejung)i\b", re.I), r"\1a"),
     (re.compile(r"\b(sakt|chaht|kar rah|de rah|bata rah|dekh rah|samajh\s+gay)i\b", re.I), r"\1a"),
+    (re.compile(r"(?<![ऀ-ॿ])(अच्छी|बुरी|थकी|अकेली|सुनी|समझी|चुकी)(\s+ह[ूु][ँं])"), lambda m: {"अच्छी": "अच्छा", "बुरी": "बुरा", "थकी": "थका", "अकेली": "अकेला", "सुनी": "सुना", "समझी": "समझा", "चुकी": "चुका"}[m[1]] + m[2]),
+    (re.compile(r"\b(achh?i|acchi)(\s+ho+n\b|\s+hun\b)", re.I), lambda m: m[1][:-1] + "a" + m[2]),
 ]
 
 

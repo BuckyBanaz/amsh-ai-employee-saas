@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { DashboardController, AgentItem } from '../../../controllers/dashboard.controller';
 import { StorageService } from '../../../services/storage.service';
+import { GlobalLoader } from '../../common/GlobalLoader';
 
 const DEFAULT_TRIGGERS = [
   { id: 'frustration', label: 'Caller expresses intense frustration or anger', active: true },
@@ -77,8 +78,7 @@ export function EscalationTab() {
   if (loading) {
     return (
       <div className="bg-white border border-gray-100 rounded-xl p-8 shadow-xs flex items-center justify-center min-h-[300px]">
-        <div className="w-6 h-6 border-2 border-[#DC2626]/20 border-t-[#DC2626] rounded-full animate-spin mr-3"></div>
-        <span className="text-xs text-gray-500 font-medium">Loading human escalation safety rules...</span>
+        <GlobalLoader message="Loading safety & escalation protocol..." size="md" />
       </div>
     );
   }

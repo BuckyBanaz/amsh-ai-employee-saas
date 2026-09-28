@@ -61,6 +61,7 @@ def _close_stale_live_calls(db: Session, business_id: str) -> None:
     Close them so the list is honest instead of showing "in progress" forever."""
     now = datetime.now(timezone.utc)
     changed = False
+    closed: List[str] = []
     for call in db.scalars(select(Call).where(Call.business_id == business_id, Call.outcome == "live")).all():
         started = call.started_at
         if not started:
@@ -71,22 +72,30 @@ def _close_stale_live_calls(db: Session, business_id: str) -> None:
             call.outcome = "resolved"
             call.ended_at = call.ended_at or now
             call.summary = call.summary or "Call ended without a hang-up signal."
+            closed.append(call.id)
             changed = True
     if changed:
         db.commit()
+        from backend.server.services.post_call import schedule
+
+        for cid in closed:
+            schedule(cid)
 
 
 def _format_call(call: Call, include_messages: bool = False) -> Dict[str, Any]:
     res = {
         "id": call.id,
         "is_test": is_test_call(call.id),
+        "sentiment": call.sentiment,
+        "action_items": call.action_items or [],
         "channel": call_channel(call.id),
         "business_id": call.business_id,
         "caller_number": call.caller_number,
         "caller_name": call.caller_name or "Unknown Caller",
-        "intent": call.intent or "General Inquiry",
+        "intent": call.intent,  # null until the call has been analysed (a few seconds after it ends)
         "outcome": call.outcome or "resolved",
-        "summary": call.summary or "Call completed.",
+        "summary": call.summary,
+        "analyzed": call.analyzed_at is not None,
         "duration_seconds": call.duration_seconds or 0,
         "latency_ms": call.latency_ms or 180,
         "recording_url": call.recording_url,
@@ -226,6 +235,9 @@ def end_simulated_call(
     call.outcome = "resolved"
     call.summary = call.summary or "Test call ended from the dashboard playground."
     db.commit()
+    from backend.server.services.post_call import schedule
+
+    schedule(call.id)
     return {"ended": True, "outcome": call.outcome, "duration_seconds": call.duration_seconds}
 
 

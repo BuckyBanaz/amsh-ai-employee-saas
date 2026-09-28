@@ -12,6 +12,7 @@ import os
 
 # Tests and evals must never send a real SMS, even when Twilio/Exotel credentials exist in .env.
 os.environ.setdefault("AMSH_DISABLE_SMS", "1")
+os.environ.setdefault("AMSH_DISABLE_POST_CALL", "1")  # tests call process_call_end directly when they want it
 
 import backend.server.database.models  # noqa: F401  (registers every table on Base.metadata)
 from backend.server.database.models.agent import Agent

@@ -50,4 +50,5 @@ AMSh operates a unified, provider-agnostic telephony adapter pattern (`call_tunn
 4b. **LLM Agent + Tool Calling (implemented 2026-09-28, behind a flag, default OFF):** The LLM writes replies and calls tools; Python validates every action (booking, cancel, transfer) and checks that booking values and quoted times trace back to the caller or a tool; emergency safety stays a static pre-LLM gate. Removes the template ceiling of Principle 4. Not for live traffic until a paid LLM tier is in place. Spec: `DOCS/16_AMSh_LLM_Agent_Tool_Calling_Architecture_Plan.md`; tracker: `DOCS/17_AMSh_Claude_Change_Tracker.md`.
 5. **Monorepo First, Split on Scale:** Keep development unified in the monorepo during early growth to eliminate network hops and multi-repo deployment overhead, while maintaining clean internal module boundaries so extraction into 4 dedicated repos is seamless when team size demands it.
 
-
+## Where to look for current status
+Done / pending / architecture and pipelines: `DOCS/README.md`. Phased plan for the user app and admin portal: `DOCS/18_AMSh_Completion_Plan_User_and_Admin.md`. Change log with evidence: `DOCS/17_AMSh_Claude_Change_Tracker.md`.

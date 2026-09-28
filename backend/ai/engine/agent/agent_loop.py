@@ -18,6 +18,7 @@ from backend.ai.engine.agent.facts import DEFAULT_TRIGGERS, disabled_capabilitie
 from backend.ai.engine.agent.grounding import CLAIM_NOTE, GUARD_NOTE, is_reasoning_leak, unbacked_claim, ungrounded
 from backend.ai.capabilities.rules.safety_emergency import EmergencyRule
 from backend.ai.engine.agent.emotion import EmotionState, parse_cues, tts_text
+from backend.ai.engine.agent.fillers import choose_backchannel, wait_text
 from backend.ai.engine.agent.progress import booking_note
 from backend.ai.engine.agent.hindi import has_devanagari, hindi_escalation, looks_english, match_speaker_gender, normalize as normalize_hindi, requested_language
 from backend.ai.engine.agent.validator import is_affirmative
@@ -187,11 +188,15 @@ class AgentEngine:
         languages: Optional[List[str]] = None,
         auto_detect_language: bool = True,
         channel: str = "voice",
+        fillers: bool = False,
     ) -> None:
         self.triggers = {**DEFAULT_TRIGGERS, **(triggers or {})}  # Escalation tab checklist
         self.frustrated_turns = 0
         self.language_pref: Optional[str] = None  # set when the caller asks to switch language
         self.gender = gender
+        self.fillers_on = fillers  # natural fillers ("hmm...", "one moment..."): spoken calls only, see agent/fillers.py
+        self._last_filler_turn = -99
+        self._wait_spoken = False
         self.channel = channel  # "voice" (phone call, playground) or "chat" (WhatsApp text)
         self.emotion = EmotionState()  # the caller's mood and how the voice should react (agent/emotion.py)
         self._mood_note: Optional[str] = None
@@ -263,6 +268,7 @@ class AgentEngine:
         self.gate.turn += 1
         self._mood_note = self.emotion.hear(utterance)
         self._reply_started = False
+        self._wait_spoken = False
         asked = requested_language(utterance) or requested_language(normalize_hindi(utterance))
         if asked:
             self.language_pref = asked  # remembered for the rest of the call, until they ask for another language
@@ -364,8 +370,9 @@ class AgentEngine:
                                         break
                                     for out in one_q.feed(sentence):
                                         first_ms = first_ms if first_ms is not None else elapsed()
-                                        spoken.append(out)
-                                        yield self._sentence_event(out)
+                                        event = self._sentence_event(out)
+                                        spoken.append(event["text"])
+                                        yield event
                                 if invented:
                                     break
                             else:
@@ -389,13 +396,15 @@ class AgentEngine:
                         break
                     for out in one_q.feed(sentence):
                         first_ms = first_ms if first_ms is not None else elapsed()
-                        spoken.append(out)
-                        yield self._sentence_event(out)
+                        event = self._sentence_event(out)
+                        spoken.append(event["text"])
+                        yield event
                 if not invented:
                     for out in one_q.flush():  # a trailing question is released once nothing newer replaces it
                         first_ms = first_ms if first_ms is not None else elapsed()
-                        spoken.append(out)
-                        yield self._sentence_event(out)
+                        event = self._sentence_event(out)
+                        spoken.append(event["text"])
+                        yield event
 
                 if invented and all(x == "lang:hi" for x in invented):
                     logger.warning("Guard blocked an English reply to a Hindi-speaking caller")
@@ -424,6 +433,13 @@ class AgentEngine:
                     continue  # same round: regenerate with the correction; nothing wrong was spoken
 
                 if calls and use_tools:
+                    if self.fillers_on and not spoken and not any(c["name"] in ("end_call", "transfer_to_human") for c in calls):
+                        # Say something now: the next model call takes a moment and silence sounds like a dropped call.
+                        wait = wait_text(self._devanagari_turn or self.language_pref == "hi")
+                        first_ms = first_ms if first_ms is not None else elapsed()
+                        spoken.append(wait)
+                        self._wait_spoken = True
+                        yield {"type": "sentence", "text": wait, "filler": True}
                     group.append(
                         {
                             "role": "assistant",
@@ -484,7 +500,15 @@ class AgentEngine:
         """The sentence event for the voice layer: the words, plus how to say them (emotion, and a real laugh)."""
         cue, laugh = self._cues.pop(sentence, (None, False))
         emotion, laugh = self.emotion.direct(cue, laugh, first_in_reply=not self._reply_started)
+        self._reply_started_before = self._reply_started
         self._reply_started = True
+        if self.fillers_on and not self._reply_started_before and not self._wait_spoken:
+            sound = choose_backchannel(
+                self._raw_said[-1] if self._raw_said else "", sentence, self.emotion.mood, self.emotion.turn, self._last_filler_turn, self.emotion.turn
+            )
+            if sound:
+                sentence = f"{sound} {sentence}"
+                self._last_filler_turn = self.emotion.turn
         event: Dict[str, Any] = {"type": "sentence", "text": sentence}
         if emotion:
             event["emotion"] = emotion

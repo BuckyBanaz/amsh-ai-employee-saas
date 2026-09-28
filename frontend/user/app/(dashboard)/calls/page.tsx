@@ -84,7 +84,7 @@ export default function CallLogsPage() {
   }, [calls, search, selectedStatus, selectedIntent, hideTests]);
 
   return (
-    <div className="animate-in fade-in duration-500 pt-2 pb-6 flex flex-col h-full">
+    <div className="space-y-3.5 animate-in fade-in duration-300 pb-8 flex flex-col h-full">
       <CallLogsHeader onRefresh={loadCalls} />
       
       <CallLogsFilterBar

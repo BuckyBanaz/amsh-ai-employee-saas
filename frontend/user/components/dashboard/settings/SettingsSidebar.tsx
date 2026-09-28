@@ -2,7 +2,7 @@
 import React from 'react';
 import { STRINGS } from '../../../utils/strings/en';
 
-export type SettingsTab = 'business' | 'profile' | 'security' | 'notifications' | 'ai_defaults' | 'billing' | 'danger_zone';
+export type SettingsTab = 'business' | 'profile' | 'security' | 'notifications' | 'billing' | 'danger_zone';
 
 interface SettingsSidebarProps {
   activeTab: SettingsTab;
@@ -16,7 +16,6 @@ export function SettingsSidebar({ activeTab, onTabChange }: SettingsSidebarProps
     { id: 'profile', label: t.PROFILE },
     { id: 'security', label: t.SECURITY },
     { id: 'notifications', label: t.NOTIFICATIONS },
-    { id: 'ai_defaults', label: t.AI_DEFAULTS },
     { id: 'billing', label: t.BILLING },
     { id: 'danger_zone', label: t.DANGER_ZONE, isDanger: true },
   ];

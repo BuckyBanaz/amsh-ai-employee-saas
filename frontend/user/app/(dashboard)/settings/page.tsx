@@ -6,7 +6,6 @@ import { STRINGS } from '../../../utils/strings/en';
 import { ProfileSettings } from '../../../components/dashboard/settings/ProfileSettings';
 import { SecuritySettings } from '../../../components/dashboard/settings/SecuritySettings';
 import { NotificationSettings } from '../../../components/dashboard/settings/NotificationSettings';
-import { AIDefaultsSettings } from '../../../components/dashboard/settings/AIDefaultsSettings';
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<SettingsTab>('business');
@@ -17,7 +16,6 @@ export default function SettingsPage() {
       case 'profile': return <ProfileSettings />;
       case 'security': return <SecuritySettings />;
       case 'notifications': return <NotificationSettings />;
-      case 'ai_defaults': return <AIDefaultsSettings />;
       case 'danger_zone':
         return <BusinessSettings focusDangerZone={true} />;
       case 'billing':
@@ -39,29 +37,15 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="animate-in fade-in duration-500 pt-1 pb-4 flex flex-col h-full w-full">
-      <header className="mb-3 py-1 shrink-0">
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-xl font-bold text-gray-900 tracking-tight leading-tight">
-              {STRINGS.DASHBOARD.SETTINGS.TITLE}
-            </h1>
-            <p className="text-xs text-gray-500 mt-0.5">
-              {STRINGS.DASHBOARD.SETTINGS.SUBTITLE}
-            </p>
-          </div>
-          
-          <div className="flex items-center gap-2.5">
-            <div className="text-xs font-medium text-gray-500 hidden md:block">
-              {STRINGS.DASHBOARD.SETTINGS.DATE_PLACEHOLDER}
-            </div>
-            <button className="w-8 h-8 rounded-full border border-gray-200 bg-white flex items-center justify-center text-gray-500 hover:bg-gray-50 shadow-2xs transition-colors relative">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
-            </button>
-            <div className="w-8 h-8 rounded-full bg-[#F0F7FF] text-[#0066FF] flex items-center justify-center font-bold text-xs cursor-pointer shadow-2xs hover:bg-blue-100 transition-colors hidden sm:flex">
-              SW
-            </div>
-          </div>
+    <div className="space-y-3.5 animate-in fade-in duration-300 pb-8 flex flex-col h-full w-full">
+      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3 py-1 shrink-0">
+        <div>
+          <h1 className="text-xl font-extrabold text-gray-900 tracking-tight leading-tight">
+            {STRINGS.DASHBOARD.SETTINGS.TITLE}
+          </h1>
+          <p className="text-xs text-gray-500 font-medium mt-0.5">
+            {STRINGS.DASHBOARD.SETTINGS.SUBTITLE}
+          </p>
         </div>
       </header>
 

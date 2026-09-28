@@ -1,4 +1,11 @@
 # Amsh — MVP Scope & Roadmap
+
+> **STATUS PARTLY SUPERSEDED (2026-09-28).** Still valid: **section 0** (ground rules: the name is Amsh, healthcare only for the MVP,
+> vertical-agnostic design) and **section 4** (what is not MVP). **Out of date, do not use as status:** sections 1, 2, 3 and 5. They say
+> there is no backend and that the voice engine, telephony, STT, LLM, TTS and RAG are missing; all of that now exists (see the README).
+> Current status and pending work: [`README.md`](README.md) sections 8 and 9. Plan: [`18_AMSh_Completion_Plan_User_and_Admin.md`](18_AMSh_Completion_Plan_User_and_Admin.md).
+> Change log: [`17_AMSh_Claude_Change_Tracker.md`](17_AMSh_Claude_Change_Tracker.md). What the AI can do (for the landing page): [`features_list.md`](features_list.md).
+
 **Status:** Active working document & sprint planning base.  
 **Date:** Updated 2026-09-20 (Master Daily Execution Roadmap created).  
 **🎯 Master Daily Roadmap (20-Sep to 31-Oct):** See **[`DOCS/roadmap/AMSh_Master_Daily_Roadmap_and_Tracker.md`](file:///c:/Users/Parikshit/Desktop/saas/DOCS/roadmap/AMSh_Master_Daily_Roadmap_and_Tracker.md)** for the complete date-by-date sprint tracker.

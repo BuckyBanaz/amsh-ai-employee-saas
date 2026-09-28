@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { STRINGS } from '../../../utils/strings/en';
 import { OnboardingController } from '../../../controllers/onboarding.controller';
+import { DashboardController } from '../../../controllers/dashboard.controller';
 import { StorageService } from '../../../services/storage.service';
 
 export default function BusinessOnboardingPage() {
@@ -47,6 +48,15 @@ export default function BusinessOnboardingPage() {
       setLogoFile(file);
       setSavedLogoName(file.name);
       localStorage.setItem('onboarding_logo_name', file.name);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (typeof reader.result === 'string') {
+          try {
+            localStorage.setItem('business_logo', reader.result);
+          } catch {}
+        }
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -78,6 +88,15 @@ export default function BusinessOnboardingPage() {
         StorageService.setBusinessId(response.id);
         localStorage.setItem('onboarding_currency', formData.currency);
         localStorage.setItem('onboarding_business_data', JSON.stringify(formData));
+
+        if (logoFile) {
+          try {
+            await DashboardController.uploadBusinessLogo(logoFile, response.id);
+          } catch (uploadErr) {
+            console.warn('Could not upload logo during onboarding:', uploadErr);
+          }
+        }
+
         router.push('/onboarding/services');
       }
     } catch (err: any) {

@@ -81,11 +81,32 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
     if (cachedBusiness) setBusiness(cachedBusiness);
     if (cachedUser) setUser(cachedUser);
 
-    DashboardController.getBusinessInfo()
-      .then((b) => {
-        if (b) setBusiness(b);
-      })
-      .catch(() => {});
+    const refreshBusiness = () => {
+      const cachedBusiness = StorageService.getBusiness();
+      const localLogo = typeof window !== 'undefined' ? localStorage.getItem('business_logo') : null;
+      if (cachedBusiness) {
+        if (!cachedBusiness.logo_url && localLogo) {
+          cachedBusiness.logo_url = localLogo;
+        }
+        setBusiness(cachedBusiness);
+      }
+      DashboardController.getBusinessInfo()
+        .then((b) => {
+          if (b) {
+            if (!b.logo_url && localLogo) {
+              b.logo_url = localLogo;
+            }
+            setBusiness(b);
+          }
+        })
+        .catch(() => {});
+    };
+
+    refreshBusiness();
+    window.addEventListener('business_updated', refreshBusiness);
+    return () => {
+      window.removeEventListener('business_updated', refreshBusiness);
+    };
   }, []);
 
   const businessName = business?.name || 'My Business';
@@ -93,6 +114,8 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
   const userName = user?.full_name || user?.name || user?.email?.split('@')[0] || 'Business Owner';
   const userEmail = user?.email || 'owner@amsh.ai';
   const userInitials = (userName.slice(0, 2) || 'BO').toUpperCase();
+  const rawLogo = business?.logo_url || (typeof window !== 'undefined' ? localStorage.getItem('business_logo') : null);
+  const businessLogo = rawLogo ? (rawLogo.startsWith('http') || rawLogo.startsWith('data:') ? rawLogo : `http://localhost:8010${rawLogo}`) : null;
 
   const handleLogout = () => {
     StorageService.clearAll();
@@ -128,9 +151,18 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
         </div>
 
         <div className="w-full flex items-center justify-between px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-md">
-          <div className="min-w-0 pr-2">
-            <h3 className="text-xs font-bold text-gray-900 leading-tight truncate">{businessName}</h3>
-            <p className="text-[10px] text-gray-500 font-medium truncate">{businessLocation}</p>
+          <div className="flex items-center gap-2 min-w-0 pr-1">
+            {businessLogo ? (
+              <img src={businessLogo} alt="Logo" className="w-6 h-6 rounded object-cover shrink-0 border border-gray-200" />
+            ) : (
+              <div className="w-6 h-6 rounded bg-blue-50 text-[#0066FF] flex items-center justify-center text-[11px] font-bold shrink-0">
+                {businessName.charAt(0) || 'B'}
+              </div>
+            )}
+            <div className="min-w-0">
+              <h3 className="text-xs font-bold text-gray-900 leading-tight truncate">{businessName}</h3>
+              <p className="text-[10px] text-gray-500 font-medium truncate">{businessLocation}</p>
+            </div>
           </div>
           <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 shrink-0" title="Active"></span>
         </div>

@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     JWT_SECRET: str = "dev-secret-change-me"
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
+    # Email (password reset, invites): Resend. Without a key the message is only logged (development).
+    RESEND_API_KEY: str | None = None
+    EMAIL_FROM: str = "AMSh <no-reply@amsh.ai>"
+    FRONTEND_URL: str = "http://localhost:3000"  # base of the links inside emails
 
     # CORS — the two Next.js frontends
     CORS_ORIGINS: list[str] = [
@@ -38,6 +42,9 @@ class Settings(BaseSettings):
     # Development conveniences that are unsafe with several customers: an unmatched phone call is given to the newest
     # business, and the old hard-coded WhatsApp verify tokens are accepted. Set to false in production.
     ALLOW_DEV_FALLBACKS: bool = True
+    # Appointment reminders message real patients, so the background loop is off unless this is true AND the clinic enabled it.
+    REMINDERS_ENABLED: bool = False
+    REMINDER_INTERVAL_SECONDS: int = 300
 
     # Third-party providers — intentionally optional/unset until real keys
     # are supplied. Nothing in the realtime/engine layer should be built

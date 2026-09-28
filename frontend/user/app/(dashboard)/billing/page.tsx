@@ -8,7 +8,7 @@ import { InvoiceHistory } from '../../../components/dashboard/InvoiceHistory';
 
 export default function BillingPage() {
   return (
-    <div className="animate-in fade-in duration-500 pt-4 pb-6 flex flex-col h-full w-full">
+    <div className="space-y-3.5 animate-in fade-in duration-300 pb-8 flex flex-col h-full w-full">
       <BillingHeader />
       <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide pb-10">
         <CurrentPlanCard />

@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.server.database.session import Base
@@ -18,6 +18,9 @@ class Call(Base):
     intent: Mapped[str | None] = mapped_column(String(100), nullable=True)
     outcome: Mapped[str] = mapped_column(String(20), default="live")  # live | resolved | transferred | failed
     summary: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    sentiment: Mapped[str | None] = mapped_column(String(20), nullable=True)  # positive | neutral | negative, set after the call
+    action_items: Mapped[list | None] = mapped_column(JSON, nullable=True)  # short follow-ups for staff, set after the call
+    analyzed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     engine: Mapped[str | None] = mapped_column(String(100), nullable=True)
     latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     duration_seconds: Mapped[int] = mapped_column(Integer, default=0)

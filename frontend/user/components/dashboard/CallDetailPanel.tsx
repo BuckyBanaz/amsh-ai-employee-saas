@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { STRINGS } from '../../utils/strings/en';
 import { CallLogItem } from '../../controllers/dashboard.controller';
+import { GlobalLoader } from '../common/GlobalLoader';
 
 interface CallDetailPanelProps {
   call: CallLogItem | null;
@@ -80,9 +81,8 @@ export function CallDetailPanel({ call, loading = false }: CallDetailPanelProps)
 
   if (loading) {
     return (
-      <div className="w-full bg-white border border-gray-100 rounded-xl shadow-[0_1px_4px_rgba(0,0,0,0.03)] flex flex-col items-center justify-center p-12 h-full min-h-[460px]">
-        <div className="w-8 h-8 border-3 border-[#0066FF]/20 border-t-[#0066FF] rounded-full animate-spin mb-3"></div>
-        <p className="text-xs text-gray-500 font-medium">Loading call details & transcript...</p>
+      <div className="w-full bg-white border border-gray-100 rounded-xl shadow-xs overflow-hidden flex flex-col items-center justify-center p-6 h-full min-h-[460px]">
+        <GlobalLoader message="Loading call transcript & audio..." size="md" />
       </div>
     );
   }
@@ -232,8 +232,43 @@ export function CallDetailPanel({ call, loading = false }: CallDetailPanelProps)
             {STRINGS.DASHBOARD_PANELS.CALL_DETAIL.SUMMARY}
           </h4>
           <div className="bg-gray-50 rounded-lg p-2.5 text-xs text-gray-800 leading-relaxed border border-gray-100 font-medium">
-            {call.summary || 'AI receptionist answered caller inquiry, verified clinic availability, and completed call.'}
+            {call.summary || (call.outcome === 'live' ? 'The summary is written when the call ends.' : 'Summary is being written; refresh in a moment.')}
           </div>
+
+          {(call.sentiment || call.intent) && (
+            <div className="flex flex-wrap items-center gap-1.5 mt-2">
+              {call.intent && (
+                <span className="text-[10px] font-semibold text-gray-600 bg-gray-100 border border-gray-200 rounded px-1.5 py-0.5 capitalize">{call.intent}</span>
+              )}
+              {call.sentiment && (
+                <span
+                  className={`text-[10px] font-semibold rounded px-1.5 py-0.5 border capitalize ${
+                    call.sentiment === 'positive'
+                      ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                      : call.sentiment === 'negative'
+                        ? 'text-red-700 bg-red-50 border-red-200'
+                        : 'text-gray-600 bg-gray-50 border-gray-200'
+                  }`}
+                >
+                  {call.sentiment} caller
+                </span>
+              )}
+            </div>
+          )}
+
+          {call.action_items && call.action_items.length > 0 && (
+            <div className="mt-2.5">
+              <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Follow-ups</h4>
+              <ul className="space-y-1">
+                {call.action_items.map((item, i) => (
+                  <li key={i} className="text-xs text-gray-700 leading-snug flex gap-1.5">
+                    <span className="text-[#0066FF]">&bull;</span>
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
 
         <div className="w-full h-px bg-gray-100"></div>

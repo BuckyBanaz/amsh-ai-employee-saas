@@ -71,8 +71,11 @@ class RazorpayGateway:
                         }
                     else:
                         print(f"[Razorpay API Error] Status {response.status_code}: {response.text}")
+                        return {"success": False, "error": f"Razorpay refused the order ({response.status_code})"}
             except Exception as e:
                 print(f"[Razorpay Request Exception] {e}")
+                # Real keys are configured: never hand out a fake order that a later "verify" could accept.
+                return {"success": False, "error": "Could not reach Razorpay"}
 
         # Fallback test mode order
         mock_order_id = f"order_{uuid.uuid4().hex[:14]}"
@@ -84,6 +87,23 @@ class RazorpayGateway:
             "key_id": settings.RAZORPAY_KEY_ID or "rzp_test_placeholder",
             "test_mode": not bool(settings.RAZORPAY_KEY_ID)
         }
+
+    @staticmethod
+    async def fetch_order(order_id: str) -> Optional[Dict[str, Any]]:
+        """The order as Razorpay stored it (amount, currency, status, notes), or None if it cannot be read."""
+        settings = get_settings()
+        if not (settings.RAZORPAY_KEY_ID and settings.RAZORPAY_KEY_SECRET):
+            return None
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(
+                    f"https://api.razorpay.com/v1/orders/{order_id}",
+                    auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET),
+                )
+            return response.json() if response.status_code == 200 else None
+        except Exception as e:
+            print(f"[Razorpay Fetch Order Exception] {e}")
+            return None
 
     @staticmethod
     def verify_signature(

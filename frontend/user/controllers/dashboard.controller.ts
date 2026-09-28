@@ -22,10 +22,42 @@ export interface LlmModelCatalog {
 export interface DashboardMetrics {
   total_calls: number;
   booked_appointments: number;
+  new_patients?: number;
   transferred_calls: number;
+  resolution_rate?: string;
   conversion_rate: string;
   avg_latency: string;
   ai_accuracy: string;
+  calls_trend?: string;
+  appointments_trend?: string;
+  patients_trend?: string;
+  resolution_trend?: string;
+}
+
+export interface AIPerformanceData {
+  resolution_rate: number;
+  resolved: number;
+  booked_appointments: number;
+  general_inquiries: number;
+  escalated_to_human: number;
+}
+
+export interface CallVolumeHour {
+  time: string;
+  calls: number;
+}
+
+export interface AppointmentSourceItem {
+  source: string;
+  label: string;
+  percentage: number;
+  count: number;
+  color: string;
+}
+
+export interface AppointmentSourcesData {
+  total: number;
+  breakdown: AppointmentSourceItem[];
 }
 
 export interface RecentActivityItem {
@@ -40,6 +72,9 @@ export interface RecentActivityItem {
 
 export interface DashboardStatsResponse {
   metrics: DashboardMetrics;
+  performance?: AIPerformanceData;
+  call_volume?: CallVolumeHour[];
+  appointment_sources?: AppointmentSourcesData;
   recent_activity: RecentActivityItem[];
 }
 
@@ -65,9 +100,12 @@ export interface CallLogItem {
   business_id: string;
   caller_number: string;
   caller_name: string;
-  intent: string;
+  intent: string | null; // null until the call has been analysed
   outcome: string;
-  summary: string;
+  summary: string | null;
+  analyzed?: boolean;
+  sentiment?: 'positive' | 'neutral' | 'negative' | null;
+  action_items?: string[];
   duration_seconds: number;
   latency_ms: number;
   recording_url?: string | null;
@@ -145,6 +183,8 @@ export interface AgentItem {
     temperature?: number;
     capabilities?: Record<string, boolean>;
     toggles?: Record<string, boolean>;
+    reminders?: { lead_hours?: number; whatsapp_template?: string; whatsapp_language?: string };
+    alerts?: { phone?: string; email?: string; events?: string[] };
     limits?: {
       max_duration_minutes?: number;
       silence_timeout_seconds?: number;
@@ -414,6 +454,12 @@ export const DashboardController = {
     return ApiService.get<AgentItem>(API_ENDPOINTS.AGENTS.GET(bId));
   },
 
+  /** The read-only calendar subscription link (Google / Outlook / Apple Calendar). */
+  async getCalendarFeedUrl(businessId?: string): Promise<{ url: string }> {
+    const bId = this.getEffectiveBusinessId(businessId);
+    return ApiService.get<{ url: string }>(API_ENDPOINTS.CALENDAR.FEED(bId));
+  },
+
   async updateAgent(payload: Partial<AgentItem>, businessId?: string): Promise<AgentItem> {
     const bId = this.getEffectiveBusinessId(businessId);
     return ApiService.patch<AgentItem>(API_ENDPOINTS.AGENTS.UPDATE(bId), payload);
@@ -544,4 +590,61 @@ export const DashboardController = {
     }
     return res.json();
   },
+
+  async getBusinessInfo(businessId?: string): Promise<any> {
+    const bId = this.getEffectiveBusinessId(businessId);
+    return ApiService.get<any>(API_ENDPOINTS.BUSINESS.GET(bId));
+  },
+
+  async updateBusiness(payload: any, businessId?: string): Promise<any> {
+    const bId = this.getEffectiveBusinessId(businessId);
+    return ApiService.patch<any>(API_ENDPOINTS.BUSINESS.UPDATE(bId), payload);
+  },
+
+  async uploadBusinessLogo(file: File, businessId?: string): Promise<{ logo_url: string }> {
+    const bId = this.getEffectiveBusinessId(businessId);
+    const form = new FormData();
+    form.append('file', file);
+    const token = StorageService.getToken();
+    const res = await fetch(`http://localhost:8010/api/businesses/${bId}/logo`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: form,
+    });
+    if (!res.ok) {
+      throw new Error(`Logo upload failed (${res.status})`);
+    }
+    return res.json();
+  },
+
+  async getTeamMembers(businessId?: string): Promise<any[]> {
+    const bId = this.getEffectiveBusinessId(businessId);
+    return ApiService.get<any[]>(`http://localhost:8010/api/businesses/${bId}/users`);
+  },
+
+  async inviteTeamMember(payload: { name: string; email: string; role: string }, businessId?: string): Promise<any> {
+    const bId = this.getEffectiveBusinessId(businessId);
+    return ApiService.post<any>(`http://localhost:8010/api/businesses/${bId}/users`, payload);
+  },
+
+  async updateTeamMember(userId: string, payload: { role?: string; is_active?: boolean }, businessId?: string): Promise<any> {
+    const bId = this.getEffectiveBusinessId(businessId);
+    return ApiService.patch<any>(`http://localhost:8010/api/businesses/${bId}/users/${userId}`, payload);
+  },
+
+  async deleteTeamMember(userId: string, businessId?: string): Promise<void> {
+    const bId = this.getEffectiveBusinessId(businessId);
+    return ApiService.delete<void>(`http://localhost:8010/api/businesses/${bId}/users/${userId}`);
+  },
+
+  async getNotifications(businessId?: string): Promise<any[]> {
+    const bId = this.getEffectiveBusinessId(businessId);
+    return ApiService.get<any[]>(`http://localhost:8010/api/businesses/${bId}/notifications`);
+  },
+
+  async markAllNotificationsRead(businessId?: string): Promise<void> {
+    const bId = this.getEffectiveBusinessId(businessId);
+    return ApiService.post<void>(`http://localhost:8010/api/businesses/${bId}/notifications/mark-read`, {});
+  },
 };
+

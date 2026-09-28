@@ -1,4 +1,9 @@
 # AMSh SaaS — Master Daily Execution Roadmap & Live Tracker
+
+> **SUPERSEDED (2026-09-28):** this roadmap was last updated on 20 Sep and its checkboxes no longer match the code. Current status and pending
+> work: [`../README.md`](../README.md) sections 8-9; plan: [`../18_AMSh_Completion_Plan_User_and_Admin.md`](../18_AMSh_Completion_Plan_User_and_Admin.md);
+> change log: [`../17_AMSh_Claude_Change_Tracker.md`](../17_AMSh_Claude_Change_Tracker.md).
+
 **Target Completion Date:** 31 October 2026 (Full SaaS Launch)  
 **🔥 HARD DEADLINE FOR ALL AI TASKS:** **05 October 2026** (Claude Subscription Window)  
 **Start Date:** 20 September 2026  

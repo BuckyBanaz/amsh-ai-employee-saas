@@ -31,12 +31,12 @@ export function KnowledgeHeader({ searchQuery, onSearchChange, onOpenModal }: Kn
   }, []);
 
   return (
-    <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 py-1">
+    <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3 py-1">
       <div>
-        <h1 className="text-xl font-bold text-gray-900 tracking-tight leading-tight">
+        <h1 className="text-xl font-extrabold text-gray-900 tracking-tight leading-tight">
           {STRINGS.DASHBOARD.HEADERS.KNOWLEDGE.TITLE}
         </h1>
-        <p className="text-xs text-gray-500 mt-0.5">
+        <p className="text-xs text-gray-500 font-medium mt-0.5">
           {STRINGS.DASHBOARD.HEADERS.KNOWLEDGE.SUBTITLE}
         </p>
       </div>

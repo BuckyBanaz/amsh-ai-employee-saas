@@ -1,3 +1,4 @@
+import hashlib
 from datetime import datetime, timedelta, timezone
 
 from fastapi import Depends, HTTPException, status
@@ -35,9 +36,64 @@ def decode_access_token(token: str) -> str:
         user_id = payload.get("sub")
         if not user_id:
             raise ValueError("missing sub claim")
+        if payload.get("purpose"):  # invite / reset tokens are single-purpose links, never a login
+            raise ValueError("not an access token")
         return user_id
     except (JWTError, ValueError) as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token") from exc
+
+
+# --- Password reset ---
+RESET_TOKEN_EXPIRE_MINUTES = 30
+MIN_PASSWORD_LENGTH = 8
+
+
+def _password_fingerprint(hashed_password: str) -> str:
+    return hashlib.sha256(hashed_password.encode()).hexdigest()[:16]
+
+
+def create_reset_token(user_id: str, hashed_password: str, minutes: int = RESET_TOKEN_EXPIRE_MINUTES) -> str:
+    """A signed link token that dies as soon as the password changes (it carries a fingerprint of the current hash),
+    so it works exactly once and needs no database column."""
+    expire = datetime.now(timezone.utc) + timedelta(minutes=minutes)
+    payload = {"sub": user_id, "purpose": "reset", "pw": _password_fingerprint(hashed_password), "exp": expire}
+    return jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
+
+
+def decode_reset_token(token: str) -> tuple[str, str]:
+    """(user_id, password fingerprint) or 400 when the link is invalid or expired."""
+    try:
+        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+        if payload.get("purpose") != "reset" or not payload.get("sub") or not payload.get("pw"):
+            raise ValueError("not a reset token")
+        return payload["sub"], payload["pw"]
+    except (JWTError, ValueError) as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This reset link is invalid or has expired") from exc
+
+
+def password_matches_fingerprint(hashed_password: str, fingerprint: str) -> bool:
+    return _password_fingerprint(hashed_password) == fingerprint
+
+
+# --- Email verification ---
+VERIFY_TOKEN_EXPIRE_DAYS = 3
+
+
+def create_verify_token(user_id: str, email: str) -> str:
+    expire = datetime.now(timezone.utc) + timedelta(days=VERIFY_TOKEN_EXPIRE_DAYS)
+    payload = {"sub": user_id, "purpose": "verify", "email": email, "exp": expire}
+    return jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
+
+
+def decode_verify_token(token: str) -> tuple[str, str]:
+    """(user_id, email the link was issued for) or 400 when invalid or expired."""
+    try:
+        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+        if payload.get("purpose") != "verify" or not payload.get("sub") or not payload.get("email"):
+            raise ValueError("not a verification token")
+        return payload["sub"], payload["email"]
+    except (JWTError, ValueError) as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This verification link is invalid or has expired") from exc
 
 
 # --- Team invites ---
@@ -74,3 +130,10 @@ def get_current_user(
     if user is None or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive")
     return user
+
+
+def require_platform_admin(current_user: User = Depends(get_current_user)) -> User:
+    """Guard for /api/admin/*: only users with scope "platform" (AMSh staff), never a clinic's owner or staff."""
+    if current_user.scope != "platform":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Platform administrators only")
+    return current_user

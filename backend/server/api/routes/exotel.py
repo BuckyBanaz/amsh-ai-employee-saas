@@ -80,6 +80,13 @@ async def handle_exotel_incoming_call(
         logger.warning(f"[EXOTEL INCOMING] No business found for call {call_sid}")
         return Response(content="<Response><Say>No business configured.</Say><Hangup/></Response>", media_type="application/xml")
 
+    if business.status == "suspended":  # set by a platform admin: no AI answers for this clinic
+        logger.info("[%s] Business %s is suspended: refusing the call", "INCOMING", business.id)
+        return Response(
+            content='<?xml version="1.0" encoding="UTF-8"?><Response><Say>This service is temporarily unavailable. Goodbye.</Say><Hangup/></Response>',
+            media_type="application/xml",
+        )
+
     # 2. Build websocket stream URL
     base_url = build_base_url()
     stream_url = f"{to_ws_url(base_url)}/media-stream/{business.id}?codec=pcm"

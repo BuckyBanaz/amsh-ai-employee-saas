@@ -189,6 +189,9 @@ def record_call_end(
 
             db.commit()
             logger.info(f"[CALL RECORDER] Call {call_id} ended (outcome={call.outcome}, duration={call.duration_seconds}s)")
+        from backend.server.services.post_call import schedule
+
+        schedule(call_id)  # summary, intent, sentiment, follow-ups: in the background
     except Exception as e:
         logger.error(f"[CALL RECORDER] Failed to record call end for {call_id}: {e}")
 

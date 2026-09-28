@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { STRINGS } from '../../../utils/strings/en';
 import { StorageService } from '../../../services/storage.service';
 import { DashboardController, AgentItem } from '../../../controllers/dashboard.controller';
+import { GlobalLoader } from '../../common/GlobalLoader';
 
 export function CallHandlingTab() {
   const content = STRINGS.DASHBOARD.COMPONENTS.AI_TABS_CONTENT.CALL_HANDLING;
@@ -82,8 +83,7 @@ export function CallHandlingTab() {
   if (loading) {
     return (
       <div className="bg-white border border-gray-100 rounded-xl p-8 shadow-xs flex items-center justify-center min-h-[300px]">
-        <div className="w-6 h-6 border-2 border-[#0066FF]/20 border-t-[#0066FF] rounded-full animate-spin mr-3"></div>
-        <span className="text-xs text-gray-500 font-medium">Loading telephony call handling rules...</span>
+        <GlobalLoader message="Loading telephony call handling rules..." size="md" />
       </div>
     );
   }

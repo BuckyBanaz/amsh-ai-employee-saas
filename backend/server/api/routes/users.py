@@ -84,3 +84,51 @@ def list_team_members(
     get_business_or_404(business_id, db)
     require_membership(business_id, current_user)
     return db.query(User).filter(User.business_id == business_id).order_by(User.created_at.asc()).all()
+
+
+class UpdateUserRequest(BaseModel):
+    role: str | None = None
+    is_active: bool | None = None
+
+
+@router.patch("/{user_id}", response_model=UserOut)
+def update_team_member(
+    business_id: str,
+    user_id: str,
+    payload: UpdateUserRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    get_business_or_404(business_id, db)
+    require_owner_or_admin(business_id, current_user)
+    user = db.get(User, user_id)
+    if not user or user.business_id != business_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    if payload.role is not None:
+        if payload.role not in INVITABLE_ROLES and payload.role != "owner":
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid role")
+        user.role = payload.role
+    if payload.is_active is not None:
+        user.is_active = payload.is_active
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+def remove_team_member(
+    business_id: str,
+    user_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    get_business_or_404(business_id, db)
+    require_owner_or_admin(business_id, current_user)
+    user = db.get(User, user_id)
+    if not user or user.business_id != business_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    if user.id == current_user.id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot remove yourself")
+    db.delete(user)
+    db.commit()
+

@@ -25,7 +25,9 @@ export function middleware(request: NextRequest) {
   }
 
   // Public auth pages & landing pages
-  const isAuthPage = pathname.startsWith('/login') || pathname.startsWith('/register');
+  // These must open without a session: someone who forgot their password, or a teammate opening an invite link, has none.
+  const PUBLIC_AUTH_PATHS = ['/login', '/register', '/forgot-password', '/reset-password', '/accept-invite', '/verify-email'];
+  const isAuthPage = PUBLIC_AUTH_PATHS.some((path) => pathname.startsWith(path));
   const isLandingPage = pathname === '/' || pathname.startsWith('/landing');
 
   // 1. Unauthenticated users trying to access protected routes (dashboard or onboarding)

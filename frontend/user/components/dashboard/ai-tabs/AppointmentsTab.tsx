@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { DashboardController, AgentItem } from '../../../controllers/dashboard.controller';
+import { GlobalLoader } from '../../common/GlobalLoader';
 
 export function AppointmentsTab() {
   const [bufferMinutes, setBufferMinutes] = useState(15);
@@ -60,8 +61,7 @@ export function AppointmentsTab() {
   if (loading) {
     return (
       <div className="bg-white border border-gray-100 rounded-xl p-8 shadow-xs flex items-center justify-center min-h-[300px]">
-        <div className="w-6 h-6 border-2 border-[#0066FF]/20 border-t-[#0066FF] rounded-full animate-spin mr-3"></div>
-        <span className="text-xs text-gray-500 font-medium">Loading appointment scheduling rules...</span>
+        <GlobalLoader message="Loading appointment scheduling rules..." size="md" />
       </div>
     );
   }

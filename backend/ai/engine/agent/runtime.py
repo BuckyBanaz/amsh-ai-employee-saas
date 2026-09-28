@@ -87,6 +87,7 @@ class AgentRuntime:
             languages=profile.languages,
             auto_detect_language=profile.auto_detect_language,
             channel=channel,
+            fillers=profile.natural_fillers and channel != "chat",  # a text chat has no voice to fill
         )
         if greeting:
             engine.greeting(greeting)  # seeds history with exactly what the caller heard

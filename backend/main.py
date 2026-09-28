@@ -1,10 +1,12 @@
 import asyncio
 import logging
+import os
 import sys
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
 
 logging.basicConfig(
     level=logging.INFO,
@@ -47,13 +49,25 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def on_startup() -> None:
-    # MVP-stage table creation. Switch to Alembic migrations once the schema
-    # needs to evolve without dropping data (spec §13).
-    Base.metadata.create_all(bind=engine)
+    # Schema: Alembic migrations (backend/migrations). Older databases created by create_all are stamped and upgraded.
+    # If migrations cannot run, fall back to create_all so the API still starts (new tables only, no column changes).
+    try:
+        from backend.server.database.migrate import run_migrations
+
+        logging.getLogger(__name__).info("[MIGRATE] database schema: %s", await asyncio.to_thread(run_migrations))
+    except Exception:
+        logging.getLogger(__name__).exception("[MIGRATE] migrations failed; falling back to create_all")
+        Base.metadata.create_all(bind=engine)
 
     # Pre-initialize all AI client connections to eliminate cold start penalty.
     # Runs Groq, Deepgram, TTS, Qdrant, Redis warmups in parallel.
     await warmup_all_clients()
+
+    if get_settings().REMINDERS_ENABLED:
+        from backend.server.workers.jobs.reminders import reminder_loop
+
+        asyncio.create_task(reminder_loop(get_settings().REMINDER_INTERVAL_SECONDS))
+        logging.getLogger(__name__).info("[REMINDERS] loop started")
 
     # Keep-alive pinger: fires every 4 min to prevent cloud containers from sleeping.
     # Without this, idle containers incur +400-700ms cold start on the next call.
@@ -81,5 +95,9 @@ def health() -> dict:
 def root() -> RedirectResponse:
     return RedirectResponse(url="/docs")
 
+
+static_dir = os.path.join(os.path.dirname(__file__), "server", "static")
+os.makedirs(static_dir, exist_ok=True)
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 app.include_router(api_router)

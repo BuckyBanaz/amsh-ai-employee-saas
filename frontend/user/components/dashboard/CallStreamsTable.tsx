@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { STRINGS } from '../../utils/strings/en';
 import { DashboardController, CallLogItem } from '../../controllers/dashboard.controller';
+import { TableSkeleton } from '../common/ShimmerSkeleton';
 
 interface CallStreamsTableProps {
   items?: CallLogItem[];
@@ -42,6 +43,16 @@ export function CallStreamsTable({ items, loading: propLoading }: CallStreamsTab
     }
   };
 
+  if (loading) {
+    return (
+      <TableSkeleton
+        rows={5}
+        headers={["CALLER", "TYPE", "DURATION", "INTENT", "OUTCOME", "TIME"]}
+        statusMessage="Streaming live call sessions & audio..."
+      />
+    );
+  }
+
   return (
     <div className="bg-white border border-gray-100 rounded-xl shadow-[0_1px_4px_rgba(0,0,0,0.03)] overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
@@ -63,16 +74,7 @@ export function CallStreamsTable({ items, loading: propLoading }: CallStreamsTab
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
-            {loading ? (
-              <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-xs text-gray-400">
-                  <div className="flex items-center justify-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-[#0066FF] animate-ping"></span>
-                    <span>Streaming live calls...</span>
-                  </div>
-                </td>
-              </tr>
-            ) : calls.length === 0 ? (
+            {calls.length === 0 ? (
               <tr>
                 <td colSpan={5} className="py-8 text-center text-xs text-gray-500">
                   <div className="flex flex-col items-center justify-center gap-1.5">

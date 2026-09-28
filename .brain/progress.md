@@ -376,3 +376,71 @@ See **[`DOCS/roadmap/AMSh_Master_Daily_Roadmap_and_Tracker.md`](file:///c:/Users
    - **BLOCKERS / decisions needed**: (1) Groq on-demand tier is 8k tokens/min and 200k/day, unusable for real traffic; the eval runs used up today's daily quota. (2) Booking confirmation SMS never sends (`send_sms_sync` missing). Details: `DOCS/16` sections 7-9 and `DOCS/17`.
 
 
+
+
+## 2026-09-28 (late) — Status snapshot and pending work
+
+Single source of truth for status and pending work is now `DOCS/README.md` (sections 8 and 9); the plan is
+`DOCS/18_AMSh_Completion_Plan_User_and_Admin.md`; every change is in `DOCS/17_AMSh_Claude_Change_Tracker.md` (entries 1-51).
+This file and `DOCS/roadmap/*` are history.
+
+**Done since section 10 above (all committed on `v0.7` except the last bullet):** hybrid LLM agent engine with guards, Groq + Gemini
+chain and live model picker, sentence streaming, Indian voices, emotion and laughter, voice interrupt (loudness detector),
+call recording and `/calls` playback with Test-call label, WhatsApp AI chat (built, not tried with a real number),
+capabilities rules and read/write operations wired into the agent, session resume after reloads, 190 unit tests.
+*Uncommitted:* Deepgram relay (`routes/stt.py`, verified live), Alembic migrations (real Postgres at revision 0002), audit log,
+forgot / reset / change password, email verification and admin login (backend), middleware fix for public auth pages.
+
+**Pending, in short:**
+- **Admin portal: almost all.** 25 pages are mock UI with zero API calls; backend has only admin login + me. Needs tenants,
+  users, cross-tenant reads, billing, analytics, health, audit, tickets, announcements, and the frontend wiring.
+- **User app static pages:** team, billing, integrations, conversations, notifications, analytics, most settings tabs; onboarding
+  plans, review, twilio; verify-email page; patients edit/delete.
+- **Voice/WhatsApp:** Deepgram browser adapter, real phone-call test, listening tests, WhatsApp real-number test, templates,
+  media, human takeover, reminders worker.
+- **Platform:** email provider key, Twilio/Exotel signatures, production settings, tests in `backend/tests`, metrics.
+- **Owner:** Groq paid tier, Cartesia credits, `META_APP_SECRET` and `RESEND_API_KEY`, rotate keys, delete duplicate agents,
+  create the first platform admin, click through everything.
+
+
+## 2026-09-28 (evening) — Work split between Claude and Antigravity
+
+- **User side (`frontend/user`, and the user-facing analytics backend such as `backend/server/api/routes/dashboard_stats.py`) is being
+  worked on by Antigravity right now.** Its uncommitted work already includes: many dashboard headers, analytics KPIs and charts
+  (`AIPerformanceCard`, `CallVolumeChart`, `CallVolumeTrendChart`, `CallOutcomesChart`, `AppointmentSourcesChart`,
+  `BusiestCallingHoursHeatmap`, `TopCallReasonsList`, `RecentAIConversations`), `ServiceModal`, `analytics.controller.ts`, and edits to the
+  dashboard, analytics, appointments, billing, conversations, integrations, notifications, services, settings and team pages.
+  **Do not start the user-app items in section 9 (U) from this list without checking `git status` and asking who has them.**
+  Some of those items (analytics, services, conversations, notifications, billing, team, settings) may already be in progress or done there.
+- **Admin portal (`frontend/admin`, `backend/server/api/routes/admin.py`) is being worked on by Claude.**
+- **Overlap to reconcile:** on the user side Claude also changed these files today (uncommitted, may conflict with Antigravity's edits):
+  `(auth)/forgot-password`, `(auth)/reset-password` (new), `(auth)/verify-email`, `settings/SecuritySettings.tsx`,
+  `settings/NotificationSettings.tsx` (rewritten into a real "Automations and alerts" tab), `middleware.ts` (public auth paths),
+  `controllers/auth.controller.ts`, `controllers/dashboard.controller.ts` (calendar feed, config types, call fields),
+  `utils/api_endpoints.ts`, `CallDetailPanel.tsx`, `CallLogsTable.tsx`, `calls/page.tsx`. If a merge conflict appears, keep both sets of changes.
+- Claude's backend-only work (auth, migrations, post-call analysis, reminders, alerts, calendar feed, WhatsApp chat, admin) does not overlap with the user side.
+
+**Why the admin portal is still mostly pending:** it was started only after the foundation (auth hardening, migrations, audit log, admin login)
+and is being built in batches: batch 1 = admin login + guard + real Businesses list with suspend / reactivate / plan change (backend done and
+tested; frontend in progress). The other 23 admin pages are still mock UI. The plan and order are in `DOCS/18_AMSh_Completion_Plan_User_and_Admin.md`.
+
+**Update (evening):** admin batch 1 is built: admin login + guard + real Businesses page with suspend / reactivate / change plan (backend tested,
+frontend passes tsc / eslint / next build, not clicked through). Still mock: the other 23 admin pages. **Incident:** the API was down for about 10 minutes
+because `routes/notifications.py` (Antigravity, user side) imported a model that does not exist (`models.appointment`); Claude fixed only that import
+(appointments are `Transaction` rows, details in JSON). **Lesson:** after any change to `router.py` or a new route file, check `GET /health` before
+moving on: the Docker API reloads on every save and a broken import takes the whole product down. To use the admin portal, create a platform admin:
+`docker compose exec api python -m backend.scripts.create_platform_admin you@example.com`, then run `npm run dev -- -p 3001` in `frontend/admin`.
+
+**Update (plans):** admin plan catalog is built. Plans live in the `plans` table (migration 0004, seeded starter / professional / business), are managed at admin `/billing`
+(`/api/admin/plans`), and are read publicly at `GET /api/plans` for the tenant app's pricing screens (the tenant app still uses hard-coded plans: user-side task).
+A business's `plan` column holds the plan key; giving a business a plan needs an active plan. Not built: enforcing quotas, real billing analytics.
+**Security issue (FIXED, tracker entry 59):** `create-order` used to trust the client's amount and `verify` trusted the client's plan and business and accepted anything without keys; now price and currency come from the plan, `verify` checks Razorpay's own order, and payments answer 503 without keys unless `ALLOW_DEV_FALLBACKS` is on. Still open: `GET /api/billing/businesses/{id}` is unauthenticated.
+All admin APIs live under `/api/admin/...`.
+
+**Update (admin detail):** the admin business detail page (`/businesses/[id]`) is now real (users, AI receptionist, appointments, calls, services, knowledge, integrations, activity;
+suspend / reactivate / change plan). Endpoints: `/api/admin/tenants/{id}/...` (`routes/admin_tenant_data.py`). Impersonation, emergency forwarding and direct password reset were removed from the
+page on purpose (unbacked / security-sensitive). Admin areas still mock: dashboard, business-users, admin-users, cross-tenant lists, usage, analytics, health, integrations, security, audit, tickets,
+announcements, verticals, and the revenue parts of billing. Admin login: `admin@amsh.ai` (created in the real DB; change the password with `create_platform_admin`).
+
+**Update (fillers):** natural fillers exist (`backend/ai/engine/agent/fillers.py`): code-chosen "hmm / achha" backchannels (rare, never for a worried caller) and an instant "one moment" while a tool
+runs; Hindi and English only; on for spoken calls, off for WhatsApp; switch off with `toggles.natural_fillers=false`. Tested (7 tests); how it sounds was NOT heard. Accent is the TTS voice, not this code.

@@ -3,12 +3,30 @@ import React from 'react';
 import { STRINGS } from '../../utils/strings/en';
 import { CustomerItem } from '../../controllers/dashboard.controller';
 
+import { TableSkeleton } from '../common/ShimmerSkeleton';
+
 interface PatientsTableProps {
   patients: CustomerItem[];
   isLoading?: boolean;
 }
 
 export function PatientsTable({ patients, isLoading = false }: PatientsTableProps) {
+  if (isLoading) {
+    return (
+      <TableSkeleton
+        rows={6}
+        headers={[
+          STRINGS.TABLES.PATIENTS.HEADERS.NAME,
+          STRINGS.TABLES.PATIENTS.HEADERS.PHONE,
+          "Total Bookings",
+          STRINGS.TABLES.PATIENTS.HEADERS.LAST_VISIT,
+          STRINGS.TABLES.PATIENTS.HEADERS.STATUS,
+        ]}
+        statusMessage="Loading patient records & profiles..."
+      />
+    );
+  }
+
   return (
     <div className="bg-white border border-gray-100 rounded-xl shadow-[0_1px_4px_rgba(0,0,0,0.03)] overflow-hidden flex flex-col">
       <div className="overflow-x-auto">
@@ -23,16 +41,7 @@ export function PatientsTable({ patients, isLoading = false }: PatientsTableProp
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50 text-xs">
-            {isLoading ? (
-              <tr>
-                <td colSpan={5} className="px-4 py-12 text-center text-xs text-gray-400">
-                  <div className="flex items-center justify-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-[#0066FF] animate-ping"></span>
-                    <span>Loading patient records...</span>
-                  </div>
-                </td>
-              </tr>
-            ) : patients.length === 0 ? (
+            {patients.length === 0 ? (
               <tr>
                 <td colSpan={5} className="py-12 text-center text-xs text-gray-500">
                   <div className="flex flex-col items-center justify-center gap-1.5">

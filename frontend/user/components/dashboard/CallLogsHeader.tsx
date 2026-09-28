@@ -24,12 +24,12 @@ export function CallLogsHeader({ onRefresh }: CallLogsHeaderProps) {
   });
 
   return (
-    <header className="flex items-center justify-between mb-3 py-1 flex-wrap gap-2">
+    <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3 py-1">
       <div>
-        <h1 className="text-xl font-bold text-gray-900 tracking-tight leading-tight flex items-center gap-2">
+        <h1 className="text-xl font-extrabold text-gray-900 tracking-tight leading-tight flex items-center gap-2">
           {STRINGS.HEADERS.CALL_LOGS.TITLE}
         </h1>
-        <p className="text-xs text-gray-500 mt-0.5">
+        <p className="text-xs text-gray-500 font-medium mt-0.5">
           {STRINGS.HEADERS.CALL_LOGS.SUBTITLE}
         </p>
       </div>
@@ -50,13 +50,9 @@ export function CallLogsHeader({ onRefresh }: CallLogsHeaderProps) {
               <polyline points="1 20 1 14 7 14"></polyline>
               <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
             </svg>
-            Refresh
+            <span>Refresh</span>
           </button>
         )}
-
-        <div className="w-8 h-8 rounded-full bg-[#E0E7FF] text-[#0066FF] flex items-center justify-center font-bold text-xs shadow-2xs">
-          {initials}
-        </div>
       </div>
     </header>
   );

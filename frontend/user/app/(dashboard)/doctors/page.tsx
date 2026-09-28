@@ -5,6 +5,7 @@ import { StaffCard, StaffCardProps } from '../../../components/dashboard/StaffCa
 import { NewStaffModal, StaffFormData } from '../../../components/dashboard/NewStaffModal';
 import { StaffScheduleModal } from '../../../components/dashboard/StaffScheduleModal';
 import { DashboardController, StaffItem, ServiceItem } from '../../../controllers/dashboard.controller';
+import { GlobalLoader } from '../../../components/common/GlobalLoader';
 
 export default function DoctorsPage() {
   const [staffList, setStaffList] = useState<StaffCardProps[]>([]);
@@ -128,13 +129,12 @@ export default function DoctorsPage() {
   };
 
   return (
-    <div className="animate-in fade-in duration-500 pt-2 pb-12">
+    <div className="space-y-3.5 animate-in fade-in duration-300 pb-8">
       <DoctorsHeader onAddStaff={handleOpenAdd} />
 
       {loading ? (
-        <div className="flex items-center justify-center p-16 text-xs text-gray-400">
-          <span className="w-2 h-2 rounded-full bg-[#0066FF] animate-ping mr-2"></span>
-          Loading staff and clinic services...
+        <div className="bg-white border border-gray-100 rounded-xl shadow-xs overflow-hidden">
+          <GlobalLoader message="Loading doctors & clinic specialists..." size="md" />
         </div>
       ) : staffList.length === 0 ? (
         <div className="bg-white border border-gray-100 rounded-xl p-10 text-center flex flex-col items-center justify-center max-w-md mx-auto mt-6 shadow-2xs">

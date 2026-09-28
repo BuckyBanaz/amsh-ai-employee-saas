@@ -20,7 +20,7 @@ router = APIRouter(prefix="/api/onboarding/businesses/{business_id}/agents", tag
 # Config sections several dashboard tabs write to (e.g. `toggles` holds Behavior's small_talk/confirm, Appointments'
 # allow_cancel/allow_reschedule and Call Handling's record/transcribe). They must merge, not replace, or saving one
 # tab silently erases the others' settings.
-_SHARED_CONFIG_SECTIONS = ("toggles", "limits", "voice_settings", "tts_provider", "capabilities")
+_SHARED_CONFIG_SECTIONS = ("toggles", "limits", "voice_settings", "tts_provider", "capabilities", "alerts", "reminders")
 
 
 def merge_agent_config(current: dict | None, update: dict) -> dict:

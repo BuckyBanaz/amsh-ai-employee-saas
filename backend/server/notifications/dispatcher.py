@@ -15,6 +15,34 @@ class NotificationDispatcher:
     """Dispatches notifications asynchronously across multiple configured channels."""
 
     @classmethod
+    async def notify_staff(cls, business_id: str, event: str, text: str) -> Dict[str, Any]:
+        """Alert the clinic's own staff (SMS and/or email) about `event` ("escalation", "booking", "missed_call").
+        Only when the owner configured a contact: Agent.config["alerts"] = {"phone", "email", "events"}; with no
+        "events" list every event is sent."""
+        from backend.server.database.models.agent import Agent
+        from backend.server.database.session import SessionLocal
+
+        def load() -> Dict[str, Any]:
+            with SessionLocal() as db:
+                agent = db.query(Agent).filter(Agent.business_id == business_id).order_by(Agent.created_at.asc()).first()
+                return dict((agent.config or {}).get("alerts") or {}) if agent else {}
+
+        alerts = await asyncio.to_thread(load)
+        phone, email = (alerts.get("phone") or "").strip(), (alerts.get("email") or "").strip()
+        if not (phone or email) or event not in (alerts.get("events") or ["escalation", "booking", "missed_call"]):
+            return {"sent": False, "reason": "no alert contact configured for this event"}
+        results: Dict[str, Any] = {"sent": True}
+        if phone:
+            from backend.ai.tools.common.send_sms import send_sms_sync
+
+            results["sms"] = await asyncio.to_thread(send_sms_sync, phone, f"[AMSh] {text}"[:300])
+        if email:
+            from backend.server.services.email_service import send_email
+
+            results["email"] = await send_email(email, f"AMSh alert: {event.replace('_', ' ')}", text)
+        return results
+
+    @classmethod
     async def dispatch_booking_confirmation(
         cls,
         business_id: str,

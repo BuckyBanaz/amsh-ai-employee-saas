@@ -4,28 +4,21 @@ import { STRINGS } from '../../utils/strings/en';
 
 export function BillingHeader() {
   return (
-    <header className="flex flex-col md:flex-row md:items-center justify-between mb-3 py-1 shrink-0 gap-3">
+    <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3 py-1 shrink-0">
       <div>
-        <h1 className="text-xl font-bold text-gray-900 tracking-tight leading-tight">
+        <h1 className="text-xl font-extrabold text-gray-900 tracking-tight leading-tight">
           {STRINGS.DASHBOARD.HEADERS.BILLING.TITLE}
         </h1>
-        <p className="text-xs text-gray-500 mt-0.5">
+        <p className="text-xs text-gray-500 font-medium mt-0.5">
           {STRINGS.DASHBOARD.HEADERS.BILLING.SUBTITLE}
         </p>
       </div>
 
-      <div className="flex items-center gap-2.5">
-        <div className="text-xs font-medium text-gray-500 hidden sm:inline-block">
-          Tuesday, August 12, 2026
-        </div>
-
-        <button className="w-8 h-8 rounded-full border border-gray-200 bg-white flex items-center justify-center text-gray-500 hover:bg-gray-50 shadow-2xs transition-colors relative">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
-        </button>
-
-        <div className="w-8 h-8 rounded-full bg-[#F0F7FF] text-[#0066FF] flex items-center justify-center font-bold text-xs cursor-pointer shadow-2xs hover:bg-blue-100 transition-colors">
-          SW
-        </div>
+      <div className="flex items-center gap-2">
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+          Subscription Active
+        </span>
       </div>
     </header>
   );

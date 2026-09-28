@@ -4,6 +4,11 @@ export const API_ENDPOINTS = {
   AUTH: {
     LOGIN: `${BASE_URL}/auth/login`,
     REGISTER: `${BASE_URL}/auth/register`,
+    FORGOT_PASSWORD: `${BASE_URL}/auth/forgot-password`,
+    RESET_PASSWORD: `${BASE_URL}/auth/reset-password`,
+    CHANGE_PASSWORD: `${BASE_URL}/auth/change-password`,
+    VERIFY_EMAIL: `${BASE_URL}/auth/verify-email`,
+    SEND_VERIFICATION: `${BASE_URL}/auth/send-verification`,
   },
   VOICE: {
     GET_VOICES: `${BASE_URL}/voice/voices`,
@@ -22,12 +27,18 @@ export const API_ENDPOINTS = {
     GET_STATS: (businessId: string) => `${BASE_URL}/businesses/${businessId}/dashboard/stats`,
     GET_OVERVIEW: (businessId: string) => `${BASE_URL}/businesses/${businessId}/dashboard`,
   },
+  ANALYTICS: {
+    GET_SUMMARY: (businessId: string, period: string = '30d') => `${BASE_URL}/businesses/${businessId}/analytics?period=${period}`,
+  },
   APPOINTMENTS: {
     LIST: (businessId: string) => `${BASE_URL}/businesses/${businessId}/appointments`,
     CREATE: (businessId: string) => `${BASE_URL}/businesses/${businessId}/appointments`,
     GET: (businessId: string, id: string) => `${BASE_URL}/businesses/${businessId}/appointments/${id}`,
     UPDATE: (businessId: string, id: string) => `${BASE_URL}/businesses/${businessId}/appointments/${id}`,
     DELETE: (businessId: string, id: string) => `${BASE_URL}/businesses/${businessId}/appointments/${id}`,
+  },
+  CALENDAR: {
+    FEED: (businessId: string) => `${BASE_URL}/businesses/${businessId}/calendar-feed`,
   },
   CALLS: {
     LIST: (businessId: string) => `${BASE_URL}/businesses/${businessId}/calls`,

@@ -1,6 +1,7 @@
 "use client";
 import React from 'react';
 import { AppointmentItem } from '../../controllers/dashboard.controller';
+import { GlobalLoader } from '../common/GlobalLoader';
 
 export interface DayInfo {
   dayName: string;
@@ -80,9 +81,8 @@ export function WeeklyCalendar({
 
   if (isLoading) {
     return (
-      <div className="bg-white border border-gray-100 rounded-xl shadow-2xs p-12 text-center flex flex-col items-center justify-center min-h-[460px]">
-        <div className="w-8 h-8 border-3 border-[#0066FF]/20 border-t-[#0066FF] rounded-full animate-spin mb-3"></div>
-        <p className="text-xs text-gray-500 font-medium">Loading schedule...</p>
+      <div className="bg-white border border-gray-100 rounded-xl shadow-2xs overflow-hidden">
+        <GlobalLoader message="Loading weekly appointments calendar..." size="lg" />
       </div>
     );
   }

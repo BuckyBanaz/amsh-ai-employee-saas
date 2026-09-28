@@ -1,7 +1,8 @@
 "use client";
-import React from 'react';
+import React, { useMemo, useSyncExternalStore } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { adminAuth, AdminUser, getUserSnapshot, subscribeSession } from '../../lib/api';
 
 const navGroups = [
   {
@@ -90,6 +91,15 @@ const getIcon = (name: string) => {
 };
 
 export function Sidebar() {
+  const router = useRouter();
+  const rawAdmin = useSyncExternalStore(subscribeSession, getUserSnapshot, () => null);
+  const admin = useMemo<AdminUser | null>(() => {
+    try {
+      return rawAdmin ? (JSON.parse(rawAdmin) as AdminUser) : null;
+    } catch {
+      return null;
+    }
+  }, [rawAdmin]);
   const pathname = usePathname();
 
   return (
@@ -145,15 +155,22 @@ export function Sidebar() {
         <div className="flex items-center justify-between border border-gray-200 p-2 rounded-lg bg-gray-50/50 hover:bg-gray-50 hover:border-gray-300 transition-colors cursor-pointer">
           <div className="flex items-center gap-2 min-w-0">
             <div className="w-6 h-6 rounded-full bg-blue-100 text-[#2563EB] flex flex-shrink-0 items-center justify-center font-bold text-[10px]">
-              PA
+              {(admin?.name || 'A').split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase()}
             </div>
             <div className="flex flex-col min-w-0">
-              <span className="text-xs font-semibold text-gray-900 truncate">Parikshit Arora</span>
-              <span className="text-[9px] font-medium text-gray-500 truncate">Super Admin</span>
+              <span className="text-xs font-semibold text-gray-900 truncate">{admin?.name || 'Admin'}</span>
+              <span className="text-[9px] font-medium text-gray-500 truncate">{admin?.role === 'superadmin' ? 'Super Admin' : admin?.role || 'Platform admin'}</span>
             </div>
           </div>
         </div>
-        <button className="flex items-center gap-1.5 mt-2 px-1 text-[11px] font-semibold text-red-500 hover:text-red-600 transition-colors">
+        <button
+          type="button"
+          onClick={() => {
+            adminAuth.clear();
+            router.replace('/login');
+          }}
+          className="flex items-center gap-1.5 mt-2 px-1 text-[11px] font-semibold text-red-500 hover:text-red-600 transition-colors"
+        >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
             <polyline points="16 17 21 12 16 7"></polyline>

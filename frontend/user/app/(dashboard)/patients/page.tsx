@@ -55,7 +55,7 @@ export default function PatientsPage() {
   }, [patients, search, selectedStatus]);
 
   return (
-    <div className="animate-in fade-in duration-500 pt-1 sm:pt-2 pb-8">
+    <div className="space-y-3.5 animate-in fade-in duration-300 pb-8">
       <PatientsHeader onAddPatient={() => setIsAddModalOpen(true)} />
       
       <PatientsFilterBar

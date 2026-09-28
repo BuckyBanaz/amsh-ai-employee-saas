@@ -224,7 +224,7 @@ export default function AppointmentsPage() {
   }, [appointments, selectedDoctor, selectedService, selectedStatus, selectedSource]);
 
   return (
-    <div className="animate-in fade-in duration-500 pt-1 pb-4">
+    <div className="space-y-3.5 animate-in fade-in duration-300 pb-8">
       {/* Header with Navigation, Date Picker Jump, & New Appointment Trigger */}
       <AppointmentsHeader
         onNewAppointment={() => setIsNewModalOpen(true)}
