@@ -1,4 +1,4 @@
-"""
+﻿"""
 Call & Conversation Persistence Service.
 Handles saving live telephony call sessions, speech turns, transcripts, sentiments,
 and recording playback URLs to PostgreSQL.
@@ -7,7 +7,7 @@ and recording playback URLs to PostgreSQL.
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy import select
 from backend.server.database.session import SessionLocal
@@ -16,6 +16,12 @@ from backend.server.database.models.call import Call
 from backend.server.database.models.message import Message
 
 logger = logging.getLogger(__name__)
+
+
+def _toggle_on(db, business_id: Optional[str], key: str) -> bool:
+    """Call Handling tab switches (Agent.config.toggles.record / transcribe). Only an explicit False turns one off."""
+    agent = db.query(Agent).filter(Agent.business_id == business_id).order_by(Agent.created_at.asc()).first() if business_id else None
+    return not (agent and ((agent.config or {}).get("toggles") or {}).get(key) is False)
 
 
 def record_call_start(
@@ -36,7 +42,7 @@ def record_call_start(
                 return existing
 
             agent = db.execute(
-                select(Agent).where(Agent.business_id == business_id)
+                select(Agent).where(Agent.business_id == business_id).order_by(Agent.created_at.asc())
             ).scalars().first()
             agent_id = agent.id if agent else None
 
@@ -51,7 +57,7 @@ def record_call_start(
             )
             db.add(call)
 
-            if greeting:
+            if greeting and _toggle_on(db, business_id, "transcribe"):
                 msg = Message(
                     id=str(uuid.uuid4()),
                     call_id=call_id,
@@ -70,6 +76,28 @@ def record_call_start(
         return None
 
 
+def load_call_turns(call_id: str) -> List[Tuple[str, str]]:
+    """The (caller, AI) exchanges saved for a call, oldest first (the opening greeting excluded), so an in-progress
+    playground call can be resumed after the server restarts. Empty when transcripts are off or the call is new."""
+    try:
+        with SessionLocal() as db:
+            rows = db.execute(
+                select(Message).where(Message.call_id == call_id, Message.sequence > 0).order_by(Message.sequence.asc())
+            ).scalars().all()
+    except Exception as e:
+        logger.warning(f"[CALL RECORDER] Could not load turns for {call_id}: {e}")
+        return []
+    turns: List[Tuple[str, str]] = []
+    said: Optional[str] = None
+    for row in rows:
+        if row.speaker == "User":
+            said = row.text
+        elif row.speaker == "AI" and said is not None:
+            turns.append((said, row.text))
+            said = None
+    return turns
+
+
 def record_call_turn(
     call_id: str,
     user_transcript: str,
@@ -86,6 +114,8 @@ def record_call_turn(
             if not call:
                 logger.warning(f"[CALL RECORDER] Call {call_id} not found when saving turn")
                 return
+            if not _toggle_on(db, call.business_id, "transcribe"):
+                return  # owner turned transcripts off: keep the call row, store no speech text
 
             now = datetime.now(timezone.utc)
             if user_transcript and user_transcript.strip():
@@ -152,7 +182,7 @@ def record_call_end(
                 call.summary = summary
             if intent:
                 call.intent = intent
-            if recording_url:
+            if recording_url and _toggle_on(db, call.business_id, "record"):
                 call.recording_url = recording_url
             if caller_name and not call.caller_name:
                 call.caller_name = caller_name
@@ -187,8 +217,8 @@ def update_call_recording_webhook(
                 logger.warning(f"[CALL RECORDER] No call record found for webhook callback {call_id}")
                 return False
 
-            if recording_url:
-                call.recording_url = recording_url
+            if recording_url and _toggle_on(db, call.business_id, "record"):
+                call.recording_url = recording_url  # (the provider still records; we just do not keep or show it)
             if duration_seconds is not None and duration_seconds > 0:
                 call.duration_seconds = duration_seconds
             if status:

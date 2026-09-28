@@ -1,5 +1,11 @@
 # AMSh — Project Status Review (2026-09-09)
 
+> **2026-09-28 update:** this document is older than the current code. The current architecture, call and WhatsApp
+> pipelines, per-module status, pending list and improvement ideas are in [`README.md`](README.md) (section 8 = status).
+> Every change made since is logged in [`17_AMSh_Claude_Change_Tracker.md`](17_AMSh_Claude_Change_Tracker.md).
+> Not corrected below: any "done" or "pending" item here that the README status table contradicts; trust the README.
+
+
 ## Verdict
 
 Execution is strong but **lopsided**: ~11 polished admin screens plus a full user dashboard are built and matching Figma, all running on hardcoded mock data — against a backend that only has auth + businesses working, with **zero voice/call logic**. The voice pipeline (Twilio/Groq/Deepgram/ElevenLabs) is the actual product, not a nice-to-have screen, and it's at 0% pending real provider keys. UI execution is currently ahead of the thing that makes this an AI receptionist.

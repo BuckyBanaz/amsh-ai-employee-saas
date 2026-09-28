@@ -15,10 +15,12 @@ export function CallDetailPanel({ call, loading = false }: CallDetailPanelProps)
   const [duration, setDuration] = useState(0);
   const [playbackRate, setPlaybackRate] = useState(1);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [audioFailed, setAudioFailed] = useState(false);
 
   useEffect(() => {
     setIsPlaying(false);
     setCurrentTime(0);
+    setAudioFailed(false);
     if (audioRef.current) {
       audioRef.current.currentTime = 0;
       audioRef.current.pause();
@@ -45,7 +47,9 @@ export function CallDetailPanel({ call, loading = false }: CallDetailPanelProps)
 
   const handleLoadedMetadata = () => {
     if (audioRef.current) {
-      setDuration(audioRef.current.duration || call?.duration_seconds || 0);
+      // Browser-made recordings (MediaRecorder webm) report an Infinity duration, so fall back to the logged call length.
+      const d = audioRef.current.duration;
+      setDuration(Number.isFinite(d) && d > 0 ? d : call?.duration_seconds || 0);
     }
   };
 
@@ -100,7 +104,8 @@ export function CallDetailPanel({ call, loading = false }: CallDetailPanelProps)
   }
 
   const initials = (call.caller_name?.slice(0, 2) || call.caller_number?.slice(0, 2) || 'CL').toUpperCase();
-  const effectiveAudioUrl = call.recording_url || 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3';
+  const audioUrl = call.recording_url || null;
+  const hasAudio = !!audioUrl && !audioFailed;
 
   return (
     <div className="w-full bg-white border border-gray-100 rounded-xl shadow-[0_1px_4px_rgba(0,0,0,0.03)] flex flex-col h-full overflow-hidden">
@@ -124,8 +129,10 @@ export function CallDetailPanel({ call, loading = false }: CallDetailPanelProps)
             <div>
               <h2 className="text-sm font-bold text-gray-900 leading-tight">
                 {call.caller_name || 'Caller'}
+                {call.channel === 'whatsapp' && <span className="ml-1.5 align-middle text-[9px] font-bold uppercase tracking-wide text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5">WhatsApp</span>}
+                {call.is_test && <span className="ml-1.5 align-middle text-[9px] font-bold uppercase tracking-wide text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">Test call</span>}
               </h2>
-              <p className="text-xs text-gray-500 font-medium">{call.caller_number}</p>
+              <p className="text-xs text-gray-500 font-medium">{call.is_test && call.caller_number === 'Anonymous' ? 'Made from the AI Studio playground' : call.caller_number}</p>
             </div>
           </div>
 
@@ -161,12 +168,24 @@ export function CallDetailPanel({ call, loading = false }: CallDetailPanelProps)
             </button>
           </div>
 
+          {!hasAudio ? (
+            <p className="text-xs text-gray-500 leading-relaxed">
+              {audioFailed
+                ? 'The recording could not be loaded. It may have been removed.'
+                : call.channel === 'whatsapp'
+                  ? 'This is a WhatsApp chat: there is a transcript but no audio.'
+                  : call.outcome === 'live'
+                  ? 'This call is still in progress.'
+                  : 'No audio was saved for this call. Calls made from the AI Studio playground keep a transcript only, unless a browser call was recorded; calls with recording switched off also have no audio.'}
+            </p>
+          ) : (<>
           <audio
             ref={audioRef}
-            src={effectiveAudioUrl}
+            src={audioUrl!}
             onTimeUpdate={handleTimeUpdate}
             onLoadedMetadata={handleLoadedMetadata}
             onEnded={() => setIsPlaying(false)}
+            onError={() => { setAudioFailed(true); setIsPlaying(false); }}
             preload="metadata"
           />
 
@@ -204,6 +223,7 @@ export function CallDetailPanel({ call, loading = false }: CallDetailPanelProps)
               </div>
             </div>
           </div>
+          </>)}
         </div>
 
         {/* Call Summary */}

@@ -2,21 +2,41 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { DoctorsHeader } from '../../../components/dashboard/DoctorsHeader';
 import { StaffCard, StaffCardProps } from '../../../components/dashboard/StaffCard';
-import { NewStaffModal } from '../../../components/dashboard/NewStaffModal';
-import { DashboardController, StaffItem } from '../../../controllers/dashboard.controller';
+import { NewStaffModal, StaffFormData } from '../../../components/dashboard/NewStaffModal';
+import { StaffScheduleModal } from '../../../components/dashboard/StaffScheduleModal';
+import { DashboardController, StaffItem, ServiceItem } from '../../../controllers/dashboard.controller';
 
 export default function DoctorsPage() {
   const [staffList, setStaffList] = useState<StaffCardProps[]>([]);
+  const [availableServices, setAvailableServices] = useState<ServiceItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
-  const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
 
-  const loadStaff = useCallback(async () => {
+  // Modals state
+  const [isStaffModalOpen, setIsStaffModalOpen] = useState<boolean>(false);
+  const [editingStaffData, setEditingStaffData] = useState<StaffFormData | null>(null);
+  const [isScheduleModalOpen, setIsScheduleModalOpen] = useState<boolean>(false);
+  const [selectedScheduleStaff, setSelectedScheduleStaff] = useState<StaffCardProps | null>(null);
+
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const items: StaffItem[] = await DashboardController.getStaff();
-      const mapped: StaffCardProps[] = (items || []).map((s) => {
+      const [staffItems, serviceItems] = await Promise.all([
+        DashboardController.getStaff().catch(() => []),
+        DashboardController.getServices().catch(() => []),
+      ]);
+
+      setAvailableServices(serviceItems || []);
+
+      const serviceMap = new Map((serviceItems || []).map((s) => [s.id, s.title]));
+
+      const mapped: StaffCardProps[] = (staffItems || []).map((s) => {
         const initials = (s.name?.slice(0, 2) || 'ST').toUpperCase();
+        const assignedTitles = (s.service_ids || [])
+          .map((id) => serviceMap.get(id))
+          .filter(Boolean) as string[];
+
         return {
+          id: s.id,
           initials,
           name: s.name,
           specialty: s.specialty || 'General Practice',
@@ -25,40 +45,96 @@ export default function DoctorsPage() {
           weeklySchedule: 'Active roster',
           rating: '5.0',
           contact: s.email || s.phone || 'Internal Staff',
-          services: ['General Consultation'],
+          services: assignedTitles.length > 0 ? assignedTitles : ['General Consultation'],
+          service_ids: s.service_ids || [],
+          email: s.email || '',
+          phone: s.phone || '',
         };
       });
+
       setStaffList(mapped);
     } catch (err) {
-      console.error('Failed to load staff roster:', err);
+      console.error('Failed to load staff roster or services:', err);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    loadStaff();
-  }, [loadStaff]);
+    loadData();
+  }, [loadData]);
 
-  const handleAddStaff = async (payload: {
-    name: string;
-    role: string;
-    specialty?: string;
-    email?: string;
-    phone?: string;
-  }) => {
-    await DashboardController.createStaff(payload);
-    await loadStaff();
+  // Handlers for Add/Edit
+  const handleOpenAdd = () => {
+    setEditingStaffData(null);
+    setIsStaffModalOpen(true);
+  };
+
+  const handleOpenEdit = (staff: StaffCardProps) => {
+    setEditingStaffData({
+      id: staff.id,
+      name: staff.name,
+      role: staff.role === 'RECEPTIONIST' ? 'Receptionist' : 'Doctor',
+      specialty: staff.specialty,
+      email: staff.email,
+      phone: staff.phone,
+      service_ids: staff.service_ids || [],
+    });
+    setIsStaffModalOpen(true);
+  };
+
+  const handleOpenSchedule = (staff: StaffCardProps) => {
+    setSelectedScheduleStaff(staff);
+    setIsScheduleModalOpen(true);
+  };
+
+  const handleSubmitStaff = async (payload: StaffFormData) => {
+    if (payload.id) {
+      // Update existing staff
+      await DashboardController.updateStaff(payload.id, {
+        name: payload.name,
+        role: payload.role,
+        specialty: payload.specialty,
+        email: payload.email,
+        phone: payload.phone,
+        service_ids: payload.service_ids || [],
+      });
+    } else {
+      // Create new staff
+      await DashboardController.createStaff({
+        name: payload.name,
+        role: payload.role,
+        specialty: payload.specialty,
+        email: payload.email,
+        phone: payload.phone,
+        service_ids: payload.service_ids || [],
+      });
+    }
+    await loadData();
+  };
+
+  const handleDeleteStaff = async (staffId: string) => {
+    await DashboardController.deleteStaff(staffId);
+    await loadData();
+  };
+
+  const handleSaveSchedule = async (staffId: string, scheduleData: any) => {
+    // Optionally update status on staff
+    if (scheduleData?.status) {
+      setStaffList((prev) =>
+        prev.map((s) => (s.id === staffId ? { ...s, status: scheduleData.status } : s))
+      );
+    }
   };
 
   return (
     <div className="animate-in fade-in duration-500 pt-2 pb-12">
-      <DoctorsHeader onAddStaff={() => setIsAddModalOpen(true)} />
-      
+      <DoctorsHeader onAddStaff={handleOpenAdd} />
+
       {loading ? (
         <div className="flex items-center justify-center p-16 text-xs text-gray-400">
           <span className="w-2 h-2 rounded-full bg-[#0066FF] animate-ping mr-2"></span>
-          Loading staff roster...
+          Loading staff and clinic services...
         </div>
       ) : staffList.length === 0 ? (
         <div className="bg-white border border-gray-100 rounded-xl p-10 text-center flex flex-col items-center justify-center max-w-md mx-auto mt-6 shadow-2xs">
@@ -75,7 +151,7 @@ export default function DoctorsPage() {
             Add team members, doctors, or specialists so your AI receptionist can assign bookings to them.
           </p>
           <button
-            onClick={() => setIsAddModalOpen(true)}
+            onClick={handleOpenAdd}
             className="px-3.5 py-1.5 bg-[#0066FF] text-white rounded-lg text-xs font-semibold shadow-xs hover:bg-[#0052cc] transition-colors cursor-pointer"
           >
             + Add First Doctor / Staff
@@ -84,15 +160,32 @@ export default function DoctorsPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           {staffList.map((staff, idx) => (
-            <StaffCard key={idx} {...staff} />
+            <StaffCard
+              key={staff.id || idx}
+              {...staff}
+              onEdit={handleOpenEdit}
+              onViewSchedule={handleOpenSchedule}
+            />
           ))}
         </div>
       )}
 
+      {/* Add / Edit Doctor & Services Modal */}
       <NewStaffModal
-        isOpen={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
-        onSubmit={handleAddStaff}
+        isOpen={isStaffModalOpen}
+        onClose={() => setIsStaffModalOpen(false)}
+        onSubmit={handleSubmitStaff}
+        onDelete={handleDeleteStaff}
+        initialData={editingStaffData}
+        availableServices={availableServices}
+      />
+
+      {/* Doctor Weekly Schedule Modal */}
+      <StaffScheduleModal
+        isOpen={isScheduleModalOpen}
+        onClose={() => setIsScheduleModalOpen(false)}
+        staff={selectedScheduleStaff}
+        onSaveSchedule={handleSaveSchedule}
       />
     </div>
   );

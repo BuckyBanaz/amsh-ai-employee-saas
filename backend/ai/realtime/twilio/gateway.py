@@ -10,14 +10,20 @@ import asyncio
 import base64
 import json
 import logging
-from typing import Any, Dict, Optional
+import re
+import time
+from typing import Any, Dict, Optional, Tuple
 
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from backend.ai.engine.conversation.state_machine import ConversationStateMachine, load_agent_settings, load_business_context, load_tone
+from backend.ai.engine.conversation.i18n import normalize_language
 from backend.ai.engine.conversation.states import CallState
+from backend.ai.engine.conversation.nlu import ConversationalNLU
+from backend.ai.engine.agent.runtime import AgentRuntime, get_sim_runtime, store_sim_runtime
 from backend.ai.llm.client import llm_client
 from backend.ai.memory.session_memory import session_memory
 from backend.ai.realtime.audio.mulaw import FRAME_BYTES, FRAME_DURATION_S, PCM_FRAME_BYTES, frame_stream
@@ -27,10 +33,12 @@ from backend.server.services.call_recorder import (
     record_call_start,
     record_call_turn,
     record_call_end,
+    load_call_turns,
 )
 from backend.ai.realtime.vad.detector import SimpleVAD
 from backend.ai.speech.stt.deepgram import DeepgramLiveConnection
 from backend.ai.speech.tts.cartesia import cartesia_tts
+from backend.ai.speech.tts.voice_profile import detect_tts_language
 from backend.ai.verticals.registry import registry as vertical_registry
 from backend.server.database.models.business import Business
 from backend.server.database.session import get_db
@@ -40,12 +48,26 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["voice"])
 vad = SimpleVAD()
 
+_WATCHDOG_LINES = {
+    "en": {
+        "still_there": "Are you still there?",
+        "goodbye": "I haven't heard anything, so I'll end the call now. Feel free to call back anytime. Goodbye!",
+        "limit": "I'm sorry, we've reached the maximum time for this call. Please call back if you need anything else. Goodbye!",
+    },
+    "hi": {
+        "still_there": "Kya aap wahan hain?",
+        "goodbye": "Mujhe kuch sunai nahi diya, isliye main call band kar rahi hoon. Aap kabhi bhi dobara call kar sakte hain. Namaste!",
+        "limit": "Maaf kijiye, is call ka maximum samay poora ho gaya hai. Zarurat ho toh dobara call kijiye. Namaste!",
+    },
+}
+
 
 class VoiceSimulateRequest(BaseModel):
     business_id: str
     caller_number: str = "+15550199999"
     user_transcript: str
     call_id: Optional[str] = None
+    voice_id: Optional[str] = None  # the voice the playground user picked (persona gender and audio prefetch follow it)
 
 
 class CallSession:
@@ -67,6 +89,15 @@ class CallSession:
         self.should_close = False
         self.seen_media = False
         self.agent_settings: dict = {}
+        # LLM agent engine (DOCS/16). None = legacy state machine only. Set per tenant / via CONVERSATION_ENGINE.
+        self.agent_rt: Optional[AgentRuntime] = None
+        self._bg_tasks: set = set()
+        # Call Handling tab limits (silence timeout, max duration), enforced by _watchdog().
+        self.call_started = time.monotonic()
+        self.last_activity = time.monotonic()
+        self._silence_prompted = False
+        self._busy = False
+        self._watchdog_task: Optional[asyncio.Task] = None
 
     async def start(self, stream_sid: str, call_id: str, caller_number: str) -> None:
         self.stream_sid = stream_sid
@@ -87,13 +118,25 @@ class CallSession:
             business_id=self.business_id,
             caller_number=self.caller_number,
             vertical_config=vertical_cfg,
-            business_info={"name": business_name or "Our Office"},
+            business_info={
+                "name": business_name or "Our Office",
+                "agent_name": self.agent_settings.get("name", "Aura"),
+            },
             services=services,
             tone=tone,
             language=self.agent_settings.get("language"),
         )
         session_memory.store_session(call_id, self.state_machine)
         greeting = self.state_machine.start_call(self.agent_settings.get("greeting"))
+        try:
+            self.agent_rt = await AgentRuntime.create(
+                self.business_id, call_id, self.caller_number, vertical_cfg, greeting, self.agent_settings.get("language")
+            )
+        except Exception as e:  # the agent is optional: any setup failure keeps the call on the legacy engine
+            logger.warning(f"[AGENT] init failed, using state machine: {e}")
+            self.agent_rt = None
+        if self.agent_rt:
+            print(f"🧪 CONVERSATION ENGINE: {self.agent_rt.mode}", flush=True)
         print(f"\n==================== [CALL STARTED] ====================", flush=True)
         print(f"📞 CALL SID: {call_id} | Business: {self.business_id} | Caller: {self.caller_number}", flush=True)
         print(f"🤖 AI GREETING: \"{greeting}\"", flush=True)
@@ -118,6 +161,7 @@ class CallSession:
             language=stt_lang
         )
         self._stt_connect_task = asyncio.create_task(self._connect_stt(call_id))
+        self._watchdog_task = asyncio.create_task(self._watchdog())
 
         await self._speak_turn(greeting)
 
@@ -142,7 +186,12 @@ class CallSession:
             if event["type"] == "speech_started":
                 await self.barge_in.handle_caller_speech(self.websocket, self.stream_sid)
             elif event["type"] == "transcript" and event.get("is_final") and event.get("text", "").strip():
-                await self._handle_transcript(event["text"])
+                self._busy = True  # we are thinking/answering: the watchdog must not call this silence
+                try:
+                    await self._handle_transcript(event["text"])
+                finally:
+                    self._busy = False
+                    self.last_activity = time.monotonic()
 
     async def _handle_transcript(self, transcript: str) -> None:
         if not self.state_machine:
@@ -151,6 +200,11 @@ class CallSession:
         print(f"\n==================== [LIVE CALL] ====================", flush=True)
         print(f"📞 CALL SID: {self.call_id}", flush=True)
         print(f"👤 USER SPOKE: \"{transcript}\"", flush=True)
+        self.last_activity = time.monotonic()  # the caller is talking: reset the silence clock
+        self._silence_prompted = False
+
+        if self.agent_rt and self.agent_rt.mode == "llm_agent" and await self._handle_agent_turn(transcript):
+            return
 
         available_intents = [
             {"name": i.name, "description": i.description}
@@ -159,24 +213,43 @@ class CallSession:
         current_intent = self.state_machine.current_intent.name if self.state_machine.current_intent else None
         last_asked_slot = getattr(self.state_machine, "last_asked_slot", None)
         
-        extracted = await llm_client.extract_intent_and_slots(
-            transcript, 
-            available_intents, 
-            self.state_machine.services,
+        recent_turns = [
+            {"role": "user", "content": t.user_transcript}
+            for t in self.state_machine.turns[-3:]
+        ]
+
+        nlu_result = await ConversationalNLU.analyze_turn(
+            user_utterance=transcript,
+            available_intents=available_intents,
+            available_services=self.state_machine.services,
+            agent_name=self.state_machine.agent_name,
+            business_name=self.state_machine.business_info.get("name", "our clinic"),
             current_intent=current_intent,
-            missing_slot=last_asked_slot
+            collected_slots=self.state_machine.collected_slots,
+            missing_slot=last_asked_slot,
+            recent_turns=recent_turns,
         )
-        print(f"🧠 EXTRACTED INTENT: {extracted.get('intent')} | SLOTS: {extracted.get('slots')}", flush=True)
+        print(f"🧠 NLU CATEGORY: {nlu_result.category.value} | INTENT: {nlu_result.intent} | CONF: {nlu_result.confidence} | SLOTS: {nlu_result.slots}", flush=True)
 
         result = await self.state_machine.process_user_turn(
             user_transcript=transcript,
-            extracted_intent=extracted.get("intent"),
-            extracted_slots=extracted.get("slots"),
+            extracted_intent=nlu_result.intent,
+            extracted_slots=nlu_result.slots,
+            nlu_category=nlu_result.category.value,
+            confidence=nlu_result.confidence,
+            is_correction=nlu_result.is_correction,
+            overridden_slot=nlu_result.overridden_slot,
+            is_ambiguous=nlu_result.is_ambiguous,
         )
 
         bot_text = result.get("bot_response") or ""
         print(f"🤖 AI RECEPTIONIST: \"{bot_text}\"", flush=True)
         print(f"=====================================================\n", flush=True)
+
+        if self.agent_rt and self.agent_rt.mode == "shadow":  # silent comparison; never spoken, never writes
+            task = asyncio.create_task(self.agent_rt.shadow(self.call_id or "", transcript, bot_text))
+            self._bg_tasks.add(task)
+            task.add_done_callback(self._bg_tasks.discard)
 
         if bot_text:
             await self._speak_turn(bot_text)
@@ -199,28 +272,111 @@ class CallSession:
             print(f"📴 HANGING UP CALL {self.call_id}...", flush=True)
             self.should_close = True
 
-    async def _speak_turn(self, text: str) -> None:
+    async def _handle_agent_turn(self, transcript: str) -> bool:
+        """LLM-agent turn: sentences are spoken as the model finishes them. Returns False if the agent could not
+        answer (LLM down), so the caller falls back to the legacy state machine for this turn."""
+        rt = self.agent_rt
+        assert rt is not None and self.state_machine is not None
+        try:
+            run = await rt.run_turn(transcript, self._speak_turn)
+        except Exception as e:
+            logger.warning(f"[AGENT] turn failed, falling back to state machine: {e}")
+            return False
+        turn = run.turn
+        if turn.degraded and not run.spoken_any:
+            logger.warning(f"[AGENT] LLM unavailable ({turn.error}); using state machine for this turn")
+            return False
+
+        tools = [t.get("tool") for t in turn.tools]
+        print(f"🤖 AI RECEPTIONIST (agent): \"{turn.reply}\" | tools={tools} | {turn.latency_ms}ms (first sentence {turn.first_sentence_ms}ms) | llm={turn.provider}", flush=True)
+        print(f"=====================================================\n", flush=True)
+
+        self.state_machine.sequence += 1  # keeps sequences unique even if a later turn falls back to the legacy path
+        for call in rt.engine.toolbox.calls:  # feed the call summary (caller name) recorded when the call ends
+            name = (call.get("args") or {}).get("patient_name")
+            if name:
+                self.state_machine.collected_slots["patient_name"] = name
+        await asyncio.to_thread(
+            record_call_turn,
+            call_id=self.call_id,
+            user_transcript=transcript,
+            bot_response=turn.reply,
+            turn_sequence=self.state_machine.sequence,
+        )
+        if turn.transferred:
+            self.state_machine.current_state = CallState.ESCALATED
+            if turn.transfer_twiml and self.call_id:
+                print(f"🔄 TRANSFERRING CALL {self.call_id}...", flush=True)
+                await redirect_call(self.call_id, turn.transfer_twiml)
+            self.should_close = True
+        elif turn.hangup:
+            print(f"📴 HANGING UP CALL {self.call_id}...", flush=True)
+            self.should_close = True
+        return True
+
+    async def _speak_turn(self, text: str, emotion: Optional[str] = None) -> bool:
         """Runs TTS playback as its own task so a barge-in can cancel just the
-        playback without killing the STT consumer loop awaiting it."""
-        speak_task = asyncio.create_task(self._stream_tts(text))
+        playback without killing the STT consumer loop awaiting it.
+        Returns False if the caller interrupted (barge-in), True if it played to the end."""
+        speak_task = asyncio.create_task(self._stream_tts(text, emotion))
         self.barge_in.mark_speaking(speak_task)
         try:
             await speak_task
+            return True
         except asyncio.CancelledError:
             logger.info(f"[TWILIO WS] Playback interrupted (barge-in) for call {self.call_id}")
+            return False
         finally:
             self.barge_in.mark_done()
+            self.last_activity = time.monotonic()  # silence is measured from the end of our own speech
 
-    async def _stream_tts(self, text: str) -> None:
+    async def _watchdog(self) -> None:
+        """Enforces the Call Handling tab: after `silence_timeout_seconds` of quiet ask "are you still there?",
+        after another timeout say goodbye; after `max_duration_minutes` wrap the call up politely."""
+        silence = int(self.agent_settings.get("silence_timeout_seconds") or 0)
+        limit = int(self.agent_settings.get("max_duration_minutes") or 0) * 60
+        if not silence and not limit:
+            return
+        lang = normalize_language(self.agent_settings.get("language"))
+        say = _WATCHDOG_LINES.get(lang, _WATCHDOG_LINES["en"])
+        try:
+            while not self.should_close:
+                await asyncio.sleep(1)
+                if self.barge_in.is_speaking or self._busy:
+                    continue
+                now = time.monotonic()
+                if limit and now - self.call_started > limit:
+                    await self._speak_turn(say["limit"])
+                    self.should_close = True
+                    return
+                if silence and now - self.last_activity > silence:
+                    if not self._silence_prompted:
+                        self._silence_prompted = True
+                        await self._speak_turn(say["still_there"])
+                    else:
+                        await self._speak_turn(say["goodbye"])
+                        self.should_close = True
+                        return
+        except asyncio.CancelledError:
+            pass
+
+    async def _stream_tts(self, text: str, emotion: Optional[str] = None) -> None:
         voice_id = self.agent_settings.get("voice_id")
-        language = self.agent_settings.get("tts_language")
+        # The owner's explicit TTS language wins; otherwise pick per sentence so Hindi words are pronounced as Hindi.
+        language = self.agent_settings.get("tts_language") or detect_tts_language(text)
+        speed = self.agent_settings.get("tts_speed")  # Voice tab speed / personality default
+        emotion = emotion or self.agent_settings.get("tts_emotion")  # the sentence's own emotion wins over the Voice-tab default
         if self.pcm:
             audio = cartesia_tts.stream_speech(
-                text, voice_id=voice_id, encoding="pcm_s16le", sample_rate=8000, language=language
+                text, voice_id=voice_id, encoding="pcm_s16le", sample_rate=8000, language=language,
+                speed=speed, emotion=emotion,
             )
             frames = frame_stream(audio, PCM_FRAME_BYTES)
         else:
-            frames = frame_stream(cartesia_tts.stream_speech(text, voice_id=voice_id, language=language), FRAME_BYTES)
+            frames = frame_stream(
+                cartesia_tts.stream_speech(text, voice_id=voice_id, language=language, speed=speed, emotion=emotion),
+                FRAME_BYTES,
+            )
         sent = 0
         async for frame_b64 in frames:
             sent += 1
@@ -247,6 +403,8 @@ class CallSession:
         )
 
     async def stop(self) -> None:
+        if self._watchdog_task:
+            self._watchdog_task.cancel()
         if self._stt_connect_task:
             self._stt_connect_task.cancel()
         if self._stt_task:
@@ -328,15 +486,9 @@ async def twilio_media_stream(websocket: WebSocket, business_id: str) -> None:
         await session.stop()
 
 
-@router.post("/api/voice/simulate")
-async def simulate_voice_turn(
-    payload: VoiceSimulateRequest,
-    db: Session = Depends(get_db),
-) -> Dict[str, Any]:
-    """
-    Simulates a voice conversation turn.
-    Used by the user dashboard's TestPlaygroundModal and automated tests.
-    """
+async def _ensure_sim_session(payload: VoiceSimulateRequest, db: Session) -> Tuple[str, ConversationStateMachine]:
+    """The playground's per-call state: the legacy state machine (always, it also records the call) and, when the tenant
+    uses the LLM agent, an agent runtime."""
     call_id = payload.call_id or f"sim_{payload.business_id[:8]}"
     state_machine = session_memory.get_session(call_id)
 
@@ -345,8 +497,10 @@ async def simulate_voice_turn(
         business = db.get(Business, payload.business_id)
         vertical_name = business.vertical if business else "clinic"
         vertical_cfg = vertical_registry.get_vertical(vertical_name)
+        agent_settings = load_agent_settings(payload.business_id)
         business_info = {
             "name": business.name if business else "Medical Center",
+            "agent_name": agent_settings.get("name", "Aura"),
         }
 
         state_machine = ConversationStateMachine(
@@ -357,34 +511,127 @@ async def simulate_voice_turn(
             business_info=business_info,
             db=db,
             services=[s.title for s in business.services] if business else [],
-            tone=load_tone(payload.business_id),
+            tone=agent_settings.get("tone") or load_tone(payload.business_id),
+            language=agent_settings.get("language"),
         )
         session_memory.store_session(call_id, state_machine)
         # Advance initial greeting
-        initial_greeting = state_machine.start_call()
+        initial_greeting = state_machine.start_call(agent_settings.get("greeting"))
         record_call_start(
             call_id=call_id,
             business_id=payload.business_id,
             caller_number=payload.caller_number,
             greeting=initial_greeting,
         )
+        if business:
+            rt = await AgentRuntime.create(
+                payload.business_id, call_id, payload.caller_number, vertical_cfg, initial_greeting,
+                agent_settings.get("language"), voice_id=payload.voice_id,  # persona gender follows the voice being previewed
+            )
+            # A server restart (code reload) drops in-memory sessions mid-call: pick the conversation back up from what was saved.
+            prior = load_call_turns(call_id)
+            if prior:
+                state_machine.sequence = len(prior)
+                if rt and rt.mode == "llm_agent":
+                    rt.engine.restore(prior)
+                logger.info(f"[SIM] Resumed call {call_id} with {len(prior)} earlier turn(s)")
+            if rt and rt.mode == "llm_agent":  # the playground previews the agent; shadow only applies to live calls
+                store_sim_runtime(call_id, rt)
+    return call_id, state_machine
 
-    # Extract intent & slots via LLM
+
+_STT_LANGUAGE = {"hi": "hi-IN", "en": "en-IN"}
+_prefetch_tasks: set = set()
+
+
+def _prefetch_tts(text: str, voice_id: Optional[str], emotion: Optional[str] = None, tts_text: Optional[str] = None) -> None:
+    """Start synthesising a sentence the moment it exists. The browser asks for the same audio a moment later and joins
+    this request (see CartesiaTTS.generate_preview_audio), so speech can start while the model is still writing."""
+    if not (voice_id and text.strip() and cartesia_tts.is_configured()):
+        return
+    snippet = (tts_text or text)[:250]  # the playground requests text.slice(0, 250); the cache key must match exactly
+    task = asyncio.create_task(
+        cartesia_tts.generate_preview_audio(snippet, voice_id, emotion=emotion, language=detect_tts_language(snippet))
+    )
+    _prefetch_tasks.add(task)  # keep a reference so the task is not garbage collected mid-flight
+    task.add_done_callback(_prefetch_tasks.discard)
+
+
+def _finish_agent_turn(call_id: str, state_machine: ConversationStateMachine, payload: VoiceSimulateRequest, agent_turn: Any) -> Dict[str, Any]:
+    """Persist an LLM-agent turn and build the response payload shared by /simulate and /simulate/stream."""
+    state_machine.sequence += 1
+    record_call_turn(
+        call_id=call_id,
+        user_transcript=payload.user_transcript,
+        bot_response=agent_turn.reply,
+        turn_sequence=state_machine.sequence,
+    )
+    if agent_turn.transferred:
+        state_machine.current_state = CallState.ESCALATED
+    if agent_turn.hangup or agent_turn.transferred:
+        record_call_end(
+            call_id=call_id,
+            outcome="transferred" if agent_turn.transferred else "resolved",
+            summary="Playground simulation (LLM agent)",
+            intent=None,
+            caller_name=None,
+        )
+    sim_rt = get_sim_runtime(call_id)
+    pref = sim_rt.engine.language_pref if sim_rt else None
+    return {
+        "call_id": call_id,
+        "state": state_machine.current_state.value,
+        "bot_response": agent_turn.reply,
+        "collected_slots": state_machine.collected_slots,
+        "tool_result": None,
+        "should_hangup": agent_turn.hangup,
+        "should_transfer": agent_turn.transferred,
+        "transfer_target": None,
+        "llm_provider": agent_turn.provider,  # which model answered (groq / groq:<model> / gemini), for debugging
+        "latency_ms": agent_turn.latency_ms,
+        "first_sentence_ms": agent_turn.first_sentence_ms,
+        # When the caller asked to switch language, tell the browser which speech-recognition language to listen in.
+        "stt_language": _STT_LANGUAGE.get(pref) if pref else None,
+    }
+
+
+async def _legacy_turn(payload: VoiceSimulateRequest, call_id: str, state_machine: ConversationStateMachine) -> Dict[str, Any]:
+    """One turn through the legacy NLU + state machine (tenants not on the agent, or the LLM being unavailable)."""
+    # Extract intent, category & slots via Conversational NLU
     available_intents = [
         {"name": i.name, "description": i.description}
         for i in state_machine.vertical_config.intents
     ]
-    extracted = await llm_client.extract_intent_and_slots(
-        payload.user_transcript,
-        available_intents,
-        state_machine.services,
+    current_intent = state_machine.current_intent.name if state_machine.current_intent else None
+    last_asked_slot = getattr(state_machine, "last_asked_slot", None)
+
+    recent_turns = [
+        {"role": "user", "content": t.user_transcript}
+        for t in state_machine.turns[-3:]
+    ]
+
+    nlu_result = await ConversationalNLU.analyze_turn(
+        user_utterance=payload.user_transcript,
+        available_intents=available_intents,
+        available_services=state_machine.services,
+        agent_name=state_machine.agent_name,
+        business_name=state_machine.business_info.get("name", "our clinic"),
+        current_intent=current_intent,
+        collected_slots=state_machine.collected_slots,
+        missing_slot=last_asked_slot,
+        recent_turns=recent_turns,
     )
 
     # Process through deterministic state machine
     result = await state_machine.process_user_turn(
         user_transcript=payload.user_transcript,
-        extracted_intent=extracted.get("intent"),
-        extracted_slots=extracted.get("slots"),
+        extracted_intent=nlu_result.intent,
+        extracted_slots=nlu_result.slots,
+        nlu_category=nlu_result.category.value,
+        confidence=nlu_result.confidence,
+        is_correction=nlu_result.is_correction,
+        overridden_slot=nlu_result.overridden_slot,
+        is_ambiguous=nlu_result.is_ambiguous,
     )
 
     bot_resp = result.get("bot_response") or ""
@@ -418,3 +665,93 @@ async def simulate_voice_turn(
         "should_transfer": result.get("should_transfer", False),
         "transfer_target": result.get("transfer_target"),
     }
+
+
+@router.post("/api/voice/simulate")
+async def simulate_voice_turn(
+    payload: VoiceSimulateRequest,
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Simulates a voice conversation turn.
+    Used by the user dashboard's TestPlaygroundModal and automated tests.
+    """
+    call_id, state_machine = await _ensure_sim_session(payload, db)
+    sim_rt = get_sim_runtime(call_id)
+    if sim_rt:
+        agent_turn = await sim_rt.engine.turn(payload.user_transcript)
+        if not agent_turn.degraded:
+            return _finish_agent_turn(call_id, state_machine, payload, agent_turn)
+    return await _legacy_turn(payload, call_id, state_machine)
+
+
+def _ndjson(obj: Dict[str, Any]) -> bytes:
+    return (json.dumps(obj, ensure_ascii=False) + "\n").encode("utf-8")
+
+
+def speech_chunks(sentence: str, soft_limit: int = 90, min_piece: int = 28) -> list:
+    """Split a long sentence at a comma / danda / 'and' so audio for the first piece is ready sooner (synthesis time
+    grows with length: ~1.2 s for 170 characters vs ~0.4 s for 60). Short sentences are returned untouched."""
+    text = sentence.strip()
+    if len(text) <= soft_limit:
+        return [text] if text else []
+    pieces, rest = [], text
+    while len(rest) > soft_limit:
+        cut = -1
+        for m in re.finditer(r"[,;:।]\s+|\s+(?:and|aur|or|but|lekin|par|और|लेकिन)\s+", rest[: soft_limit + 25]):
+            if m.end() >= min_piece:
+                cut = m.end() if rest[m.start()] in ",;:।" else m.start()
+                if m.end() >= soft_limit - 25:
+                    break
+        if cut < min_piece:
+            break
+        pieces.append(rest[:cut].strip())
+        rest = rest[cut:].strip()
+    if rest:
+        pieces.append(rest)
+    return pieces
+
+
+@router.post("/api/voice/simulate/stream")
+async def simulate_voice_turn_stream(
+    payload: VoiceSimulateRequest,
+    db: Session = Depends(get_db),
+) -> StreamingResponse:
+    """Same turn as /simulate, but as newline-delimited JSON: one {"type":"sentence"} event the moment each sentence is
+    ready (its audio is already being synthesised), then a final {"type":"done", ...same payload as /simulate}. The
+    browser can start speaking the first sentence while the model is still writing the rest."""
+    call_id, state_machine = await _ensure_sim_session(payload, db)
+    sim_rt = get_sim_runtime(call_id)
+
+    async def events() -> Any:
+        sent_any = False
+        final = None
+        if sim_rt:
+            voice = payload.voice_id or sim_rt.profile.voice_id or cartesia_tts.voice_id
+            try:
+                async for ev in sim_rt.engine.turn_events(payload.user_transcript, stream=True):
+                    if ev["type"] == "sentence":
+                        for n, piece in enumerate(speech_chunks(ev["text"])):  # long sentences are cut so the first audio is ready sooner
+                            sent_any = True
+                            emotion = ev.get("emotion")
+                            spoken = f"[laughter] {piece}" if ev.get("tts_text") and n == 0 else None  # a laugh opens the sentence
+                            _prefetch_tts(piece, voice, emotion, spoken)
+                            out = {"type": "sentence", "text": piece}
+                            if emotion:
+                                out["emotion"] = emotion
+                            if spoken:
+                                out["tts_text"] = spoken
+                            yield _ndjson(out)
+                    elif ev["type"] == "done":
+                        final = ev["turn"]
+            except Exception as e:  # never leave the browser waiting on a broken stream
+                logger.warning(f"[SIM STREAM] agent turn failed: {e}")
+            if final is not None and (not final.degraded or sent_any):
+                yield _ndjson({"type": "done", **_finish_agent_turn(call_id, state_machine, payload, final)})
+                return
+        # Legacy engine tenants, or the LLM was unavailable before anything was said: one sentence, same protocol.
+        result = await _legacy_turn(payload, call_id, state_machine)
+        yield _ndjson({"type": "sentence", "text": result["bot_response"]})
+        yield _ndjson({"type": "done", **result})
+
+    return StreamingResponse(events(), media_type="application/x-ndjson", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})

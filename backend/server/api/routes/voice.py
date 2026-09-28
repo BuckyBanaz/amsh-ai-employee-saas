@@ -7,16 +7,18 @@ Zero-Dropped-Calls 20-second transfer fallback, per DOCS/11.
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Form, Query, Response
+from fastapi import APIRouter, Depends, File, Form, Query, Response, UploadFile
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.ai.realtime.twilio.call_control import build_base_url, to_ws_url
 from backend.ai.tools.common.send_sms import SendSmsTool
 from backend.ai.tools.framework.base import ToolContext
+from backend.server.common.config import get_settings
 from backend.server.database.models.business import Business
 from backend.server.database.session import get_db
 from backend.ai.speech.tts.cartesia import cartesia_tts
+from backend.ai.speech.tts.voice_profile import detect_tts_language
 
 from backend.server.services.call_recorder import update_call_recording_webhook
 
@@ -41,13 +43,65 @@ async def list_voices():
     return {"voices": voices}
 
 
+@router.get("/llm-models")
+async def list_llm_models(refresh: bool = False):
+    """Chat models available right now from Groq and Gemini (fetched live from their APIs, cached for a few minutes), for
+    the dashboard's model picker. Each row: value ("groq:<id>" / "gemini:<id>", what the agent config stores), label,
+    context window, whether it is in the current fallback chain and where, and tool-calling status ('no' once a model
+    has refused tools, otherwise 'unknown': providers publish no reliable flag)."""
+    from backend.ai.engine.agent.llm_backend import parse_provider_spec, tool_calling_status
+    from backend.ai.llm.catalog import fetch_catalog
+    from backend.ai.llm.client import llm_client
+    from backend.server.common.config import get_settings
+
+    settings = get_settings()
+    data = await fetch_catalog(llm_client.api_key, settings.GEMINI_API_KEY, force=refresh)
+    chain = []
+    for entry in parse_provider_spec(settings.LLM_PROVIDERS):
+        model = entry["model"] or (llm_client.model if entry["kind"] == "groq" else settings.GEMINI_MODEL)
+        value = f"{entry['kind']}:{model}"
+        if value not in chain:
+            chain.append(value)
+    rows = []
+    for m in data["models"]:
+        value = f"{m['provider']}:{m['id']}"
+        position = chain.index(value) + 1 if value in chain else None
+        rows.append({**m, "value": value, "in_chain": position is not None, "chain_position": position,
+                     "tool_calling": tool_calling_status(m["provider"], m["id"])})
+    rows.sort(key=lambda r: (r["chain_position"] is None, r["chain_position"] or 0, r["provider"], r["id"]))
+    return {"models": rows, "default": chain[0] if chain else None, "chain": chain, "errors": data["errors"]}
+
+
 @router.get("/preview")
-async def preview_voice(voice_id: str = Query(...), text: str = Query(...)):
-    """Generate and return MP3 audio preview for a voice and text."""
-    audio_bytes = await cartesia_tts.generate_preview_audio(text, voice_id)
+async def preview_voice(
+    voice_id: str = Query(...),
+    text: str = Query(...),
+    speed: Optional[float] = Query(None, ge=0.6, le=1.5),
+    emotion: Optional[str] = Query(None),
+    language: Optional[str] = Query(None),
+):
+    """Generate and return MP3 audio preview for a voice and text (optional speed multiplier / emotion / language).
+    The dashboard already sends `language`; it used to be dropped here. Without it the language is detected from the text."""
+    lang = (language or "").strip().lower()[:2] or detect_tts_language(text)
+    audio_bytes = await cartesia_tts.generate_preview_audio(text, voice_id, speed=speed, emotion=emotion, language=lang)
     if not audio_bytes:
-        return Response(status_code=500, content="Failed to generate audio")
+        status_code, message = cartesia_tts.last_error or (500, "")
+        if status_code == 402:  # tell the dashboard the truth instead of a generic 500
+            return Response(status_code=402, content="Text-to-speech credits are exhausted. Top up the Cartesia account.")
+        return Response(status_code=500, content=f"Failed to generate audio {message[:120]}".strip())
     return Response(content=audio_bytes, media_type="audio/mpeg")
+
+
+@router.post("/transcribe")
+async def transcribe_audio_file(
+    file: UploadFile = File(...),
+):
+    """Transcribe browser microphone audio payload using Deepgram Nova-2."""
+    from backend.ai.speech.stt.deepgram import deepgram_stt
+    content = await file.read()
+    mimetype = file.content_type or "audio/webm"
+    text = await deepgram_stt.transcribe_audio(content, mimetype=mimetype)
+    return {"transcript": text or ""}
 
 
 @router.post("/call-me")
@@ -122,7 +176,8 @@ async def handle_incoming_call(
         .first()
     )
 
-    if not business:
+    if not business and get_settings().ALLOW_DEV_FALLBACKS:
+        logger.warning("[VOICE INCOMING] No tenant matched: using the newest business (ALLOW_DEV_FALLBACKS)")
         # Fallback to latest business for development and trial numbers
         business = db.execute(select(Business).order_by(Business.created_at.desc())).scalars().first()
 

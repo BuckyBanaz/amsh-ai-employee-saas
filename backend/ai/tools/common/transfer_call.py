@@ -83,6 +83,9 @@ class TransferCallTool(BaseTool):
         on-call/escalation table yet): 'front_desk' rings the business's main
         line; every other department rings the first roster entry with a
         phone number on file, falling back to the business line."""
+        override = (context.metadata or {}).get("transfer_phone")  # owner's Escalation-tab fallback number
+        if override:
+            return override, ("our front desk" if department == "front_desk" else department.replace("_", " ").title())
         if not context.db:
             return None, department.replace("_", " ").title()
 

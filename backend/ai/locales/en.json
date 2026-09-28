@@ -38,5 +38,10 @@
   "bridge_frustrated_professional": "I apologize for the inconvenience.",
   "bridge_frustrated_friendly": "I hear you, sorry for the trouble.",
   "bridge_frustrated_warm": "I hear you, and I'm sorry this has been frustrating.",
-  "bridge_frustrated_calm": "I'm sorry about that. Let's fix this calmly."
+  "bridge_frustrated_calm": "I'm sorry about that. Let's fix this calmly.",
+  "persona_identity": "I am {agent_name}, the AI receptionist at {business_name}. How can I help you today?",
+  "persona_is_ai": "I am an AI receptionist for {business_name}. I can help you schedule appointments, check doctor availability, or answer clinic questions. If you prefer to speak to a person, I can connect you to the front desk. How can I assist you?",
+  "out_of_scope_redirect": "I specialize in clinic appointments, services, doctor schedules, and clinic information. How can I assist you with the clinic today?",
+  "unclear_speech_repeat": "Sorry, I didn't quite catch that. Could you please repeat that?",
+  "ambiguous_clarification": "Could you please clarify which appointment or detail you would like to change?"
 }

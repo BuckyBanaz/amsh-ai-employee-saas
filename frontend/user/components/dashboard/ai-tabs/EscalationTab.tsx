@@ -1,6 +1,7 @@
 "use client";
 import React, { useEffect, useState } from 'react';
 import { DashboardController, AgentItem } from '../../../controllers/dashboard.controller';
+import { StorageService } from '../../../services/storage.service';
 
 const DEFAULT_TRIGGERS = [
   { id: 'frustration', label: 'Caller expresses intense frustration or anger', active: true },

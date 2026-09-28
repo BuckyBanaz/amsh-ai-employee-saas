@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from backend.ai.realtime.twilio.call_control import build_base_url, to_ws_url
 from backend.ai.tools.framework.base import ToolContext
+from backend.server.common.config import get_settings
 from backend.server.database.models.business import Business
 from backend.server.database.session import get_db
 
@@ -63,7 +64,8 @@ async def handle_exotel_incoming_call(
             .first()
         )
 
-    if not business:
+    if not business and get_settings().ALLOW_DEV_FALLBACKS:
+        logger.warning("[EXOTEL INCOMING] No tenant matched: using the newest business (ALLOW_DEV_FALLBACKS)")
         # Fallback: pick the most-recently-created ACTIVE business
         business = db.execute(
             select(Business)

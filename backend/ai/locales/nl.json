@@ -38,5 +38,10 @@
   "bridge_frustrated_professional": "Mijn excuses voor het ongemak.",
   "bridge_frustrated_friendly": "Ik begrijp het, excuses voor het ongemak.",
   "bridge_frustrated_warm": "Ik begrijp het en het spijt me dat dit zo frustrerend is.",
-  "bridge_frustrated_calm": "Het spijt me. Laten we dit rustig oplossen."
+  "bridge_frustrated_calm": "Het spijt me. Laten we dit rustig oplossen.",
+  "persona_identity": "Ik ben {agent_name}, de AI-receptioniste van {business_name}. Waar kan ik u vandaag mee helpen?",
+  "persona_is_ai": "Ik ben een AI-receptioniste voor {business_name}. Ik kan u helpen met afspraken en vragen. Als u liever met een medewerker spreekt, kan ik u doorverbinden. Hoe kan ik u helpen?",
+  "out_of_scope_redirect": "Ik ben gespecialiseerd in afspraken, diensten, artsenschema's en algemene kliniekinformatie. Hoe kan ik u helpen?",
+  "unclear_speech_repeat": "Sorry, ik heb dat niet goed verstaan. Kunt u dat herhalen?",
+  "ambiguous_clarification": "Kunt u verduidelijken welke afspraak of welk detail u wilt wijzigen?"
 }

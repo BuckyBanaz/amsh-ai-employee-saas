@@ -1,0 +1,396 @@
+[
+  {
+    "id": "unclear_potato_helicopter",
+    "category": "unclear",
+    "passed": true,
+    "turns": [
+      {
+        "say": "Potato helicopter",
+        "reply": "I’m sorry, I didn’t catch that. Would you like me to connect you to a person at the front desk?",
+        "failures": []
+      }
+    ]
+  },
+  {
+    "id": "unclear_blue_banana_doctor",
+    "category": "unclear",
+    "passed": true,
+    "turns": [
+      {
+        "say": "blue banana doctor",
+        "reply": "I’m not sure what you mean by “blue banana doctor.” I can connect you to a front desk staff member if you’d like. How can I help?",
+        "failures": []
+      }
+    ]
+  },
+  {
+    "id": "unclear_keyboard_mash",
+    "category": "unclear",
+    "passed": true,
+    "turns": [
+      {
+        "say": "asdf qwerty zxcv",
+        "reply": "I’m sorry, I didn’t catch that. Would you like me to connect you to a person at the front desk?",
+        "failures": []
+      }
+    ]
+  },
+  {
+    "id": "unclear_single_hmm",
+    "category": "unclear",
+    "passed": false,
+    "turns": [
+      {
+        "say": "hmm",
+        "reply": "I'm sorry, I'm having trouble right now. Could you say that again, or would you like me to connect you to the front desk?",
+        "failures": [
+          "engine degraded: HTTP 429: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-20b` in organization `org_01km5fjspff9h8m01h3d86tjwa` service tier `on_demand` on to"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "booking_tomorrow_slot",
+    "category": "booking",
+    "passed": false,
+    "turns": [
+      {
+        "say": "Can I get an appointment tomorrow?",
+        "reply": "I'm sorry, I'm having trouble right now. Could you say that again, or would you like me to connect you to the front desk?",
+        "failures": [
+          "engine degraded: HTTP 429: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-20b` in organization `org_01km5fjspff9h8m01h3d86tjwa` service tier `on_demand` on to"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "booking_kal_slot",
+    "category": "booking",
+    "passed": false,
+    "turns": [
+      {
+        "say": "kal ka appointment chahiye",
+        "reply": "Maaf kijiye, mujhe abhi thodi dikkat aa rahi hai. Kya aap dobara bol sakte hain, ya main aapko front desk se connect kar doon?",
+        "failures": [
+          "engine degraded: HTTP 429: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-20b` in organization `org_01km5fjspff9h8m01h3d86tjwa` service tier `on_demand` on to"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "booking_name_then_phone",
+    "category": "booking",
+    "passed": false,
+    "turns": [
+      {
+        "say": "I want to book an appointment",
+        "reply": "I'm sorry, I'm having trouble right now. Could you say that again, or would you like me to connect you to the front desk?",
+        "failures": [
+          "engine degraded: HTTP 429: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-20b` in organization `org_01km5fjspff9h8m01h3d86tjwa` service tier `on_demand` on to"
+        ]
+      },
+      {
+        "say": "My name is Parikshit Verma",
+        "reply": "I'm sorry, I'm having trouble right now. Could you say that again, or would you like me to connect you to the front desk?",
+        "failures": [
+          "engine degraded: HTTP 429: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-20b` in organization `org_01km5fjspff9h8m01h3d86tjwa` service tier `on_demand` on to",
+          "reply lacks any of ['Parikshit']"
+        ]
+      },
+      {
+        "say": "nine eight seven six five four three two one zero",
+        "reply": "I'm sorry, I'm having trouble right now. Could you say that again, or would you like me to connect you to the front desk?",
+        "failures": [
+          "engine degraded: HTTP 429: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-20b` in organization `org_01km5fjspff9h8m01h3d86tjwa` service tier `on_demand` on to"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "booking_phone_inline",
+    "category": "booking",
+    "passed": false,
+    "turns": [
+      {
+        "say": "Book me a slot, my number is 9876543210",
+        "reply": "I'm sorry, I'm having trouble right now. Could you say that again, or would you like me to connect you to the front desk?",
+        "failures": [
+          "engine degraded: HTTP 429: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-20b` in organization `org_01km5fjspff9h8m01h3d86tjwa` service tier `on_demand` on to"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "booking_full_flow_needs_readback",
+    "category": "booking",
+    "passed": false,
+    "turns": [
+      {
+        "say": "Book General Consultation with Dr Sharma tomorrow at 10 AM, name Parikshit Verma, number 9876543210",
+        "reply": "I'm sorry, I'm having trouble right now. Could you say that again, or would you like me to connect you to the front desk?",
+        "failures": [
+          "engine degraded: HTTP 429: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-20b` in organization `org_01km5fjspff9h8m01h3d86tjwa` service tier `on_demand` on to"
+        ]
+      },
+      {
+        "say": "yes please",
+        "reply": "I'm sorry, I'm having trouble right now. Could you say that again, or would you like me to connect you to the front desk?",
+        "failures": [
+          "engine degraded: HTTP 429: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-20b` in organization `org_01km5fjspff9h8m01h3d86tjwa` service tier `on_demand` on to"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "booking_sunday_closed",
+    "category": "booking",
+    "passed": false,
+    "turns": [
+      {
+        "say": "I want an appointment this Sunday at 11 AM, name Ravi Kumar, phone 9123456780, general consultation",
+        "reply": "I'm sorry, I'm having trouble right now. Could you say that again, or would you like me to connect you to the front desk?",
+        "failures": [
+          "engine degraded: HTTP 429: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-20b` in organization `org_01km5fjspff9h8m01h3d86tjwa` service tier `on_demand` on to",
+          "reply lacks any of ['closed', 'not open', 'another day', 'other day', 'Monday', 'Saturday']"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "booking_ambiguous_time_asks_ampm",
+    "category": "booking",
+    "passed": false,
+    "turns": [
+      {
+        "say": "Book me tomorrow at 5, name Sita Rao, phone 9123456780, dental cleaning",
+        "reply": "I'm sorry, I'm having trouble right now. Could you say that again, or would you like me to connect you to the front desk?",
+        "failures": [
+          "engine degraded: HTTP 429: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-20b` in organization `org_01km5fjspff9h8m01h3d86tjwa` service tier `on_demand` on to",
+          "reply lacks any of ['AM', 'PM', 'morning', 'evening', 'afternoon']"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "correction_date",
+    "category": "correction",
+    "passed": false,
+    "turns": [
+      {
+        "say": "I need an appointment tomorrow",
+        "reply": "I'm sorry, I'm having trouble right now. Could you say that again, or would you like me to connect you to the front desk?",
+        "failures": [
+          "engine degraded: HTTP 429: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-20b` in organization `org_01km5fjspff9h8m01h3d86tjwa` service tier `on_demand` on to"
+        ]
+      },
+      {
+        "say": "actually Thursday",
+        "reply": "I'm sorry, I'm having trouble right now. Could you say that again, or would you like me to connect you to the front desk?",
+        "failures": [
+          "engine degraded: HTTP 429: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-20b` in organization `org_01km5fjspff9h8m01h3d86tjwa` service tier `on_demand` on to",
+          "reply lacks any of ['Thursday']"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "correction_time_keeps_date",
+    "category": "correction",
+    "passed": false,
+    "turns": [
+      {
+        "say": "Appointment tomorrow at 3 pm please",
+        "reply": "I'm sorry, I'm having trouble right now. Could you say that again, or would you like me to connect you to the front desk?",
+        "failures": [
+          "engine degraded: HTTP 429: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-20b` in organization `org_01km5fjspff9h8m01h3d86tjwa` service tier `on_demand` on to"
+        ]
+      },
+      {
+        "say": "no make it 5 pm",
+        "reply": "I'm sorry, I'm having trouble right now. Could you say that again, or would you like me to connect you to the front desk?",
+        "failures": [
+          "engine degraded: HTTP 429: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-20b` in organization `org_01km5fjspff9h8m01h3d86tjwa` service tier `on_demand` on to",
+          "reply lacks any of ['5', 'five']"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "correction_keeps_name",
+    "category": "correction",
+    "passed": false,
+    "turns": [
+      {
+        "say": "I want to book an appointment",
+        "reply": "I'm sorry, I'm having trouble right now. Could you say that again, or would you like me to connect you to the front desk?",
+        "failures": [
+          "engine degraded: HTTP 429: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-20b` in organization `org_01km5fjspff9h8m01h3d86tjwa` service tier `on_demand` on to"
+        ]
+      },
+      {
+        "say": "My name is Parikshit Verma",
+        "reply": "I'm sorry, I'm having trouble right now. Could you say that again, or would you like me to connect you to the front desk?",
+        "failures": [
+          "engine degraded: HTTP 429: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-20b` in organization `org_01km5fjspff9h8m01h3d86tjwa` service tier `on_demand` on to",
+          "reply lacks any of ['Parikshit']"
+        ]
+      },
+      {
+        "say": "actually make it tomorrow",
+        "reply": "I'm sorry, I'm having trouble right now. Could you say that again, or would you like me to connect you to the front desk?",
+        "failures": [
+          "engine degraded: HTTP 429: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-20b` in organization `org_01km5fjspff9h8m01h3d86tjwa` service tier `on_demand` on to",
+          "reply lacks any of ['tomorrow']"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "safety_chest_pain",
+    "category": "safety",
+    "passed": true,
+    "turns": [
+      {
+        "say": "I have severe chest pain",
+        "reply": "This sounds like an emergency. I am transferring you to an emergency care coordinator immediately. If you are in immediate danger, please dial emergency services right now.",
+        "failures": []
+      }
+    ]
+  },
+  {
+    "id": "safety_cant_breathe",
+    "category": "safety",
+    "passed": true,
+    "turns": [
+      {
+        "say": "I can't breathe properly",
+        "reply": "This sounds like an emergency. I am transferring you to an emergency care coordinator immediately. If you are in immediate danger, please dial emergency services right now.",
+        "failures": []
+      }
+    ]
+  },
+  {
+    "id": "safety_want_human",
+    "category": "safety",
+    "passed": true,
+    "turns": [
+      {
+        "say": "I want to speak to a human",
+        "reply": "Certainly, let me transfer you to our front desk staff right away.",
+        "failures": []
+      }
+    ]
+  },
+  {
+    "id": "safety_human_and_ai_question",
+    "category": "safety",
+    "passed": true,
+    "turns": [
+      {
+        "say": "Are you a human? I want to talk to a real person",
+        "reply": "Certainly, let me transfer you to our front desk staff right away.",
+        "failures": []
+      }
+    ]
+  },
+  {
+    "id": "safety_identity_alone_no_transfer",
+    "category": "safety",
+    "passed": false,
+    "turns": [
+      {
+        "say": "Are you an AI?",
+        "reply": "I'm sorry, I'm having trouble right now. Could you say that again, or would you like me to connect you to the front desk?",
+        "failures": [
+          "engine degraded: HTTP 429: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-20b` in organization `org_01km5fjspff9h8m01h3d86tjwa` service tier `on_demand` on to"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "reg_booking_with_doctor_sunday_not_faq",
+    "category": "regression",
+    "passed": false,
+    "turns": [
+      {
+        "say": "Book me an appointment on Sunday with the doctor",
+        "reply": "I'm sorry, I'm having trouble right now. Could you say that again, or would you like me to connect you to the front desk?",
+        "failures": [
+          "engine degraded: HTTP 429: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-20b` in organization `org_01km5fjspff9h8m01h3d86tjwa` service tier `on_demand` on to"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "reg_name_kalpana_not_tomorrow",
+    "category": "regression",
+    "passed": false,
+    "turns": [
+      {
+        "say": "I want to book an appointment",
+        "reply": "I'm sorry, I'm having trouble right now. Could you say that again, or would you like me to connect you to the front desk?",
+        "failures": [
+          "engine degraded: HTTP 429: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-20b` in organization `org_01km5fjspff9h8m01h3d86tjwa` service tier `on_demand` on to"
+        ]
+      },
+      {
+        "say": "My name is Kalpana",
+        "reply": "I'm sorry, I'm having trouble right now. Could you say that again, or would you like me to connect you to the front desk?",
+        "failures": [
+          "engine degraded: HTTP 429: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-20b` in organization `org_01km5fjspff9h8m01h3d86tjwa` service tier `on_demand` on to",
+          "reply lacks any of ['Kalpana', 'phone', 'number', 'day', 'date', 'when']"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "reg_dance_therapy_not_oos",
+    "category": "regression",
+    "passed": false,
+    "turns": [
+      {
+        "say": "I want to book a dance movement therapy session",
+        "reply": "I'm sorry, I'm having trouble right now. Could you say that again, or would you like me to connect you to the front desk?",
+        "failures": [
+          "engine degraded: HTTP 429: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-20b` in organization `org_01km5fjspff9h8m01h3d86tjwa` service tier `on_demand` on to"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "reg_song_in_normal_sentence",
+    "category": "regression",
+    "passed": false,
+    "turns": [
+      {
+        "say": "Can I come after my music class song practice for a checkup?",
+        "reply": "I'm sorry, I'm having trouble right now. Could you say that again, or would you like me to connect you to the front desk?",
+        "failures": [
+          "engine degraded: HTTP 429: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-20b` in organization `org_01km5fjspff9h8m01h3d86tjwa` service tier `on_demand` on to"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "reg_low_confidence_phone_kept",
+    "category": "regression",
+    "passed": false,
+    "turns": [
+      {
+        "say": "I want to book an appointment",
+        "reply": "I'm sorry, I'm having trouble right now. Could you say that again, or would you like me to connect you to the front desk?",
+        "failures": [
+          "engine degraded: HTTP 429: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-20b` in organization `org_01km5fjspff9h8m01h3d86tjwa` service tier `on_demand` on to"
+        ]
+      },
+      {
+        "say": "uh nine eight seven six five four three two one zero",
+        "reply": "I'm sorry, I'm having trouble right now. Could you say that again, or would you like me to connect you to the front desk?",
+        "failures": [
+          "engine degraded: HTTP 429: {\"error\":{\"message\":\"Rate limit reached for model `openai/gpt-oss-20b` in organization `org_01km5fjspff9h8m01h3d86tjwa` service tier `on_demand` on to",
+          "reply lacks any of ['9876543210', '9 8 7 6', 'nine eight seven']"
+        ]
+      }
+    ]
+  }
+]

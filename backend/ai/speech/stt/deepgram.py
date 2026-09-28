@@ -57,9 +57,27 @@ deepgram_stt = DeepgramSTT()
 
 DEEPGRAM_LIVE_URL_TEMPLATE = (
     "wss://api.deepgram.com/v1/listen"
-    "?model=nova-2&language={language}&encoding={encoding}&sample_rate=8000&channels=1"
+    "?model={model}&language={language}&encoding={encoding}&sample_rate=8000&channels=1"
     "&punctuate=true&interim_results=true&endpointing=200&vad_events=true"
 )
+
+# Languages Nova-3's multilingual mode understands while the caller switches between them mid-sentence.
+_MULTI_LANGS = ("en", "hi")
+
+
+def resolve_stt_language(explicit: Optional[str]) -> str:
+    """Language code for live speech-to-text. Measured on Hindi and English speech: `nova-3` + `multi` transcribed both
+    correctly ("...अपॉइंटमेंट book करना है" and "Can we talk in Hindi?"), while `nova-2` + `en-IN` failed on Hindi and
+    `hi` wrote English as Devanagari. So callers in English or Hindi (or with nothing configured) get `multi`; other
+    languages (Punjabi, Bengali, Spanish...) keep the owner's explicit setting."""
+    code = (explicit or "").strip()
+    if not code or code.lower().split("-")[0] in _MULTI_LANGS or code == "multi":
+        return "multi"
+    return code
+
+
+def model_for(language: str) -> str:
+    return "nova-3" if language == "multi" else "nova-2"
 
 
 class DeepgramLiveConnection:
@@ -83,21 +101,25 @@ class DeepgramLiveConnection:
         if not self.api_key:
             logger.warning("[DEEPGRAM LIVE] No API key configured — live STT disabled")
             return False
-        try:
-            url = DEEPGRAM_LIVE_URL_TEMPLATE.format(
-                encoding=self.encoding,
-                language=self.language or "en-IN"
-            )
-            self._ws = await websockets.connect(
-                url,
-                additional_headers={"Authorization": f"Token {self.api_key}"},
-                ping_interval=5,
-            )
-            self._reader_task = asyncio.create_task(self._read_loop())
-            return True
-        except Exception as e:
-            logger.error(f"[DEEPGRAM LIVE] Connection failed: {e}")
-            return False
+        language = resolve_stt_language(self.language)
+        for attempt in (1, 2):
+            try:
+                url = DEEPGRAM_LIVE_URL_TEMPLATE.format(model=model_for(language), encoding=self.encoding, language=language)
+                self._ws = await websockets.connect(
+                    url,
+                    additional_headers={"Authorization": f"Token {self.api_key}"},
+                    ping_interval=5,
+                )
+                self.language = language
+                self._reader_task = asyncio.create_task(self._read_loop())
+                return True
+            except Exception as e:
+                logger.error(f"[DEEPGRAM LIVE] Connection failed ({model_for(language)}/{language}): {e}")
+                if attempt == 1 and language == "multi":
+                    language = "en-IN"  # never leave a call deaf because the multilingual mode was refused: use the old setting
+                    continue
+                return False
+        return False
 
     async def send_audio(self, mulaw_bytes: bytes) -> None:
         if self._ws is not None:

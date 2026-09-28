@@ -58,6 +58,15 @@ def parse_profile(value: Optional[str]) -> ToneProfile:
     v = (value or "").strip().lower()
     if v in ("warm", "empathetic", "warm / empathetic", "warm_empathetic"):
         return ToneProfile.WARM
+    # The four personalities the dashboard offers (they used to fall through to PROFESSIONAL, so the choice did nothing).
+    dashboard = {
+        "warm & friendly": ToneProfile.FRIENDLY,
+        "energetic & fast": ToneProfile.FRIENDLY,
+        "empathetic & calm": ToneProfile.CALM,
+        "crisp & professional": ToneProfile.PROFESSIONAL,
+    }
+    if v in dashboard:
+        return dashboard[v]
     try:
         return ToneProfile(v)
     except ValueError:

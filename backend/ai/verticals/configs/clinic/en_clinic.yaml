@@ -80,6 +80,18 @@ intents:
     confirmation_required: false
     slots: []
 
+  - name: agent_identity
+    description: Caller is asking about the receptionist's name, role, identity, or human status.
+    target_tool: null
+    confirmation_required: false
+    slots: []
+
+  - name: out_of_scope
+    description: Caller is asking off-topic questions, world trivia, personal questions, or unrelated matters.
+    target_tool: null
+    confirmation_required: false
+    slots: []
+
 escalation_rules:
   - trigger_keywords:
       - "chest pain"

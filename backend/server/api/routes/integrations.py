@@ -254,7 +254,11 @@ async def whatsapp_test_message(
 wa_webhook_router = APIRouter(prefix="/api/v1/whatsapp/webhook", tags=["whatsapp-webhook"])
 
 
-from fastapi import Query, Response
+import logging
+
+from fastapi import BackgroundTasks, Query, Request, Response
+
+logger = logging.getLogger(__name__)
 
 @wa_webhook_router.get("")
 def verify_whatsapp_webhook(
@@ -265,26 +269,34 @@ def verify_whatsapp_webhook(
     """Meta Webhook Challenge Verification (GET). Accepts hub.mode, hub.challenge, hub.verify_token."""
     from backend.server.common.config import get_settings
     settings = get_settings()
-    valid_tokens = {"amsh_whatsapp_secret_token_2026", "amsh_wa_verify_token_2026", settings.META_WHATSAPP_VERIFY_TOKEN}
+    valid_tokens = {settings.META_WHATSAPP_VERIFY_TOKEN}
+    if settings.ALLOW_DEV_FALLBACKS:  # older tokens that used to be hard-coded here; off in production
+        valid_tokens |= {"amsh_whatsapp_secret_token_2026", "amsh_wa_verify_token_2026"}
     if hub_mode == "subscribe" and hub_verify_token in valid_tokens:
         return Response(content=hub_challenge or "", media_type="text/plain")
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid verify token")
 
 
 @wa_webhook_router.post("")
-async def receive_whatsapp_webhook(payload: dict):
-    """Inbound Meta WhatsApp Message & Status Callback (POST)."""
-    # Log incoming WhatsApp event
-    entries = payload.get("entry", [])
-    for entry in entries:
-        changes = entry.get("changes", [])
-        for change in changes:
-            value = change.get("value", {})
-            messages = value.get("messages", [])
-            for msg in messages:
-                sender = msg.get("from")
-                text_body = msg.get("text", {}).get("body", "")
-                print(f"[Meta WhatsApp Inbound] From: {sender} | Msg: {text_body}")
+async def receive_whatsapp_webhook(request: Request, background: BackgroundTasks):
+    """Inbound Meta WhatsApp message & status callback (POST). Verifies Meta's signature, then answers each text message
+    with the AI receptionist in a background task (Meta needs a fast 200 or it retries)."""
+    import json
 
-    return {"status": "success", "received": True}
+    from backend.server.services.whatsapp_agent import extract_messages, verify_signature, whatsapp_agent
+
+    raw = await request.body()
+    secret = get_settings().META_APP_SECRET
+    if not secret:
+        logger.warning("[WHATSAPP] META_APP_SECRET is not set: webhook signatures are NOT being verified")
+    if not verify_signature(raw, request.headers.get("X-Hub-Signature-256"), secret):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid signature")
+    try:
+        payload = json.loads(raw or b"{}")
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid JSON")
+    messages = extract_messages(payload)
+    for msg in messages:
+        background.add_task(whatsapp_agent.handle, msg)
+    return {"status": "success", "received": len(messages)}
 

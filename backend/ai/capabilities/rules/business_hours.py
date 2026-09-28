@@ -1,55 +1,47 @@
 """
 Business Hours Rule.
-Determines if an incoming call arrives during active clinic/business operating hours.
+Says whether the business is open right now and when it opens next, from the dashboard's working hours
+({"Monday": [{"start": "09:00", "end": "17:00"}], ...} or "9 AM - 5 PM" strings). The agent's prompt gets the one-line
+`describe()` result, so it never offers a same-day visit to a closed clinic without saying so.
 """
 
-from datetime import datetime, time
-import logging
+from datetime import date, datetime, timedelta
 from typing import Any, Dict, Optional, Tuple
-import pytz
 
-logger = logging.getLogger(__name__)
+from backend.ai.engine.agent.availability import day_ranges
+from backend.ai.engine.agent.datetime_utils import format_time, local_now, to_minutes
+
+_DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
 
 class BusinessHoursRule:
-    """Evaluates operating schedule against caller's local timestamp."""
+    """Evaluates the working-hours schedule against the business's local time."""
 
     @staticmethod
-    def is_open(
-        working_hours: Optional[Dict[str, Any]],
-        timezone_str: str = "Asia/Kolkata"
-    ) -> Tuple[bool, str]:
-        """
-        Returns (is_open_now, schedule_summary_message).
-        """
-        if not working_hours:
-            # Default open 24/7 if not specified
-            return True, "Open now"
+    def describe(working_hours: Optional[Dict[str, Any]], now: datetime) -> str:
+        """One line for the model, e.g. "OPEN NOW until 06:00 PM today." / "CLOSED NOW; next opens Tuesday at 09:00 AM."
+        Empty when no hours are configured (the prompt already says so)."""
+        today = now.date()
+        todays = day_ranges(working_hours, today)
+        if not todays.configured:
+            return ""
+        minute = now.hour * 60 + now.minute
+        for start, end in todays.ranges:
+            if to_minutes(start) <= minute < to_minutes(end):
+                return f"OPEN NOW until {format_time(end)} today."
+        for start, _ in todays.ranges:  # later today
+            if to_minutes(start) > minute:
+                return f"CLOSED NOW; opens today at {format_time(start)}."
+        for ahead in range(1, 8):
+            d: date = today + timedelta(days=ahead)
+            nxt = day_ranges(working_hours, d)
+            if nxt.ranges:
+                when = "tomorrow" if ahead == 1 else _DAYS[d.weekday()]
+                return f"CLOSED NOW; next opens {when} at {format_time(nxt.ranges[0][0])}."
+        return "CLOSED NOW; no opening hours in the coming week."
 
-        try:
-            tz = pytz.timezone(timezone_str)
-            now = datetime.now(tz)
-        except Exception:
-            now = datetime.now()
-
-        day_name = now.strftime("%A").lower()  # monday, tuesday...
-        day_config = working_hours.get(day_name) or working_hours.get(day_name[:3])
-
-        if not day_config or day_config.get("closed", False):
-            return False, f"We are currently closed on {day_name.capitalize()}s."
-
-        open_str = day_config.get("open", "09:00")
-        close_str = day_config.get("close", "18:00")
-
-        try:
-            open_time = datetime.strptime(open_str, "%H:%M").time()
-            close_time = datetime.strptime(close_str, "%H:%M").time()
-            current_time = now.time()
-
-            if open_time <= current_time <= close_time:
-                return True, f"Open today until {close_str}"
-            else:
-                return False, f"Our operating hours today are from {open_str} to {close_str}."
-        except Exception as e:
-            logger.warning("Failed to parse business hours: %s", e)
-            return True, "Open now"
+    @staticmethod
+    def is_open(working_hours: Optional[Dict[str, Any]], timezone_str: str = "Asia/Kolkata") -> Tuple[bool, str]:
+        """(is_open_now, description). Open by default when no hours are configured."""
+        text = BusinessHoursRule.describe(working_hours, local_now(timezone_str))
+        return (not text.startswith("CLOSED"), text or "Open now")

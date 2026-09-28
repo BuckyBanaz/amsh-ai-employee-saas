@@ -1,4 +1,4 @@
-"""Onboarding "AI Receptionist" step: frontend/user/app/onboarding/ai-receptionist/page.tsx.
+﻿"""Onboarding "AI Receptionist" step: frontend/user/app/onboarding/ai-receptionist/page.tsx.
 `personality`, `capabilities`, `transfer_phone`, and `escalation` all live inside
 Agent.config rather than as their own columns."""
 
@@ -7,6 +7,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 
 from backend.server.api.routes._shared import get_business_or_404, require_membership, require_owner_or_admin
 from backend.server.auth.security import get_current_user
@@ -15,6 +16,21 @@ from backend.server.database.models.user import User
 from backend.server.database.session import get_db
 
 router = APIRouter(prefix="/api/onboarding/businesses/{business_id}/agents", tags=["agents"])
+
+# Config sections several dashboard tabs write to (e.g. `toggles` holds Behavior's small_talk/confirm, Appointments'
+# allow_cancel/allow_reschedule and Call Handling's record/transcribe). They must merge, not replace, or saving one
+# tab silently erases the others' settings.
+_SHARED_CONFIG_SECTIONS = ("toggles", "limits", "voice_settings", "tts_provider", "capabilities")
+
+
+def merge_agent_config(current: dict | None, update: dict) -> dict:
+    merged = dict(current or {})
+    for key, value in update.items():
+        if key in _SHARED_CONFIG_SECTIONS and isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = {**merged[key], **value}
+        else:
+            merged[key] = value
+    return merged
 
 
 class AgentCreate(BaseModel):
@@ -95,7 +111,13 @@ def update_agent(
     get_business_or_404(business_id, db)
     require_owner_or_admin(business_id, current_user)
     agent = _get_agent_or_404(business_id, agent_id, db)
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    update_data = payload.model_dump(exclude_unset=True)
+    if "config" in update_data and update_data["config"] is not None:
+        agent.config = merge_agent_config(agent.config, update_data["config"])
+        flag_modified(agent, "config")
+        del update_data["config"]
+
+    for field, value in update_data.items():
         setattr(agent, field, value)
     db.commit()
     db.refresh(agent)
@@ -113,7 +135,7 @@ def get_dashboard_agent(
 ):
     get_business_or_404(business_id, db)
     require_membership(business_id, current_user)
-    agent = db.query(Agent).filter(Agent.business_id == business_id).first()
+    agent = db.query(Agent).filter(Agent.business_id == business_id).order_by(Agent.created_at.asc()).first()
     if not agent:
         agent = Agent(
             business_id=business_id,
@@ -172,15 +194,14 @@ def update_dashboard_agent(
 ):
     get_business_or_404(business_id, db)
     require_owner_or_admin(business_id, current_user)
-    agent = db.query(Agent).filter(Agent.business_id == business_id).first()
+    agent = db.query(Agent).filter(Agent.business_id == business_id).order_by(Agent.created_at.asc()).first()
     if not agent:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
 
     update_data = payload.model_dump(exclude_unset=True)
-    if "config" in update_data and update_data["config"] and agent.config:
-        merged_config = dict(agent.config)
-        merged_config.update(update_data["config"])
-        agent.config = merged_config
+    if "config" in update_data and update_data["config"] is not None:
+        agent.config = merge_agent_config(agent.config, update_data["config"])
+        flag_modified(agent, "config")
         del update_data["config"]
 
     for field, value in update_data.items():

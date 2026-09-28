@@ -35,14 +35,31 @@ float snoise(vec3 v){
 const VERTEX = /* glsl */ `
 uniform float uTime;
 uniform float uAmp;
+uniform float uJiggle;
+uniform float uPitch;
+uniform float uSpeed;
 varying vec3 vNormal;
 varying vec3 vView;
 varying float vNoise;
 ${NOISE}
 void main(){
-  float n = snoise(normal * 1.6 + uTime * 0.35);
-  float n2 = snoise(normal * 4.0 - uTime * 0.6) * 0.35;
-  float d = (n + n2) * uAmp;
+  // Dynamic base wave modulated by pitch (low pitch = broad resonant rolling wave, high pitch = compressed fast ripples)
+  float freq = mix(1.6, 3.4, uPitch);
+  float n = snoise(normal * freq + uTime * (0.35 + uSpeed * 0.7));
+  
+  // Formant vocal harmonics
+  float n2 = snoise(normal * (freq * 2.2) - uTime * (0.6 + uSpeed * 1.4)) * 0.4;
+  
+  // High-pitch micro-jiggle (rapid sound wave vibration across vertex surface)
+  // High pitch creates dense, lightning-fast acoustic jitters!
+  float jiggleFreq = mix(6.5, 16.0, uPitch);
+  float jiggleSpeed = mix(3.5, 12.0, uPitch);
+  float microJiggle = snoise(normal * jiggleFreq + uTime * jiggleSpeed) * uJiggle;
+  
+  // Secondary harmonic treble buzz that kicks in on high pitch
+  float trebleBuzz = sin(dot(normal, vec3(10.0, 14.0, 12.0)) + uTime * (6.0 + uPitch * 14.0)) * (uJiggle * uPitch * 0.35);
+
+  float d = (n + n2 + microJiggle + trebleBuzz) * uAmp;
   vNoise = d;
   vec3 pos = position + normal * d;
   vec4 mv = modelViewMatrix * vec4(pos, 1.0);
@@ -53,18 +70,32 @@ void main(){
 
 const FRAGMENT = /* glsl */ `
 uniform float uTime;
+uniform float uUserMix;
 varying vec3 vNormal;
 varying vec3 vView;
 varying float vNoise;
 void main(){
   float fres = pow(1.0 - max(dot(vNormal, vView), 0.0), 2.2);
+
+  // Blue / Indigo / Cyan palette (Amsh brand theme & AI speaking)
   vec3 cyan = vec3(0.13, 0.83, 0.93);
   vec3 indigo = vec3(0.31, 0.27, 0.90);
   vec3 violet = vec3(0.66, 0.33, 0.97);
+
+  // Emerald / Teal / Mint palette (User speaking with green waves!)
+  vec3 emerald = vec3(0.06, 0.72, 0.50);
+  vec3 teal = vec3(0.08, 0.82, 0.78);
+  vec3 mint = vec3(0.35, 0.98, 0.65);
+
+  vec3 colorA = mix(indigo, emerald, uUserMix);
+  vec3 colorB = mix(cyan, mint, uUserMix);
+  vec3 colorC = mix(violet, teal, uUserMix);
+
   float t = clamp(vNoise * 2.2 + 0.5 + sin(uTime * 0.4) * 0.15, 0.0, 1.0);
-  vec3 base = mix(indigo, cyan, t);
-  base = mix(base, violet, smoothstep(0.55, 1.0, vNormal.y * 0.5 + 0.5) * 0.6);
-  vec3 col = base * 0.55 + fres * vec3(0.6, 0.9, 1.0) * 0.85;
+  vec3 base = mix(colorA, colorB, t);
+  base = mix(base, colorC, smoothstep(0.55, 1.0, vNormal.y * 0.5 + 0.5) * 0.6);
+  vec3 fresnelTint = mix(vec3(0.6, 0.9, 1.0), vec3(0.6, 1.0, 0.8), uUserMix);
+  vec3 col = base * 0.55 + fres * fresnelTint * 0.85;
   gl_FragColor = vec4(col, 0.92);
 }`;
 
@@ -96,9 +127,32 @@ function makeHalo() {
   return g;
 }
 
-type OrbProps = { pointer?: React.RefObject<{ x: number; y: number }>; animate: boolean; distance?: number };
+export type HeroOrbProps = {
+  pointer?: React.RefObject<{ x: number; y: number }>;
+  animate?: boolean;
+  distance?: number;
+  isAISpeaking?: boolean;
+  isUserSpeaking?: boolean;
+  isLiveActive?: boolean;
+  audioLevel?: number;
+  pitchLevel?: number;
+};
 
-export function Orb({ pointer }: { pointer?: React.RefObject<{ x: number; y: number }> }) {
+export function Orb({
+  pointer,
+  isAISpeaking,
+  isUserSpeaking,
+  isLiveActive,
+  audioLevel,
+  pitchLevel,
+}: {
+  pointer?: React.RefObject<{ x: number; y: number }>;
+  isAISpeaking?: boolean;
+  isUserSpeaking?: boolean;
+  isLiveActive?: boolean;
+  audioLevel?: number;
+  pitchLevel?: number;
+}) {
   const group = useRef<THREE.Group>(null);
   const shell = useRef<THREE.Mesh>(null);
   const ringA = useRef<THREE.Mesh>(null);
@@ -106,27 +160,115 @@ export function Orb({ pointer }: { pointer?: React.RefObject<{ x: number; y: num
   const halo = useRef<THREE.Points>(null);
 
   const core = useRef<THREE.ShaderMaterial>(null);
-  const uniforms = useMemo(() => ({ uTime: { value: 0 }, uAmp: { value: 0.18 } }), []);
+  const uniforms = useMemo(
+    () => ({
+      uTime: { value: 0 },
+      uAmp: { value: 0.16 },
+      uJiggle: { value: 0.05 },
+      uPitch: { value: 0.2 },
+      uSpeed: { value: 0.2 },
+      uUserMix: { value: 0 },
+    }),
+    []
+  );
 
   const haloGeo = useMemo(() => makeHalo(), []);
 
   useFrame((state, delta) => {
     const t = state.clock.elapsedTime;
     const u = core.current?.uniforms;
-    if (u) u.uTime.value = t;
-    // Speech-like amplitude: layered sines give an irregular "talking" pulse.
-    const speak = 0.12 + Math.abs(Math.sin(t * 2.1) * Math.sin(t * 0.7)) * 0.14;
-    if (u) u.uAmp.value = THREE.MathUtils.lerp(u.uAmp.value, speak, 0.08);
+    if (u) {
+      u.uTime.value = t;
+
+      let targetAmp = 0.13;
+      let targetJiggle = 0.03;
+      let targetPitch = 0.15;
+      let targetSpeed = 0.2;
+
+      if (isUserSpeaking) {
+        // User speaking: acoustic speech cadence with rapid pitch fluctuations & energetic green jiggle
+        // Multi-frequency oscillation simulating human vocal tract formant shifts
+        const pitchOsc = 0.5 + 0.48 * Math.sin(t * 7.5 + Math.cos(t * 13.0));
+        const effectivePitch = pitchLevel !== undefined ? pitchLevel : pitchOsc;
+        targetPitch = effectivePitch;
+
+        // High pitch = intense jiggle ripples; low pitch = subtle resonant jiggle
+        targetJiggle = 0.4 + effectivePitch * 1.1 + (audioLevel !== undefined ? audioLevel * 0.8 : 0);
+        targetSpeed = 1.3 + effectivePitch * 2.6;
+        targetAmp = 0.28 + effectivePitch * 0.24 + Math.abs(Math.sin(t * 4.2)) * 0.16;
+      } else if (isAISpeaking) {
+        // AI speaking: rhythmic TTS cadence with lively speech pitch sweeps
+        const pitchOsc = 0.45 + 0.42 * Math.sin(t * 6.2 + Math.sin(t * 11.5) * 0.6);
+        const effectivePitch = pitchLevel !== undefined ? pitchLevel : pitchOsc;
+        targetPitch = effectivePitch;
+
+        // High pitch = sharp jiggle; low pitch = calm hum
+        targetJiggle = 0.3 + effectivePitch * 0.9;
+        targetSpeed = 1.1 + effectivePitch * 2.0;
+        targetAmp = 0.22 + effectivePitch * 0.2 + Math.abs(Math.sin(t * 3.4)) * 0.12;
+      } else if (isLiveActive) {
+        // Connected standby
+        targetPitch = 0.15;
+        targetJiggle = 0.05;
+        targetSpeed = 0.3;
+        targetAmp = 0.15 + Math.abs(Math.sin(t * 1.4)) * 0.04;
+      } else {
+        // Default idle breathing
+        targetPitch = 0.1;
+        targetJiggle = 0.02;
+        targetSpeed = 0.15;
+        targetAmp = 0.12 + Math.abs(Math.sin(t * 2.1) * Math.sin(t * 0.7)) * 0.1;
+      }
+
+      u.uAmp.value = THREE.MathUtils.lerp(u.uAmp.value, targetAmp, 0.14);
+      u.uJiggle.value = THREE.MathUtils.lerp(u.uJiggle.value, targetJiggle, 0.18);
+      u.uPitch.value = THREE.MathUtils.lerp(u.uPitch.value, targetPitch, 0.16);
+      u.uSpeed.value = THREE.MathUtils.lerp(u.uSpeed.value, targetSpeed, 0.14);
+
+      // Smooth color morph: 0.0 = blue theme (AI / idle), 1.0 = green waves (User speaking)
+      const targetUserMix = isUserSpeaking ? 1.0 : 0.0;
+      u.uUserMix.value = THREE.MathUtils.lerp(u.uUserMix.value, targetUserMix, 0.08);
+    }
 
     if (group.current && pointer?.current) {
       const g = group.current;
       g.rotation.y = THREE.MathUtils.lerp(g.rotation.y, pointer.current.x * 0.5, 0.05);
       g.rotation.x = THREE.MathUtils.lerp(g.rotation.x, -pointer.current.y * 0.35, 0.05);
+    } else if (group.current) {
+      // Gentle automatic orbit tilt when no pointer passed
+      group.current.rotation.y = Math.sin(t * 0.25) * 0.2;
+      group.current.rotation.x = Math.cos(t * 0.2) * 0.15;
     }
-    if (shell.current) shell.current.rotation.y += delta * 0.12;
-    if (ringA.current) ringA.current.rotation.z += delta * 0.25;
-    if (ringB.current) ringB.current.rotation.z -= delta * 0.18;
-    if (halo.current) halo.current.rotation.y += delta * 0.04;
+
+    const speedMultiplier = isUserSpeaking || isAISpeaking ? 2.2 : 1.0;
+    if (shell.current) shell.current.rotation.y += delta * 0.12 * speedMultiplier;
+    if (ringA.current) ringA.current.rotation.z += delta * 0.25 * speedMultiplier;
+    if (ringB.current) ringB.current.rotation.z -= delta * 0.18 * speedMultiplier;
+    if (halo.current) halo.current.rotation.y += delta * 0.04 * speedMultiplier;
+
+    // Dynamically tint rings and shell toward green when user speaks
+    if (shell.current) {
+      const mat = shell.current.material as THREE.MeshBasicMaterial;
+      if (mat) {
+        const targetColor = isUserSpeaking ? new THREE.Color("#6ee7b7") : new THREE.Color("#7dd3fc");
+        mat.color.lerp(targetColor, 0.08);
+        mat.opacity = isUserSpeaking || isAISpeaking ? 0.22 : 0.12;
+      }
+    }
+    if (ringA.current) {
+      const mat = ringA.current.material as THREE.MeshBasicMaterial;
+      if (mat) {
+        const targetColor = isUserSpeaking ? new THREE.Color("#34d399") : new THREE.Color("#22d3ee");
+        mat.color.lerp(targetColor, 0.08);
+      }
+    }
+    if (ringB.current) {
+      const mat = ringB.current.material as THREE.MeshBasicMaterial;
+      if (mat) {
+        const targetColor = isUserSpeaking ? new THREE.Color("#10b981") : new THREE.Color("#a78bfa");
+        mat.color.lerp(targetColor, 0.08);
+      }
+    }
   });
 
   return (
@@ -154,7 +296,16 @@ export function Orb({ pointer }: { pointer?: React.RefObject<{ x: number; y: num
   );
 }
 
-export default function HeroOrb({ pointer, animate, distance = 5.4 }: OrbProps) {
+export default function HeroOrb({
+  pointer,
+  animate = true,
+  distance = 5.4,
+  isAISpeaking,
+  isUserSpeaking,
+  isLiveActive,
+  audioLevel,
+  pitchLevel,
+}: HeroOrbProps) {
   return (
     <Canvas
       dpr={[1, 1.75]}
@@ -163,7 +314,14 @@ export default function HeroOrb({ pointer, animate, distance = 5.4 }: OrbProps) 
       frameloop={animate ? "always" : "demand"}
       aria-hidden="true"
     >
-      <Orb pointer={pointer} />
+      <Orb
+        pointer={pointer}
+        isAISpeaking={isAISpeaking}
+        isUserSpeaking={isUserSpeaking}
+        isLiveActive={isLiveActive}
+        audioLevel={audioLevel}
+        pitchLevel={pitchLevel}
+      />
     </Canvas>
   );
 }

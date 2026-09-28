@@ -357,4 +357,22 @@ See **[`DOCS/roadmap/AMSh_Master_Daily_Roadmap_and_Tracker.md`](file:///c:/Users
      - Built-in audio player streams and plays the recorded audio URL directly with seeker bar, play/pause, time tracker, and speed toggles (1x to 2x).
      - Renders complete chat bubbles for each message turn in the dialogue.
 
+9. **Conversational NLU & Persona Intelligence Upgrade (In Progress)**:
+   - **Architectural Spec Published**: Created [`DOCS/15_AMSh_Conversational_NLU_and_Persona_Intelligence_Spec.md`](file:///c:/Users/Parikshit/Desktop/saas/DOCS/15_AMSh_Conversational_NLU_and_Persona_Intelligence_Spec.md).
+   - **Diagnostic Finding**: All non-booking queries (FAQ, out-of-scope trivia, ambiguous references, broken audio) previously collapsed into the identical `no_intent_guidance` string ("I'm here to help with scheduling appointments..."), and identity queries ("What is your name? / Who are you?") failed to identify the agent despite `Agent.name` existing in PostgreSQL.
+   - **5-Way Semantic Categorization Established**: `persona`, `action`, `knowledge`, `out_of_scope`, `ambiguous_unclear`.
+   - **Persona System**: Dynamic injection of `Agent.name`, business name, and AI identity into context and dialog transitions.
+   - **Rules & Governance Updated**: Updated `.agents/rules/ai-receptionist-rules.md` and `.brain/overview.md` prohibiting monolithic fallback trapping and mandating lean single-pass Groq NLU (<250ms) without heavy library overhead (No LangChain/spaCy).
+
+10. **LLM Agent + Tool Calling Architecture Plan (2026-09-28, PLAN ONLY)**:
+   - **Why**: The NLU upgrade in section 9 still answers from fixed locale templates, so every new caller question needs a new regex/template. Decision: move to a hybrid where the LLM writes replies and calls tools, and Python validates all actions.
+   - **Docs**: [`DOCS/16_AMSh_LLM_Agent_Tool_Calling_Architecture_Plan.md`](file:///c:/Users/Parikshit/Desktop/saas/DOCS/16_AMSh_LLM_Agent_Tool_Calling_Architecture_Plan.md) (spec), [`ai generated docs/llm_agent_tool_calling_plan.md`](file:///c:/Users/Parikshit/Desktop/saas/ai%20generated%20docs/llm_agent_tool_calling_plan.md) (full planning), [`DOCS/17_AMSh_Claude_Change_Tracker.md`](file:///c:/Users/Parikshit/Desktop/saas/DOCS/17_AMSh_Claude_Change_Tracker.md) (live log).
+   - **Phases**: 0 fix NLU bugs, 1 eval suite, 2 agent core, 3 validator + cancel/reschedule/lookup tools, 4 streaming/latency, 5 feature-flag shadow rollout, 6 retire templates.
+   - **Review findings on section 9 code (unfixed, Gemini's files)**: FAQ check precedes booking in `nlu.py` fallback; out-of-scope regex overfitted to a test word list; `"kal"` substring matches names; identity bypass in `safety.py` blocks human transfer; confidence < 0.40 drops slots; bot turns missing from NLU context.
+   - **Phase 1 DONE (2026-09-28)**: eval suite at `backend/ai/evals/` (49 scenarios; run `python -m backend.ai.evals.runner`). Legacy engine offline baseline **33/49 (67%)**, saved in `backend/ai/evals/baselines/`. Details in the tracker.
+   - **Phases 2-5 DONE (2026-09-28), behind a flag, default OFF**: agent core, validator + 8 tools, streaming, shadow/per-tenant rollout in `backend/ai/engine/agent/` (13 files). `CONVERSATION_ENGINE=state_machine|shadow|llm_agent`, tenant override `Agent.config["engine"]`. Edited existing files only in small additive ways: `realtime/twilio/gateway.py`, `server/common/config.py`.
+   - **Verification**: 65/65 deterministic tests (`python -m unittest backend.ai.evals.test_agent_core`). Live eval (fresh Groq key): agent **58/59** (assembled from several runs after fixes, not one clean run; open failure: Hinglish trivia reply) vs legacy offline 34/49 (69%). Warm/human tone added (small talk 5/5 live). Confirmation SMS bug fixed (real SMS now sent after voice bookings; kill-switch `AMSH_DISABLE_SMS=1`).
+   - **Code-enforced guarantees**: read-back + later-turn confirmation, caller-said grounding for name/phone/date/time, invented-time blocker, transfer guard, real availability from working hours + bookings.
+   - **BLOCKERS / decisions needed**: (1) Groq on-demand tier is 8k tokens/min and 200k/day, unusable for real traffic; the eval runs used up today's daily quota. (2) Booking confirmation SMS never sends (`send_sms_sync` missing). Details: `DOCS/16` sections 7-9 and `DOCS/17`.
+
 

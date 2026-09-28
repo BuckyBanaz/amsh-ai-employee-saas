@@ -105,8 +105,10 @@ export function CallLogsTable({
                         <div>
                           <p className="font-semibold text-gray-900 leading-tight">
                             {call.caller_name || 'Caller'}
+                            {call.channel === 'whatsapp' && <span className="ml-1.5 align-middle text-[9px] font-bold uppercase tracking-wide text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5">WhatsApp</span>}
+                            {call.is_test && <span className="ml-1.5 align-middle text-[9px] font-bold uppercase tracking-wide text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">Test call</span>}
                           </p>
-                          <p className="text-[11px] text-gray-500">{call.caller_number}</p>
+                          <p className="text-[11px] text-gray-500">{call.is_test && call.caller_number === 'Anonymous' ? 'Playground' : call.caller_number}</p>
                         </div>
                       </div>
                     </td>

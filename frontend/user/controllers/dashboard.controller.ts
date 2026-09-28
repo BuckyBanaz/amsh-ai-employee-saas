@@ -2,6 +2,23 @@ import { API_ENDPOINTS } from '../utils/api_endpoints';
 import { ApiService } from '../services/api.service';
 import { StorageService } from '../services/storage.service';
 
+export interface LlmModelOption {
+  value: string; // "groq:<id>" / "gemini:<id>": exactly what the agent config stores in `model`
+  provider: 'groq' | 'gemini';
+  id: string;
+  label: string;
+  context_window: number | null;
+  in_chain: boolean;
+  chain_position: number | null; // 1 = tried first; later ones are fallbacks
+  tool_calling: 'no' | 'unknown'; // 'no' once the model has refused tool calls
+}
+export interface LlmModelCatalog {
+  models: LlmModelOption[];
+  default: string | null;
+  chain: string[];
+  errors: Record<string, string>;
+}
+
 export interface DashboardMetrics {
   total_calls: number;
   booked_appointments: number;
@@ -54,6 +71,8 @@ export interface CallLogItem {
   duration_seconds: number;
   latency_ms: number;
   recording_url?: string | null;
+  is_test?: boolean; // made from the dashboard playground, not a real caller
+  channel?: 'phone' | 'whatsapp' | 'playground';
   started_at: string | null;
   ended_at: string | null;
   messages?: Array<{
@@ -405,16 +424,78 @@ export const DashboardController = {
   },
 
   async simulateVoice(
-    payload: { user_transcript: string; call_id?: string; caller_number?: string },
+    payload: { user_transcript: string; call_id?: string; caller_number?: string; language?: string; accent?: string; voice_id?: string },
     businessId?: string
   ): Promise<any> {
     const bId = this.getEffectiveBusinessId(businessId);
     return ApiService.post<any>(API_ENDPOINTS.VOICE.SIMULATE, {
       business_id: bId,
-      caller_number: payload.caller_number || '+919811223344',
+      caller_number: payload.caller_number ?? '',
       user_transcript: payload.user_transcript,
       call_id: payload.call_id,
+      language: payload.language,
+      accent: payload.accent,
+      voice_id: payload.voice_id,
     });
+  },
+
+  /** Chat models available right now from Groq and Gemini (fetched live by the server, nothing hard-coded). */
+  async getLlmModels(refresh = false): Promise<LlmModelCatalog> {
+    return ApiService.get<LlmModelCatalog>(`${API_ENDPOINTS.VOICE.LLM_MODELS}${refresh ? '?refresh=true' : ''}`, { requireAuth: false });
+  },
+
+  /**
+   * Streaming version of simulateVoice: `onSentence` fires the moment the server has each sentence (its audio is already
+   * being synthesised), so the caller can start speaking before the model has finished. Resolves with the final payload
+   * (same shape as simulateVoice). Uses newline-delimited JSON over a plain fetch.
+   */
+  async simulateVoiceStream(
+    payload: { user_transcript: string; call_id?: string; caller_number?: string; language?: string; accent?: string; voice_id?: string },
+    onSentence: (text: string, meta: { emotion?: string; ttsText?: string }) => void,
+    businessId?: string
+  ): Promise<any> {
+    const bId = this.getEffectiveBusinessId(businessId);
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const token = StorageService.getToken();
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const res = await fetch(`${API_ENDPOINTS.VOICE.SIMULATE}/stream`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        business_id: bId,
+        caller_number: payload.caller_number ?? '',
+        user_transcript: payload.user_transcript,
+        call_id: payload.call_id,
+        language: payload.language,
+        accent: payload.accent,
+        voice_id: payload.voice_id,
+      }),
+    });
+    if (!res.ok || !res.body) throw new Error(`Streaming turn failed (${res.status})`);
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let final: any = null;
+    const handleLine = (line: string) => {
+      if (!line.trim()) return;
+      const event = JSON.parse(line);
+      if (event.type === 'sentence') onSentence(event.text, { emotion: event.emotion, ttsText: event.tts_text });
+      else if (event.type === 'done') final = event;
+    };
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let newline: number;
+      while ((newline = buffer.indexOf('\n')) >= 0) {
+        handleLine(buffer.slice(0, newline));
+        buffer = buffer.slice(newline + 1);
+      }
+    }
+    handleLine(buffer);
+    return final;
   },
 
   async triggerTestCall(phoneNumber: string, businessId?: string): Promise<any> {
@@ -423,5 +504,44 @@ export const DashboardController = {
       phone_number: phoneNumber,
       business_id: bId,
     });
+  },
+
+  /** Attach the recording of a browser test call (caller mic + AI voice) so it can be played back in /calls. */
+  async uploadCallRecording(callId: string, blob: Blob, businessId?: string): Promise<{ stored: boolean; recording_url?: string; reason?: string }> {
+    const bId = this.getEffectiveBusinessId(businessId);
+    const ext = blob.type.includes('ogg') ? 'ogg' : blob.type.includes('mp4') ? 'mp4' : 'webm';
+    const form = new FormData();
+    form.append('file', blob, `call.${ext}`);
+    const token = StorageService.getToken();
+    const res = await fetch(API_ENDPOINTS.CALLS.RECORDING(bId, callId), {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: form,
+    });
+    if (!res.ok) throw new Error(`Recording upload failed (${res.status})`);
+    return res.json();
+  },
+
+  /** Tell the server the tester hung up, so the call stops showing as live and gets its real duration. */
+  async endSimulatedCall(callId: string, businessId?: string): Promise<void> {
+    const bId = this.getEffectiveBusinessId(businessId);
+    await ApiService.post<any>(API_ENDPOINTS.CALLS.END(bId, callId), {});
+  },
+
+  async transcribeAudio(audioBlob: Blob): Promise<{ transcript: string }> {
+    const formData = new FormData();
+    formData.append('file', audioBlob, 'mic_recording.webm');
+    const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+    const res = await fetch(API_ENDPOINTS.VOICE.TRANSCRIBE, {
+      method: 'POST',
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: formData,
+    });
+    if (!res.ok) {
+      throw new Error(`Transcription failed: ${res.statusText}`);
+    }
+    return res.json();
   },
 };

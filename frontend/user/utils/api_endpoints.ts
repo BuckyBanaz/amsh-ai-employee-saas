@@ -8,8 +8,10 @@ export const API_ENDPOINTS = {
   VOICE: {
     GET_VOICES: `${BASE_URL}/voice/voices`,
     PREVIEW: `${BASE_URL}/voice/preview`,
+    LLM_MODELS: `${BASE_URL}/voice/llm-models`,
     SIMULATE: `${BASE_URL}/voice/simulate`,
     CALL_ME: `${BASE_URL}/voice/call-me`,
+    TRANSCRIBE: `${BASE_URL}/voice/transcribe`,
   },
   BUSINESS: {
     CREATE: `${BASE_URL}/onboarding/businesses`,
@@ -30,6 +32,8 @@ export const API_ENDPOINTS = {
   CALLS: {
     LIST: (businessId: string) => `${BASE_URL}/businesses/${businessId}/calls`,
     GET: (businessId: string, id: string) => `${BASE_URL}/businesses/${businessId}/calls/${id}`,
+    RECORDING: (businessId: string, id: string) => `${BASE_URL}/businesses/${businessId}/calls/${id}/recording`,
+    END: (businessId: string, id: string) => `${BASE_URL}/businesses/${businessId}/calls/${id}/end`,
   },
   CUSTOMERS: {
     LIST: (businessId: string) => `${BASE_URL}/businesses/${businessId}/customers`,

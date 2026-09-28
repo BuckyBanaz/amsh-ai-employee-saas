@@ -80,6 +80,18 @@ intents:
     confirmation_required: false
     slots: []
 
+  - name: agent_identity
+    description: Caller AI receptionist ka naam, pehchaan ya role ke baare me pooch raha hai.
+    target_tool: null
+    confirmation_required: false
+    slots: []
+
+  - name: out_of_scope
+    description: Caller clinic se alag mudde, general knowledge ya irrelevant baatein kar raha hai.
+    target_tool: null
+    confirmation_required: false
+    slots: []
+
 escalation_rules:
   - trigger_keywords:
       - "chhati me dard"

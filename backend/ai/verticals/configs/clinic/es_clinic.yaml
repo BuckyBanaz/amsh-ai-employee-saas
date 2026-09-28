@@ -80,6 +80,18 @@ intents:
     confirmation_required: false
     slots: []
 
+  - name: agent_identity
+    description: El llamante pregunta sobre el nombre, rol o identidad de la recepcionista.
+    target_tool: null
+    confirmation_required: false
+    slots: []
+
+  - name: out_of_scope
+    description: El llamante hace preguntas fuera de tema o no relacionadas con la clínica.
+    target_tool: null
+    confirmation_required: false
+    slots: []
+
 escalation_rules:
   - trigger_keywords:
       - "dolor de pecho"

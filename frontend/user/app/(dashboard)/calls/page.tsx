@@ -16,6 +16,7 @@ export default function CallLogsPage() {
   const [search, setSearch] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('');
   const [selectedIntent, setSelectedIntent] = useState('');
+  const [hideTests, setHideTests] = useState(false);
 
   const loadCalls = useCallback(async () => {
     try {
@@ -64,6 +65,7 @@ export default function CallLogsPage() {
 
   const filteredCalls = useMemo(() => {
     return calls.filter((c) => {
+      if (hideTests && c.is_test) return false;
       if (search) {
         const q = search.toLowerCase();
         const matchesCaller = (c.caller_name || '').toLowerCase().includes(q);
@@ -79,7 +81,7 @@ export default function CallLogsPage() {
       }
       return true;
     });
-  }, [calls, search, selectedStatus, selectedIntent]);
+  }, [calls, search, selectedStatus, selectedIntent, hideTests]);
 
   return (
     <div className="animate-in fade-in duration-500 pt-2 pb-6 flex flex-col h-full">
@@ -94,6 +96,11 @@ export default function CallLogsPage() {
         onIntentChange={setSelectedIntent}
       />
       
+      <label className="flex items-center gap-2 text-xs text-gray-600 mb-3 cursor-pointer select-none w-fit">
+        <input type="checkbox" checked={hideTests} onChange={(e) => setHideTests(e.target.checked)} className="accent-[#0066FF]" />
+        Hide test calls (made from the AI Studio playground)
+      </label>
+
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 flex-1 min-h-[640px]">
         <div className="xl:col-span-2 h-full min-w-0">
           <CallLogsTable

@@ -38,5 +38,10 @@
   "bridge_frustrated_professional": "Le pido disculpas por el inconveniente.",
   "bridge_frustrated_friendly": "Le entiendo, lamento las molestias.",
   "bridge_frustrated_warm": "Le entiendo y lamento que esto haya sido frustrante.",
-  "bridge_frustrated_calm": "Lo siento. Vamos a solucionar esto con calma."
+  "bridge_frustrated_calm": "Lo siento. Vamos a solucionar esto con calma.",
+  "persona_identity": "Soy {agent_name}, la recepcionista de inteligencia artificial de {business_name}. ¿En qué puedo ayudarle hoy?",
+  "persona_is_ai": "Soy una recepcionista con inteligencia artificial para {business_name}. Puedo ayudarle a programar citas o responder dudas. Si prefiere hablar con una persona, puedo transferirle. ¿Cómo le ayudo?",
+  "out_of_scope_redirect": "Me especializo en citas de la clínica, servicios, horarios médicos e información general. ¿Cómo puedo ayudarle con respecto a la clínica?",
+  "unclear_speech_repeat": "Disculpe, no le escuché bien. ¿Podría repetirlo, por favor?",
+  "ambiguous_clarification": "¿Podría aclarar qué cita o detalle desea modificar?"
 }

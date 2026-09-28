@@ -32,6 +32,13 @@ class Settings(BaseSettings):
         "http://localhost:3001",
     ]
 
+    # Conversation engine rollout (DOCS/16): state_machine (legacy, default) | shadow (agent runs silently
+    # beside legacy and is only logged) | llm_agent. A tenant can override via Agent.config["engine"].
+    CONVERSATION_ENGINE: str = "state_machine"
+    # Development conveniences that are unsafe with several customers: an unmatched phone call is given to the newest
+    # business, and the old hard-coded WhatsApp verify tokens are accepted. Set to false in production.
+    ALLOW_DEV_FALLBACKS: bool = True
+
     # Third-party providers — intentionally optional/unset until real keys
     # are supplied. Nothing in the realtime/engine layer should be built
     # assuming these exist; check for None and fail loudly at the call site.
@@ -39,6 +46,13 @@ class Settings(BaseSettings):
     TWILIO_AUTH_TOKEN: str | None = None
     TWILIO_PHONE_NUMBER: str | None = None
     GROQ_API_KEY: str | None = None
+    # Second LLM provider. LLM_PROVIDERS is the order tried (providers without a key are skipped); when the first is
+    # rate limited or down, the next one answers the turn.
+    GEMINI_API_KEY: str | None = None
+    GEMINI_MODEL: str = "gemini-3.1-flash-lite"
+    # Entries: `groq` (default model), `groq:<model>`, `gemini`. Groq limits are per model, so extra Groq models add
+    # capacity. Order matters; the flaky-but-free qwen goes last.
+    LLM_PROVIDERS: str = "groq,groq:openai/gpt-oss-120b,gemini,groq:qwen/qwen3.8-27b"
     DEEPGRAM_API_KEY: str | None = None
     ELEVENLABS_API_KEY: str | None = None
     CARTESIA_API_KEY: str | None = None

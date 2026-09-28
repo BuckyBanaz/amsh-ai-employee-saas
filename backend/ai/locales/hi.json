@@ -38,5 +38,10 @@
   "bridge_frustrated_professional": "Hui asuvidha ke liye kshama chahti hoon.",
   "bridge_frustrated_friendly": "Main samajh sakti hoon, pareshani ke liye maaf kijiye.",
   "bridge_frustrated_warm": "Main samajh sakti hoon, aapko pareshani hui uske liye mujhe khed hai.",
-  "bridge_frustrated_calm": "Maaf kijiye. Hum ise shanti se theek karte hain."
+  "bridge_frustrated_calm": "Maaf kijiye. Hum ise shanti se theek karte hain.",
+  "persona_identity": "Main {agent_name} hoon, {business_name} ki AI receptionist. Bataiye, main aapki kya madad kar sakti hoon?",
+  "persona_is_ai": "Main {business_name} ki AI receptionist hoon. Main appointment book karne, doctors ki jaankari aur clinic ke sawalon me madad kar sakti hoon. Agar aap kisi vyakti se baat karna chahte hain toh main transfer kar sakti hoon. Bataiye, kya chahiye?",
+  "out_of_scope_redirect": "Main clinic ke appointments, doctors aur services ki jaankari me madad kar sakti hoon. Bataiye, clinic se related aapki kya madad karoon?",
+  "unclear_speech_repeat": "Maaf kijiye, mujhe theek se sunai nahi diya. Kya aap dobara bol sakte hain?",
+  "ambiguous_clarification": "Kya aap thoda saaf bata sakte hain ki kaunsi appointment ya detail badalni hai?"
 }

@@ -173,6 +173,20 @@ class ClinicWriteOperations:
         }
 
     @staticmethod
+    def cancel_appointment(db: Session, business_id: str, appointment_id: str) -> Optional[Dict[str, Any]]:
+        """Mark an appointment cancelled (kept for history, not deleted)."""
+        return ClinicWriteOperations.update_appointment(db, business_id, appointment_id, {"status": "cancelled"})
+
+    @staticmethod
+    def reschedule_appointment(
+        db: Session, business_id: str, appointment_id: str, date_iso: str, time_text: str
+    ) -> Optional[Dict[str, Any]]:
+        """Move an appointment to a new date and time (callers validate the slot first)."""
+        return ClinicWriteOperations.update_appointment(
+            db, business_id, appointment_id, {"preferred_date": date_iso, "preferred_time": time_text}
+        )
+
+    @staticmethod
     def delete_appointment(db: Session, business_id: str, appointment_id: str) -> bool:
         """Delete an appointment transaction."""
         tx = db.query(Transaction).filter(

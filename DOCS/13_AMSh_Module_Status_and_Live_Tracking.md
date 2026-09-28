@@ -1,5 +1,11 @@
 # AMSh Multi-Module Status & Live Progress Tracker
 
+> **2026-09-28 update:** this document is older than the current code. The current architecture, call and WhatsApp
+> pipelines, per-module status, pending list and improvement ideas are in [`README.md`](README.md) (section 8 = status).
+> Every change made since is logged in [`17_AMSh_Claude_Change_Tracker.md`](17_AMSh_Claude_Change_Tracker.md).
+> Not corrected below: any "done" or "pending" item here that the README status table contradicts; trust the README.
+
+
 This document provides a single source of truth for tracking what is **Completed (Done)**, what is **Currently In-Progress**, and what is **Pending / Blocked (Atka hua)** across all 4 core components of the AMSh platform:
 1. **Backend Server (`backend/server/`)**
 2. **Backend AI / Voice Engine (`backend/ai/`)**

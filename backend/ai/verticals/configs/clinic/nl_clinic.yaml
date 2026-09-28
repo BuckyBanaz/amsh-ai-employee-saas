@@ -80,6 +80,18 @@ intents:
     confirmation_required: false
     slots: []
 
+  - name: agent_identity
+    description: De beller vraagt naar de naam, rol of identiteit van de AI-receptioniste.
+    target_tool: null
+    confirmation_required: false
+    slots: []
+
+  - name: out_of_scope
+    description: De beller stelt irrelevante vragen die niets met de kliniek te maken hebben.
+    target_tool: null
+    confirmation_required: false
+    slots: []
+
 escalation_rules:
   - trigger_keywords:
       - "pijn op de borst"

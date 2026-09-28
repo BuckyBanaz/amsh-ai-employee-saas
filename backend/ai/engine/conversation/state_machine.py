@@ -1,4 +1,4 @@
-"""
+﻿"""
 Deterministic State Machine.
 Orchestrates conversation transitions, slot filling, tool routing,
 and guardrails validation in pure deterministic Python code.
@@ -17,6 +17,7 @@ from backend.ai.engine.conversation.states import CallState
 from backend.ai.capabilities.skills.emotional_tone import Sentiment, detect_sentiment, parse_profile
 from backend.ai.engine.conversation.turn import Turn
 from backend.ai.engine.guardrails.safety import SafetyGuardrails
+from backend.ai.speech.tts.voice_profile import resolve_speed
 from backend.ai.tools.framework.base import ToolContext, ToolResult
 from backend.ai.tools.framework.registry import tool_registry
 from backend.ai.verticals.schemas import IntentDefinition, VerticalConfig
@@ -64,25 +65,32 @@ def load_business_context(business_id: str) -> Tuple[Optional[str], List[str]]:
 def load_tone(business_id: str) -> Optional[str]:
     """Blocking DB read: the tenant's chosen personality (Agent.config['personality'])."""
     with SessionLocal() as db:
-        agent = db.query(Agent).filter(Agent.business_id == business_id).first()
+        agent = db.query(Agent).filter(Agent.business_id == business_id).order_by(Agent.created_at.asc()).first()
         return (agent.config or {}).get("personality") if agent else None
 
 
 def load_agent_settings(business_id: str) -> Dict[str, Any]:
     """Blocking DB read: per-tenant agent overrides (tone, greeting, STT language, TTS voice/language)."""
     with SessionLocal() as db:
-        agent = db.query(Agent).filter(Agent.business_id == business_id).first()
+        agent = db.query(Agent).filter(Agent.business_id == business_id).order_by(Agent.created_at.asc()).first()
         if not agent:
             return {}
         cfg = agent.config or {}
         tts = cfg.get("tts_provider") or {}
         return {
+            "name": agent.name,
             "tone": cfg.get("personality"),
             "language": agent.primary_language,
             "greeting": agent.greeting_message or None,
             "stt_language": (cfg.get("stt") or {}).get("language"),
             "voice_id": tts.get("voice_id"),
             "tts_language": tts.get("language"),
+            # Voice tab speed/emotion (Cartesia generation_config); speed falls back to the personality's default.
+            # Call Handling tab: idle/total call limits, enforced by the gateway's call watchdog
+            "silence_timeout_seconds": (cfg.get("limits") or {}).get("silence_timeout_seconds"),
+            "max_duration_minutes": (cfg.get("limits") or {}).get("max_duration_minutes"),
+            "tts_speed": resolve_speed((cfg.get("voice_settings") or {}).get("speed"), cfg.get("personality")),
+            "tts_emotion": (cfg.get("voice_settings") or {}).get("emotion") or None,
         }
 
 
@@ -143,6 +151,7 @@ class ConversationStateMachine:
         self.caller_number = caller_number
         self.vertical_config = vertical_config
         self.business_info = business_info or {"name": "Our Office"}
+        self.agent_name = (self.business_info or {}).get("agent_name") or "Aura"
         self.db = db
         self.services: List[str] = services or []
 
@@ -198,6 +207,11 @@ class ConversationStateMachine:
         user_transcript: str,
         extracted_intent: Optional[str] = None,
         extracted_slots: Optional[Dict[str, Any]] = None,
+        nlu_category: Optional[str] = None,
+        confidence: float = 1.0,
+        is_correction: bool = False,
+        overridden_slot: Optional[str] = None,
+        is_ambiguous: bool = False,
     ) -> Dict[str, Any]:
         """Deterministic turn plus the emotional tone layer (phrasing only)."""
         sentiment = detect_sentiment(user_transcript)
@@ -207,7 +221,16 @@ class ConversationStateMachine:
             if self.frustrated_turns >= 2 and self.current_state != CallState.ESCALATED:
                 return await self._transfer_frustrated(user_transcript)
 
-        result = await self._process_turn_core(user_transcript, extracted_intent, extracted_slots)
+        result = await self._process_turn_core(
+            user_transcript=user_transcript,
+            extracted_intent=extracted_intent,
+            extracted_slots=extracted_slots,
+            nlu_category=nlu_category,
+            confidence=confidence,
+            is_correction=is_correction,
+            overridden_slot=overridden_slot,
+            is_ambiguous=is_ambiguous,
+        )
 
         # Only bridge on ordinary prompts, once per sentiment, never over tool/escalation output.
         if (
@@ -263,6 +286,11 @@ class ConversationStateMachine:
         user_transcript: str,
         extracted_intent: Optional[str] = None,
         extracted_slots: Optional[Dict[str, Any]] = None,
+        nlu_category: Optional[str] = None,
+        confidence: float = 1.0,
+        is_correction: bool = False,
+        overridden_slot: Optional[str] = None,
+        is_ambiguous: bool = False,
     ) -> Dict[str, Any]:
         """
         Processes a user utterance deterministically through state transitions.
@@ -309,7 +337,55 @@ class ConversationStateMachine:
                 "transfer_target": target_role,
             }
 
-        # 1b. In-flow question about available services: answer from DB catalog
+        # 1b. Persona & Identity Inquiries ("What is your name?", "Are you an AI?")
+        if nlu_category == "persona" or extracted_intent in ("agent_identity", "persona_is_ai"):
+            if extracted_intent == "persona_is_ai":
+                msg = t(self.language, "persona_is_ai", business_name=self.business_info.get("name", "our clinic"))
+            else:
+                msg = t(self.language, "persona_identity", agent_name=self.agent_name, business_name=self.business_info.get("name", "our clinic"))
+            self.turns.append(
+                Turn(
+                    sequence=self.sequence,
+                    user_transcript=user_transcript,
+                    bot_response=msg,
+                    intent=extracted_intent or "agent_identity",
+                    extracted_slots=dict(self.collected_slots),
+                )
+            )
+            return {"bot_response": msg, "state": self.current_state.value}
+
+        # 1c. Out-of-Scope Off-topic Queries ("PM of India", "Cricket")
+        if nlu_category == "out_of_scope" or extracted_intent == "out_of_scope":
+            msg = t(self.language, "out_of_scope_redirect")
+            self.turns.append(
+                Turn(
+                    sequence=self.sequence,
+                    user_transcript=user_transcript,
+                    bot_response=msg,
+                    intent="out_of_scope",
+                    extracted_slots=dict(self.collected_slots),
+                )
+            )
+            return {"bot_response": msg, "state": self.current_state.value}
+
+        # 1d. Ambiguous or Unclear Queries ("Potato helicopter", "Woh wala kal kar dena")
+        if nlu_category == "ambiguous_unclear" or confidence < 0.40:
+            if extracted_intent == "clarification_needed" or is_ambiguous:
+                msg = t(self.language, "ambiguous_clarification")
+            else:
+                msg = t(self.language, "unclear_speech_repeat")
+            self.turns.append(
+                Turn(
+                    sequence=self.sequence,
+                    user_transcript=user_transcript,
+                    bot_response=msg,
+                    intent="unclear",
+                    extracted_slots=dict(self.collected_slots),
+                )
+            )
+            return {"bot_response": msg, "state": self.current_state.value}
+
+        # 1e. In-flow question about available services: answer from DB catalog
         if _SERVICES_QUESTION.search(user_transcript):
             if self.services:
                 msg = t(self.language, "services_list", items=_join_natural(self.services, t(self.language, "list_and")))
@@ -326,7 +402,7 @@ class ConversationStateMachine:
             )
             return {"bot_response": msg, "state": self.current_state.value}
 
-        # 1c. In-flow question about doctors / staff: answer from DB
+        # 1f. In-flow question about doctors / staff: answer from DB
         if _DOCTORS_QUESTION.search(user_transcript):
             doctors_list = []
             if self.db:
@@ -347,7 +423,7 @@ class ConversationStateMachine:
             )
             return {"bot_response": msg, "state": self.current_state.value}
 
-        # 1d. Small talk greeting handling ("Hi, how are you?", "Hello")
+        # 1g. Small talk greeting handling ("Hi, how are you?", "Hello")
         if _SMALL_TALK_GREETING.search(user_transcript.strip()):
             if "how are you" in user_transcript.lower() or "kaise" in user_transcript.lower():
                 msg = t(self.language, "smalltalk_how_are_you")
@@ -363,6 +439,37 @@ class ConversationStateMachine:
                 )
             )
             return {"bot_response": msg, "state": self.current_state.value}
+
+        # 1h. Knowledge / Clinic FAQ Category (Answers verified knowledge without breaking slot collection!)
+        if nlu_category == "knowledge" or extracted_intent == "clinic_faq":
+            tool_context = ToolContext(
+                business_id=self.business_id,
+                caller_number=self.caller_number,
+                call_id=self.call_id,
+                db=self.db,
+                user_transcript=user_transcript,
+            )
+            tool_result: ToolResult = await tool_registry.execute(
+                "answer_faq",
+                tool_context,
+            )
+            faq_msg = tool_result.message or t(self.language, "no_intent_guidance")
+            self.turns.append(
+                Turn(
+                    sequence=self.sequence,
+                    user_transcript=user_transcript,
+                    bot_response=faq_msg,
+                    intent="clinic_faq",
+                    extracted_slots=dict(self.collected_slots),
+                    tool_called="answer_faq",
+                    tool_result=tool_result.data,
+                )
+            )
+            return {
+                "bot_response": faq_msg,
+                "state": self.current_state.value,
+                "tool_result": tool_result.data,
+            }
 
         # 2. Update collected slots with newly extracted entities and normalize synonyms
         SLOT_SYNONYMS = {
@@ -392,6 +499,11 @@ class ConversationStateMachine:
                     changed_slots.append(normalized_key)
                 self.collected_slots[normalized_key] = v
                 self.collected_slots[k] = v
+
+        # Handle corrections
+        if is_correction or overridden_slot:
+            self.confirmed = False
+            self.awaiting_confirmation = False
 
         # Deterministic Fallback 1: Phone number digits
         if "phone_number" not in self.collected_slots or len(str(self.collected_slots.get("phone_number", ""))) < 7:
