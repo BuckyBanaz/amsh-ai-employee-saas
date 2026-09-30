@@ -16,9 +16,10 @@ export class BargeInDetector {
   private loudSamples = 0;
   private onBarge: (() => void) | null = null;
 
-  static readonly MIN_LEVEL = 0.05; // RMS (0..1): quiet rooms and echo residue stay below this
+  static readonly MIN_LEVEL = 0.045; // RMS (0..1): quiet rooms and echo residue stay below this
   static readonly BASELINE_MS = 600; // after arming, learn the echo residue for this long
-  static readonly SUSTAIN_SAMPLES = 6; // 6 x 50 ms of continuous loudness = about 300 ms of speech
+  static readonly SUSTAIN_SAMPLES = 4; // 4 x 50 ms of continuous loudness = about 200 ms of speech
+  static readonly BASELINE_MULTIPLIER = 2.2; // how far above the learned echo residue counts as a real voice
 
   get isOpen(): boolean {
     return !!this.stream;
@@ -95,7 +96,7 @@ export class BargeInDetector {
       this.baseline = Math.max(this.baseline, level); // echo residue while the AI starts talking
       return;
     }
-    const threshold = Math.max(BargeInDetector.MIN_LEVEL, this.baseline * 3);
+    const threshold = Math.max(BargeInDetector.MIN_LEVEL, this.baseline * BargeInDetector.BASELINE_MULTIPLIER);
     this.loudSamples = level > threshold ? this.loudSamples + 1 : 0;
     if (this.loudSamples >= BargeInDetector.SUSTAIN_SAMPLES) {
       const fire = this.onBarge;

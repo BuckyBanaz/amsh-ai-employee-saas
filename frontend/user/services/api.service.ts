@@ -4,6 +4,33 @@ interface ApiOptions extends RequestInit {
   requireAuth?: boolean;
 }
 
+let isRedirectingToLogin = false;
+
+function handleSessionExpired() {
+  if (isRedirectingToLogin) return;
+  isRedirectingToLogin = true;
+  StorageService.clearAll();
+  if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+    const current = window.location.pathname;
+    window.location.href = `/login?expired=1&redirect=${encodeURIComponent(current)}`;
+  }
+}
+
+function isTokenExpired(token: string): boolean {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return false;
+    const payload = JSON.parse(atob(parts[1]));
+    if (payload.exp && typeof payload.exp === 'number') {
+      // If token expires within 5 seconds, treat as expired
+      return payload.exp * 1000 <= Date.now() + 5000;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 export const ApiService = {
   async request<T>(url: string, options: ApiOptions = {}): Promise<T> {
     const { requireAuth = true, headers: customHeaders, ...restOptions } = options;
@@ -15,9 +42,17 @@ export const ApiService = {
     
     if (requireAuth) {
       const token = StorageService.getToken();
-      if (token) {
-        headers.set('Authorization', `Bearer ${token}`);
+      if (!token) {
+        handleSessionExpired();
+        throw new Error('Session expired. Redirecting to login...');
       }
+
+      if (isTokenExpired(token)) {
+        handleSessionExpired();
+        throw new Error('Session expired. Redirecting to login...');
+      }
+
+      headers.set('Authorization', `Bearer ${token}`);
     }
     
     try {
@@ -31,11 +66,9 @@ export const ApiService = {
       
       if (!response.ok) {
         if (response.status === 401) {
-          // Handle unauthorized (e.g. redirect to login, clear token)
-          StorageService.removeToken();
-          if (typeof window !== 'undefined') {
-            window.location.href = '/login';
-          }
+          // Token expired or invalid on server: clear all session storage and redirect to login
+          handleSessionExpired();
+          throw new Error('Session expired. Redirecting to login...');
         }
         let errorMessage = 'API request failed';
         if (typeof data?.detail === 'string') {
@@ -51,7 +84,10 @@ export const ApiService = {
       }
       
       return data as T;
-    } catch (error) {
+    } catch (error: any) {
+      if (error?.message?.includes('Session expired')) {
+        throw error;
+      }
       console.error(`[API Error] ${url}:`, error);
       throw error;
     }

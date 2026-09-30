@@ -40,7 +40,46 @@ export interface VerifyPaymentResponse {
   status: string;
 }
 
+export interface PlanItem {
+  key: string;
+  name: string;
+  description: string;
+  price_monthly: number | null;
+  price_yearly: number | null;
+  currency: string;
+  highlighted?: boolean;
+  quotas?: Record<string, number | null>;
+  overage?: Record<string, number>;
+  features?: { key: string; label: string }[];
+}
+
+export interface InvoiceItem {
+  id: string;
+  number: string;
+  date: string;
+  period: string;
+  description: string;
+  amount: string;
+  amount_raw: number;
+  currency: string;
+  status: string;
+  payment_method: string;
+  receipt_url?: string;
+}
+
 export const BillingController = {
+  getPlans: async (): Promise<{ items: PlanItem[] }> => {
+    try {
+      return await ApiService.get<{ items: PlanItem[] }>(
+        API_ENDPOINTS.PLANS.LIST,
+        { requireAuth: false }
+      );
+    } catch (error) {
+      console.warn('Failed to load plans from backend catalog:', error);
+      return { items: [] };
+    }
+  },
+
   getConfig: async (): Promise<BillingConfig> => {
     try {
       return await ApiService.get<BillingConfig>(
@@ -87,6 +126,44 @@ export const BillingController = {
       );
     } catch (error) {
       console.error(`Failed to get billing for business ${businessId}:`, error);
+      throw error;
+    }
+  },
+
+  getInvoices: async (businessId: string): Promise<{ total_invoices: number; invoices: InvoiceItem[] }> => {
+    try {
+      return await ApiService.get<{ total_invoices: number; invoices: InvoiceItem[] }>(
+        API_ENDPOINTS.BILLING.GET_INVOICES(businessId),
+        { requireAuth: true }
+      );
+    } catch (error) {
+      console.warn(`Failed to get invoices for business ${businessId}:`, error);
+      return { total_invoices: 0, invoices: [] };
+    }
+  },
+
+  changePlan: async (businessId: string, planId: string, cycle: string = 'monthly'): Promise<any> => {
+    try {
+      return await ApiService.post<any>(
+        API_ENDPOINTS.BILLING.CHANGE_PLAN(businessId),
+        { plan_id: planId, cycle },
+        { requireAuth: true }
+      );
+    } catch (error) {
+      console.error(`Failed to change plan for business ${businessId}:`, error);
+      throw error;
+    }
+  },
+
+  startTrial: async (businessId: string, planId: string = 'starter'): Promise<any> => {
+    try {
+      return await ApiService.post<any>(
+        API_ENDPOINTS.BILLING.START_TRIAL(businessId),
+        { plan_id: planId },
+        { requireAuth: true }
+      );
+    } catch (error) {
+      console.error(`Failed to start free trial for business ${businessId}:`, error);
       throw error;
     }
   }

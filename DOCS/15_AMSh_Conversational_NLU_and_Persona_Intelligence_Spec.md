@@ -1,5 +1,7 @@
 # AMSh — Conversational NLU, Persona & Intelligent Dialog System Specification
 
+> **Status note (2026-09-28):** spec for the older state-machine/NLU engine. The live engine is the tool-calling agent described in `16_*Tool_Calling_Architecture_Plan.md`; treat this file as background only.
+
 **Document Version:** 1.0.0  
 **Status:** Architecture Blueprint & Implementation Specification  
 **Focus:** Conversational Natural Language Understanding (NLU), Persona Identity, Dynamic Dialog Management, and Multi-Category Intent Routing  

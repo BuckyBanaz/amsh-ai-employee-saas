@@ -111,8 +111,8 @@ Each block: **headline**, one line of copy you can paste, status, and where a vi
 
 ### Document 01, "already implemented" (research inventory)
 Almost all of these are **admin-portal** screens (tenant dashboard, active businesses, clinics directory, quotas, platform
-health, RBAC, audit logs). In our code the admin portal is a design mock with no data behind it, so **none of these should be
-sold as working** until the admin phase in [`18_AMSh_Completion_Plan_User_and_Admin.md`](18_AMSh_Completion_Plan_User_and_Admin.md)
+health, RBAC, audit logs). In our code only four admin screens are real (login, dashboard, businesses with detail, billing / plan catalog); the rest are design mocks
+with a "Sample data" banner, so **only those four may be shown as working**, the others not until the admin phase in [`18_AMSh_Completion_Plan_User_and_Admin.md`](18_AMSh_Completion_Plan_User_and_Admin.md)
 is done. What does exist: roles, an audit log table (written on sign-ins and password events) and voice configuration per clinic.
 
 ### Document 02, "missing features"

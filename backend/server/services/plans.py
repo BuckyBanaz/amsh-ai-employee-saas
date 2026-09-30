@@ -12,15 +12,20 @@ from backend.server.database.models.plan import Plan
 # Capabilities a plan can include. `key` is stored on plans; label and hint are what people read.
 FEATURES: List[Dict[str, str]] = [
     {"key": "call_recording", "label": "Call Recording", "hint": "Store call audio for playback"},
-    {"key": "multi_language", "label": "Multi-language AI", "hint": "More than one spoken language"},
-    {"key": "custom_voice", "label": "Custom Voice Clone", "hint": "Branded TTS voice"},
+    {"key": "multi_language", "label": "Multi-language AI", "hint": "More than one spoken language (Hindi, English, Hinglish)"},
+    {"key": "custom_voice", "label": "Custom Voice Clone", "hint": "Branded custom receptionist voice"},
     {"key": "api_access", "label": "API Access", "hint": "Public REST + webhooks"},
-    {"key": "advanced_analytics", "label": "Advanced Analytics", "hint": "Cohorts and exports"},
+    {"key": "advanced_analytics", "label": "Advanced Analytics", "hint": "Cohorts, peak hours and exports"},
     {"key": "calendar_sync", "label": "Calendar Sync", "hint": "Google / Microsoft calendars"},
-    {"key": "payments_integration", "label": "Payments", "hint": "Deposits and prepayments"},
-    {"key": "whatsapp", "label": "WhatsApp Channel", "hint": "Messaging on WhatsApp Business"},
+    {"key": "payments_integration", "label": "Payments", "hint": "Advance consultation fee links"},
+    {"key": "whatsapp", "label": "WhatsApp Channel", "hint": "Automated reminders and confirmation pins"},
+    {"key": "email_alerts", "label": "Email Alerts", "hint": "Instant booking and call summaries"},
+    {"key": "warm_transfer", "label": "Warm Call Transfer", "hint": "Forward urgent calls to human doctor/staff"},
+    {"key": "multi_doctor", "label": "Multi-Doctor Scheduling", "hint": "Custom slots per doctor"},
+    {"key": "multi_location", "label": "Multi-Branch Routing", "hint": "Route calls by clinic branch"},
+    {"key": "ehr_integration", "label": "EHR / EMR Sync", "hint": "Direct hospital software integration"},
     {"key": "white_label", "label": "White Label", "hint": "Remove platform branding"},
-    {"key": "priority_support", "label": "Priority Support", "hint": "SLA-backed response times"},
+    {"key": "priority_support", "label": "Priority Support", "hint": "Dedicated account manager & 24/7 SLA"},
 ]
 FEATURE_KEYS = [f["key"] for f in FEATURES]
 FEATURE_LABELS = {f["key"]: f["label"] for f in FEATURES}

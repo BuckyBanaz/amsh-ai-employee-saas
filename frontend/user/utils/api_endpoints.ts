@@ -81,10 +81,17 @@ export const API_ENDPOINTS = {
     WHATSAPP_EMBEDDED_SIGNUP: (businessId: string) => `${BASE_URL}/onboarding/businesses/${businessId}/integrations/whatsapp/embedded-signup`,
     WHATSAPP_TEST_MESSAGE: (businessId: string) => `${BASE_URL}/onboarding/businesses/${businessId}/integrations/whatsapp/test-message`,
   },
+  PLANS: {
+    LIST: `${BASE_URL}/plans`,
+    GET: (key: string) => `${BASE_URL}/plans/${key}`,
+  },
   BILLING: {
     CONFIG: `${BASE_URL}/billing/config`,
     CREATE_ORDER: `${BASE_URL}/billing/razorpay/create-order`,
     VERIFY: `${BASE_URL}/billing/razorpay/verify`,
     GET_BUSINESS_BILLING: (businessId: string) => `${BASE_URL}/billing/businesses/${businessId}`,
+    GET_INVOICES: (businessId: string) => `${BASE_URL}/billing/businesses/${businessId}/invoices`,
+    CHANGE_PLAN: (businessId: string) => `${BASE_URL}/billing/businesses/${businessId}/change-plan`,
+    START_TRIAL: (businessId: string) => `${BASE_URL}/billing/businesses/${businessId}/start-trial`,
   }
 };

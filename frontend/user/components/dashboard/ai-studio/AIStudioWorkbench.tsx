@@ -69,6 +69,7 @@ export function AIStudioWorkbench({ onBack, onSave }: AIStudioWorkbenchProps) {
   const [systemPrompt, setSystemPrompt] = useState(
     'You are a professional, HIPAA-compliant medical receptionist. Greet callers warmly, offer open appointment slots, confirm patient name and contact number, and answer clinic FAQs accurately. For medical emergencies, advise immediate emergency care.'
   );
+  const [complianceInfo, setComplianceInfo] = useState<any>(null);
 
   // DB Sync Status
   const [isSaving, setIsSaving] = useState(false);
@@ -142,7 +143,12 @@ export function AIStudioWorkbench({ onBack, onSave }: AIStudioWorkbenchProps) {
           if (agent.greeting_message) setWelcomeMessage(agent.greeting_message);
           if (agent.config?.personality) setEmotion(agent.config.personality);
           if (agent.config?.model) setModel(agent.config.model);
-          if (agent.config?.system_prompt) setSystemPrompt(agent.config.system_prompt);
+          if (agent.config?.compliance) setComplianceInfo(agent.config.compliance);
+          if (agent.config?.system_prompt) {
+            setSystemPrompt(agent.config.system_prompt);
+          } else if (agent.config?.compliance?.default_system_prompt) {
+            setSystemPrompt(agent.config.compliance.default_system_prompt);
+          }
 
           // 1. Restore exact saved voice from DB
           if (agent.voice_model) {
@@ -1063,11 +1069,21 @@ export function AIStudioWorkbench({ onBack, onSave }: AIStudioWorkbenchProps) {
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 flex items-center gap-2">
                   Agent Knowledge & System Prompt
+                  {complianceInfo?.framework && (
+                    <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-700">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                      </svg>
+                      {complianceInfo.framework} ({complianceInfo.region})
+                    </span>
+                  )}
                 </h3>
                 <p className="text-[11px] text-slate-500">
-                  Governs how the conversational engine reasons, identifies medical intents, and structures replies.
+                  {complianceInfo?.emergency_code
+                    ? `Region: ${complianceInfo.region} · Emergency Code: ${complianceInfo.emergency_code} · Governs reasoning & intent identification.`
+                    : 'Governs how the conversational engine reasons, identifies medical intents, and structures replies.'}
                 </p>
               </div>
               <span className="text-[10px] bg-blue-50 text-[#0066FF] font-bold px-2 py-0.5 rounded-full border border-blue-100">

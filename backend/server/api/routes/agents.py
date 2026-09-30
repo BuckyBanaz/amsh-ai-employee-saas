@@ -1,4 +1,4 @@
-﻿"""Onboarding "AI Receptionist" step: frontend/user/app/onboarding/ai-receptionist/page.tsx.
+"""Onboarding "AI Receptionist" step: frontend/user/app/onboarding/ai-receptionist/page.tsx.
 `personality`, `capabilities`, `transfer_phone`, and `escalation` all live inside
 Agent.config rather than as their own columns."""
 
@@ -133,21 +133,31 @@ def get_dashboard_agent(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    get_business_or_404(business_id, db)
+    biz = get_business_or_404(business_id, db)
     require_membership(business_id, current_user)
+    from backend.ai.verticals.compliance import get_regional_compliance
+    compliance = get_regional_compliance(
+        vertical=biz.vertical or "clinic",
+        country=biz.country or "",
+        timezone=biz.timezone or "UTC",
+        currency=biz.currency or "USD",
+    )
     agent = db.query(Agent).filter(Agent.business_id == business_id).order_by(Agent.created_at.asc()).first()
     if not agent:
+        greeting = compliance["default_greeting"].replace("{business_name}", biz.name)
         agent = Agent(
             business_id=business_id,
-            name="Aanya AI Receptionist",
-            greeting_message="Namaste, Sanjeevani Hospital me aapka swagat hai. Main aapki kya madad kar sakti hoon?",
+            name="Aura AI Receptionist",
+            greeting_message=greeting,
             voice_provider="cartesia",
             voice_model="default",
-            primary_language="en",
-            languages=["en", "hi"],
+            primary_language="hi" if compliance["region"] == "India" else "en",
+            languages=["en", "hi"] if compliance["region"] == "India" else ["en", "es"],
             config={
-                "personality": "professional_warm",
+                "personality": "empathetic & calm",
                 "temperature": 20,
+                "system_prompt": compliance["default_system_prompt"],
+                "compliance": compliance,
                 "capabilities": {
                     "faq": True,
                     "book": True,
@@ -170,7 +180,7 @@ def get_dashboard_agent(
                     "buffer_minutes": 15,
                     "notice_hours": 24,
                 },
-                "transfer_phone": "+919811223344",
+                "transfer_phone": biz.business_phone or "+919811223344",
                 "escalation_triggers": [
                     {"id": "human_request", "label": "Caller explicitly asks for a human agent", "active": True},
                     {"id": "emergency", "label": "Urgent medical symptoms or emergency indicators", "active": True},
@@ -182,6 +192,15 @@ def get_dashboard_agent(
         db.add(agent)
         db.commit()
         db.refresh(agent)
+    else:
+        # Ensure agent has dynamic compliance information attached to config
+        if not agent.config or not agent.config.get("compliance"):
+            cfg = dict(agent.config or {})
+            cfg["compliance"] = compliance
+            agent.config = cfg
+            flag_modified(agent, "config")
+            db.commit()
+            db.refresh(agent)
     return agent
 
 

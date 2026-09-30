@@ -1,7 +1,7 @@
 "use client";
 import React from 'react';
 import { TopCallReasonItem } from '../../controllers/analytics.controller';
-import { GlobalLoader } from '../common/GlobalLoader';
+import { ShimmerBlock } from '../common/ShimmerSkeleton';
 
 interface TopCallReasonsListProps {
   reasons?: TopCallReasonItem[];
@@ -83,8 +83,19 @@ export function TopCallReasonsList({ reasons, loading = false }: TopCallReasonsL
 
       {/* State 1: Loading Progress State */}
       {loading ? (
-        <div className="flex-1 flex flex-col items-center justify-center py-4">
-          <GlobalLoader message="Classifying caller intents & inquiries..." size="sm" />
+        <div className="flex-1 flex flex-col justify-center space-y-3 py-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <ShimmerBlock delay={((i % 4) + 1) as 1 | 2 | 3 | 4} className="w-5 h-5 rounded-md" />
+                  <ShimmerBlock delay={((i % 4) + 1) as 1 | 2 | 3 | 4} className="h-3 w-28 rounded-md" />
+                </div>
+                <ShimmerBlock delay={((i % 4) + 1) as 1 | 2 | 3 | 4} className="h-3 w-10 rounded-md" />
+              </div>
+              <ShimmerBlock delay={((i % 4) + 1) as 1 | 2 | 3 | 4} className="h-2 w-full rounded-full" />
+            </div>
+          ))}
         </div>
       ) : list.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center py-8 text-center my-auto">

@@ -34,6 +34,8 @@ class BusinessFacts:
     address: str = ""
     phone: str = ""
     city: str = ""
+    country: str = ""
+    vertical: str = "clinic"
     slot_minutes: int = DEFAULT_SLOT_MINUTES  # visit length + the owner's buffer between visits
     notice_hours: float = 0.0  # minimum lead time before an appointment can start
 

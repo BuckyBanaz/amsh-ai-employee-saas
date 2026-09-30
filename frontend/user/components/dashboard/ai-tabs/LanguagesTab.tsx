@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { STRINGS } from '../../../utils/strings/en';
 import { DashboardController, AgentItem } from '../../../controllers/dashboard.controller';
-import { GlobalLoader } from '../../common/GlobalLoader';
+import { FormSkeleton } from '../../common/ShimmerSkeleton';
 
 const ALL_LANGUAGES = [
   { code: 'en', name: 'English (US)' },
@@ -67,11 +67,7 @@ export function LanguagesTab() {
   };
 
   if (loading) {
-    return (
-      <div className="bg-white border border-gray-100 rounded-xl shadow-xs overflow-hidden">
-        <GlobalLoader message="Loading multilingual language packs & presets..." size="md" />
-      </div>
-    );
+    return <FormSkeleton title="Loading multilingual language packs & presets..." />;
   }
 
   return (

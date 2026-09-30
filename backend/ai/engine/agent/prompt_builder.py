@@ -178,6 +178,16 @@ def build_system_prompt(
         prompt += f"\nESCALATION: {escalation}"
     if disabled:
         prompt += f"\nTURNED OFF by the clinic (politely decline and offer the front desk instead): {'; '.join(disabled)}."
+    from backend.ai.verticals.compliance import get_regional_compliance
+    compliance = get_regional_compliance(
+        vertical=getattr(facts, "vertical", "clinic"),
+        country=getattr(facts, "country", ""),
+        timezone=facts.timezone,
+    )
+    compliance_clause = compliance.get("compliance_clause", "")
+    if compliance_clause:
+        prompt += f"\n\nPOLICY: {compliance_clause}"
+
     text = (instructions or "").strip()
     if text:
         prompt += (

@@ -72,31 +72,47 @@ interface SidebarProps {
 
 export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
   const pathname = usePathname();
+  const [mounted, setMounted] = React.useState(false);
   const [business, setBusiness] = React.useState<any>(null);
+  const [businessLogo, setBusinessLogo] = React.useState<string | null>(null);
   const [user, setUser] = React.useState<any>(null);
 
   React.useEffect(() => {
+    setMounted(true);
+
+    const resolveLogoUrl = (raw: string | null) => {
+      if (!raw) return null;
+      return raw.startsWith('http') || raw.startsWith('data:') ? raw : `http://localhost:8010${raw}`;
+    };
+
     const cachedBusiness = StorageService.getBusiness();
     const cachedUser = StorageService.getUser();
-    if (cachedBusiness) setBusiness(cachedBusiness);
+    const localLogo = localStorage.getItem('business_logo');
+
+    if (cachedBusiness) {
+      setBusiness(cachedBusiness);
+      setBusinessLogo(resolveLogoUrl(cachedBusiness.logo_url || localLogo));
+    } else if (localLogo) {
+      setBusinessLogo(resolveLogoUrl(localLogo));
+    }
+
     if (cachedUser) setUser(cachedUser);
 
     const refreshBusiness = () => {
-      const cachedBusiness = StorageService.getBusiness();
-      const localLogo = typeof window !== 'undefined' ? localStorage.getItem('business_logo') : null;
-      if (cachedBusiness) {
-        if (!cachedBusiness.logo_url && localLogo) {
-          cachedBusiness.logo_url = localLogo;
-        }
-        setBusiness(cachedBusiness);
+      const b = StorageService.getBusiness();
+      const currentLocalLogo = localStorage.getItem('business_logo');
+      if (b) {
+        setBusiness(b);
+        setBusinessLogo(resolveLogoUrl(b.logo_url || currentLocalLogo));
+      } else if (currentLocalLogo) {
+        setBusinessLogo(resolveLogoUrl(currentLocalLogo));
       }
+
       DashboardController.getBusinessInfo()
-        .then((b) => {
-          if (b) {
-            if (!b.logo_url && localLogo) {
-              b.logo_url = localLogo;
-            }
-            setBusiness(b);
+        .then((fresh) => {
+          if (fresh) {
+            setBusiness(fresh);
+            setBusinessLogo(resolveLogoUrl(fresh.logo_url || currentLocalLogo));
           }
         })
         .catch(() => {});
@@ -114,8 +130,6 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
   const userName = user?.full_name || user?.name || user?.email?.split('@')[0] || 'Business Owner';
   const userEmail = user?.email || 'owner@amsh.ai';
   const userInitials = (userName.slice(0, 2) || 'BO').toUpperCase();
-  const rawLogo = business?.logo_url || (typeof window !== 'undefined' ? localStorage.getItem('business_logo') : null);
-  const businessLogo = rawLogo ? (rawLogo.startsWith('http') || rawLogo.startsWith('data:') ? rawLogo : `http://localhost:8010${rawLogo}`) : null;
 
   const handleLogout = () => {
     StorageService.clearAll();
@@ -152,7 +166,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
 
         <div className="w-full flex items-center justify-between px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-md">
           <div className="flex items-center gap-2 min-w-0 pr-1">
-            {businessLogo ? (
+            {mounted && businessLogo ? (
               <img src={businessLogo} alt="Logo" className="w-6 h-6 rounded object-cover shrink-0 border border-gray-200" />
             ) : (
               <div className="w-6 h-6 rounded bg-blue-50 text-[#0066FF] flex items-center justify-center text-[11px] font-bold shrink-0">

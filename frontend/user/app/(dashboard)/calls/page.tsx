@@ -101,8 +101,8 @@ export default function CallLogsPage() {
         Hide test calls (made from the AI Studio playground)
       </label>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 flex-1 min-h-[640px]">
-        <div className="xl:col-span-2 h-full min-w-0">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
+        <div className="xl:col-span-2 min-w-0">
           <CallLogsTable
             calls={filteredCalls}
             selectedCallId={selectedCall?.id}
@@ -110,7 +110,7 @@ export default function CallLogsPage() {
             isLoading={isLoadingList}
           />
         </div>
-        <div className="h-full min-w-0">
+        <div className="xl:col-span-1 min-w-0 sticky top-4">
           <CallDetailPanel
             call={selectedCall}
             loading={isLoadingDetail}

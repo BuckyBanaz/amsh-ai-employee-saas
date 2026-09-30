@@ -301,9 +301,14 @@ export const DashboardController = {
     return ApiService.get<CallLogItem[]>(url);
   },
 
-  async getCallDetail(callId: string, businessId?: string): Promise<CallLogItem> {
-    const bId = this.getEffectiveBusinessId(businessId);
-    return ApiService.get<CallLogItem>(API_ENDPOINTS.CALLS.GET(bId, callId));
+  async getCallDetail(callId: string, businessId?: string): Promise<CallLogItem | null> {
+    try {
+      const bId = this.getEffectiveBusinessId(businessId);
+      return await ApiService.get<CallLogItem>(API_ENDPOINTS.CALLS.GET(bId, callId));
+    } catch (err) {
+      console.warn(`[getCallDetail] Call ${callId} not found or failed to load:`, err);
+      return null;
+    }
   },
 
   async getServices(businessId?: string): Promise<ServiceItem[]> {

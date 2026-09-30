@@ -1,7 +1,7 @@
 "use client";
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { createPlan, fetchPlans, updatePlan, PlanApi, PlanBody } from '../../../lib/api';
+import { createPlan, fetchOverview, fetchPlans, fetchTenants, updatePlan, Overview, PlanApi, PlanBody, TenantItem } from '../../../lib/api';
 
 type PlanStatus = 'Active' | 'Draft' | 'Archived';
 type BillingCycle = 'Monthly' | 'Yearly';
@@ -18,6 +18,11 @@ type FeatureKey =
   | 'calendar_sync'
   | 'payments_integration'
   | 'whatsapp'
+  | 'email_alerts'
+  | 'warm_transfer'
+  | 'multi_doctor'
+  | 'multi_location'
+  | 'ehr_integration'
   | 'white_label'
   | 'priority_support';
 
@@ -62,42 +67,20 @@ interface Plan {
 
 const FEATURE_CATALOG: { key: FeatureKey; label: string; hint: string }[] = [
   { key: 'call_recording', label: 'Call Recording', hint: 'Store call audio for playback' },
-  { key: 'multi_language', label: 'Multi-language AI', hint: 'More than one spoken language' },
-  { key: 'custom_voice', label: 'Custom Voice Clone', hint: 'Branded TTS voice' },
+  { key: 'multi_language', label: 'Multi-language AI', hint: 'English, Hindi, Hinglish auto-switch' },
+  { key: 'custom_voice', label: 'Custom Voice Clone', hint: 'Branded clinic receptionist voice' },
   { key: 'api_access', label: 'API Access', hint: 'Public REST + webhooks' },
-  { key: 'advanced_analytics', label: 'Advanced Analytics', hint: 'Cohorts and exports' },
-  { key: 'calendar_sync', label: 'Calendar Sync', hint: 'Google / Microsoft calendars' },
-  { key: 'payments_integration', label: 'Payments', hint: 'Deposits and prepayments' },
-  { key: 'whatsapp', label: 'WhatsApp Channel', hint: 'Messaging on WhatsApp Business' },
+  { key: 'advanced_analytics', label: 'Advanced Analytics', hint: 'Patient cohorts and peak call insights' },
+  { key: 'calendar_sync', label: 'Calendar Sync', hint: 'Google & Microsoft calendars' },
+  { key: 'payments_integration', label: 'Payments', hint: 'Online consultation fee links' },
+  { key: 'whatsapp', label: 'WhatsApp Channel', hint: 'Reminders & booking confirmation pins' },
+  { key: 'email_alerts', label: 'Email Alerts', hint: 'Instant appointment & call summaries' },
+  { key: 'warm_transfer', label: 'Warm Call Transfer', hint: 'Forward urgent calls to doctor/front desk' },
+  { key: 'multi_doctor', label: 'Multi-Doctor Scheduling', hint: 'Custom schedules & slots per doctor' },
+  { key: 'multi_location', label: 'Multi-Branch Routing', hint: 'Route patient calls by clinic branch' },
+  { key: 'ehr_integration', label: 'EHR / EMR Sync', hint: 'Direct hospital records integration' },
   { key: 'white_label', label: 'White Label', hint: 'Remove platform branding' },
-  { key: 'priority_support', label: 'Priority Support', hint: 'SLA-backed response times' },
-];
-
-const revenueTrend = [48, 56, 60, 72, 68, 84, 96];
-const revenuePoints = ['M1', 'M2', 'M3', 'M4', 'M5', 'M6', 'M7'];
-
-const kpis = [
-  { label: 'MRR', value: '€24,680', change: '+€3,120 growth', tone: 'positive' as const },
-  { label: 'ARR', value: '€296,160', change: '€300k target close', tone: 'positive' as const },
-  { label: 'Active Subs', value: '109', change: '96% retention rate', tone: 'positive' as const },
-  { label: 'Trials', value: '14', change: '+2 this week', tone: 'positive' as const },
-  { label: 'Churn Rate', value: '2.1%', change: '-0.4% from Jan', tone: 'positive' as const },
-  { label: 'Failed Payments', value: '3', change: '€420 pending dunning', tone: 'negative' as const },
-];
-
-const tenantSubscriptions = [
-  { id: 't-1', tenant: 'Smile Dental Business', plan: 'Professional', status: 'Active', price: '€199', usage: 78, renewal: '2026-02-12' },
-  { id: 't-2', tenant: 'Amsterdam Dental Care', plan: 'Business', status: 'Active', price: '€399', usage: 92, renewal: '2026-02-15' },
-  { id: 't-3', tenant: 'Berlin Health Center', plan: 'Starter', status: 'Suspended', price: '€99', usage: 12, renewal: '2026-01-30' },
-  { id: 't-4', tenant: 'Bella Rosa Ristorante', plan: 'Professional', status: 'Active', price: '€199', usage: 45, renewal: '2026-03-01' },
-  { id: 't-5', tenant: 'Paris Dental Studio', plan: 'Trial', status: 'Trial', price: '€0', usage: 60, renewal: '2026-02-20' },
-];
-
-const invoices = [
-  { id: 'INV-2026-001', tenant: 'Smile Dental Business', amount: '€199.00', status: 'Paid', date: 'Jan 12, 2026' },
-  { id: 'INV-2026-002', tenant: 'Amsterdam Dental Care', amount: '€399.00', status: 'Paid', date: 'Jan 15, 2026' },
-  { id: 'INV-2026-003', tenant: 'Bella Rosa Ristorante', amount: '€199.00', status: 'Pending', date: 'Jan 22, 2026' },
-  { id: 'INV-2026-004', tenant: 'Berlin Health Center', amount: '€99.00', status: 'Failed', date: 'Jan 10, 2026' },
+  { key: 'priority_support', label: 'Priority Support', hint: 'Dedicated manager & 24/7 SLA' },
 ];
 
 const statusStyles: Record<string, string> = {
@@ -587,10 +570,58 @@ export default function BillingPage() {
   const [loadError, setLoadError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [overview, setOverview] = useState<Overview | null>(null);
+  const [subs, setSubs] = useState<TenantItem[] | null>(null);
   const [draft, setDraft] = useState<Plan | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [kindFilter, setKindFilter] = useState<'All' | PlanKind>('All');
+
+  // Dynamic Free / Paid Trial Configuration
+  const [trialConfig, setTrialConfig] = useState({
+    enabled: true,
+    is_free: true,
+    price: 0,
+    currency: 'USD',
+    duration_days: 14,
+    voice_minutes: 50,
+    messages: 100,
+    banner_headline: '{days}-Day Free Trial is Active ({days_left} days remaining)',
+    banner_description: 'You have full access to automated patient call handling and calendar sync. Choose any subscription plan below to upgrade anytime!',
+  });
+  const [trialSaving, setTrialSaving] = useState(false);
+  const [trialSavedMsg, setTrialSavedMsg] = useState('');
+
+  useEffect(() => {
+    fetch('http://localhost:8010/api/billing/trial-config')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data && typeof data === 'object') {
+          setTrialConfig((prev) => ({ ...prev, ...data }));
+        }
+      })
+      .catch((e) => console.warn('Could not load trial config:', e));
+  }, []);
+
+  const handleSaveTrial = async () => {
+    setTrialSaving(true);
+    setTrialSavedMsg('');
+    try {
+      const res = await fetch('http://localhost:8010/api/billing/trial-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(trialConfig),
+      });
+      if (res.ok) {
+        setTrialSavedMsg('✓ Saved & active on user app!');
+        setTimeout(() => setTrialSavedMsg(''), 4000);
+      }
+    } catch (err) {
+      console.error('Failed to save trial settings:', err);
+    } finally {
+      setTrialSaving(false);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -604,6 +635,22 @@ export default function BillingPage() {
         if (cancelled) return;
         setLoadError(err instanceof Error ? err.message : 'Could not load plans.');
         setLoadState('error');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadKey]);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([fetchOverview(), fetchTenants({})])
+      .then(([o, t]) => {
+        if (cancelled) return;
+        setOverview(o);
+        setSubs(t.items);
+      })
+      .catch(() => {
+        /* the plan catalog above has its own error banner; these numbers just stay empty */
       });
     return () => {
       cancelled = true;
@@ -630,8 +677,6 @@ export default function BillingPage() {
     () => plans.reduce((sum, plan) => sum + plan.subscribers, 0),
     [plans]
   );
-
-  const barMax = Math.max(...revenueTrend);
 
   const openCreate = (kind: PlanKind = 'Catalog') => {
     setDraft(emptyPlan(kind));
@@ -757,38 +802,29 @@ export default function BillingPage() {
         </div>
       )}
       {loadState === 'loading' && <div className="mb-3 text-xs text-[#94A3B8]">Loading plans...</div>}
-      <div className="mb-3 text-[11px] text-[#64748B] bg-[#F8FAFC] border border-[#E2E8F0] rounded-md px-3 py-2">
-        <strong>Plans are live:</strong> what you create or edit here is saved and is what the tenant app can show. The revenue figures,
-        tenant subscriptions and invoices below are <strong>sample data</strong> until real billing analytics are built.
-      </div>
-
-      {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2.5 mb-3.5">
-        {kpis.map((kpi) => (
+      {/* Numbers read from the catalog and the businesses (no payments are recorded yet, so revenue is an estimate) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 mb-3.5">
+        {[
+          { label: 'Active plans', value: String(plans.filter((p) => p.status === 'Active').length), note: `${plans.length} plans in total` },
+          { label: 'Businesses on a plan', value: String(totalSubscribers), note: 'all statuses' },
+          { label: 'Active on a paid plan', value: overview ? String(overview.revenue.paying_businesses) : '—', note: 'active businesses whose plan has a price' },
+          {
+            label: 'Est. monthly revenue',
+            value: overview
+              ? Object.entries(overview.revenue.monthly_estimate).map(([c, v]) => money(Math.round(v), c)).join(' · ') || '—'
+              : '—',
+            note: 'estimate from plan prices, not payments',
+          },
+        ].map((kpi) => (
           <div key={kpi.label} className="bg-white border border-[#E2E8F0] rounded-lg p-2.5 sm:p-3 shadow-2xs">
             <div className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider mb-1.5">{kpi.label}</div>
             <div className="text-lg font-bold text-[#0F172A] leading-none mb-1.5">{kpi.value}</div>
-            <div className={`text-[11px] font-semibold ${kpi.tone === 'positive' ? 'text-[#10B981]' : 'text-[#EF4444]'}`}>
-              {kpi.change}
-            </div>
+            <div className="text-[11px] text-[#64748B]">{kpi.note}</div>
           </div>
         ))}
       </div>
 
-      {/* Revenue trend + plan distribution */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-3.5 mb-3.5">
-        <section className="xl:col-span-2 bg-white border border-[#E2E8F0] rounded-lg p-3.5 shadow-2xs">
-          <h2 className="text-xs font-bold text-[#0F172A] mb-3">Monthly Revenue Trend (YTD)</h2>
-          <div className="flex items-end justify-between gap-2.5 h-[120px]">
-            {revenueTrend.map((value, index) => (
-              <div key={revenuePoints[index]} className="flex-1 flex flex-col items-center justify-end gap-1.5 h-full">
-                <div className="w-7 bg-[#2563EB] rounded-t-md" style={{ height: `${(value / barMax) * 100}%` }} />
-                <span className="text-[10px] text-[#94A3B8]">{revenuePoints[index]}</span>
-              </div>
-            ))}
-          </div>
-        </section>
-
+      <div className="grid grid-cols-1 gap-3.5 mb-3.5">
         <section className="bg-white border border-[#E2E8F0] rounded-lg p-3.5 shadow-2xs">
           <h2 className="text-xs font-bold text-[#0F172A] mb-0.5">Plan Distribution</h2>
           <p className="text-[11px] text-[#64748B] mb-3">{totalSubscribers} paying tenants across {plans.length} plans.</p>
@@ -858,6 +894,171 @@ export default function BillingPage() {
               </svg>
               New Enterprise Deal
             </button>
+          </div>
+        </div>
+
+        {/* Dynamic Free & Paid Trial Configuration Card */}
+        <div className="m-3 p-4 bg-gradient-to-r from-amber-50/70 via-white to-orange-50/50 border border-amber-200 rounded-xl shadow-2xs space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-amber-100 pb-2.5">
+            <div className="flex items-center gap-2">
+              <span className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center text-amber-800 text-sm font-bold">
+                🎁
+              </span>
+              <div>
+                <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                  Trial Settings & Promotion Manager
+                  <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                    {trialConfig.enabled ? (trialConfig.is_free ? '100% Free Trial' : `Paid Trial ($${trialConfig.price})`) : 'Disabled'}
+                  </span>
+                </h3>
+                <p className="text-[11px] text-gray-500">
+                  Control how new clinics experience AMSh: completely free ($0) or nominal commitment fee.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {trialSavedMsg && (
+                <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200 animate-in fade-in">
+                  {trialSavedMsg}
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={handleSaveTrial}
+                disabled={trialSaving}
+                className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-60 text-white rounded-lg text-xs font-bold transition-all shadow-2xs cursor-pointer"
+              >
+                {trialSaving ? 'Saving...' : 'Save Trial Settings'}
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+            {/* Enable Trial Toggle */}
+            <div className="bg-white p-3 rounded-lg border border-gray-200">
+              <label className="text-[11px] font-bold text-gray-700 block mb-1">Trial Status</label>
+              <div className="flex items-center gap-2 mt-1">
+                <input
+                  type="checkbox"
+                  id="admin-trial-enabled"
+                  checked={trialConfig.enabled}
+                  onChange={(e) => setTrialConfig({ ...trialConfig, enabled: e.target.checked })}
+                  className="w-4 h-4 accent-amber-600 cursor-pointer"
+                />
+                <label htmlFor="admin-trial-enabled" className="text-xs font-semibold text-gray-800 cursor-pointer">
+                  {trialConfig.enabled ? 'Active for new clinics' : 'Disabled'}
+                </label>
+              </div>
+            </div>
+
+            {/* Trial Pricing Mode: Free vs Paid */}
+            <div className="bg-white p-3 rounded-lg border border-gray-200">
+              <label className="text-[11px] font-bold text-gray-700 block mb-1">Trial Pricing Mode</label>
+              <div className="flex items-center gap-3 mt-1">
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="trial-pricing-mode"
+                    checked={trialConfig.is_free}
+                    onChange={() => setTrialConfig({ ...trialConfig, is_free: true, price: 0 })}
+                    className="accent-amber-600"
+                  />
+                  <span className="font-semibold text-gray-800 text-[11px]">Free ($0)</span>
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="trial-pricing-mode"
+                    checked={!trialConfig.is_free}
+                    onChange={() => setTrialConfig({ ...trialConfig, is_free: false, price: trialConfig.price || 1.0 })}
+                    className="accent-amber-600"
+                  />
+                  <span className="font-semibold text-gray-800 text-[11px]">Paid Fee</span>
+                </label>
+              </div>
+              {!trialConfig.is_free && (
+                <div className="mt-2 flex items-center gap-1">
+                  <span className="text-xs text-gray-500 font-bold">$</span>
+                  <input
+                    type="number"
+                    min={0.5}
+                    step={0.5}
+                    value={trialConfig.price}
+                    onChange={(e) => setTrialConfig({ ...trialConfig, price: Number(e.target.value) })}
+                    className="w-20 px-2 py-0.5 border border-gray-300 rounded text-xs font-mono font-bold"
+                  />
+                  <span className="text-[10px] text-gray-500">charge fee</span>
+                </div>
+              )}
+            </div>
+
+            {/* Duration Days */}
+            <div className="bg-white p-3 rounded-lg border border-gray-200">
+              <label className="text-[11px] font-bold text-gray-700 block mb-1">Trial Duration (Days)</label>
+              <div className="flex items-center gap-2 mt-1">
+                <input
+                  type="number"
+                  min={1}
+                  max={90}
+                  value={trialConfig.duration_days}
+                  onChange={(e) => setTrialConfig({ ...trialConfig, duration_days: Number(e.target.value) })}
+                  className="w-20 px-2 py-1 border border-gray-300 rounded text-xs font-bold font-mono"
+                />
+                <span className="text-gray-500 text-[11px]">days access</span>
+              </div>
+            </div>
+
+            {/* Trial Quotas */}
+            <div className="bg-white p-3 rounded-lg border border-gray-200">
+              <label className="text-[11px] font-bold text-gray-700 block mb-1">Included Quotas</label>
+              <div className="grid grid-cols-2 gap-2 mt-1">
+                <div>
+                  <span className="text-[10px] text-gray-400 block">Voice Mins</span>
+                  <input
+                    type="number"
+                    min={5}
+                    value={trialConfig.voice_minutes}
+                    onChange={(e) => setTrialConfig({ ...trialConfig, voice_minutes: Number(e.target.value) })}
+                    className="w-full px-1.5 py-0.5 border border-gray-300 rounded text-xs font-bold font-mono"
+                  />
+                </div>
+                <div>
+                  <span className="text-[10px] text-gray-400 block">Messages</span>
+                  <input
+                    type="number"
+                    min={10}
+                    value={trialConfig.messages}
+                    onChange={(e) => setTrialConfig({ ...trialConfig, messages: Number(e.target.value) })}
+                    className="w-full px-1.5 py-0.5 border border-gray-300 rounded text-xs font-bold font-mono"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Banner Text Customization */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs bg-white p-3 rounded-lg border border-gray-200">
+            <div>
+              <label className="text-[11px] font-bold text-gray-700 block mb-1">
+                Banner Headline <span className="font-normal text-gray-400">(tags: {'{days}'}, {'{days_left}'})</span>
+              </label>
+              <input
+                type="text"
+                value={trialConfig.banner_headline}
+                onChange={(e) => setTrialConfig({ ...trialConfig, banner_headline: e.target.value })}
+                className="w-full px-2.5 py-1.5 border border-gray-300 rounded text-xs font-medium"
+              />
+            </div>
+            <div>
+              <label className="text-[11px] font-bold text-gray-700 block mb-1">Banner Description</label>
+              <input
+                type="text"
+                value={trialConfig.banner_description}
+                onChange={(e) => setTrialConfig({ ...trialConfig, banner_description: e.target.value })}
+                className="w-full px-2.5 py-1.5 border border-gray-300 rounded text-xs font-medium"
+              />
+            </div>
           </div>
         </div>
 
@@ -982,95 +1183,45 @@ export default function BillingPage() {
         ))}
       </section>
 
-      {/* Tenant subscriptions */}
-      <section className="bg-white border border-[#E2E8F0] rounded-lg shadow-2xs overflow-hidden mb-3.5">
-        <div className="p-3 border-b border-[#E2E8F0]">
-          <h2 className="text-xs font-bold text-[#0F172A]">Tenant Subscriptions</h2>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0]">
-                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider">Tenant</th>
-                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider">Plan</th>
-                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider">Status</th>
-                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider">Price</th>
-                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider w-[140px]">Quota Usage</th>
-                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider">Renewal</th>
-                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#E2E8F0]">
-              {tenantSubscriptions.map((sub) => (
-                <tr key={sub.id} className="hover:bg-[#F8FAFC]/70 transition-colors">
-                  <td className="px-3.5 py-2 text-xs font-semibold text-[#0F172A] whitespace-nowrap">{sub.tenant}</td>
-                  <td className="px-3.5 py-2 text-xs text-[#475569] whitespace-nowrap">{sub.plan}</td>
-                  <td className="px-3.5 py-2 whitespace-nowrap">
-                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${statusStyles[sub.status]}`}>
-                      {sub.status}
-                    </span>
-                  </td>
-                  <td className="px-3.5 py-2 text-xs font-semibold text-[#0F172A] whitespace-nowrap">{sub.price}</td>
-                  <td className="px-3.5 py-2 whitespace-nowrap">
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-16 h-1 bg-[#E2E8F0] rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full ${
-                            sub.usage >= 90 ? 'bg-[#EF4444]' : sub.usage >= 70 ? 'bg-[#F59E0B]' : 'bg-[#2563EB]'
-                          }`}
-                          style={{ width: `${sub.usage}%` }}
-                        />
-                      </div>
-                      <span className="text-[10px] text-[#94A3B8]">{sub.usage}%</span>
-                    </div>
-                  </td>
-                  <td className="px-3.5 py-2 text-xs text-[#475569] whitespace-nowrap">{sub.renewal}</td>
-                  <td className="px-3.5 py-2 whitespace-nowrap">
-                    <div className="flex items-center gap-2">
-                      <button className="text-xs font-semibold text-[#2563EB] hover:underline">Manage</button>
-                      <button className="text-xs font-semibold text-[#475569] hover:underline">Invoice</button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      {/* Invoices */}
+      {/* Businesses and the plan each is on */}
       <section className="bg-white border border-[#E2E8F0] rounded-lg shadow-2xs overflow-hidden">
         <div className="p-3 border-b border-[#E2E8F0]">
-          <h2 className="text-xs font-bold text-[#0F172A]">Recent Invoices</h2>
+          <h2 className="text-xs font-bold text-[#0F172A]">Business Subscriptions</h2>
+          <p className="text-[11px] text-[#64748B] mt-0.5">Which plan each business is on. Payments and invoices are not recorded yet, so none are shown.</p>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0]">
-                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider">Tenant</th>
-                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider">Invoice #</th>
-                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider">Amount</th>
-                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider">Status</th>
-                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider">Date</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#E2E8F0]">
-              {invoices.map((invoice) => (
-                <tr key={invoice.id} className="hover:bg-[#F8FAFC]/70 transition-colors">
-                  <td className="px-3.5 py-2 text-xs font-semibold text-[#0F172A] whitespace-nowrap">{invoice.tenant}</td>
-                  <td className="px-3.5 py-2 text-xs text-[#475569] whitespace-nowrap">{invoice.id}</td>
-                  <td className="px-3.5 py-2 text-xs font-semibold text-[#0F172A] whitespace-nowrap">{invoice.amount}</td>
-                  <td className="px-3.5 py-2 whitespace-nowrap">
-                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${statusStyles[invoice.status]}`}>
-                      {invoice.status}
-                    </span>
-                  </td>
-                  <td className="px-3.5 py-2 text-xs text-[#475569] whitespace-nowrap">{invoice.date}</td>
+        {subs === null ? (
+          <p className="p-4 text-xs text-[#94A3B8]">Loading...</p>
+        ) : subs.length === 0 ? (
+          <p className="p-4 text-xs text-[#94A3B8]">No businesses yet.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0]">
+                  {['Business', 'Plan', 'Status', 'Plan price', 'Minutes (30 days)'].map((h) => (
+                    <th key={h} className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider whitespace-nowrap">{h}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-[#E2E8F0]">
+                {subs.map((sub) => {
+                  const plan = plans.find((p) => p.key.toLowerCase() === sub.plan.toLowerCase());
+                  return (
+                    <tr key={sub.id} className="hover:bg-[#F8FAFC]/70">
+                      <td className="px-3.5 py-2 text-xs font-semibold text-[#0F172A] whitespace-nowrap">{sub.name}</td>
+                      <td className="px-3.5 py-2 text-xs text-[#475569] whitespace-nowrap">{plan ? plan.name : `${sub.plan} (no such plan)`}</td>
+                      <td className="px-3.5 py-2 text-xs text-[#475569] whitespace-nowrap capitalize">{sub.status}</td>
+                      <td className="px-3.5 py-2 text-xs text-[#475569] whitespace-nowrap">
+                        {plan ? `${money(plan.price, plan.currency)} / ${plan.cycle.toLowerCase()}${plan.customPricing ? ' (quoted)' : ''}` : '—'}
+                      </td>
+                      <td className="px-3.5 py-2 text-xs text-[#475569] whitespace-nowrap">{sub.minutes_30d}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
 
       {draft && (

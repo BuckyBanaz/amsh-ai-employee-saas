@@ -1,7 +1,7 @@
 "use client";
 import React from 'react';
 import Link from 'next/link';
-import { GlobalLoader } from '../common/GlobalLoader';
+import { ListSkeleton } from '../common/ShimmerSkeleton';
 
 export interface RecentConversationItem {
   id: string;
@@ -134,9 +134,7 @@ export function RecentAIConversations({ items, loading = false }: RecentAIConver
 
       {/* Conversation Feed List */}
       {loading ? (
-        <div className="py-6 flex items-center justify-center">
-          <GlobalLoader message="Streaming live conversations..." size="sm" />
-        </div>
+        <ListSkeleton count={4} />
       ) : (
         <div className="divide-y divide-gray-100 -mx-1">
           {conversations.slice(0, 4).map((item) => (

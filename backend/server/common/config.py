@@ -85,6 +85,9 @@ class Settings(BaseSettings):
     # Razorpay Payments
     RAZORPAY_KEY_ID: str | None = None
     RAZORPAY_KEY_SECRET: str | None = None
+    RAZORPAY_API_KEY: str | None = None
+    RAZORPAY_SECRET_KEY: str | None = None
+
 
 
 @lru_cache

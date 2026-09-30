@@ -3759,6 +3759,149 @@ class NaturalFillers(unittest.TestCase):
         self.assertFalse(load_all(factory, biz)[1].natural_fillers)
 
 
+class AdminOverview(unittest.TestCase):
+    """The admin dashboard's numbers: real calls only, revenue labelled as an estimate, health from the running server."""
+
+    def setUp(self):
+        from datetime import datetime, timedelta, timezone
+        from types import SimpleNamespace
+        from unittest.mock import patch
+
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from backend.scripts.create_platform_admin import create_platform_admin
+        from backend.server.api.routes import admin_overview
+        from backend.server.auth.security import create_access_token, hash_password
+        from backend.server.common import warmup
+        from backend.server.database.models.agent import Agent
+        from backend.server.database.models.audit_log import AuditLog
+        from backend.server.database.models.business import Business
+        from backend.server.database.models.call import Call
+        from backend.server.database.models.plan import Plan
+        from backend.server.database.models.transaction import Transaction
+        from backend.server.database.models.user import User
+        from backend.server.database.session import get_db
+
+        self.factory, self.biz = make_db_factory()  # the seeded clinic
+        app = FastAPI()
+        app.include_router(admin_overview.router)
+
+        def override():
+            with self.factory() as db:
+                yield db
+
+        app.dependency_overrides[get_db] = override
+        self.client = TestClient(app)
+        now = datetime.now(timezone.utc)
+        hours = lambda h: now - timedelta(hours=h)  # noqa: E731
+
+        def plan(key, price, cycle="monthly", currency="USD"):
+            return Plan(key=key, name=key.title(), status="active", kind="catalog", price=price, cycle=cycle, currency=currency, quotas={}, overage={}, features=[])
+
+        with self.factory() as db:
+            db.add_all([plan("starter", 99), plan("annual", 1200, cycle="yearly"), plan("rupees", 5000, currency="INR"), plan("freebie", 0)])
+            one = db.get(Business, self.biz)
+            one.status, one.plan = "active", "starter"
+            for bid, name, status, plan_key in (("b-annual", "Annual Clinic", "active", "annual"), ("b-inr", "Rupee Clinic", "active", "rupees"),
+                                                ("b-free", "Free Clinic", "active", "freebie"), ("b-susp", "Suspended Clinic", "suspended", "starter"),
+                                                ("b-pend", "Pending Clinic", "pending", "starter")):
+                db.add(Business(id=bid, name=name, status=status, plan=plan_key))
+            db.add(Agent(business_id="b-annual", name="Anna", status="active", config={}))
+            # real calls: 2 in the last 24h (one resolved, one failed), 1 in the previous 24h, 1 long ago in the month, 1 live
+            for cid, biz, ago, outcome, secs in (("CA1", self.biz, 2, "resolved", 120), ("CA2", self.biz, 3, "failed", 60), ("CA3", self.biz, 30, "resolved", 60),
+                                                 ("wa_x_91_20260901", "b-annual", 24 * 10, "resolved", 60), ("CA-live", self.biz, 1, "live", 0),
+                                                 ("CA-old", self.biz, 24 * 45, "resolved", 600)):
+                db.add(Call(id=cid, business_id=biz, caller_number="+911", outcome=outcome, duration_seconds=secs, started_at=hours(ago)))
+            for cid in ("studio_a", "webcall_b", "sim_c", "test_call_d"):  # playground tests never count
+                db.add(Call(id=cid, business_id=self.biz, caller_number="Anonymous", outcome="resolved", duration_seconds=300, started_at=hours(1)))
+            for ago in (2, 30, 24 * 10):
+                db.add(Transaction(business_id=self.biz, type="appointment", status="confirmed", details={}, created_at=hours(ago)))
+            db.add(AuditLog(action="admin.login", actor_email="root@amsh.ai", created_at=hours(5)))
+            db.add(AuditLog(action="admin.tenant_updated", actor_email="root@amsh.ai", created_at=hours(1)))
+            db.commit()
+            admin_user = create_platform_admin(db, "root@amsh.ai", "Root", "a-long-enough-pass")
+            db.add(User(email="owner@x.example", hashed_password=hash_password("x" * 10), name="Owner", scope="business", role="owner", business_id=self.biz))
+            db.commit()
+            owner = db.query(User).filter(User.email == "owner@x.example").one()
+            self.admin_h = {"Authorization": f"Bearer {create_access_token(admin_user.id)}"}
+            self.owner_h = {"Authorization": f"Bearer {create_access_token(owner.id)}"}
+
+        self.settings = dict(DEEPGRAM_API_KEY="k", CARTESIA_API_KEY="k", GROQ_API_KEY="k", RESEND_API_KEY=None, TWILIO_ACCOUNT_SID="sid",
+                             EXOTEL_ACCOUNT_SID=None, RAZORPAY_KEY_ID=None, RAZORPAY_KEY_SECRET=None)
+        self.state = SimpleNamespace(redis_ready=True, deepgram_ready=True, tts_ready=True, groq_ready=True, qdrant_ready=False)
+        for pt in (patch.object(admin_overview, "get_settings", lambda: SimpleNamespace(**self.settings)), patch.object(warmup, "state", self.state)):
+            pt.start()
+            self.addCleanup(pt.stop)
+
+    def _get(self):
+        r = self.client.get("/api/admin/overview", headers=self.admin_h)
+        self.assertEqual(r.status_code, 200)
+        return r.json()
+
+    def test_only_platform_admins(self):
+        self.assertIn(self.client.get("/api/admin/overview").status_code, (401, 403))
+        self.assertEqual(self.client.get("/api/admin/overview", headers=self.owner_h).status_code, 403)
+
+    def test_business_counts(self):
+        t = self._get()["tenants"]
+        self.assertEqual((t["total"], t["active"], t["pending"], t["suspended"], t["paused"]), (6, 4, 1, 1, 0))
+        self.assertEqual(t["with_ai"], 2)  # the seeded clinic's agent and Anna
+
+    def test_calls_count_patients_not_playground_tests(self):
+        c = self._get()["calls"]
+        self.assertEqual((c["last_24h"], c["previous_24h"]), (3, 1))  # CA1, CA2 and the live one; CA3 was 30 hours ago
+        self.assertEqual(c["last_30d"], 5)  # CA1, CA2, CA3, the WhatsApp chat, the live one; not the 45-day-old one, not the 4 tests
+        self.assertEqual(c["minutes_30d"], 5.0)  # 120 + 60 + 60 + 60 seconds
+        self.assertEqual((c["resolution_rate_30d"], c["resolution_sample"]), (75.0, 4))  # 3 of the 4 finished calls; the live call is not counted
+
+    def test_no_finished_calls_means_no_rate_not_zero(self):
+        from backend.server.database.models.call import Call
+
+        with self.factory() as db:
+            db.query(Call).delete()
+            db.commit()
+        c = self._get()["calls"]
+        self.assertEqual((c["last_30d"], c["resolution_rate_30d"], c["resolution_sample"]), (0, None, 0))
+
+    def test_appointments_booked(self):
+        a = self._get()["appointments"]
+        self.assertEqual((a["booked_24h"], a["previous_24h"], a["booked_30d"]), (1, 1, 3))
+
+    def test_revenue_is_an_estimate_from_active_plans_in_each_currency(self):
+        r = self._get()["revenue"]
+        self.assertEqual(r["monthly_estimate"], {"USD": 199.0, "INR": 5000.0})  # 99 + 1200 / 12; the free and suspended ones add nothing
+        self.assertEqual(r["paying_businesses"], 3)
+        self.assertIn("not recorded", r["basis"])
+
+    def test_top_businesses_are_active_and_ranked_by_real_calls(self):
+        top = self._get()["top_businesses"]
+        self.assertEqual(top[0]["id"], self.biz)
+        self.assertEqual((top[0]["calls_30d"], top[0]["appointments_30d"], top[0]["plan"]), (4, 3, "starter"))  # CA1, CA2, CA3 and the live one
+        self.assertNotIn("b-susp", [t["id"] for t in top])
+        self.assertNotIn("b-pend", [t["id"] for t in top])
+        self.assertTrue(top[0]["ai_name"])
+        anna = next(t for t in top if t["id"] == "b-annual")
+        self.assertEqual((anna["ai_name"], anna["calls_30d"]), ("Anna", 1))
+
+    def test_recent_activity_is_newest_first(self):
+        self.assertEqual([a["action"] for a in self._get()["recent_activity"]][:2], ["admin.tenant_updated", "admin.login"])
+
+    def test_health_reflects_the_running_server(self):
+        health = {h["name"].split(" (")[0]: h["status"] for h in self._get()["health"]}
+        self.assertEqual(health["API"], "operational")
+        self.assertEqual(health["Database"], "operational")
+        self.assertEqual(health["Speech-to-text"], "operational")
+        self.assertEqual(health["Knowledge search"], "degraded")  # Qdrant did not come up
+        self.assertEqual(health["Email"], "not_configured")
+        self.assertEqual(health["Payments"], "not_configured")
+        self.assertEqual(health["SMS"], "operational")
+        self.state.deepgram_ready = False
+        self.settings["RESEND_API_KEY"] = "key"
+        again = {h["name"].split(" (")[0]: h["status"] for h in self._get()["health"]}
+        self.assertEqual((again["Speech-to-text"], again["Email"]), ("degraded", "operational"))
+
+
 class OneQuestionRule(unittest.TestCase):
     def test_glued_sentences_are_split(self):
         s = SentenceSplitter()

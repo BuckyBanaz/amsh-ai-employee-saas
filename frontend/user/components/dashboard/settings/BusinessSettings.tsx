@@ -4,7 +4,7 @@ import { STRINGS } from '../../../utils/strings/en';
 
 import { DashboardController } from '../../../controllers/dashboard.controller';
 import { StorageService } from '../../../services/storage.service';
-import { GlobalLoader } from '../../../components/common/GlobalLoader';
+import { FormSkeleton } from '../../../components/common/ShimmerSkeleton';
 
 interface DaySchedule {
   day: string;
@@ -279,11 +279,7 @@ export function BusinessSettings({ focusDangerZone }: { focusDangerZone?: boolea
   };
 
   if (loading) {
-    return (
-      <div className="py-12">
-        <GlobalLoader message="Loading business configuration & profile..." />
-      </div>
-    );
+    return <FormSkeleton title="Loading business configuration & profile..." />;
   }
 
   return (

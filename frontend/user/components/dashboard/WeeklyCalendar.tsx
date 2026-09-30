@@ -1,7 +1,7 @@
 "use client";
 import React from 'react';
 import { AppointmentItem } from '../../controllers/dashboard.controller';
-import { GlobalLoader } from '../common/GlobalLoader';
+import { CalendarSkeleton } from '../common/ShimmerSkeleton';
 
 export interface DayInfo {
   dayName: string;
@@ -80,11 +80,7 @@ export function WeeklyCalendar({
   };
 
   if (isLoading) {
-    return (
-      <div className="bg-white border border-gray-100 rounded-xl shadow-2xs overflow-hidden">
-        <GlobalLoader message="Loading weekly appointments calendar..." size="lg" />
-      </div>
-    );
+    return <CalendarSkeleton />;
   }
 
   const daysToShow = weekDays.length > 0 ? weekDays : [];

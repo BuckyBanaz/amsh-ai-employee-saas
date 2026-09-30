@@ -12,7 +12,7 @@ import { AppointmentsTab } from '../../../components/dashboard/ai-tabs/Appointme
 import { EscalationTab } from '../../../components/dashboard/ai-tabs/EscalationTab';
 import { TestPlaygroundModal } from '../../../components/dashboard/TestPlaygroundModal';
 import { AIStudioWorkbench } from '../../../components/dashboard/ai-studio/AIStudioWorkbench';
-import { GlobalLoader } from '../../../components/common/GlobalLoader';
+import { FormSkeleton } from '../../../components/common/ShimmerSkeleton';
 
 function AIPageContent() {
   const searchParams = useSearchParams();
@@ -62,7 +62,7 @@ function AIPageContent() {
 
 export default function AIPage() {
   return (
-    <Suspense fallback={<GlobalLoader label="Loading AI Receptionist" sublabel="Synchronizing voice models & settings..." size="md" />}>
+    <Suspense fallback={<FormSkeleton title="Loading AI Studio..." />}>
       <AIPageContent />
     </Suspense>
   );

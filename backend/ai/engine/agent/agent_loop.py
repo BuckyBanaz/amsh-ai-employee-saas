@@ -60,6 +60,10 @@ _ENGLISH_FILLER = re.compile(
     r"\s*(?:sure|great|okay|ok|alright|perfect|awesome|absolutely|got it|of course|no problem|right|cool|nice)[!.,\s]*", re.IGNORECASE
 )
 _EMOJI = re.compile("[\U0001F000-\U0001FAFF\u2600-\u27BF\uFE0F\u200d]")
+_NO_REGREET_NOTE = (
+    "You already started answering this turn before that correction; do not greet or acknowledge again "
+    "(no new \"Sure\"/\"Got it\"/\"Right\"), just continue with the corrected content."
+)
 _LANGUAGE_RETRY_NOTE = (
     "Your draft reply was in English, but the caller is speaking Hindi. Write the whole reply again in Hindi (Devanagari if "
     "they wrote Devanagari), keeping only names and everyday English words like appointment or doctor. Do not switch to English."
@@ -197,6 +201,7 @@ class AgentEngine:
         self.fillers_on = fillers  # natural fillers ("hmm...", "one moment..."): spoken calls only, see agent/fillers.py
         self._last_filler_turn = -99
         self._wait_spoken = False
+        self._ack_used: set = set()  # acknowledgement words ("sure", "got it"...) already said this turn, see _speech
         self.channel = channel  # "voice" (phone call, playground) or "chat" (WhatsApp text)
         self.emotion = EmotionState()  # the caller's mood and how the voice should react (agent/emotion.py)
         self._mood_note: Optional[str] = None
@@ -269,6 +274,7 @@ class AgentEngine:
         self._mood_note = self.emotion.hear(utterance)
         self._reply_started = False
         self._wait_spoken = False
+        self._ack_used = set()
         asked = requested_language(utterance) or requested_language(normalize_hindi(utterance))
         if asked:
             self.language_pref = asked  # remembered for the rest of the call, until they ask for another language
@@ -368,6 +374,9 @@ class AgentEngine:
                                         continue
                                     if not check(sentence):
                                         break
+                                    sentence = self._dedupe_ack(sentence)
+                                    if not sentence:
+                                        continue
                                     for out in one_q.feed(sentence):
                                         first_ms = first_ms if first_ms is not None else elapsed()
                                         event = self._sentence_event(out)
@@ -394,6 +403,9 @@ class AgentEngine:
                         continue
                     if not check(sentence):
                         break
+                    sentence = self._dedupe_ack(sentence)
+                    if not sentence:
+                        continue
                     for out in one_q.feed(sentence):
                         first_ms = first_ms if first_ms is not None else elapsed()
                         event = self._sentence_event(out)
@@ -409,6 +421,8 @@ class AgentEngine:
                 if invented and all(x == "lang:hi" for x in invented):
                     logger.warning("Guard blocked an English reply to a Hindi-speaking caller")
                     lang_state["retried"] = True
+                    if spoken:
+                        guard_notes.append(_NO_REGREET_NOTE)
                     guard_notes.append(_LANGUAGE_RETRY_NOTE)
                     continue
                 invented[:] = [x for x in invented if x != "lang:hi"]
@@ -429,6 +443,8 @@ class AgentEngine:
                         notes.append(GUARD_NOTE.format(times=", ".join(times)))
                     if claimed:
                         notes.append(CLAIM_NOTE.format(kinds="/".join({"book": "booked or confirmed", "cancel": "cancelled", "reschedule": "rescheduled"}[k] for k in claimed)))
+                    if spoken:
+                        notes.append(_NO_REGREET_NOTE)
                     guard_notes.append(" ".join(notes))
                     continue  # same round: regenerate with the correction; nothing wrong was spoken
 
@@ -495,6 +511,25 @@ class AgentEngine:
         if cue or laugh:
             self._cues[out] = (cue, laugh)
         return out
+
+    def _dedupe_ack(self, sentence: str) -> str:
+        """A retry (the guard rejected a sentence and the model regenerated the round from scratch, or a new tool round
+        started) tends to open with the same acknowledgement again ("Sure!", "Got it"). Only the first one per turn is
+        kept; a repeat is stripped so the caller does not hear "Sure... Sure!... Got it..." stacked up. Called once per
+        real sentence, after `_speech` and the grounding guard, so re-processing the same text twice (the non-streaming
+        path runs `_speech` once on the whole reply, then again per split sentence) cannot double-count a word as used."""
+        m = _ENGLISH_FILLER.match(sentence)
+        if not m:
+            return sentence
+        key = re.sub(r"[^a-z]", "", m.group(0).lower())
+        if key not in self._ack_used:
+            self._ack_used.add(key)
+            return sentence
+        rest = sentence[m.end():].lstrip()
+        cue = self._cues.pop(sentence, None)
+        if rest and cue:
+            self._cues[rest] = cue
+        return rest
 
     def _sentence_event(self, sentence: str) -> Dict[str, Any]:
         """The sentence event for the voice layer: the words, plus how to say them (emotion, and a real laugh)."""

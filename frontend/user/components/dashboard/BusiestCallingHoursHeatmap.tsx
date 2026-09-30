@@ -1,7 +1,7 @@
 "use client";
 import React, { useState } from 'react';
 import { HeatmapData } from '../../controllers/analytics.controller';
-import { GlobalLoader } from '../common/GlobalLoader';
+import { ShimmerBlock } from '../common/ShimmerSkeleton';
 
 interface BusiestCallingHoursHeatmapProps {
   data?: HeatmapData;
@@ -63,8 +63,17 @@ export function BusiestCallingHoursHeatmap({ data, loading = false }: BusiestCal
 
       {/* State 1: Loading Progress State */}
       {loading ? (
-        <div className="flex-1 flex flex-col items-center justify-center py-4">
-          <GlobalLoader message="Calculating hourly call density..." size="sm" />
+        <div className="w-full overflow-x-auto scrollbar-hide py-3">
+          <div className="min-w-[580px] space-y-2">
+            {Array.from({ length: 5 }).map((_, r) => (
+              <div key={r} className="grid grid-cols-[48px_repeat(13,1fr)] gap-1.5 items-center">
+                <ShimmerBlock delay={((r % 4) + 1) as 1 | 2 | 3 | 4} className="h-3 w-8 rounded-md" />
+                {Array.from({ length: 13 }).map((_, c) => (
+                  <ShimmerBlock key={c} delay={(((r + c) % 4) + 1) as 1 | 2 | 3 | 4} className="h-6 w-full rounded-md opacity-70" />
+                ))}
+              </div>
+            ))}
+          </div>
         </div>
       ) : (
         /* Heatmap Grid */

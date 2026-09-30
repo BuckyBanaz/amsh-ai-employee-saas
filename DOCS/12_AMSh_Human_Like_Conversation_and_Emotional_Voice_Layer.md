@@ -1,5 +1,7 @@
 # AMSh — Human-Like Conversation & Emotional Voice Layer
 
+> **Status note (2026-09-28):** partly implemented: `backend/ai/engine/agent/emotion.py` (emotion cues, laughter) and `fillers.py` (natural fillers, hold-on lines). Unit-tested only; not yet listened to on a real call. See [`README.md`](README.md) and [`features_list.md`](features_list.md).
+
 This document details the design, behavioral guidelines, acoustic considerations, and dynamic emotional modulation engine for making **AMSh sound remarkably natural, empathetic, and professional** while maintaining 100% clinical truthfulness and deterministic business rules.
 
 ---

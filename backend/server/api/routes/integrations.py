@@ -100,6 +100,38 @@ def disconnect_integration(
 
 
 # -----------------------------------------------------------------------------
+# Tenant Dashboard Integrations Router (/api/businesses/{business_id}/integrations)
+# -----------------------------------------------------------------------------
+dashboard_router = APIRouter(prefix="/api/businesses/{business_id}/integrations", tags=["dashboard-integrations"])
+
+
+@dashboard_router.get("", response_model=list[IntegrationOut])
+def dashboard_list_integrations(business_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return list_integrations(business_id, db, current_user)
+
+
+@dashboard_router.post("/{provider}/connect", response_model=IntegrationOut)
+def dashboard_connect_integration(
+    business_id: str,
+    provider: str,
+    payload: IntegrationConnect,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return connect_integration(business_id, provider, payload, db, current_user)
+
+
+@dashboard_router.post("/{provider}/disconnect", response_model=IntegrationOut)
+def dashboard_disconnect_integration(
+    business_id: str,
+    provider: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return disconnect_integration(business_id, provider, db, current_user)
+
+
+# -----------------------------------------------------------------------------
 # Meta WhatsApp Embedded Signup (Coexistence: keep existing WhatsApp Business App number)
 # -----------------------------------------------------------------------------
 import secrets

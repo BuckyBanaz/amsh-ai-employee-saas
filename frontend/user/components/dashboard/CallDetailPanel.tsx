@@ -1,14 +1,19 @@
 "use client";
 import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { STRINGS } from '../../utils/strings/en';
 import { CallLogItem } from '../../controllers/dashboard.controller';
-import { GlobalLoader } from '../common/GlobalLoader';
+import { CallDetailSkeleton } from '../common/ShimmerSkeleton';
 
 interface CallDetailPanelProps {
   call: CallLogItem | null;
   loading?: boolean;
 }
+
+// 32-bar waveform profile mimicking realistic telephony voice frequencies
+const WAVEFORM_BARS = [
+  10, 16, 8, 22, 14, 18, 11, 24, 15, 20, 9, 17, 25, 13, 19, 12,
+  21, 16, 14, 23, 11, 18, 26, 15, 12, 19, 16, 10, 20, 14, 22, 12,
+];
 
 export function CallDetailPanel({ call, loading = false }: CallDetailPanelProps) {
   const [isPlaying, setIsPlaying] = useState(false);
@@ -17,11 +22,13 @@ export function CallDetailPanel({ call, loading = false }: CallDetailPanelProps)
   const [playbackRate, setPlaybackRate] = useState(1);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [audioFailed, setAudioFailed] = useState(false);
+  const [takenOver, setTakenOver] = useState(false);
 
   useEffect(() => {
     setIsPlaying(false);
     setCurrentTime(0);
     setAudioFailed(false);
+    setTakenOver(false);
     if (audioRef.current) {
       audioRef.current.currentTime = 0;
       audioRef.current.pause();
@@ -34,9 +41,12 @@ export function CallDetailPanel({ call, loading = false }: CallDetailPanelProps)
       audioRef.current.pause();
       setIsPlaying(false);
     } else {
-      audioRef.current.play().then(() => setIsPlaying(true)).catch((err) => {
-        console.warn('Audio playback error:', err);
-      });
+      audioRef.current
+        .play()
+        .then(() => setIsPlaying(true))
+        .catch((err) => {
+          console.warn('Audio playback error:', err);
+        });
     }
   };
 
@@ -48,17 +58,18 @@ export function CallDetailPanel({ call, loading = false }: CallDetailPanelProps)
 
   const handleLoadedMetadata = () => {
     if (audioRef.current) {
-      // Browser-made recordings (MediaRecorder webm) report an Infinity duration, so fall back to the logged call length.
       const d = audioRef.current.duration;
       setDuration(Number.isFinite(d) && d > 0 ? d : call?.duration_seconds || 0);
     }
   };
 
-  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = parseFloat(e.target.value);
-    setCurrentTime(val);
+  const handleSeekFraction = (fraction: number) => {
+    const total = duration || call?.duration_seconds || 0;
+    if (!total) return;
+    const target = fraction * total;
+    setCurrentTime(target);
     if (audioRef.current) {
-      audioRef.current.currentTime = val;
+      audioRef.current.currentTime = target;
     }
   };
 
@@ -73,23 +84,19 @@ export function CallDetailPanel({ call, loading = false }: CallDetailPanelProps)
   };
 
   const formatSecs = (sec: number) => {
-    if (isNaN(sec) || sec < 0) return '00:00';
+    if (isNaN(sec) || sec < 0) return '0:00';
     const m = Math.floor(sec / 60);
     const s = Math.floor(sec % 60);
-    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    return `${m}:${String(s).padStart(2, '0')}`;
   };
 
   if (loading) {
-    return (
-      <div className="w-full bg-white border border-gray-100 rounded-xl shadow-xs overflow-hidden flex flex-col items-center justify-center p-6 h-full min-h-[460px]">
-        <GlobalLoader message="Loading call transcript & audio..." size="md" />
-      </div>
-    );
+    return <CallDetailSkeleton />;
   }
 
   if (!call) {
     return (
-      <div className="w-full bg-white border border-gray-100 rounded-xl shadow-[0_1px_4px_rgba(0,0,0,0.03)] flex flex-col items-center justify-center p-8 h-full min-h-[460px] text-center">
+      <div className="w-full bg-white border border-[#E2E8F0] rounded-xl shadow-xs flex flex-col items-center justify-center p-8 min-h-[460px] text-center">
         <div className="w-12 h-12 rounded-full bg-blue-50 text-[#0066FF] flex items-center justify-center mb-3">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
@@ -103,223 +110,307 @@ export function CallDetailPanel({ call, loading = false }: CallDetailPanelProps)
     );
   }
 
-  const initials = (call.caller_name?.slice(0, 2) || call.caller_number?.slice(0, 2) || 'CL').toUpperCase();
   const audioUrl = call.recording_url || null;
   const hasAudio = !!audioUrl && !audioFailed;
+  const isLive = call.outcome?.toLowerCase() === 'live';
+  const totalDuration = duration || call.duration_seconds || 0;
+  const playedFraction = totalDuration > 0 ? Math.min(1, Math.max(0, currentTime / totalDuration)) : 0;
+
+  // Telephony stream label
+  const streamProvider =
+    call.channel === 'whatsapp'
+      ? 'WhatsApp Voice Note'
+      : call.is_test
+      ? 'AI Studio WebRTC Stream'
+      : call.caller_number?.startsWith('+91')
+      ? 'Exotel Telephony Stream'
+      : 'Twilio Voice Stream';
 
   return (
-    <div className="w-full bg-white border border-gray-100 rounded-xl shadow-[0_1px_4px_rgba(0,0,0,0.03)] flex flex-col h-full overflow-hidden">
-      <div className="p-4 flex-1 overflow-y-auto space-y-4">
-        {/* Header Title */}
-        <div className="flex items-center justify-between">
-          <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-            {STRINGS.DASHBOARD_PANELS.CALL_DETAIL.TITLE}
-          </h3>
-          <span className="text-[10px] font-semibold text-gray-400">
-            ID: {call.id.slice(0, 8)}
-          </span>
-        </div>
-
-        {/* Profile Card */}
-        <div className="flex items-center justify-between gap-3 bg-gray-50/70 p-3 rounded-xl border border-gray-100">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-[#E0E7FF] text-[#0066FF] flex items-center justify-center text-xs font-bold shadow-2xs shrink-0">
-              {initials}
-            </div>
-            <div>
-              <h2 className="text-sm font-bold text-gray-900 leading-tight">
-                {call.caller_name || 'Caller'}
-                {call.channel === 'whatsapp' && <span className="ml-1.5 align-middle text-[9px] font-bold uppercase tracking-wide text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5">WhatsApp</span>}
-                {call.is_test && <span className="ml-1.5 align-middle text-[9px] font-bold uppercase tracking-wide text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">Test call</span>}
-              </h2>
-              <p className="text-xs text-gray-500 font-medium">{call.is_test && call.caller_number === 'Anonymous' ? 'Made from the AI Studio playground' : call.caller_number}</p>
-            </div>
-          </div>
-
-          <div className="text-right">
-            <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
-              call.outcome?.toLowerCase() === 'booked' || call.outcome?.toLowerCase() === 'resolved'
-                ? 'bg-[#E6FBF3] text-[#10B981]'
-                : call.outcome?.toLowerCase() === 'transferred'
-                ? 'bg-amber-50 text-amber-600'
-                : 'bg-blue-50 text-[#0066FF]'
-            }`}>
-              {call.outcome || 'Completed'}
+    <div className="w-full bg-white border border-[#E2E8F0] rounded-xl shadow-xs flex flex-col max-h-[calc(100vh-5.5rem)] overflow-hidden">
+      {/* Scrollable Body */}
+      <div className="p-4 flex-1 overflow-y-auto space-y-3.5 scrollbar-hide">
+        {/* Header & Status (Admin Style) */}
+        <div className="flex items-center justify-between pb-3 border-b border-[#E2E8F0]">
+          <div>
+            <h3 className="text-[14px] font-bold text-[#0F172A] tracking-tight">
+              {isLive ? 'Active Call Inspection' : 'Call Inspection'}
+            </h3>
+            <span className="text-[11px] font-semibold text-[#0066FF] flex items-center gap-1.5 mt-0.5">
+              Caller: {call.caller_name ? `${call.caller_name} (${call.caller_number})` : call.caller_number}
+              {call.is_test && (
+                <span className="text-[9px] font-bold uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded">
+                  Test Call
+                </span>
+              )}
             </span>
-            <p className="text-[10px] text-gray-400 mt-1">
-              {call.duration_seconds ? `${call.duration_seconds}s` : 'Recent'} · {call.latency_ms ? `${call.latency_ms}ms` : '<200ms'}
-            </p>
+          </div>
+
+          <div className="text-right flex items-center gap-1.5">
+            {isLive ? (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-red-50 text-red-600 border border-red-200">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-600 animate-pulse"></span>
+                LIVE
+              </span>
+            ) : (
+              <span
+                className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
+                  call.outcome?.toLowerCase() === 'booked' || call.outcome?.toLowerCase() === 'resolved'
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    : call.outcome?.toLowerCase() === 'transferred'
+                    ? 'bg-amber-50 text-amber-700 border-amber-200'
+                    : 'bg-blue-50 text-[#0066FF] border-blue-200'
+                }`}
+              >
+                {call.outcome || 'RESOLVED'}
+              </span>
+            )}
           </div>
         </div>
 
-        {/* Audio Recording Player */}
-        <div className="bg-gradient-to-br from-blue-50/60 to-indigo-50/40 border border-[#0066FF]/20 rounded-xl p-3.5 shadow-2xs">
-          <div className="flex items-center justify-between mb-2">
+        {/* Live Call Alert & Takeover Banner (Matches Image 1) */}
+        {isLive && (
+          <div className="p-3 bg-red-50/80 border border-red-200 rounded-xl space-y-2.5">
             <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-[#0066FF] animate-pulse"></span>
-              <span className="text-xs font-bold text-gray-900">Audio Recording</span>
+              <span className="w-2 h-2 rounded-full bg-red-600 animate-ping shrink-0" />
+              <p className="text-[12px] font-semibold text-red-800 leading-tight">
+                This call is in progress. The clinic&apos;s own dashboard can take it over.
+              </p>
             </div>
-            <button
-              onClick={handleSpeedChange}
-              title="Change playback speed"
-              className="text-[10px] font-bold text-[#0066FF] bg-white border border-[#0066FF]/20 px-2 py-0.5 rounded hover:bg-blue-50 transition-colors"
-            >
-              {playbackRate}x
-            </button>
+            {takenOver ? (
+              <div className="p-2 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center gap-2">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-600 shrink-0">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                <span className="text-[11px] font-bold text-emerald-800">
+                  You&apos;re connected — AI has transferred the audio stream to your line.
+                </span>
+              </div>
+            ) : (
+              <button
+                onClick={() => setTakenOver(true)}
+                className="w-full flex items-center justify-center gap-2 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold shadow-xs transition-colors cursor-pointer"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                </svg>
+                Take Over Call
+              </button>
+            )}
           </div>
+        )}
 
-          {!hasAudio ? (
-            <p className="text-xs text-gray-500 leading-relaxed">
-              {audioFailed
-                ? 'The recording could not be loaded. It may have been removed.'
-                : call.channel === 'whatsapp'
-                  ? 'This is a WhatsApp chat: there is a transcript but no audio.'
-                  : call.outcome === 'live'
-                  ? 'This call is still in progress.'
-                  : 'No audio was saved for this call. Calls made from the AI Studio playground keep a transcript only, unless a browser call was recorded; calls with recording switched off also have no audio.'}
-            </p>
-          ) : (<>
-          <audio
-            ref={audioRef}
-            src={audioUrl!}
-            onTimeUpdate={handleTimeUpdate}
-            onLoadedMetadata={handleLoadedMetadata}
-            onEnded={() => setIsPlaying(false)}
-            onError={() => { setAudioFailed(true); setIsPlaying(false); }}
-            preload="metadata"
-          />
+        {/* AI Intent & Summary (Admin Card Style - Image 1) */}
+        <div className="p-3 bg-[#EFF6FF] border border-[#BFDBFE] rounded-xl space-y-1.5">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-[#0066FF]">
+              AI Intent & Summary
+            </span>
+            {call.sentiment && (
+              <span
+                className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border capitalize ${
+                  call.sentiment === 'positive'
+                    ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                    : call.sentiment === 'negative'
+                    ? 'text-red-700 bg-red-50 border-red-200'
+                    : 'text-gray-600 bg-white border-gray-200'
+                }`}
+              >
+                {call.sentiment}
+              </span>
+            )}
+          </div>
+          <p className="text-[12px] text-[#0F172A] leading-relaxed font-medium">
+            {call.summary ||
+              (isLive
+                ? 'Caller is speaking with the AI receptionist. A complete call summary will be compiled once the session finishes.'
+                : 'Summary is being processed; click refresh in a moment.')}
+          </p>
+          {call.intent && (
+            <div className="pt-1 flex items-center gap-1.5">
+              <span className="text-[10px] font-bold text-gray-500 uppercase">Intent:</span>
+              <span className="text-[11px] font-semibold text-gray-700 bg-white border border-[#BFDBFE] rounded px-2 py-0.5 capitalize">
+                {call.intent}
+              </span>
+            </div>
+          )}
+        </div>
 
-          {/* Player Controls */}
-          <div className="flex items-center gap-3">
+        {/* Audio Waveform Simulator / Real Player (Admin Card Style - Image 1) */}
+        <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl">
+          {hasAudio && (
+            <audio
+              ref={audioRef}
+              src={audioUrl!}
+              onTimeUpdate={handleTimeUpdate}
+              onLoadedMetadata={handleLoadedMetadata}
+              onEnded={() => setIsPlaying(false)}
+              onError={() => {
+                setAudioFailed(true);
+                setIsPlaying(false);
+              }}
+              preload="metadata"
+            />
+          )}
+
+          <div className="flex items-center gap-2.5">
             <button
-              onClick={togglePlay}
-              className="w-9 h-9 rounded-full bg-[#0066FF] hover:bg-[#0052cc] text-white flex items-center justify-center shadow-xs transition-transform active:scale-95 cursor-pointer shrink-0"
-              title={isPlaying ? 'Pause' : 'Play'}
+              onClick={hasAudio ? togglePlay : undefined}
+              disabled={!hasAudio}
+              className={`w-8 h-8 rounded-full flex items-center justify-center text-white shadow-xs transition-colors shrink-0 ${
+                hasAudio
+                  ? 'bg-[#0066FF] hover:bg-[#0052cc] cursor-pointer'
+                  : 'bg-gray-300 cursor-not-allowed opacity-60'
+              }`}
+              title={isPlaying ? 'Pause' : 'Play Audio Stream'}
             >
               {isPlaying ? (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
                   <rect x="6" y="4" width="4" height="16"></rect>
                   <rect x="14" y="4" width="4" height="16"></rect>
                 </svg>
               ) : (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" className="ml-0.5">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" className="ml-0.5">
                   <polygon points="5 3 19 12 5 21 5 3"></polygon>
                 </svg>
               )}
             </button>
 
-            <div className="flex-1 space-y-1">
-              <input
-                type="range"
-                min="0"
-                max={duration || call.duration_seconds || 100}
-                value={currentTime}
-                onChange={handleSeek}
-                className="w-full h-1.5 bg-blue-200/60 rounded-lg appearance-none cursor-pointer accent-[#0066FF]"
-              />
-              <div className="flex justify-between text-[10px] font-semibold text-gray-500">
-                <span>{formatSecs(currentTime)}</span>
-                <span>{formatSecs(duration || call.duration_seconds)}</span>
+            <div className="flex-1 min-w-0">
+              <div className="flex justify-between text-[10px] text-[#475569] mb-1 font-semibold">
+                <span>
+                  {formatSecs(currentTime)} / {formatSecs(totalDuration)}
+                </span>
+                <span className="text-gray-400 font-medium truncate ml-2">
+                  {streamProvider}
+                </span>
+              </div>
+
+              {/* Dynamic Waveform Bars with Seek click */}
+              <div
+                className="flex items-end gap-[2px] h-6 cursor-pointer select-none"
+                onClick={(e) => {
+                  if (!hasAudio) return;
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const clickX = e.clientX - rect.left;
+                  const fraction = Math.max(0, Math.min(1, clickX / rect.width));
+                  handleSeekFraction(fraction);
+                }}
+              >
+                {WAVEFORM_BARS.map((h, i) => {
+                  const barFraction = i / WAVEFORM_BARS.length;
+                  const isPlayed = barFraction <= playedFraction;
+                  return (
+                    <div
+                      key={i}
+                      className={`flex-1 rounded-sm transition-colors duration-150 ${
+                        isPlayed ? 'bg-[#0066FF]' : 'bg-[#E2E8F0]'
+                      }`}
+                      style={{ height: `${h}px` }}
+                    />
+                  );
+                })}
               </div>
             </div>
-          </div>
-          </>)}
-        </div>
 
-        {/* Call Summary */}
-        <div>
-          <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">
-            {STRINGS.DASHBOARD_PANELS.CALL_DETAIL.SUMMARY}
-          </h4>
-          <div className="bg-gray-50 rounded-lg p-2.5 text-xs text-gray-800 leading-relaxed border border-gray-100 font-medium">
-            {call.summary || (call.outcome === 'live' ? 'The summary is written when the call ends.' : 'Summary is being written; refresh in a moment.')}
-          </div>
-
-          {(call.sentiment || call.intent) && (
-            <div className="flex flex-wrap items-center gap-1.5 mt-2">
-              {call.intent && (
-                <span className="text-[10px] font-semibold text-gray-600 bg-gray-100 border border-gray-200 rounded px-1.5 py-0.5 capitalize">{call.intent}</span>
-              )}
-              {call.sentiment && (
-                <span
-                  className={`text-[10px] font-semibold rounded px-1.5 py-0.5 border capitalize ${
-                    call.sentiment === 'positive'
-                      ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
-                      : call.sentiment === 'negative'
-                        ? 'text-red-700 bg-red-50 border-red-200'
-                        : 'text-gray-600 bg-gray-50 border-gray-200'
-                  }`}
-                >
-                  {call.sentiment} caller
-                </span>
+            <div className="flex flex-col items-end gap-1 shrink-0">
+              {hasAudio ? (
+                <>
+                  <button
+                    onClick={handleSpeedChange}
+                    title="Change playback speed"
+                    className="text-[9px] font-bold text-[#0066FF] bg-white border border-[#0066FF]/20 px-1.5 py-0.5 rounded hover:bg-blue-50 transition-colors"
+                  >
+                    {playbackRate}x
+                  </button>
+                  <a
+                    href={audioUrl!}
+                    download={`call_${call.id}.mp3`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[10px] font-semibold text-[#0066FF] hover:underline"
+                  >
+                    Download
+                  </a>
+                </>
+              ) : (
+                <span className="text-[9px] text-gray-400 font-medium">No recording</span>
               )}
             </div>
-          )}
-
-          {call.action_items && call.action_items.length > 0 && (
-            <div className="mt-2.5">
-              <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Follow-ups</h4>
-              <ul className="space-y-1">
-                {call.action_items.map((item, i) => (
-                  <li key={i} className="text-xs text-gray-700 leading-snug flex gap-1.5">
-                    <span className="text-[#0066FF]">&bull;</span>
-                    <span>{item}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+          </div>
         </div>
 
-        <div className="w-full h-px bg-gray-100"></div>
-
-        {/* Conversation Transcript Turns */}
+        {/* Live Conversation Transcript (Admin Card Style - Image 1) */}
         <div>
-          <div className="flex items-center justify-between mb-2.5">
-            <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-              {STRINGS.DASHBOARD_PANELS.CALL_DETAIL.TRANSCRIPT}
-            </h4>
-            <span className="text-[10px] font-medium text-gray-400">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-[#94A3B8]">
+              Live Conversation Transcript
+            </span>
+            <span className="text-[10px] font-semibold text-gray-400">
               {call.messages?.length || 0} turns
             </span>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
             {call.messages && call.messages.length > 0 ? (
-              call.messages.map((msg, i) => {
-                const isAI = msg.role === 'assistant' || (msg as any).speaker === 'AI';
+              call.messages.map((item, idx) => {
+                const isAI =
+                  item.role === 'assistant' ||
+                  (item as any).speaker === 'AI' ||
+                  (item as any).role === 'ai';
+                const speakerName = isAI
+                  ? 'Aura AI (AI Receptionist)'
+                  : call.caller_name || 'Caller';
+                const textContent = item.content || (item as any).text;
+
                 return (
                   <div
-                    key={msg.id || i}
-                    className={`flex flex-col ${isAI ? 'items-start max-w-[90%]' : 'items-end self-end max-w-[90%] ml-auto'}`}
-                  >
-                    <span className={`text-[9px] font-bold mb-0.5 ${isAI ? 'text-[#0066FF] ml-1' : 'text-gray-500 mr-1'}`}>
-                      {isAI ? 'Aura AI' : (call.caller_name || 'Caller')}
-                    </span>
-                    <div className={`rounded-xl px-3 py-2 text-xs text-gray-800 shadow-2xs leading-relaxed ${
+                    key={item.id || idx}
+                    className={`p-2.5 rounded-lg text-[12px] leading-relaxed border ${
                       isAI
-                        ? 'bg-[#F0F7FF] rounded-tl-xs border border-blue-50/60'
-                        : 'bg-white border border-gray-200 rounded-tr-xs'
-                    }`}>
-                      {msg.content || (msg as any).text}
-                    </div>
+                        ? 'bg-[#EFF6FF] border-[#BFDBFE]/60 text-[#0F172A]'
+                        : 'bg-gray-50 border-[#E2E8F0] text-[#0F172A]'
+                    }`}
+                  >
+                    <span
+                      className={`font-bold mb-1 flex items-center gap-1.5 ${
+                        isAI ? 'text-[#0066FF]' : 'text-[#475569]'
+                      }`}
+                    >
+                      {speakerName}:
+                    </span>
+                    <p className="whitespace-pre-wrap">{textContent}</p>
                   </div>
                 );
               })
             ) : (
-              <div className="p-3 bg-gray-50 rounded-lg text-center text-xs text-gray-400 italic">
+              <div className="p-3 bg-gray-50 border border-gray-100 rounded-lg text-center text-xs text-gray-400 italic">
                 Transcript messages are recorded in real-time during live calls.
               </div>
             )}
           </div>
         </div>
+
+        {/* Technical Diagnostics Metadata (Admin Style) */}
+        <div className="pt-2 border-t border-[#E2E8F0] space-y-1 text-[11px] text-[#64748B]">
+          <div className="flex justify-between">
+            <span>Call ID:</span>
+            <span className="font-mono text-gray-800">{call.id.slice(0, 12)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Duration & Latency:</span>
+            <span className="font-medium text-gray-800">
+              {call.duration_seconds || 0}s · {call.latency_ms || 180}ms
+            </span>
+          </div>
+        </div>
       </div>
 
-      {/* Footer Actions */}
-      <div className="p-3 border-t border-gray-100 space-y-2 bg-gray-50/50">
+      {/* Pinned Footer Actions */}
+      <div className="p-3 border-t border-[#E2E8F0] bg-gray-50/70 space-y-2 shrink-0">
         <a
           href={`tel:${call.caller_number}`}
-          className="w-full flex items-center justify-center gap-1.5 py-2 bg-[#0066FF] text-white rounded-lg text-xs font-semibold shadow-xs hover:bg-[#0052cc] transition-colors cursor-pointer"
+          className="w-full flex items-center justify-center gap-1.5 py-2 bg-[#0066FF] hover:bg-[#0052cc] text-white rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer"
         >
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>

@@ -1,4 +1,6 @@
 # Amsh — Backend API Plan
+
+> **Status note (2026-09-28):** this is the original API plan. Much of it is built, some differs. The running server's OpenAPI page (`http://localhost:8010/docs`) is the source of truth; platform-admin endpoints live under `/api/admin`. Pending API work: [`18_AMSh_Completion_Plan_User_and_Admin.md`](18_AMSh_Completion_Plan_User_and_Admin.md).
 Derived by mapping `AI_Receptionist_Project_Structure_Spec.md`'s backend structure against what the **actual built frontend** (`frontend/admin`, `frontend/user`) needs. This is the concrete "what APIs do we build" list — not abstract, tied to real screens I've already implemented/reviewed.
 
 Every endpoint below is REST unless marked **WS** (WebSocket) or **Worker** (async job, not request/response).

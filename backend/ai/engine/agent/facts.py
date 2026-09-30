@@ -124,6 +124,8 @@ def load_facts(db: Session, business_id: str) -> BusinessFacts:
         address=business.address or "",
         phone=business.business_phone or "",
         city=business.city or "",
+        country=business.country or "",
+        vertical=business.vertical or "clinic",
         slot_minutes=min(max(min(durations), 15), 60) if durations else DEFAULT_SLOT_MINUTES,
     )
 

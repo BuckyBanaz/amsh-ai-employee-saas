@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { STRINGS } from '../../utils/strings/en';
 import { KnowledgeItem } from '../../controllers/dashboard.controller';
-import { GlobalLoader } from '../common/GlobalLoader';
+import { TableSkeleton } from '../common/ShimmerSkeleton';
 
 interface KnowledgeTableProps {
   items: KnowledgeItem[];
@@ -113,7 +113,11 @@ export function KnowledgeTable({
       {/* Table Content */}
       <div className="overflow-x-auto scrollbar-hide flex-1">
         {loading ? (
-          <GlobalLoader message="Loading knowledge base & RAG documents..." size="md" />
+          <TableSkeleton
+            rows={5}
+            headers={["SOURCE", "TYPE", "STATUS", "SYNCED", "ACTIONS"]}
+            statusMessage="Syncing knowledge base & vector embeddings..."
+          />
         ) : filteredItems.length === 0 ? (
           <div className="flex flex-col items-center justify-center p-12 text-center">
             <div className="w-12 h-12 rounded-full bg-blue-50 text-[#0066FF] flex items-center justify-center mb-3">

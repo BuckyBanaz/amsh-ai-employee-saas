@@ -5,12 +5,14 @@ import { Sidebar } from '../../components/dashboard/Sidebar';
 import { StorageService } from '../../services/storage.service';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const [mounted, setMounted] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [businessName, setBusinessName] = useState<string>('My Business');
   const [initials, setInitials] = useState<string>('BO');
   const [logo, setLogo] = useState<string | null>(null);
 
   React.useEffect(() => {
+    setMounted(true);
     const refreshData = () => {
       const cachedB = StorageService.getBusiness();
       const localLogo = typeof window !== 'undefined' ? localStorage.getItem('business_logo') : null;
@@ -72,7 +74,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <span className="text-xs font-semibold text-gray-600 truncate max-w-[120px] sm:max-w-[180px]">
               {businessName}
             </span>
-            {logo ? (
+            {mounted && logo ? (
               <img src={logo} alt="Logo" className="w-7 h-7 rounded-full object-cover border border-gray-200" />
             ) : (
               <div className="w-7 h-7 rounded-full bg-[#E0E7FF] text-[#0066FF] flex items-center justify-center text-xs font-bold">

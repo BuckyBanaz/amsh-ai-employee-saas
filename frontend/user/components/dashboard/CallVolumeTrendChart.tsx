@@ -1,7 +1,7 @@
 "use client";
 import React, { useState } from 'react';
 import { VolumeTrendPoint } from '../../controllers/analytics.controller';
-import { GlobalLoader } from '../common/GlobalLoader';
+import { ChartSkeleton } from '../common/ShimmerSkeleton';
 
 interface CallVolumeTrendChartProps {
   data?: VolumeTrendPoint[];
@@ -72,9 +72,7 @@ export function CallVolumeTrendChart({ data, loading = false }: CallVolumeTrendC
 
       {/* State 1: Loading Progress State */}
       {loading ? (
-        <div className="flex-1 flex flex-col items-center justify-center py-4">
-          <GlobalLoader message="Loading call volume & performance trends..." size="sm" />
-        </div>
+        <ChartSkeleton height="h-40" />
       ) : points.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center py-8 text-center my-auto">
           <p className="text-xs font-bold text-gray-800">No trend data available for this range</p>

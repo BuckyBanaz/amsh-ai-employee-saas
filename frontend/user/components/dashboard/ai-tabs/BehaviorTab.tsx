@@ -2,13 +2,14 @@
 import React, { useEffect, useState } from 'react';
 import { STRINGS } from '../../../utils/strings/en';
 import { DashboardController, AgentItem } from '../../../controllers/dashboard.controller';
-import { GlobalLoader } from '../../common/GlobalLoader';
+import { FormSkeleton } from '../../common/ShimmerSkeleton';
 
 export function BehaviorTab() {
   const content = STRINGS.DASHBOARD.COMPONENTS.AI_TABS_CONTENT.BEHAVIOR;
   
   const [agentName, setAgentName] = useState('Sarah');
   const [prompt, setPrompt] = useState(content.PROMPT.DEFAULT);
+  const [complianceInfo, setComplianceInfo] = useState<any>(null);
   const [temperature, setTemperature] = useState(20);
   const [allowSmallTalk, setAllowSmallTalk] = useState(true);
   const [requireConfirmation, setRequireConfirmation] = useState(true);
@@ -32,7 +33,12 @@ export function BehaviorTab() {
       .then((agent: AgentItem) => {
         if (agent) {
           if (agent.name) setAgentName(agent.name);
-          if (agent.config?.system_prompt) setPrompt(agent.config.system_prompt);
+          if (agent.config?.compliance) setComplianceInfo(agent.config.compliance);
+          if (agent.config?.system_prompt) {
+            setPrompt(agent.config.system_prompt);
+          } else if (agent.config?.compliance?.default_system_prompt) {
+            setPrompt(agent.config.compliance.default_system_prompt);
+          }
           if (agent.config?.temperature !== undefined) setTemperature(agent.config.temperature);
           if (agent.config?.toggles?.small_talk !== undefined) setAllowSmallTalk(agent.config.toggles.small_talk);
           if (agent.config?.toggles?.confirm !== undefined) setRequireConfirmation(agent.config.toggles.confirm);
@@ -88,11 +94,7 @@ export function BehaviorTab() {
   };
 
   if (loading) {
-    return (
-      <div className="bg-white border border-gray-100 rounded-xl p-8 shadow-xs flex items-center justify-center min-h-[300px]">
-        <GlobalLoader message="Loading AI persona and behavior configuration..." size="md" />
-      </div>
-    );
+    return <FormSkeleton title="Loading AI persona and behavior configuration..." />;
   }
 
   return (
@@ -127,14 +129,28 @@ export function BehaviorTab() {
 
           {/* System Prompt */}
           <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1.5">{content.PROMPT.LABEL}</label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs font-semibold text-gray-700">{content.PROMPT.LABEL}</label>
+              {complianceInfo?.framework && (
+                <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-700">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                  </svg>
+                  {complianceInfo.framework} ({complianceInfo.region})
+                </span>
+              )}
+            </div>
             <textarea 
               className="w-full border border-gray-200 rounded-lg p-2.5 text-xs text-gray-800 min-h-[110px] focus:outline-none focus:border-[#0066FF] focus:ring-1 focus:ring-[#0066FF] transition-all leading-relaxed"
-              placeholder={content.PROMPT.PLACEHOLDER}
+              placeholder={complianceInfo?.default_system_prompt || content.PROMPT.PLACEHOLDER}
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
             ></textarea>
-            <p className="text-[10px] text-gray-400 mt-1">{content.PROMPT.HINT}</p>
+            <p className="text-[10px] text-gray-400 mt-1">
+              {complianceInfo?.emergency_code
+                ? `Emergency Protocol: ${complianceInfo.emergency_code} · ${content.PROMPT.HINT}`
+                : content.PROMPT.HINT}
+            </p>
           </div>
 
           <div className="h-px bg-gray-100 w-full"></div>

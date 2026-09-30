@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { DashboardController, AgentItem } from '../../../controllers/dashboard.controller';
-import { GlobalLoader } from '../../common/GlobalLoader';
+import { FormSkeleton } from '../../common/ShimmerSkeleton';
 
 export function AppointmentsTab() {
   const [bufferMinutes, setBufferMinutes] = useState(15);
@@ -59,11 +59,7 @@ export function AppointmentsTab() {
   };
 
   if (loading) {
-    return (
-      <div className="bg-white border border-gray-100 rounded-xl p-8 shadow-xs flex items-center justify-center min-h-[300px]">
-        <GlobalLoader message="Loading appointment scheduling rules..." size="md" />
-      </div>
-    );
+    return <FormSkeleton title="Loading appointment scheduling rules..." />;
   }
 
   return (

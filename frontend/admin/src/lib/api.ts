@@ -200,3 +200,94 @@ export const fetchTenant = (id: string) => adminFetch<TenantDetail>(`/admin/tena
 
 export const fetchTenantSection = <T>(id: string, section: string) =>
   adminFetch<{ items: T[] }>(`/admin/tenants/${encodeURIComponent(id)}/${section}`);
+
+// ---- Dashboard overview ------------------------------------------------------------------------------------------------
+
+export interface Overview {
+  generated_at: string;
+  tenants: { total: number; active: number; pending: number; paused: number; suspended: number; new_7d: number; with_ai: number };
+  calls: { last_24h: number; previous_24h: number; last_30d: number; minutes_30d: number; resolution_rate_30d: number | null; resolution_sample: number };
+  appointments: { booked_24h: number; previous_24h: number; booked_30d: number };
+  revenue: { monthly_estimate: Record<string, number>; paying_businesses: number; basis: string };
+  top_businesses: {
+    id: string; name: string; type: string; country: string | null; ai_status: string | null; ai_name: string | null;
+    calls_30d: number; appointments_30d: number; plan: string; status: string;
+  }[];
+  recent_activity: { at: string | null; action: string; actor: string | null; outcome: string }[];
+  health: { name: string; status: 'operational' | 'degraded' | 'not_configured'; detail: string }[];
+}
+
+export const fetchOverview = () => adminFetch<Overview>('/admin/overview');
+
+// ---- Calls (Cross-Tenant Platform Monitoring) --------------------------------------------------------------------------
+
+export interface AdminCallMessage {
+  speaker: 'AI' | 'User';
+  text: string;
+  sentiment?: 'Positive' | 'Neutral' | 'Negative';
+}
+
+export interface AdminCallRecord {
+  id: string;
+  businessId: string;
+  businessName: string;
+  businessType: string;
+  callerNumber: string;
+  callerName?: string;
+  time: string;
+  startedAt: string | null;
+  duration: string;
+  durationSeconds: number;
+  intent: string;
+  outcome: 'Resolved' | 'Transferred' | 'Failed' | 'Live';
+  outcomeColor: { bg: string; text: string };
+  aiReceptionist: string;
+  engine: string;
+  latency: string;
+  summary: string;
+  recordingUrl?: string | null;
+  transcript: AdminCallMessage[];
+}
+
+export interface AdminCallsKpi {
+  callsToday: number;
+  callsTodayDelta: string;
+  averageDuration: string;
+  averageDurationDelta: string;
+  aiResolutionRate: string;
+  aiResolutionDelta: string;
+  transferredCount: number;
+  transferredPercent: string;
+  failedCount: number;
+  failedDelta: string;
+}
+
+export interface AdminCallsResponse {
+  items: AdminCallRecord[];
+  total: number;
+  kpis: AdminCallsKpi;
+  facets: {
+    businesses: string[];
+    types: string[];
+    outcomes: string[];
+    intents: string[];
+  };
+}
+
+export function fetchAdminCalls(params?: {
+  search?: string;
+  business?: string;
+  outcome?: string;
+  intent?: string;
+  type?: string;
+  limit?: number;
+}): Promise<AdminCallsResponse> {
+  const query = new URLSearchParams();
+  if (params?.search) query.set('search', params.search);
+  if (params?.business && params.business !== 'All') query.set('business_name', params.business);
+  if (params?.outcome && params.outcome !== 'All') query.set('outcome', params.outcome);
+  if (params?.intent && params.intent !== 'All') query.set('intent', params.intent);
+  if (params?.type && params.type !== 'All') query.set('business_type', params.type);
+  if (params?.limit) query.set('limit', String(params.limit));
+  return adminFetch<AdminCallsResponse>(`/admin/calls?${query.toString()}`);
+}

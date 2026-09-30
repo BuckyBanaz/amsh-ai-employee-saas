@@ -6,6 +6,18 @@ Last verified against the code: 2026-09-28 (branch `v0.6`). Every status below s
 Detailed change log: [`17_AMSh_Claude_Change_Tracker.md`](17_AMSh_Claude_Change_Tracker.md). Older specs are listed at the
 bottom (some are stale, see "Doc index").
 
+## Progress at a glance (estimate, 2026-09-28)
+
+| Part | Done | Main pending |
+|---|---|---|
+| User frontend | ~73% | billing and integrations pages, onboarding plans / review / Twilio, conversations and analytics polish (in progress) |
+| Admin frontend | ~19% | 21 mock pages (5 of 26 are real) |
+| AI / voice | ~50% | real phone-call test, outbound, returning-patient recognition, regional languages, live take-over |
+| Server | ~61% | admin APIs, payments and invoices, quotas, Twilio / Exotel signatures, CI |
+| **Overall** | **~51%** | little of it has been verified in a real browser or on a real call |
+
+Method and lists: [`../.brain/progress.md`](../.brain/progress.md).
+
 ---
 
 ## 1. What the product is
@@ -276,7 +288,7 @@ run, **Stub** = placeholder, **Missing** = does not exist.
 | SMS confirmations | Written | Guarded by `AMSH_DISABLE_SMS`; it will send real SMS when enabled |
 | Billing / Razorpay / plans | Written | Not re-tested |
 | Workers, calendar, CRM, e-commerce, payments integrations, analytics | Stub | Folders contain only `__init__.py` |
-| **Admin portal (`frontend/admin`)** | **3 areas real, 21 pages still mock** | Real: admin login and guard, Businesses list (search, filters, suspend / reactivate / change plan), **Business detail** (overview with 30-day usage, users, AI receptionist, appointments, calls, services, knowledge base, integrations, activity; read-only except suspend / plan), **Billing plan catalog** (create / edit / archive plans). Backend tested (admin tenants, tenant data, plans); `tsc`, eslint and `next build` pass; read against live data for the Demo clinic; **not clicked through in a browser**. Removed from the detail page because nothing real backs them: impersonate, emergency forwarding, direct password reset, customers, usage and billing tabs. Still mock: dashboard, business-users, admin-users, appointments, calls, conversations, customers, services, receptionists, usage, analytics, health, integrations, security, audit, tickets, announcements, verticals, and the revenue / subscriptions / invoices parts of Billing. Sidebar links `/notifications` and `/settings` point to pages that do not exist |
+| **Admin portal (`frontend/admin`)** | **4 areas real, 20 pages still mock (with a banner)** | Real: admin login and guard, **Dashboard** (live counts, calls, appointments, estimated revenue, AI resolution rate, busiest businesses, platform health, recent activity), Businesses list (search, filters, suspend / reactivate / change plan), **Business detail** (overview, users, AI receptionist, appointments, calls, services, knowledge base, integrations, activity), **Billing** (plan catalog create / edit / archive, plan distribution, business subscriptions). Backend tested; `tsc`, eslint and `next build` pass; read against live data; **not clicked through in a browser**. Every other admin page is a design mock and shows an amber "Sample data" banner: business-users, admin-users, appointments, calls, conversations, customers, services, receptionists, usage, analytics, health, integrations, security, audit, tickets, announcements, verticals. No payments or invoices are recorded anywhere, so revenue is an estimate from plan prices. Sidebar links `/notifications` and `/settings` point to pages that do not exist |
 | Post-call record: real summary, intent, sentiment, action items (model + keyword fallback; booking and emergency decided by the database and rules) | Tested + model output checked live | Runs in the background when any call ends; shown in `/calls`; Postgres at migration 0003 |
 | Appointment reminders (SMS; WhatsApp template optional) | Tested with fakes | **Off by default** (`REMINDERS_ENABLED` and the clinic's `toggles.reminders`); no dashboard switch yet; not tried with a real SMS provider |
 | Missed-call text-back and staff alerts (SMS / email) | Tested with fakes | Opt-in per clinic through `Agent.config` (`toggles.missed_call_followup`, `alerts`); no dashboard UI yet |
@@ -375,7 +387,8 @@ Still to do: blocking a suspended clinic's dashboard login, admin password reset
 1. Uncommitted work (about 36 files on `v0.7`) needs a commit plan; keep the other person's dashboard files in a separate commit.
 2. `scratch/test_cartesia*.py` and `scratch/test_models.py` were committed by accident.
 3. Status docs overlap. Source of truth: this README (status + pending), `17` (change log), `18` (plan). The others
-   (`06`, `13`, `04`, `roadmap/*`, `.brain/progress.md`) are history; the roadmap file is marked superseded.
+   (`04`, `.brain/progress.md` and the archive) are history or scope notes. The old status reviews, module tracker, backend
+   roadmap and daily roadmap were deleted on 2026-09-28. Percentages per part live in `.brain/progress.md`.
 
 ---
 
@@ -410,19 +423,17 @@ Still to do: blocking a suspended clinic's dashboard login, admin password reset
 | Doc | About | State |
 |---|---|---|
 | `README.md` (this file) | overview, pipelines, status | current |
-| `17_AMSh_Claude_Change_Tracker.md` | every change with evidence and limits | current (entries 1-51) |
-| `18_AMSh_Completion_Plan_User_and_Admin.md` | audit and phased plan for the user app and the admin portal | current |
+| `17_AMSh_Claude_Change_Tracker.md` | every change with evidence and limits | current (entries 1-64) |
+| `18_AMSh_Completion_Plan_User_and_Admin.md` | phased plan for the user app, admin portal and server APIs (done / pending) | current |
+| `../.brain/progress.md` | overall progress percentage per part | current |
 | `features_list.md` | what the AI can do, with honest status tags, target features from docs 01-03, landing-page copy and claims to avoid | current |
 | `16_...Tool_Calling_Architecture_Plan.md` | agent design | current |
 | `15_...Conversational_NLU_and_Persona...` | persona/NLU spec | partly superseded by 16 |
 | `14_...Telephony_Tunnels_and_AI_Capabilities_Spec.md` | tunnels + capabilities | see section 7 for the current mapping |
-| `13_...Module_Status_and_Live_Tracking.md` | module status | older; see section 8 above |
 | `11_...Telephony_Call_Transfer_and_Forwarding.md` | forwarding design | design |
 | `08_...Integrations_Setup_Guide.md` | provider setup | check keys/URLs before use |
-| `06_...Project_Status_Review.md` | earlier status review | older; see section 8 above |
-| `flowcharts/*` | login, onboarding, integrations, conversation engine | onboarding and login still valid; conversation flow predates the agent (use section 3a) |
-| `04_AMSh_MVP_Scope_and_Roadmap.md` | MVP scope and an old checklist | **section 0 (ground rules) and 4 (not MVP) are valid; the rest is stale**, marked at the top |
-| `roadmap/AMSh_Master_Daily_Roadmap_and_Tracker.md` | daily roadmap from 20 Sep | superseded, marked at the top |
+| `flowcharts/*` | login, onboarding, integrations | valid; the agent's flow is in section 3a |
+| `04_AMSh_MVP_Scope_and_Roadmap.md` | MVP ground rules and the not-MVP list | trimmed to those two sections |
 | `01-03 .docx` | target features from the research (already / missing / roadmap) | still the feature target; mapped to real status in `features_list.md` |
 | `05`, `07`, `09`, `10`, `12`, PRD, structure specs | planning and history | not re-checked this session |
 | `../ai generated docs/*` | RAG and agent plans | RAG docs not re-checked |

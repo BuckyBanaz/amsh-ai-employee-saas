@@ -5,7 +5,7 @@ import { StaffCard, StaffCardProps } from '../../../components/dashboard/StaffCa
 import { NewStaffModal, StaffFormData } from '../../../components/dashboard/NewStaffModal';
 import { StaffScheduleModal } from '../../../components/dashboard/StaffScheduleModal';
 import { DashboardController, StaffItem, ServiceItem } from '../../../controllers/dashboard.controller';
-import { GlobalLoader } from '../../../components/common/GlobalLoader';
+import { CardGridSkeleton } from '../../../components/common/ShimmerSkeleton';
 
 export default function DoctorsPage() {
   const [staffList, setStaffList] = useState<StaffCardProps[]>([]);
@@ -133,9 +133,7 @@ export default function DoctorsPage() {
       <DoctorsHeader onAddStaff={handleOpenAdd} />
 
       {loading ? (
-        <div className="bg-white border border-gray-100 rounded-xl shadow-xs overflow-hidden">
-          <GlobalLoader message="Loading doctors & clinic specialists..." size="md" />
-        </div>
+        <CardGridSkeleton count={6} />
       ) : staffList.length === 0 ? (
         <div className="bg-white border border-gray-100 rounded-xl p-10 text-center flex flex-col items-center justify-center max-w-md mx-auto mt-6 shadow-2xs">
           <div className="w-12 h-12 rounded-full bg-blue-50 text-[#0066FF] flex items-center justify-center mb-3">

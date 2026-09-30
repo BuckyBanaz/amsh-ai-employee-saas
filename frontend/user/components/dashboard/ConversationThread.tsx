@@ -1,7 +1,7 @@
 "use client";
 import React from 'react';
 import { CallLogItem } from '../../controllers/dashboard.controller';
-import { GlobalLoader } from '../common/GlobalLoader';
+import { ChatThreadSkeleton } from '../common/ShimmerSkeleton';
 
 interface ConversationThreadProps {
   call: CallLogItem | null;
@@ -10,11 +10,7 @@ interface ConversationThreadProps {
 
 export function ConversationThread({ call, loading }: ConversationThreadProps) {
   if (loading) {
-    return (
-      <div className="bg-white border border-gray-100 rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.03)] flex flex-col h-full overflow-hidden items-center justify-center p-12">
-        <GlobalLoader message="Loading call transcript & conversation..." />
-      </div>
-    );
+    return <ChatThreadSkeleton />;
   }
 
   if (!call) {

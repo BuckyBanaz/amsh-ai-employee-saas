@@ -1,7 +1,7 @@
 # Amsh Flowcharts
 
 > 2026-09-28: the voice pipeline, one-agent-turn, WhatsApp (current and target), playground and calls flows are in
-> [`../README.md`](../README.md). `conversation_engine_flow.md` here predates the LLM agent; use README section 3a.
+> [`../README.md`](../README.md). The old conversation-engine flowchart was deleted because it predated the LLM agent; use README section 3a.
 
 Here are the visual representations of the core flows in the system.
 

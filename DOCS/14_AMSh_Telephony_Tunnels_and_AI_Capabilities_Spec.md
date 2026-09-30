@@ -1,5 +1,7 @@
 # AMSh Architecture Spec: Call Tunnels, AI Capabilities & Notification Hub
 
+> **Status note (2026-09-28):** partly implemented (Twilio and Exotel webhooks, capabilities, notifications). README section 7 has the current mapping of what exists and what is still design.
+
 This specification outlines the modular architecture for:
 1. **Multi-Country Call Tunnels (`backend/ai/telephony/` / `call_tunnels/`)**
 2. **Modular AI Capabilities Layer (Rules, Skills, Read/Write Operations)**

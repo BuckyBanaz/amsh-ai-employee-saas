@@ -17,6 +17,34 @@ export function ShimmerBlock({ className = '', delay }: ShimmerBlockProps) {
 }
 
 /**
+ * Clean, lightweight inline spinner for buttons and action processing
+ */
+export function InlineSpinner({ className = "w-4 h-4 text-[#0066FF]" }: { className?: string }) {
+  return (
+    <svg
+      className={`animate-spin ${className}`}
+      xmlns="http://www.w3.org/2000/svg"
+      fill="none"
+      viewBox="0 0 24 24"
+    >
+      <circle
+        className="opacity-25"
+        cx="12"
+        cy="12"
+        r="10"
+        stroke="currentColor"
+        strokeWidth="3"
+      ></circle>
+      <path
+        className="opacity-75"
+        fill="currentColor"
+        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+      ></path>
+    </svg>
+  );
+}
+
+/**
  * Ultra-premium table shimmer skeleton with realistic row heights,
  * rounded cells, pill badges, and staggered wave animations.
  */
@@ -119,7 +147,7 @@ export function TableSkeleton({
 }
 
 /**
- * Ultra-premium Card Grid shimmer skeleton (for Services, Doctors, Integrations)
+ * Ultra-premium Card Grid shimmer skeleton (for Services, Doctors, Staff)
  */
 interface CardGridSkeletonProps {
   count?: number;
@@ -170,7 +198,7 @@ export function CardGridSkeleton({
 }
 
 /**
- * Ultra-premium List shimmer skeleton (for Notifications, Recent Calls, Activity Feed)
+ * Ultra-premium List shimmer skeleton (for Notifications, Recent Calls, Sidebar items)
  */
 interface ListSkeletonProps {
   count?: number;
@@ -226,6 +254,225 @@ export function KpiGridSkeleton() {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/**
+ * Form / Settings / AI-Tabs shimmer skeleton
+ */
+export function FormSkeleton({ title = "Loading settings..." }: { title?: string }) {
+  return (
+    <div className="bg-white border border-gray-100 rounded-xl p-6 shadow-[0_1px_4px_rgba(0,0,0,0.03)] space-y-6">
+      <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+        <div className="space-y-1.5">
+          <ShimmerBlock className="h-4 w-40 rounded-md" />
+          <ShimmerBlock className="h-2.5 w-64 rounded-md opacity-60" />
+        </div>
+        <ShimmerBlock className="h-8 w-24 rounded-lg" />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="space-y-1.5">
+            <ShimmerBlock delay={((i % 4) + 1) as 1 | 2 | 3 | 4} className="h-3 w-24 rounded-md" />
+            <ShimmerBlock delay={((i % 4) + 1) as 1 | 2 | 3 | 4} className="h-9 w-full rounded-lg" />
+          </div>
+        ))}
+      </div>
+
+      <div className="space-y-2 pt-2">
+        <ShimmerBlock className="h-3 w-32 rounded-md" />
+        <ShimmerBlock className="h-20 w-full rounded-xl" />
+      </div>
+
+      <div className="flex items-center justify-between pt-3 border-t border-gray-50">
+        <ShimmerBlock className="h-3 w-28 rounded-md" />
+        <div className="flex gap-2">
+          <ShimmerBlock className="h-8 w-20 rounded-lg" />
+          <ShimmerBlock className="h-8 w-28 rounded-lg" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Chat / Dialogue Conversation Thread Shimmer Skeleton
+ */
+export function ChatThreadSkeleton() {
+  return (
+    <div className="bg-white border border-gray-100 rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.03)] flex flex-col h-full overflow-hidden">
+      {/* Header */}
+      <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <ShimmerBlock className="w-10 h-10 rounded-full shrink-0" />
+          <div className="space-y-1.5">
+            <ShimmerBlock className="h-3.5 w-32 rounded-md" />
+            <ShimmerBlock className="h-2.5 w-20 rounded-md opacity-60" />
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <ShimmerBlock className="h-6 w-16 rounded-full" />
+          <ShimmerBlock className="h-8 w-8 rounded-lg" />
+        </div>
+      </div>
+
+      {/* Message Bubbles */}
+      <div className="flex-1 p-5 space-y-4 overflow-y-auto">
+        {/* Turn 1: AI Greeting */}
+        <div className="flex justify-start">
+          <div className="max-w-[70%] space-y-1.5">
+            <ShimmerBlock className="h-2 w-16 rounded-md opacity-50" />
+            <div className="bg-blue-50/50 p-3 rounded-2xl rounded-tl-none border border-blue-100/60 space-y-2">
+              <ShimmerBlock className="h-3 w-48 rounded-md" />
+              <ShimmerBlock className="h-3 w-36 rounded-md opacity-80" />
+            </div>
+          </div>
+        </div>
+
+        {/* Turn 2: Caller response */}
+        <div className="flex justify-end">
+          <div className="max-w-[70%] space-y-1.5 flex flex-col items-end">
+            <ShimmerBlock delay={2} className="h-2 w-14 rounded-md opacity-50" />
+            <div className="bg-gray-100 p-3 rounded-2xl rounded-tr-none space-y-2">
+              <ShimmerBlock delay={2} className="h-3 w-56 rounded-md" />
+              <ShimmerBlock delay={2} className="h-3 w-40 rounded-md opacity-80" />
+            </div>
+          </div>
+        </div>
+
+        {/* Turn 3: AI Action */}
+        <div className="flex justify-start">
+          <div className="max-w-[70%] space-y-1.5">
+            <ShimmerBlock delay={3} className="h-2 w-16 rounded-md opacity-50" />
+            <div className="bg-blue-50/50 p-3 rounded-2xl rounded-tl-none border border-blue-100/60 space-y-2">
+              <ShimmerBlock delay={3} className="h-3 w-64 rounded-md" />
+              <ShimmerBlock delay={3} className="h-3 w-44 rounded-md opacity-80" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Footer Audio Bar */}
+      <div className="p-3 border-t border-gray-100 bg-[#F9FAFB]/60 flex items-center justify-between gap-3">
+        <ShimmerBlock className="w-8 h-8 rounded-full shrink-0" />
+        <ShimmerBlock className="flex-1 h-3 rounded-full" />
+        <ShimmerBlock className="w-12 h-3 rounded-md" />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Call Detail Panel Shimmer Skeleton
+ */
+export function CallDetailSkeleton() {
+  return (
+    <div className="w-full bg-white border border-gray-100 rounded-xl shadow-[0_1px_4px_rgba(0,0,0,0.03)] flex flex-col h-full overflow-hidden p-4 space-y-4">
+      <div className="flex items-center justify-between">
+        <ShimmerBlock className="h-3 w-20 rounded-md" />
+        <ShimmerBlock className="h-3 w-16 rounded-md opacity-60" />
+      </div>
+
+      <div className="flex items-center gap-3 bg-gray-50/70 p-3 rounded-xl border border-gray-100">
+        <ShimmerBlock className="w-10 h-10 rounded-full shrink-0" />
+        <div className="flex-1 space-y-1.5">
+          <ShimmerBlock className="h-3.5 w-28 rounded-md" />
+          <ShimmerBlock className="h-2.5 w-20 rounded-md opacity-60" />
+        </div>
+        <ShimmerBlock className="h-5 w-16 rounded-full" />
+      </div>
+
+      <div className="bg-gray-50/50 p-3 rounded-xl border border-gray-100 space-y-2">
+        <div className="flex justify-between">
+          <ShimmerBlock className="h-3 w-16 rounded-md" />
+          <ShimmerBlock className="h-3 w-12 rounded-md opacity-60" />
+        </div>
+        <ShimmerBlock className="h-2 w-full rounded-full" />
+      </div>
+
+      <div className="space-y-2 flex-1 pt-1">
+        <ShimmerBlock className="h-3 w-24 rounded-md" />
+        <ShimmerBlock className="h-3 w-full rounded-md opacity-70" />
+        <ShimmerBlock className="h-3 w-4/5 rounded-md opacity-60" />
+        <ShimmerBlock className="h-3 w-3/4 rounded-md opacity-50" />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Calendar Grid Shimmer Skeleton
+ */
+export function CalendarSkeleton() {
+  return (
+    <div className="w-full bg-white border border-gray-100 rounded-xl shadow-[0_1px_4px_rgba(0,0,0,0.03)] overflow-hidden">
+      <div className="flex items-center justify-between p-4 border-b border-gray-100">
+        <div className="flex items-center gap-2">
+          <ShimmerBlock className="h-7 w-20 rounded-lg" />
+          <ShimmerBlock className="h-7 w-24 rounded-lg" />
+        </div>
+        <ShimmerBlock className="h-6 w-32 rounded-md" />
+      </div>
+
+      <div className="grid grid-cols-7 border-b border-gray-100 bg-[#F9FAFB]/70">
+        {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, idx) => (
+          <div key={idx} className="p-3 text-center border-r border-gray-100 last:border-r-0 space-y-1">
+            <span className="text-[10px] font-bold text-gray-400 uppercase">{day}</span>
+            <ShimmerBlock className="h-3 w-6 mx-auto rounded-md" />
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-7 h-[380px] divide-x divide-gray-100 bg-white">
+        {Array.from({ length: 7 }).map((_, cIdx) => (
+          <div key={cIdx} className="p-2 space-y-2">
+            {cIdx % 2 === 0 && (
+              <div className="p-2 rounded-lg bg-blue-50/60 border border-blue-100 space-y-1">
+                <ShimmerBlock delay={((cIdx % 4) + 1) as 1 | 2 | 3 | 4} className="h-2.5 w-14 rounded-md" />
+                <ShimmerBlock delay={((cIdx % 4) + 1) as 1 | 2 | 3 | 4} className="h-2 w-10 rounded-md opacity-60" />
+              </div>
+            )}
+            {cIdx % 3 === 0 && (
+              <div className="p-2 rounded-lg bg-emerald-50/60 border border-emerald-100 space-y-1">
+                <ShimmerBlock delay={2} className="h-2.5 w-16 rounded-md" />
+                <ShimmerBlock delay={2} className="h-2 w-12 rounded-md opacity-60" />
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Chart Shimmer Skeleton
+ */
+export function ChartSkeleton({ height = "h-48" }: { height?: string }) {
+  return (
+    <div className={`w-full bg-white border border-gray-100 rounded-xl p-4 shadow-[0_1px_4px_rgba(0,0,0,0.03)] flex flex-col justify-between ${height}`}>
+      <div className="flex items-center justify-between mb-3">
+        <div className="space-y-1">
+          <ShimmerBlock className="h-3.5 w-28 rounded-md" />
+          <ShimmerBlock className="h-2 w-20 rounded-md opacity-60" />
+        </div>
+        <ShimmerBlock className="h-5 w-16 rounded-full" />
+      </div>
+
+      <div className="flex items-end gap-3 h-28 pt-2 px-2">
+        {Array.from({ length: 8 }).map((_, i) => {
+          const heights = ['h-12', 'h-20', 'h-16', 'h-24', 'h-14', 'h-28', 'h-18', 'h-22'];
+          const delay = ((i % 4) + 1) as 1 | 2 | 3 | 4;
+          return (
+            <div key={i} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end">
+              <ShimmerBlock delay={delay} className={`w-full ${heights[i]} rounded-t-md`} />
+              <ShimmerBlock delay={delay} className="h-2 w-4 rounded-md opacity-50" />
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

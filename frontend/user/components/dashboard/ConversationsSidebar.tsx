@@ -1,7 +1,7 @@
 "use client";
 import React from 'react';
 import { CallLogItem } from '../../controllers/dashboard.controller';
-import { GlobalLoader } from '../common/GlobalLoader';
+import { ListSkeleton } from '../common/ShimmerSkeleton';
 
 interface ConversationsSidebarProps {
   calls: CallLogItem[];
@@ -71,9 +71,7 @@ export function ConversationsSidebar({
       {/* List */}
       <div className="flex-1 overflow-y-auto scrollbar-hide">
         {loading ? (
-          <div className="py-12">
-            <GlobalLoader message="Loading call conversations..." />
-          </div>
+          <ListSkeleton count={6} />
         ) : calls.length === 0 ? (
           <div className="p-8 text-center flex flex-col items-center justify-center">
             <div className="w-10 h-10 rounded-xl bg-blue-50 text-[#0066FF] flex items-center justify-center mb-2">

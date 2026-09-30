@@ -1,7 +1,7 @@
 "use client";
 import React from 'react';
 import { CallOutcomesData } from '../../controllers/analytics.controller';
-import { GlobalLoader } from '../common/GlobalLoader';
+import { ShimmerBlock } from '../common/ShimmerSkeleton';
 
 interface CallOutcomesChartProps {
   data?: CallOutcomesData;
@@ -51,8 +51,13 @@ export function CallOutcomesChart({ data, loading = false }: CallOutcomesChartPr
 
       {/* State 1: Loading Progress State */}
       {loading ? (
-        <div className="flex-1 flex flex-col items-center justify-center py-4">
-          <GlobalLoader message="Calculating call outcomes & resolutions..." size="sm" />
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-6 my-auto py-3">
+          <ShimmerBlock className="w-24 h-24 rounded-full" />
+          <div className="space-y-2.5">
+            <ShimmerBlock delay={1} className="h-3 w-28 rounded-md" />
+            <ShimmerBlock delay={2} className="h-3 w-24 rounded-md" />
+            <ShimmerBlock delay={3} className="h-3 w-32 rounded-md" />
+          </div>
         </div>
       ) : items.length === 0 || total === 0 ? (
         /* State 2: Zero Data State */

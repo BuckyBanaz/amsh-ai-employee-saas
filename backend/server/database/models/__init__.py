@@ -15,3 +15,4 @@ from backend.server.database.models.integration import Integration  # noqa: F401
 from backend.server.database.models.usage import Usage  # noqa: F401
 from backend.server.database.models.audit_log import AuditLog  # noqa: F401
 from backend.server.database.models.plan import Plan  # noqa: F401
+from backend.server.database.models.platform_integration import PlatformIntegration  # noqa: F401
