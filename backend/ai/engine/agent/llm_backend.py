@@ -14,7 +14,8 @@ from typing import Any, AsyncIterator, Dict, List, Optional, Protocol, Set, Tupl
 
 import httpx
 
-from backend.ai.llm.client import llm_client
+from backend.ai.llm.client import llm_client, pooled_http_client
+from backend.ai.realtime import latency
 
 logger = logging.getLogger(__name__)
 
@@ -188,6 +189,10 @@ class OpenAICompatBackend:
         headers = self._headers()
         text_parts: List[str] = []
         acc: Dict[int, Dict[str, Any]] = {}
+        # Latency marks (no-op outside a measured live turn). First "token" counts any delta, including hidden reasoning
+        # and tool-call fragments; first "content" is the first word that can be spoken. The gap is reasoning cost.
+        latency.mark("llm_request_start", provider=self.provider, tools=bool(tools))
+        first_token = first_content = False
         try:
             async with self.client().stream(
                 "POST", self.api_url(), headers=headers, json=self._payload(messages, tools, stream=True), timeout=self.timeout
@@ -202,7 +207,13 @@ class OpenAICompatBackend:
                     delta = parse_sse_line(line)
                     if delta is None:
                         continue
+                    if not first_token and (delta.get("content") or delta.get("reasoning") or delta.get("tool_calls")):
+                        first_token = True
+                        latency.mark("llm_first_token", provider=self.provider)
                     if delta.get("content"):
+                        if not first_content:
+                            first_content = True
+                            latency.mark("llm_first_content", provider=self.provider)
                         text_parts.append(delta["content"])
                         yield {"type": "text", "delta": delta["content"]}
                     for tc in delta.get("tool_calls") or []:
@@ -305,7 +316,7 @@ class GeminiChatBackend(OpenAICompatBackend):
     def client(self) -> httpx.AsyncClient:
         global _gemini_client
         if _gemini_client is None:
-            _gemini_client = httpx.AsyncClient(timeout=10.0)
+            _gemini_client = pooled_http_client(timeout=10.0)  # long keep-alive: no TLS handshake per turn
         return _gemini_client
 
     # Gemini 3 validates a thought_signature on every function call in the history. Calls the model made itself carry the

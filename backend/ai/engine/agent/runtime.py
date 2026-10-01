@@ -12,6 +12,7 @@ from backend.ai.engine.agent.agent_loop import AgentEngine, AgentTurn
 from backend.ai.engine.agent.facts import AgentProfile, load_all
 from backend.ai.engine.agent.llm_backend import build_chat_backend
 from backend.ai.engine.conversation.i18n import normalize_language
+from backend.ai.realtime import latency
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +89,8 @@ class AgentRuntime:
             auto_detect_language=profile.auto_detect_language,
             channel=channel,
             fillers=profile.natural_fillers and channel != "chat",  # a text chat has no voice to fill
+            # LATENCY: start TTS on the first safe clause instead of the first full sentence (voice only).
+            early_chunking=bool(getattr(get_settings(), "VOICE_EARLY_CHUNKING", True)) and channel == "voice",
         )
         if greeting:
             engine.greeting(greeting)  # seeds history with exactly what the caller heard
@@ -99,8 +102,12 @@ class AgentRuntime:
         queue: asyncio.Queue = asyncio.Queue()
 
         async def produce() -> None:
+            first = True
             try:
                 async for event in self.engine.turn_events(transcript, stream=True):
+                    if first and event["type"] == "sentence":
+                        first = False  # the first text the caller will hear; a filler shows up as filler=True
+                        latency.mark("llm_first_chunk", filler=bool(event.get("filler")), words=len(event["text"].split()))
                     await queue.put(event)
             except Exception as e:  # never let a producer crash leave the consumer waiting forever
                 await queue.put({"type": "error", "error": e})

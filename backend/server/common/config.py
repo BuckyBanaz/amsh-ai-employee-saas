@@ -53,6 +53,16 @@ class Settings(BaseSettings):
     TWILIO_AUTH_TOKEN: str | None = None
     TWILIO_PHONE_NUMBER: str | None = None
     GROQ_API_KEY: str | None = None
+    # Default Groq model for the agent and legacy NLU. gpt-oss-20b is a reasoning model: it emits hidden reasoning tokens
+    # before the first spoken word (see `llm_reasoning` in the [LATENCY] log). A non-reasoning model such as
+    # llama-3.3-70b-versatile skips that step but must be checked for tool-calling reliability before switching.
+    GROQ_MODEL: str = "openai/gpt-oss-20b"
+    # Voice latency (see backend/ai/realtime/latency.py for the per-turn [LATENCY] log).
+    # Start TTS on the first safe clause (", " after >= 4 words, no numbers/questions) instead of the first full sentence.
+    VOICE_EARLY_CHUNKING: bool = True
+    # How long pooled HTTPS connections to Groq/Gemini/Cartesia stay open while idle. httpx's default is 5 s, shorter
+    # than a typical caller utterance, so every turn used to pay a fresh TCP+TLS handshake to each provider.
+    PROVIDER_KEEPALIVE_SECONDS: float = 120.0
     # Second LLM provider. LLM_PROVIDERS is the order tried (providers without a key are skipped); when the first is
     # rate limited or down, the next one answers the turn.
     GEMINI_API_KEY: str | None = None

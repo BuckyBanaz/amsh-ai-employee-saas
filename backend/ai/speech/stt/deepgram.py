@@ -6,6 +6,7 @@ Provides fast streaming transcription for inbound Twilio voice streams.
 import asyncio
 import json
 import logging
+import time
 from typing import Any, AsyncIterator, Dict, Optional
 
 import websockets
@@ -93,6 +94,10 @@ class DeepgramLiveConnection:
         self._ws: Optional[WebSocketClientProtocol] = None
         self._queue: "asyncio.Queue[Dict[str, Any]]" = asyncio.Queue()
         self._reader_task: Optional[asyncio.Task] = None
+        # Wall-clock (monotonic) time of the first audio byte Deepgram received. Deepgram's word timestamps are offsets
+        # into that audio, and telephony audio arrives in real time, so audio_t0 + last word end ~= when the caller
+        # stopped speaking. Used only for latency measurement.
+        self.audio_t0: Optional[float] = None
 
     def is_configured(self) -> bool:
         return bool(self.api_key)
@@ -125,6 +130,8 @@ class DeepgramLiveConnection:
         if self._ws is not None:
             try:
                 await self._ws.send(mulaw_bytes)
+                if self.audio_t0 is None:
+                    self.audio_t0 = time.monotonic()
             except Exception as e:
                 logger.warning(f"[DEEPGRAM LIVE] Failed to send audio chunk: {e}")
 
@@ -144,11 +151,18 @@ class DeepgramLiveConnection:
                     alt = msg.get("channel", {}).get("alternatives", [{}])[0]
                     transcript = alt.get("transcript", "")
                     if transcript:
+                        words = alt.get("words") or []
+                        speech_end = None
+                        if words and self.audio_t0 is not None and isinstance(words[-1].get("end"), (int, float)):
+                            speech_end = self.audio_t0 + float(words[-1]["end"])
                         await self._queue.put(
                             {
                                 "type": "transcript",
                                 "text": transcript,
                                 "is_final": bool(msg.get("is_final")),
+                                "speech_final": bool(msg.get("speech_final")),
+                                "received_at": time.monotonic(),  # before any queueing delay in the consumer
+                                "speech_end_at": speech_end,  # estimated, see audio_t0
                             }
                         )
         except Exception as e:

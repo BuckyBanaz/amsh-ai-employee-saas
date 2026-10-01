@@ -26,6 +26,7 @@ from backend.ai.engine.conversation.nlu import ConversationalNLU
 from backend.ai.engine.agent.runtime import AgentRuntime, get_sim_runtime, store_sim_runtime
 from backend.ai.llm.client import llm_client
 from backend.ai.memory.session_memory import session_memory
+from backend.ai.realtime import latency
 from backend.ai.realtime.audio.mulaw import FRAME_BYTES, FRAME_DURATION_S, PCM_FRAME_BYTES, frame_stream
 from backend.ai.realtime.barge_in.coordinator import BargeInCoordinator
 from backend.ai.realtime.twilio.call_control import redirect_call
@@ -98,6 +99,8 @@ class CallSession:
         self._silence_prompted = False
         self._busy = False
         self._watchdog_task: Optional[asyncio.Task] = None
+        self._turn_no = 0  # numbering for the per-turn [LATENCY] log
+        self._last_warm = 0.0  # monotonic time provider connections were last warmed (see _warm_providers)
 
     async def start(self, stream_sid: str, call_id: str, caller_number: str) -> None:
         self.stream_sid = stream_sid
@@ -162,6 +165,7 @@ class CallSession:
         )
         self._stt_connect_task = asyncio.create_task(self._connect_stt(call_id))
         self._watchdog_task = asyncio.create_task(self._watchdog())
+        self._warm_providers(force=True)  # LLM connection opens while the greeting plays, not on the first turn
 
         await self._speak_turn(greeting)
 
@@ -185,13 +189,54 @@ class CallSession:
         async for event in self.stt.events():
             if event["type"] == "speech_started":
                 await self.barge_in.handle_caller_speech(self.websocket, self.stream_sid)
+                # LATENCY: the caller is talking, so the LLM/TTS requests are a second or two away. Make sure their
+                # pooled HTTPS connections are open now instead of paying TCP+TLS after the caller stops.
+                self._warm_providers()
             elif event["type"] == "transcript" and event.get("is_final") and event.get("text", "").strip():
                 self._busy = True  # we are thinking/answering: the watchdog must not call this silence
+                tracker = self._new_turn_tracker(event)
+                token = latency.start_turn(tracker)
                 try:
                     await self._handle_transcript(event["text"])
                 finally:
+                    latency.end_turn(token)
+                    try:
+                        tracker.report()
+                    except Exception as e:  # measurement must never break a call
+                        logger.debug("latency report failed: %s", e)
                     self._busy = False
                     self.last_activity = time.monotonic()
+
+    def _new_turn_tracker(self, event: Dict[str, Any]) -> latency.TurnLatency:
+        """Per-utterance latency tracker. Origin = the caller's estimated end of speech (Deepgram word timing), clamped to
+        the moment the final transcript arrived; without word timings the origin is the transcript arrival itself."""
+        self._turn_no += 1
+        received = event.get("received_at") or time.monotonic()
+        speech_end = event.get("speech_end_at")
+        if speech_end is not None:
+            speech_end = min(speech_end, received)
+        tracker = latency.TurnLatency(self.call_id, self._turn_no, origin=speech_end if speech_end is not None else received)
+        if speech_end is not None:
+            tracker.mark("speech_end", at=speech_end)
+        tracker.mark("deepgram_final", at=received)
+        tracker.info.update({
+            "engine": self.agent_rt.mode if self.agent_rt else "state_machine",
+            "transcript_words": len(event.get("text", "").split()),
+            "speech_final": event.get("speech_final"),
+        })
+        return tracker
+
+    def _warm_providers(self, force: bool = False) -> None:
+        """Fire-and-forget keep-warm requests to Groq and Cartesia, at most every 20 s. Each provider client keeps its
+        connection pooled for PROVIDER_KEEPALIVE_SECONDS; this covers servers that close idle connections sooner."""
+        now = time.monotonic()
+        if not force and now - self._last_warm < 20.0:
+            return
+        self._last_warm = now
+        for coro in (llm_client.warm(), cartesia_tts.warm()):
+            task = latency.create_detached_task(coro)
+            self._bg_tasks.add(task)
+            task.add_done_callback(self._bg_tasks.discard)
 
     async def _handle_transcript(self, transcript: str) -> None:
         if not self.state_machine:
@@ -218,6 +263,7 @@ class CallSession:
             for t in self.state_machine.turns[-3:]
         ]
 
+        latency.mark("nlu_start")  # legacy engine: one NLU LLM call before the state machine replies
         nlu_result = await ConversationalNLU.analyze_turn(
             user_utterance=transcript,
             available_intents=available_intents,
@@ -229,6 +275,7 @@ class CallSession:
             missing_slot=last_asked_slot,
             recent_turns=recent_turns,
         )
+        latency.mark("nlu_end")
         print(f"🧠 NLU CATEGORY: {nlu_result.category.value} | INTENT: {nlu_result.intent} | CONF: {nlu_result.confidence} | SLOTS: {nlu_result.slots}", flush=True)
 
         result = await self.state_machine.process_user_turn(
@@ -247,7 +294,8 @@ class CallSession:
         print(f"=====================================================\n", flush=True)
 
         if self.agent_rt and self.agent_rt.mode == "shadow":  # silent comparison; never spoken, never writes
-            task = asyncio.create_task(self.agent_rt.shadow(self.call_id or "", transcript, bot_text))
+            # Detached context: the silent agent's LLM calls must not show up in this live turn's latency numbers.
+            task = latency.create_detached_task(self.agent_rt.shadow(self.call_id or "", transcript, bot_text))
             self._bg_tasks.add(task)
             task.add_done_callback(self._bg_tasks.discard)
 
@@ -283,6 +331,9 @@ class CallSession:
             logger.warning(f"[AGENT] turn failed, falling back to state machine: {e}")
             return False
         turn = run.turn
+        tracker = latency.current()
+        if tracker is not None:
+            tracker.info.update({"interrupted": run.interrupted, "llm": turn.provider})
         if turn.degraded and not run.spoken_any:
             logger.warning(f"[AGENT] LLM unavailable ({turn.error}); using state machine for this turn")
             return False
@@ -380,6 +431,7 @@ class CallSession:
         sent = 0
         async for frame_b64 in frames:
             sent += 1
+            # LATENCY: frames go out as soon as TTS bytes arrive (no whole-sentence buffering). Mark the first one.
             await self.websocket.send_text(
                 json.dumps(
                     {
@@ -390,6 +442,8 @@ class CallSession:
                     }
                 )
             )
+            if sent == 1:
+                latency.mark("first_audio_sent_to_telephony", chars=len(text))
             # Yield to event loop without sleeping 20ms to keep telephony jitter buffer full
             await asyncio.sleep(0.005)
         logger.info(f"[TTS OUT] call={self.call_id} frames={sent} text={text[:40]!r}")
