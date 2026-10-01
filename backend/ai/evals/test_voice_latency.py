@@ -342,6 +342,124 @@ class GatewayTurn(unittest.TestCase):
         self.assertLess(media, 40 * 10)  # stopped long before the full 40 x 200 ms of audio was sent
 
 
+class BargeInPlayback(unittest.TestCase):
+    """The AI stays interruptible until its audio has actually played, not just until the frames were sent."""
+
+    def _coordinator(self):
+        from backend.ai.realtime.barge_in.coordinator import BargeInCoordinator
+
+        now = {"t": 100.0}
+        return BargeInCoordinator(clock=lambda: now["t"]), now
+
+    def test_queued_audio_keeps_the_ai_interruptible_after_sending_ends(self):
+        c, now = self._coordinator()
+        for _ in range(150):  # 3 s of audio sent in a burst
+            c.audio_sent(0.02)
+        self.assertTrue(c.is_speaking)
+        now["t"] += 2.9
+        self.assertTrue(c.is_speaking)
+        now["t"] += 0.2
+        self.assertFalse(c.is_speaking)
+
+    def test_latest_mark_echo_ends_playback_older_ones_do_not(self):
+        c, _ = self._coordinator()
+        c.audio_sent(2.0)
+        first = c.next_mark()
+        c.audio_sent(2.0)
+        latest = c.next_mark()
+        c.on_mark(first)
+        self.assertTrue(c.is_speaking)
+        c.on_mark(latest)
+        self.assertFalse(c.is_speaking)
+
+    def test_barge_in_during_playback_clears_twilio_and_bumps_generation(self):
+        c, _ = self._coordinator()
+        c.audio_sent(3.0)
+        sent = []
+
+        class WS:
+            async def send_text(self, text):
+                sent.append(json.loads(text))
+
+        run(c.handle_caller_speech(WS(), "MS1"))
+        self.assertEqual(sent[0]["event"], "clear")
+        self.assertEqual(c.generation, 1)
+        self.assertFalse(c.is_speaking)
+        sent.clear()
+        run(c.handle_caller_speech(WS(), "MS1"))  # nothing audible any more: no second clear
+        self.assertEqual(sent, [])
+
+    def test_barge_in_between_sentences_stops_the_rest_of_the_turn(self):
+        gw = GatewayTurn()
+        slow_backend = ScriptedBackend(reply("ignored"))
+
+        async def chat_stream(messages, tools):
+            yield {"type": "text", "delta": "Of course, I can certainly help you with that today. "}
+            await asyncio.sleep(0.3)  # the model is still writing sentence two while sentence one plays
+            yield {"type": "text", "delta": "Our next opening is on Monday morning."}
+            yield {"type": "final", "content": None, "tool_calls": []}
+
+        slow_backend.chat_stream = chat_stream
+        session, sent = gw._session(slow_backend, tts_delay=0.0, tts_chunks=2)
+        try:
+            async def go():
+                turn = asyncio.create_task(session._handle_transcript("I want to book"))
+                for _ in range(100):  # sentence one fully sent; its audio is still "playing"
+                    await asyncio.sleep(0.01)
+                    if any(e["event"] == "mark" for e in sent):
+                        break
+                self.assertTrue(session.barge_in.is_speaking)
+                await session.barge_in.handle_caller_speech(session.websocket, session.stream_sid)
+                await turn
+
+            run(go())
+        finally:
+            gw.tearDown()
+        events = [e["event"] for e in sent]
+        self.assertIn("clear", events)
+        self.assertNotIn("media", events[events.index("clear"):])  # nothing spoken after the interruption
+
+    def test_vad_needs_consecutive_voiced_frames(self):
+        import base64
+        from backend.ai.realtime.twilio import gateway
+
+        gw = GatewayTurn()
+        session, sent = gw._session(ScriptedBackend(reply("ok")))
+        gw.tearDown()
+        session.barge_in.audio_sent(5.0)
+        loud = base64.b64encode(b"\x00" * 160).decode()  # mulaw 0x00 = full scale
+        quiet = base64.b64encode(b"\xff" * 160).decode()  # mulaw 0xFF = silence
+
+        async def frames(*payloads):
+            for p in payloads:
+                await session.handle_media(p)
+
+        run(frames(loud, loud, quiet, loud))  # a spike, then a broken run: not speech
+        self.assertEqual(sent, [])
+        run(frames(*[loud] * gateway.BARGE_IN_MIN_VOICED_FRAMES))
+        self.assertEqual([e["event"] for e in sent], ["clear"])
+
+    def test_deepgram_speech_started_calls_the_hook_directly(self):
+        conn = DeepgramLiveConnection()
+        calls = []
+
+        async def hook():
+            calls.append(1)
+
+        conn.on_speech_started = hook
+
+        class FakeWS:
+            def __aiter__(self):
+                async def gen():
+                    yield json.dumps({"type": "SpeechStarted"})
+                return gen()
+
+        conn._ws = FakeWS()
+        run(conn._read_loop())
+        self.assertEqual(calls, [1])
+        self.assertEqual(conn._queue.get_nowait()["type"], "closed")  # not queued behind a busy consumer
+
+
 class ProviderClients(unittest.TestCase):
     def test_pooled_client_keeps_connections_longer_than_httpx_default(self):
         client = pooled_http_client(timeout=4.0)

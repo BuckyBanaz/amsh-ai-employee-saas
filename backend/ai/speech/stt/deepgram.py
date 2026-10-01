@@ -7,7 +7,7 @@ import asyncio
 import json
 import logging
 import time
-from typing import Any, AsyncIterator, Dict, Optional
+from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Optional
 
 import websockets
 from websockets.client import WebSocketClientProtocol
@@ -98,6 +98,9 @@ class DeepgramLiveConnection:
         # into that audio, and telephony audio arrives in real time, so audio_t0 + last word end ~= when the caller
         # stopped speaking. Used only for latency measurement.
         self.audio_t0: Optional[float] = None
+        # Barge-in hook. When set, SpeechStarted calls it straight from the reader instead of queueing an event: the
+        # queue's consumer is busy for the whole AI turn, so a queued event would only be seen after the AI finished.
+        self.on_speech_started: Optional[Callable[[], Awaitable[None]]] = None
 
     def is_configured(self) -> bool:
         return bool(self.api_key)
@@ -146,7 +149,13 @@ class DeepgramLiveConnection:
 
                 msg_type = msg.get("type")
                 if msg_type == "SpeechStarted":
-                    await self._queue.put({"type": "speech_started"})
+                    if self.on_speech_started is not None:
+                        try:
+                            await self.on_speech_started()
+                        except Exception as e:  # a failed barge-in must never stop transcription
+                            logger.warning(f"[DEEPGRAM LIVE] speech_started handler failed: {e}")
+                    else:
+                        await self._queue.put({"type": "speech_started"})
                 elif msg_type == "Results":
                     alt = msg.get("channel", {}).get("alternatives", [{}])[0]
                     transcript = alt.get("transcript", "")

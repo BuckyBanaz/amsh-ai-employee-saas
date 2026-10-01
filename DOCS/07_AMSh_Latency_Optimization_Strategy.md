@@ -95,6 +95,15 @@ Checked and **not** a problem: the `llm_agent` path does not run NLU (only on fa
 - `python -m unittest backend.ai.evals.test_voice_latency` (25 tests): splitter rules, guards still blocking invented times / unbacked booking claims / duplicate questions, parallel reads, timing marks, a full gateway turn, barge-in still sends Twilio `clear`.
 - `python -m backend.ai.evals.latency_bench`: simulated (assumed timings, **not production numbers**); `--live` uses real Groq + Cartesia. Compare connection reuse with `--live --keepalive 5 --idle 8` vs `--live --keepalive 120 --idle 8`.
 
-### 6.6 Known issue (not fixed)
+### 6.6 Barge-in during playback (fixed)
 
-Audio is sent to Twilio ~4x faster than real time, so the "AI is speaking" flag clears while Twilio still has seconds of audio queued: the caller cannot barge in on the end of a sentence. Deepgram `speech_started` events are also not handled while a turn is running. Fix needs Twilio `mark` echo tracking; pending approval.
+Problem: audio is sent to Twilio ~4x faster than real time, so the "AI is speaking" flag cleared while Twilio still had seconds of audio queued; the caller could not interrupt the end of a sentence. Deepgram `speech_started` events were also queued behind the running turn and only seen after the AI finished.
+
+Fix (`realtime/barge_in/coordinator.py`, `twilio/gateway.py`, `speech/stt/deepgram.py`):
+- The coordinator tracks `playback_until` (+20 ms per frame sent), so the AI counts as speaking until its audio has played. Each sentence ends with a unique mark (`turn_end:<n>`); when Twilio/Exotel echoes the latest one, playback is known to be over.
+- Deepgram `SpeechStarted` calls the barge-in handler directly from the reader task, so it works while a turn is running.
+- A barge-in bumps a `generation` counter: every later sentence of the same turn is dropped, including one that arrives after the interrupted sentence was fully sent.
+- Energy-VAD barge-in now needs 3 consecutive voiced frames (60 ms), because the interruptible window is much longer and a single click must not cut the AI off.
+- The silence watchdog counts from the end of playback, not the end of sending.
+
+Still open: after a barge-in the interrupted turn's full reply (including unspoken sentences) is saved to history and the call record, as before.

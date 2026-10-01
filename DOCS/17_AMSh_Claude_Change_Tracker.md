@@ -20,7 +20,7 @@ Status legend: `DONE` / `IN PROGRESS` / `PLANNED` / `BLOCKED`
 | 4 | `GROQ_MODEL` setting (default unchanged `openai/gpt-oss-20b`); reasoning params only for gpt-oss | DONE | `common/config.py`, `llm/client.py`, `conversation/nlu.py` |
 | 5 | Tests: `test_voice_latency` **25/25**; `test_agent_core` 250/256, same 6 failures as before the change (5 BillingSecurity + 1 prompt-length) | DONE | `evals/test_voice_latency.py` (new) |
 | 6 | Benchmark: `python -m backend.ai.evals.latency_bench` (simulated) / `--live` (real providers). Simulated median first audio 581 -> 540 ms; assumed timings, not production numbers | DONE | `evals/latency_bench.py` (new) |
-| 7 | Found: barge-in cannot interrupt the tail of a sentence (audio sent ~4x real time; speaking flag clears early). Not fixed, needs approval | PLANNED | `twilio/gateway.py`, `barge_in/coordinator.py` |
+| 7 | **Barge-in fixed for the whole playback**: speaking state follows audio still queued at Twilio (+ mark echoes), Deepgram speech-started handled while a turn runs, later sentences of an interrupted turn dropped, 60 ms VAD debounce. `test_voice_latency` now **31/31**, core suite unchanged. Not tried on a real call | DONE, not live-tested | `barge_in/coordinator.py`, `twilio/gateway.py`, `stt/deepgram.py` |
 
 Details: `DOCS/07_AMSh_Latency_Optimization_Strategy.md` section 6.
 
