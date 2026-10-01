@@ -8,6 +8,24 @@ Status legend: `DONE` / `IN PROGRESS` / `PLANNED` / `BLOCKED`
 
 ---
 
+## 2026-10-01
+
+### Entries
+
+| # | Item | Status | Files |
+|---|---|---|---|
+| 1 | **Voice latency pass (branch `v1.1`).** Traced the live path; main suspected cause: pooled Groq/Cartesia connections expired after httpx's 5 s default keep-alive, so most turns re-did TCP+TLS to both. Now 120 s keep-alive + warm-ups at call start and on caller speech. Startup warm-up fixed to warm the real clients | DONE, **not measured live** (no keys in session) | `llm/client.py`, `tts/cartesia.py`, `agent/llm_backend.py`, `twilio/gateway.py`, `common/warmup.py`, `common/config.py` |
+| 2 | Early first-clause TTS (`VOICE_EARLY_CHUNKING`), guarded so times/numbers and questions still wait for the full sentence; parallel `check_availability` within one round | DONE | `agent/agent_loop.py`, `agent/runtime.py` |
+| 3 | Per-turn `[LATENCY]` structured log (speech_end -> first audio sent to Twilio, every stage) | DONE | `realtime/latency.py` (new), `stt/deepgram.py`, `twilio/gateway.py` |
+| 4 | `GROQ_MODEL` setting (default unchanged `openai/gpt-oss-20b`); reasoning params only for gpt-oss | DONE | `common/config.py`, `llm/client.py`, `conversation/nlu.py` |
+| 5 | Tests: `test_voice_latency` **25/25**; `test_agent_core` 250/256, same 6 failures as before the change (5 BillingSecurity + 1 prompt-length) | DONE | `evals/test_voice_latency.py` (new) |
+| 6 | Benchmark: `python -m backend.ai.evals.latency_bench` (simulated) / `--live` (real providers). Simulated median first audio 581 -> 540 ms; assumed timings, not production numbers | DONE | `evals/latency_bench.py` (new) |
+| 7 | Found: barge-in cannot interrupt the tail of a sentence (audio sent ~4x real time; speaking flag clears early). Not fixed, needs approval | PLANNED | `twilio/gateway.py`, `barge_in/coordinator.py` |
+
+Details: `DOCS/07_AMSh_Latency_Optimization_Strategy.md` section 6.
+
+---
+
 ## 2026-09-28
 
 ### Entries
