@@ -120,6 +120,17 @@ async def _warmup_tts() -> None:
     except Exception as e:
         logger.warning(f"[WARMUP] TTS warmup failed (non-fatal): {e}")
 
+    # Open Cartesia's TTS websocket now: the handshake takes ~1.5-2s the first time (measured), which the very first
+    # real caller should not have to wait through. Later sentences reuse this connection (~150-200ms to first audio,
+    # against ~500ms over the REST fallback). Failing here is not fatal: stream_speech() falls back to REST per sentence.
+    try:
+        from backend.ai.speech.tts.cartesia import cartesia_tts
+        if cartesia_tts.is_configured():
+            await cartesia_tts._ensure_ws()
+            logger.info("[WARMUP] Cartesia TTS websocket connected")
+    except Exception as e:
+        logger.warning(f"[WARMUP] Cartesia websocket warmup failed (non-fatal, will use REST): {e}")
+
 
 async def _warmup_qdrant() -> None:
     """

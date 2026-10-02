@@ -4,13 +4,22 @@ Provides ultra-low latency (<100ms) voice streaming for real-time telephony.
 """
 
 import asyncio
+import base64
+import json
 import logging
-from typing import AsyncGenerator
+import uuid
+from typing import AsyncGenerator, Optional
 import httpx
+import websockets
+from websockets.exceptions import ConnectionClosed
 
 from backend.server.common.config import get_settings
 
 logger = logging.getLogger(__name__)
+
+
+class _WebSocketUnavailable(Exception):
+    """Raised before anything was streamed: the caller falls back to the REST endpoint for this sentence."""
 
 
 class CartesiaTTS:
@@ -33,6 +42,14 @@ class CartesiaTTS:
         self._preview_cache: dict[tuple, bytes] = {}  # dashboard previews (MP3), so repeats do not spend credits
         self._preview_inflight: dict[tuple, "asyncio.Future"] = {}  # syntheses in progress, shared by identical requests
         self.last_error: tuple[int, str] | None = None  # (HTTP status, message) of the last failed request
+        # One shared WebSocket connection, reused across calls (skips the ~100-200ms TLS+TCP handshake per utterance).
+        # Cartesia's websocket streams audio as it is generated instead of waiting for the whole utterance like the REST
+        # /tts/bytes endpoint used before, which measured ~530ms to the first chunk; the websocket is what gets Cartesia's
+        # advertised <100ms. Multiple utterances can be in flight at once, told apart by `context_id`.
+        self._ws: Optional["websockets.WebSocketClientProtocol"] = None
+        self._ws_lock = asyncio.Lock()
+        self._ws_reader_task: Optional[asyncio.Task] = None
+        self._ws_pending: dict[str, "asyncio.Queue"] = {}
 
     def is_configured(self) -> bool:
         return bool(self.api_key)
@@ -58,7 +75,8 @@ class CartesiaTTS:
         emotion: str | None = None,
     ) -> AsyncGenerator[bytes, None]:
         """
-        Stream raw audio chunks from Cartesia Sonic API.
+        Stream raw audio chunks from Cartesia Sonic, over the websocket for low time-to-first-chunk, falling back to
+        the REST endpoint if the websocket is unavailable (network blocks it, or Cartesia is down for that transport).
         Default output encoding: 8000Hz (native phone audio format) for crystal-clear 0-transcode latency!
         `speed` (0.6-1.5) and `emotion` go in Cartesia's generation_config; the API accepts and applies speed
         (measured: 0.8x -> 5.12s, 1.25x -> 4.56s for the same sentence). Emotion is passed through as given.
@@ -72,6 +90,132 @@ class CartesiaTTS:
             yield cached
             return
 
+        collected = bytearray()
+        try:
+            async for chunk in self._stream_speech_ws(text, voice_id, encoding, sample_rate, language, speed, emotion):
+                collected.extend(chunk)
+                yield chunk
+        except _WebSocketUnavailable as e:
+            logger.warning(f"[CARTESIA TTS] Websocket unavailable ({e}); falling back to REST for this sentence")
+            async for chunk in self._stream_speech_rest(text, voice_id, encoding, sample_rate, language, speed, emotion):
+                collected.extend(chunk)
+                yield chunk
+        if collected and len(self._audio_cache) < 200:
+            # Only cache a REST-fallback or a websocket run that finished (a barge-in cancellation stops mid-stream and
+            # never reaches here, so a cached entry is always the complete utterance).
+            self._audio_cache[cache_key] = bytes(collected)
+
+    async def _stream_speech_ws(
+        self,
+        text: str,
+        voice_id: str | None,
+        encoding: str,
+        sample_rate: int,
+        language: str | None,
+        speed: float | None,
+        emotion: str | None,
+    ) -> AsyncGenerator[bytes, None]:
+        """One utterance over the shared Cartesia websocket. Raises `_WebSocketUnavailable` (never yields partial audio
+        first) if the connection cannot be established or the request cannot be sent, so the caller can fall back to REST
+        cleanly; a failure after Cartesia accepted the request (mid-stream) instead just ends the generator early."""
+        context_id = uuid.uuid4().hex
+        payload: dict = {
+            "model_id": self.model_id,
+            "transcript": text,
+            "voice": {"mode": "id", "id": voice_id or self.voice_id},
+            "output_format": {"container": "raw", "encoding": encoding, "sample_rate": sample_rate},
+            "context_id": context_id,
+            "add_timestamps": False,
+        }
+        if language:
+            payload["language"] = language
+        generation_config = self.generation_config(speed, emotion)
+        if generation_config:
+            payload["generation_config"] = generation_config
+
+        try:
+            ws = await self._ensure_ws()
+        except Exception as e:
+            raise _WebSocketUnavailable(str(e)) from e
+
+        queue: asyncio.Queue = asyncio.Queue()
+        self._ws_pending[context_id] = queue
+        finished = False
+        try:
+            try:
+                await ws.send(json.dumps(payload))
+            except Exception as e:
+                raise _WebSocketUnavailable(str(e)) from e
+            while True:
+                msg = await queue.get()
+                if msg is None:  # the reader loop lost the connection: nothing more is coming for this utterance
+                    finished = True
+                    return
+                if msg.get("type") == "error":
+                    self.last_error = (0, str(msg.get("error"))[:300])
+                    logger.warning(f"[CARTESIA TTS] Websocket error for utterance: {msg.get('error')}")
+                    finished = True
+                    return
+                if msg.get("type") == "chunk" and msg.get("data"):
+                    yield base64.b64decode(msg["data"])
+                if msg.get("done"):
+                    finished = True
+                    return
+        finally:
+            self._ws_pending.pop(context_id, None)
+            if not finished and self._ws is not None:
+                # A barge-in cancelled us mid-utterance: tell Cartesia to stop generating the rest so it doesn't spend
+                # credits on audio nobody will hear. Best-effort — the connection is shared, so we don't wait for or
+                # even check a reply here.
+                try:
+                    await self._ws.send(json.dumps({"context_id": context_id, "cancel": True}))
+                except Exception:
+                    pass
+
+    async def _ensure_ws(self) -> "websockets.WebSocketClientProtocol":
+        """Returns the shared connection, opening (or reopening, after a drop) it under a lock so concurrent sentences
+        don't each try to reconnect at once."""
+        async with self._ws_lock:
+            if self._ws is not None and self._ws.close_code is None:
+                return self._ws
+            url = f"wss://api.cartesia.ai/tts/websocket?api_key={self.api_key}&cartesia_version={self.api_version}"
+            self._ws = await asyncio.wait_for(websockets.connect(url, ping_interval=20, ping_timeout=20), timeout=5.0)
+            if self._ws_reader_task is None or self._ws_reader_task.done():
+                self._ws_reader_task = asyncio.ensure_future(self._ws_reader_loop(self._ws))
+            return self._ws
+
+    async def _ws_reader_loop(self, ws: "websockets.WebSocketClientProtocol") -> None:
+        """Dispatches every incoming message to the queue of the utterance (`context_id`) it belongs to. Runs for the
+        life of one connection; a drop releases every utterance still waiting so none hangs forever."""
+        try:
+            async for raw in ws:
+                try:
+                    msg = json.loads(raw)
+                except ValueError:
+                    continue
+                q = self._ws_pending.get(msg.get("context_id"))
+                if q is not None:
+                    q.put_nowait(msg)
+        except (ConnectionClosed, Exception) as e:
+            logger.warning(f"[CARTESIA TTS] Websocket connection lost: {e}")
+        finally:
+            if self._ws is ws:
+                self._ws = None
+            for q in self._ws_pending.values():
+                q.put_nowait(None)  # unblock anyone still waiting; they fall back to REST on their next sentence
+
+    async def _stream_speech_rest(
+        self,
+        text: str,
+        voice_id: str | None = None,
+        encoding: str = "pcm_mulaw",
+        sample_rate: int = 8000,
+        language: str | None = None,
+        speed: float | None = None,
+        emotion: str | None = None,
+    ) -> AsyncGenerator[bytes, None]:
+        """The original REST /tts/bytes path: ~500ms to the first chunk (measured), kept only as a fallback for when
+        the websocket cannot be reached at all."""
         url = "https://api.cartesia.ai/tts/bytes"
         headers = {
             "X-API-Key": self.api_key,
@@ -101,14 +245,8 @@ class CartesiaTTS:
         try:
             async with self._client.stream("POST", url, headers=headers, json=payload) as response:
                 if response.status_code == 200:
-                    collected = bytearray()
                     async for chunk in response.aiter_bytes():
-                        collected.extend(chunk)
                         yield chunk
-                    # Only reached if playback wasn't cancelled mid-stream (barge-in),
-                    # so a cached entry is always the complete utterance.
-                    if len(self._audio_cache) < 200:
-                        self._audio_cache[cache_key] = bytes(collected)
                 else:
                     error_text = (await response.aread()).decode("utf-8", errors="ignore")
                     self.last_error = (response.status_code, error_text[:300])
@@ -116,6 +254,7 @@ class CartesiaTTS:
                     logger.log(level, f"[CARTESIA TTS] Error ({response.status_code}){' OUT OF CREDITS' if response.status_code == 402 else ''}: {error_text}")
         except Exception as e:
             logger.error(f"[CARTESIA TTS] Stream failed: {e}")
+
     async def get_voices(self) -> list[dict]:
         """Fetch all available voices from Cartesia."""
         if not self.api_key:
