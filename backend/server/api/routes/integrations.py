@@ -151,6 +151,16 @@ class WhatsappEmbeddedSignup(BaseModel):
     coexistence: bool = False
 
 
+class WhatsappManualConnect(BaseModel):
+    waba_id: str
+    phone_number_id: str
+    # Permanent System User token from the business's own Meta app; works without
+    # Advanced Access because the app only touches its own business portfolio.
+    access_token: str
+    # Numbers newly added in API Setup still need a Cloud API register call
+    register: bool = False
+
+
 class WhatsappTestMessage(BaseModel):
     to: str
 
@@ -216,6 +226,19 @@ async def whatsapp_embedded_signup(
         )
         number_info = resp.json() if resp.status_code == 200 else {}
 
+    return _save_whatsapp_integration(db, business_id, {
+        "mode": "embedded_signup",
+        "waba_id": payload.waba_id,
+        "phone_number_id": payload.phone_number_id,
+        "display_phone_number": number_info.get("display_phone_number"),
+        "verified_name": number_info.get("verified_name"),
+        "access_token": CryptoManager.encrypt(access_token),
+        "coexistence": payload.coexistence,
+        **({"two_step_pin": CryptoManager.encrypt(pin)} if pin else {}),
+    })
+
+
+def _save_whatsapp_integration(db: Session, business_id: str, config: dict) -> Integration:
     integration = (
         db.query(Integration)
         .filter(Integration.business_id == business_id, Integration.provider == "whatsapp")
@@ -226,21 +249,64 @@ async def whatsapp_embedded_signup(
         db.add(integration)
 
     integration.status = "connected"
-    integration.config = {
-        **(integration.config or {}),
-        "mode": "embedded_signup",
-        "waba_id": payload.waba_id,
-        "phone_number_id": payload.phone_number_id,
-        "display_phone_number": number_info.get("display_phone_number"),
-        "verified_name": number_info.get("verified_name"),
-        "access_token": CryptoManager.encrypt(access_token),
-        "coexistence": payload.coexistence,
-        **({"two_step_pin": CryptoManager.encrypt(pin)} if pin else {}),
-    }
+    integration.config = {**(integration.config or {}), **config}
     integration.connected_at = datetime.utcnow()
     db.commit()
     db.refresh(integration)
     return integration
+
+
+@router.post("/whatsapp/manual-connect", response_model=IntegrationOut)
+async def whatsapp_manual_connect(
+    business_id: str,
+    payload: WhatsappManualConnect,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Fallback for when Embedded Signup is blocked (e.g. Meta error 2655111 while the app
+    still lacks Advanced Access): connect a number from the business's own WABA by token."""
+    get_business_or_404(business_id, db)
+    require_owner_or_admin(business_id, current_user)
+    access_token = payload.access_token.strip()
+    auth = {"Authorization": f"Bearer {access_token}"}
+
+    async with httpx.AsyncClient(timeout=20) as client:
+        # 1. Validate the token + phone number ID before saving anything
+        resp = await client.get(
+            _graph_url(payload.phone_number_id.strip()),
+            params={"fields": "display_phone_number,verified_name"},
+            headers=auth,
+        )
+        if resp.status_code != 200:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Meta rejected these credentials: {_graph_error(resp)}")
+        number_info = resp.json()
+
+        # 2. Subscribe our app to the WABA so inbound messages hit our webhook
+        resp = await client.post(_graph_url(f"{payload.waba_id.strip()}/subscribed_apps"), headers=auth)
+        if resp.status_code != 200:
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Webhook subscription failed: {_graph_error(resp)}")
+
+        pin = None
+        if payload.register:
+            pin = f"{secrets.randbelow(10**6):06d}"
+            resp = await client.post(
+                _graph_url(f"{payload.phone_number_id.strip()}/register"),
+                headers=auth,
+                json={"messaging_product": "whatsapp", "pin": pin},
+            )
+            if resp.status_code != 200:
+                raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Phone number registration failed: {_graph_error(resp)}")
+
+    return _save_whatsapp_integration(db, business_id, {
+        "mode": "manual_token",
+        "waba_id": payload.waba_id.strip(),
+        "phone_number_id": payload.phone_number_id.strip(),
+        "display_phone_number": number_info.get("display_phone_number"),
+        "verified_name": number_info.get("verified_name"),
+        "access_token": CryptoManager.encrypt(access_token),
+        "coexistence": False,
+        **({"two_step_pin": CryptoManager.encrypt(pin)} if pin else {}),
+    })
 
 
 @router.post("/whatsapp/test-message")

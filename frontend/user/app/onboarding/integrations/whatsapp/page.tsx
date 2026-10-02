@@ -25,6 +25,9 @@ export default function WhatsappSetupPage() {
   const [customPhoneId, setCustomPhoneId] = useState('');
   const [customWabaId, setCustomWabaId] = useState('');
   const [customToken, setCustomToken] = useState('');
+  const [customRegister, setCustomRegister] = useState(false);
+  const [manualSaving, setManualSaving] = useState(false);
+  const [manualError, setManualError] = useState('');
 
   // Saving state
   const [isSaving, setIsSaving] = useState(false);
@@ -76,6 +79,28 @@ export default function WhatsappSetupPage() {
     if (wa.connectedNumber) setBusinessPhone(wa.connectedNumber);
   }, [wa.connectedNumber]);
 
+  const handleManualConnect = async () => {
+    setManualError('');
+    if (!customPhoneId.trim() || !customWabaId.trim() || !customToken.trim()) {
+      setManualError('Phone Number ID, WABA ID and access token are all required.');
+      return;
+    }
+    setManualSaving(true);
+    try {
+      await wa.connectManually({
+        phone_number_id: customPhoneId,
+        waba_id: customWabaId,
+        access_token: customToken,
+        register: customRegister,
+      });
+      setCustomToken('');
+    } catch (err) {
+      setManualError(err instanceof Error ? err.message : 'Could not connect with these credentials.');
+    } finally {
+      setManualSaving(false);
+    }
+  };
+
   const handleSendTestMessage = async () => {
     setTestError('');
     try {
@@ -94,15 +119,16 @@ export default function WhatsappSetupPage() {
     try {
       localStorage.setItem('onboarding_whatsapp_connected', 'true');
       localStorage.setItem('onboarding_whatsapp_phone', businessPhone);
-      const mode = metaStatus === 'connected' ? 'embedded_signup' : activeTab === 'turnkey' ? 'turnkey_cloud' : 'custom_waba';
-      localStorage.setItem('onboarding_whatsapp_mode', mode);
+      // A Meta connection already stored its own mode (embedded_signup / manual_token)
+      const mode = metaStatus === 'connected' ? undefined : activeTab === 'turnkey' ? 'turnkey_cloud' : 'custom_waba';
+      if (mode) localStorage.setItem('onboarding_whatsapp_mode', mode);
 
       const businessId = getActiveBusinessId();
       if (businessId) {
         await ApiService.post(API_ENDPOINTS.INTEGRATIONS.CONNECT(businessId, 'whatsapp'), {
           provider: 'whatsapp',
           config: {
-            mode,
+            ...(mode ? { mode } : {}),
             business_phone: businessPhone,
             admin_alert_phone: adminAlertPhone,
             instant_cards: enableInstantCards,
@@ -329,12 +355,14 @@ export default function WhatsappSetupPage() {
             <div className="pt-2 border-t border-gray-100">
               <details className="group">
                 <summary className="text-[11px] font-bold text-gray-600 hover:text-gray-900 cursor-pointer list-none flex items-center justify-between py-1">
-                  <span>Advanced: Connect Custom Meta Cloud WABA (Optional)</span>
+                  <span>Advanced: Connect with access token (works before Meta App Review)</span>
                   <span className="text-xs text-gray-400 group-open:rotate-180 transition-transform">▼</span>
                 </summary>
                 <div className="pt-2 space-y-2 text-xs">
                   <p className="text-[10px] text-gray-500">
-                    If you have a dedicated enterprise Meta WABA and want to use your custom Phone Number ID instead of the managed gateway:
+                    Use this if the Facebook popup says the app &ldquo;lacks required advanced WhatsApp Business Management and messaging permissions&rdquo;.
+                    Take the Phone Number ID and WABA ID from Meta App Dashboard &rarr; WhatsApp &rarr; API Setup, and a permanent
+                    System User token (Business Settings &rarr; System users) with <code>whatsapp_business_management</code> and <code>whatsapp_business_messaging</code>.
                   </p>
                   <div className="grid grid-cols-2 gap-2">
                     <input
@@ -352,6 +380,29 @@ export default function WhatsappSetupPage() {
                       className="px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg font-mono"
                     />
                   </div>
+                  <input
+                    type="password"
+                    value={customToken}
+                    onChange={(e) => setCustomToken(e.target.value)}
+                    placeholder="Permanent System User access token"
+                    autoComplete="off"
+                    className="w-full px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg font-mono"
+                  />
+                  <div className="flex items-center justify-between gap-2">
+                    <label className="flex items-center gap-1.5 text-[10px] text-gray-600 cursor-pointer">
+                      <input type="checkbox" checked={customRegister} onChange={(e) => setCustomRegister(e.target.checked)} />
+                      Newly added number &mdash; register it on Cloud API
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleManualConnect}
+                      disabled={manualSaving}
+                      className="px-3 py-1.5 text-xs font-bold text-white bg-[#128C7E] hover:bg-[#075E54] rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      {manualSaving ? 'Connecting…' : 'Connect with access token'}
+                    </button>
+                  </div>
+                  {manualError && <p className="text-[10px] text-red-600">{manualError}</p>}
                 </div>
               </details>
             </div>

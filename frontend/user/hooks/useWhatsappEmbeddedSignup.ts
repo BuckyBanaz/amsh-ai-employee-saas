@@ -19,6 +19,20 @@ declare global {
 type WaSession = { waba_id: string; phone_number_id: string; coexistence: boolean };
 export type WhatsappStatus = 'loading' | 'idle' | 'connecting' | 'connected' | 'error';
 
+// Meta error 2655111: the app has only Standard Access, so Embedded Signup cannot
+// onboard numbers until App Review grants Advanced Access.
+const PERMISSION_ERROR_HINT =
+  'Meta blocked signup because the Amsh app does not have Advanced Access yet (error 2655111). ' +
+  'In the Meta App Dashboard finish Business verification, request Advanced Access for ' +
+  'whatsapp_business_management and whatsapp_business_messaging in App Review, then publish the app. ' +
+  'Until then, use "Connect with access token" below.';
+
+export function explainMetaError(message?: string): string {
+  if (!message) return 'Signup was cancelled before finishing.';
+  if (/2655111|advanced whatsapp business management|lacks required advanced/i.test(message)) return PERMISSION_ERROR_HINT;
+  return message;
+}
+
 export const getActiveBusinessId = () =>
   StorageService.getBusinessId() || (typeof window !== 'undefined' ? localStorage.getItem('onboarding_business_id') : null);
 
@@ -98,7 +112,8 @@ export function useWhatsappEmbeddedSignup() {
           };
         } else if (data.event === 'CANCEL') {
           setStatus('idle');
-          setError(data.data?.error_message || 'Signup was cancelled before finishing.');
+          const meta = data.data || {};
+          setError(explainMetaError([meta.error_message, meta.error_id && `(#${meta.error_id})`].filter(Boolean).join(' ')));
         }
       } catch {
         // non-JSON messages from the SDK are ignored
@@ -166,11 +181,23 @@ export function useWhatsappEmbeddedSignup() {
     );
   }, []);
 
+  // Fallback while Embedded Signup is blocked: own-WABA System User token
+  const connectManually = useCallback(async (creds: { waba_id: string; phone_number_id: string; access_token: string; register?: boolean }) => {
+    const businessId = await resolveBusinessId();
+    if (!businessId) throw new Error('Business not found — complete the Business step first.');
+    setError('');
+    const integration = await ApiService.post<{ config?: { display_phone_number?: string } }>(API_ENDPOINTS.INTEGRATIONS.WHATSAPP_MANUAL_CONNECT(businessId), creds);
+    setConnectedNumber(integration?.config?.display_phone_number || '');
+    setStatus('connected');
+    localStorage.setItem('onboarding_whatsapp_connected', 'true');
+    localStorage.setItem('onboarding_whatsapp_mode', 'manual_token');
+  }, []);
+
   const sendTestMessage = useCallback(async (to: string) => {
     const businessId = await resolveBusinessId();
     if (!businessId) throw new Error('Business not found.');
     await ApiService.post(API_ENDPOINTS.INTEGRATIONS.WHATSAPP_TEST_MESSAGE(businessId), { to });
   }, []);
 
-  return { sdkReady, status, error, connectedNumber, connect, sendTestMessage };
+  return { sdkReady, status, error, connectedNumber, connect, connectManually, sendTestMessage };
 }

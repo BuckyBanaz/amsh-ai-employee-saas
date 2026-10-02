@@ -79,7 +79,8 @@ export const API_ENDPOINTS = {
     LIST: (businessId: string) => `${BASE_URL}/onboarding/businesses/${businessId}/integrations`,
     CONNECT: (businessId: string, provider: string) => `${BASE_URL}/onboarding/businesses/${businessId}/integrations/${provider}/connect`,
     WHATSAPP_EMBEDDED_SIGNUP: (businessId: string) => `${BASE_URL}/onboarding/businesses/${businessId}/integrations/whatsapp/embedded-signup`,
-    WHATSAPP_TEST_MESSAGE: (businessId: string) => `${BASE_URL}/onboarding/businesses/${businessId}/integrations/whatsapp/test-message`,
+    WHATSAPP_MANUAL_CONNECT: (businessId: string) => `${BASE_URL}/onboarding/businesses/${businessId}/integrations/whatsapp/manual-connect`,
+    WHATSAPP_TEST_MESSAGE:(businessId: string) => `${BASE_URL}/onboarding/businesses/${businessId}/integrations/whatsapp/test-message`,
   },
   PLANS: {
     LIST: `${BASE_URL}/plans`,
