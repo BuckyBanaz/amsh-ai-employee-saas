@@ -3,111 +3,120 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Logo Preview — Concepts</title>
+<title>AMSh Logo Preview — Round 2</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    padding: 2rem;
-    transition: background-color 0.3s, color 0.3s;
-  }
-  body.light { background: #f5f5f5; color: #333; }
-  body.dark { background: #1a1a1a; color: #eee; }
-  .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; }
-  h1 { font-size: 1.5rem; font-weight: 600; }
-  h2 { font-size: 1.1rem; font-weight: 600; margin: 2.5rem 0 1rem; }
-  .toggle { padding: 0.5rem 1rem; border: 1px solid currentColor; border-radius: 6px; background: transparent; color: inherit; cursor: pointer; font-size: 0.875rem; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.5rem; }
-  .card { border: 1px solid rgba(128, 128, 128, 0.3); border-radius: 12px; overflow: hidden; }
-  .card-img { display: flex; align-items: center; justify-content: center; padding: 2rem; min-height: 240px; }
-  body.light .card-img { background: #fff; }
-  body.dark .card-img { background: #2a2a2a; }
-  .card-img img { max-width: 100%; max-height: 200px; }
-  .card-label { padding: 0.75rem 1rem; font-size: 0.875rem; font-weight: 500; border-top: 1px solid rgba(128, 128, 128, 0.3); }
-  body.light .card-label { background: #fafafa; }
-  body.dark .card-label { background: #222; }
-  .lockups { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.5rem; }
-  .lockup { display: flex; align-items: center; gap: 0.75rem; padding: 1.25rem 1.5rem; border-radius: 12px; border: 1px solid rgba(128,128,128,0.3); }
-  body.light .lockup { background: #fff; }
-  body.dark .lockup { background: #2a2a2a; }
-  .lockup img { width: 56px; height: 56px; }
-  .lockup span { font-size: 2.1rem; font-weight: 800; letter-spacing: -0.02em; color: #0B1F44; }
-  body.dark .lockup span { color: #fff; }
-  .lockup small { margin-left: auto; font-size: 0.75rem; opacity: 0.5; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 2rem; background: #04060F; color: #E6E8F0; }
+  h1 { font-size: 1.5rem; font-weight: 600; margin-bottom: .25rem; }
+  .sub { opacity: .6; font-size: .9rem; margin-bottom: 2rem; }
+  h2 { font-size: 1.05rem; font-weight: 600; margin: 2.25rem 0 1rem; opacity: .9; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1.25rem; }
+  .card { border: 1px solid rgba(255,255,255,.08); border-radius: 16px; overflow: hidden; background: radial-gradient(120% 120% at 0% 0%, #111A3A 0%, #070B1A 60%); }
+  .card-img { display: flex; align-items: center; justify-content: center; padding: 1.5rem; min-height: 200px; }
+  .card-img img { width: 100%; max-height: 170px; }
+  .card-label { padding: .7rem 1rem; font-size: .82rem; border-top: 1px solid rgba(255,255,255,.08); opacity: .8; }
+  .card.on-light { background: #F9FAFB; color: #333; }
+  .card.on-light .card-label { border-top-color: rgba(0,0,0,.08); }
+  .icons { display: flex; flex-direction: column; gap: .5rem; }
+  .icons .lbl { font-size: .8rem; opacity: .7; }
+  .icons .row { display: flex; gap: 1rem; align-items: end; }
+  figure { display: flex; flex-direction: column; align-items: center; gap: .3rem; }
+  figcaption { font-size: .7rem; opacity: .5; }
+  .fonts { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 1rem; }
+  .font { border: 1px solid rgba(255,255,255,.08); border-radius: 14px; padding: 1rem; background: #0A0F22; display: flex; flex-direction: column; gap: .5rem; }
+  .font img { width: 100%; }
+  .font span { font-size: .8rem; opacity: .65; }
 </style>
 </head>
-<body class="light">
-  <div class="header">
-    <h1>AMSh Logo Preview — Concepts</h1>
-    <button class="toggle" onclick="document.body.classList.toggle('dark'); document.body.classList.toggle('light'); this.textContent = document.body.classList.contains('dark') ? '☀️ Light' : '🌙 Dark';">🌙 Dark</button>
-  </div>
+<body>
+  <h1>AMSh — Premium concepts (Round 2)</h1>
+  <p class="sub">Dark + gradient AI-brand direction. Wordmarks are vector paths in AI-startup fonts.</p>
   <div class="grid">
-    <div class="card">
-      <div class="card-img">
-        <img src="concepts/concept-1.svg" alt="concept-1">
+    <div class="card ">
+      <div class="card-img"><img src="concepts/concept-5.svg" alt="concept-5 — Waveform AM · font: Sora"></div>
+      <div class="card-label">concept-5 — Waveform AM · font: Sora</div>
+    </div>
+    <div class="card ">
+      <div class="card-img"><img src="concepts/concept-6.svg" alt="concept-6 — AI orb + spark · font: Unbounded"></div>
+      <div class="card-label">concept-6 — AI orb + spark · font: Unbounded</div>
+    </div>
+    <div class="card ">
+      <div class="card-img"><img src="concepts/concept-7.svg" alt="concept-7 — Prism A · font: Michroma"></div>
+      <div class="card-label">concept-7 — Prism A · font: Michroma</div>
+    </div>
+    <div class="card ">
+      <div class="card-img"><img src="concepts/concept-8.svg" alt="concept-8 — Human + AI · font: Geist"></div>
+      <div class="card-label">concept-8 — Human + AI · font: Geist</div>
+    </div>
+  </div>
+  <h2>On light background (your app is light)</h2>
+  <div class="grid">
+    <div class="card on-light">
+      <div class="card-img"><img src="concepts/concept-5-light.svg" alt="concept-5 on light"></div>
+      <div class="card-label">concept-5 on light</div>
+    </div>
+    <div class="card on-light">
+      <div class="card-img"><img src="concepts/concept-6-light.svg" alt="concept-6 on light"></div>
+      <div class="card-label">concept-6 on light</div>
+    </div>
+    <div class="card on-light">
+      <div class="card-img"><img src="concepts/concept-7-light.svg" alt="concept-7 on light"></div>
+      <div class="card-label">concept-7 on light</div>
+    </div>
+    <div class="card on-light">
+      <div class="card-img"><img src="concepts/concept-8-light.svg" alt="concept-8 on light"></div>
+      <div class="card-label">concept-8 on light</div>
+    </div>
+  </div>
+  <h2>App icon / favicon check</h2>
+  <div style="display:flex;gap:2.5rem;flex-wrap:wrap;">
+    <div class="icons">
+      <div class="lbl">concept-5</div>
+      <div class="row">
+        <figure><img src="concepts/concept-5-icon.svg" width="128" height="128"><figcaption>128</figcaption></figure>
+        <figure><img src="concepts/concept-5-icon.svg" width="64" height="64"><figcaption>64</figcaption></figure>
+        <figure><img src="concepts/concept-5-icon.svg" width="32" height="32"><figcaption>32</figcaption></figure>
+        <figure><img src="concepts/concept-5-icon.svg" width="16" height="16"><figcaption>16</figcaption></figure>
       </div>
-      <div class="card-label">concept-1 — A + voice wave</div>
     </div>
-    <div class="card">
-      <div class="card-img">
-        <img src="concepts/concept-2.svg" alt="concept-2">
+    <div class="icons">
+      <div class="lbl">concept-6</div>
+      <div class="row">
+        <figure><img src="concepts/concept-6-icon.svg" width="128" height="128"><figcaption>128</figcaption></figure>
+        <figure><img src="concepts/concept-6-icon.svg" width="64" height="64"><figcaption>64</figcaption></figure>
+        <figure><img src="concepts/concept-6-icon.svg" width="32" height="32"><figcaption>32</figcaption></figure>
+        <figure><img src="concepts/concept-6-icon.svg" width="16" height="16"><figcaption>16</figcaption></figure>
       </div>
-      <div class="card-label">concept-2 — Chat bubble + voice</div>
     </div>
-    <div class="card">
-      <div class="card-img">
-        <img src="concepts/concept-3.svg" alt="concept-3">
+    <div class="icons">
+      <div class="lbl">concept-7</div>
+      <div class="row">
+        <figure><img src="concepts/concept-7-icon.svg" width="128" height="128"><figcaption>128</figcaption></figure>
+        <figure><img src="concepts/concept-7-icon.svg" width="64" height="64"><figcaption>64</figcaption></figure>
+        <figure><img src="concepts/concept-7-icon.svg" width="32" height="32"><figcaption>32</figcaption></figure>
+        <figure><img src="concepts/concept-7-icon.svg" width="16" height="16"><figcaption>16</figcaption></figure>
       </div>
-      <div class="card-label">concept-3 — Friendly AI receptionist</div>
     </div>
-    <div class="card">
-      <div class="card-img">
-        <img src="concepts/concept-4.svg" alt="concept-4">
+    <div class="icons">
+      <div class="lbl">concept-8</div>
+      <div class="row">
+        <figure><img src="concepts/concept-8-icon.svg" width="128" height="128"><figcaption>128</figcaption></figure>
+        <figure><img src="concepts/concept-8-icon.svg" width="64" height="64"><figcaption>64</figcaption></figure>
+        <figure><img src="concepts/concept-8-icon.svg" width="32" height="32"><figcaption>32</figcaption></figure>
+        <figure><img src="concepts/concept-8-icon.svg" width="16" height="16"><figcaption>16</figcaption></figure>
       </div>
-      <div class="card-label">concept-4 — Always-on 'a' (24/7)</div>
     </div>
   </div>
-  <h2>With the AMSh name</h2>
-  <div class="lockups">
-    <div class="lockup"><img src="concepts/concept-1.svg" alt="concept-1"><span>AMSh</span><small>concept-1</small></div>
-    <div class="lockup"><img src="concepts/concept-2.svg" alt="concept-2"><span>AMSh</span><small>concept-2</small></div>
-    <div class="lockup"><img src="concepts/concept-3.svg" alt="concept-3"><span>AMSh</span><small>concept-3</small></div>
-    <div class="lockup"><img src="concepts/concept-4.svg" alt="concept-4"><span>AMSh</span><small>concept-4</small></div>
+  <h2>Font options for the AMSh wordmark</h2>
+  <div class="fonts">
+    <div class="font"><img src="fonts/sora.svg" alt="Sora"><span>Sora</span></div>
+    <div class="font"><img src="fonts/space-grotesk.svg" alt="Space Grotesk"><span>Space Grotesk</span></div>
+    <div class="font"><img src="fonts/syne.svg" alt="Syne"><span>Syne</span></div>
+    <div class="font"><img src="fonts/unbounded.svg" alt="Unbounded"><span>Unbounded</span></div>
+    <div class="font"><img src="fonts/michroma.svg" alt="Michroma"><span>Michroma</span></div>
+    <div class="font"><img src="fonts/orbitron.svg" alt="Orbitron"><span>Orbitron</span></div>
+    <div class="font"><img src="fonts/outfit.svg" alt="Outfit"><span>Outfit</span></div>
+    <div class="font"><img src="fonts/geist.svg" alt="Geist"><span>Geist</span></div>
   </div>
-  <h2>Favicon Size Check</h2>
-<div style="display:flex;gap:2rem;flex-wrap:wrap;align-items:end;">
-  <div style="display:flex;flex-direction:column;align-items:center;gap:0.5rem;">
-    <div style="font-size:0.8rem;font-weight:500;">concept-1</div>
-    <div style="display:flex;gap:1rem;align-items:end;">
-      <div><img src="concepts/concept-1.svg" width="64" height="64"><div style="font-size:0.75rem;opacity:0.6;">64px</div></div>
-      <div><img src="concepts/concept-1.svg" width="32" height="32"><div style="font-size:0.75rem;opacity:0.6;">32px</div></div>
-      <div><img src="concepts/concept-1.svg" width="16" height="16"><div style="font-size:0.75rem;opacity:0.6;">16px</div></div>
-    </div>
-  </div>
-  <div style="display:flex;flex-direction:column;align-items:center;gap:0.5rem;">
-    <div style="font-size:0.8rem;font-weight:500;">concept-2</div>
-    <div style="display:flex;gap:1rem;align-items:end;">
-      <div><img src="concepts/concept-2.svg" width="64" height="64"><div style="font-size:0.75rem;opacity:0.6;">64px</div></div>
-      <div><img src="concepts/concept-2.svg" width="32" height="32"><div style="font-size:0.75rem;opacity:0.6;">32px</div></div>
-      <div><img src="concepts/concept-2.svg" width="16" height="16"><div style="font-size:0.75rem;opacity:0.6;">16px</div></div>
-    </div>
-  </div>
-  <div style="display:flex;flex-direction:column;align-items:center;gap:0.5rem;">
-    <div style="font-size:0.8rem;font-weight:500;">concept-3</div>
-    <div style="display:flex;gap:1rem;align-items:end;">
-      <div><img src="concepts/concept-3.svg" width="64" height="64"><div style="font-size:0.75rem;opacity:0.6;">64px</div></div>
-      <div><img src="concepts/concept-3.svg" width="32" height="32"><div style="font-size:0.75rem;opacity:0.6;">32px</div></div>
-      <div><img src="concepts/concept-3.svg" width="16" height="16"><div style="font-size:0.75rem;opacity:0.6;">16px</div></div>
-    </div>
-  </div>
-  <div style="display:flex;flex-direction:column;align-items:center;gap:0.5rem;">
-    <div style="font-size:0.8rem;font-weight:500;">concept-4</div>
-    <div style="display:flex;gap:1rem;align-items:end;">
-      <div><img src="concepts/concept-4.svg" width="64" height="64"><div style="font-size:0.75rem;opacity:0.6;">64px</div></div>
-      <div><img src="concepts/concept-4.svg" width="32" height="32"><div style="font-size:0.75rem;opacity:0.6;">32px</div></div>
-      <div><img src="concepts/concept-4.svg" width="16" height="16"><div style="font-size:0.75rem;opacity:0.6;">16px</div></div>
-    </div>
-  </div>
-</div>
 </body>
 </html>
