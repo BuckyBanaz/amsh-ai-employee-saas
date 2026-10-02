@@ -175,7 +175,8 @@ def update_business(
     return business
 
 
-UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static", "uploads", "logos")
+# Must match the /static mount in main.py (backend/server/static).
+UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "static", "uploads", "logos")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
