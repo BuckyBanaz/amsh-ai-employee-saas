@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <g id="icon">
+    <g id="letter-a" fill="none" stroke="#0066FF" stroke-width="64" stroke-linecap="round">
+      <circle cx="228" cy="288" r="116"/>
+      <path d="M344 184 L344 404"/>
+    </g>
+    <g id="clock-hands" fill="none" stroke="#0066FF" stroke-width="28" stroke-linecap="round">
+      <path d="M228 288 L228 236"/>
+      <path d="M228 288 L264 312"/>
+    </g>
+    <circle id="online-dot" cx="420" cy="116" r="44" fill="#10B981" stroke="#FFFFFF" stroke-width="16"/>
+  </g>
+</svg>

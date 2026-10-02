@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <g id="icon">
+    <g id="headset" fill="none" stroke="#0B1F44" stroke-width="28" stroke-linecap="round">
+      <path d="M110 268 A146 146 0 0 1 402 268"/>
+      <path d="M396 344 Q396 428 304 428" stroke-width="22"/>
+    </g>
+    <g id="face">
+      <rect x="132" y="156" width="248" height="236" rx="100" fill="#0066FF"/>
+      <rect x="198" y="228" width="30" height="54" rx="15" fill="#FFFFFF"/>
+      <rect x="284" y="228" width="30" height="54" rx="15" fill="#FFFFFF"/>
+      <path d="M214 320 Q256 352 298 320" fill="none" stroke="#FFFFFF" stroke-width="22" stroke-linecap="round"/>
+    </g>
+    <g id="earcups" fill="#0B1F44">
+      <rect x="84" y="240" width="56" height="104" rx="28"/>
+      <rect x="372" y="240" width="56" height="104" rx="28"/>
+      <circle cx="292" cy="428" r="20"/>
+    </g>
+  </g>
+</svg>
