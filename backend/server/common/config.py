@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     # App
     APP_NAME: str = "Amsh Backend"
     ENV: str = "development"
-    DEBUG: bool = True
+    DEBUG: bool = False  # development turns it on in .env; production must leave it off
 
     # Database (Postgres in Docker; SQLAlchemy makes the driver swappable)
     DATABASE_URL: str = "postgresql+psycopg2://amsh:amsh@postgres:5432/amsh"
@@ -34,14 +34,17 @@ class Settings(BaseSettings):
     CORS_ORIGINS: list[str] = [
         "http://localhost:3000",
         "http://localhost:3001",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:3001",
     ]
+    CORS_ORIGIN_REGEX: str | None = None  # e.g. r"https://.*\.amsh\.ai"; empty = only CORS_ORIGINS
 
-    # Conversation engine rollout (DOCS/16): state_machine (legacy, default) | shadow (agent runs silently
-    # beside legacy and is only logged) | llm_agent. A tenant can override via Agent.config["engine"].
-    CONVERSATION_ENGINE: str = "state_machine"
+    # Conversation engine rollout (DOCS/16): llm_agent (default) | shadow (agent runs silently beside the legacy engine and is
+    # only logged) | state_machine (legacy, to be retired). A tenant can override via Agent.config["engine"].
+    CONVERSATION_ENGINE: str = "llm_agent"
     # Development conveniences that are unsafe with several customers: an unmatched phone call is given to the newest
     # business, and the old hard-coded WhatsApp verify tokens are accepted. Set to false in production.
-    ALLOW_DEV_FALLBACKS: bool = True
+    ALLOW_DEV_FALLBACKS: bool = False
     # Appointment reminders message real patients, so the background loop is off unless this is true AND the clinic enabled it.
     REMINDERS_ENABLED: bool = False
     REMINDER_INTERVAL_SECONDS: int = 300
@@ -83,6 +86,8 @@ class Settings(BaseSettings):
     EXOTEL_API_KEY: str | None = None
     EXOTEL_API_TOKEN: str | None = None
     EXOTEL_PHONE_NUMBER: str | None = None
+    # Exotel does not sign webhooks: a shared secret goes in the callback URL as ?key=... (see server/auth/webhook_signatures.py)
+    EXOTEL_WEBHOOK_SECRET: str | None = None
     # Meta WhatsApp Cloud API
     META_WHATSAPP_TOKEN: str | None = None
     META_WHATSAPP_PHONE_NUMBER_ID: str | None = None
@@ -98,6 +103,22 @@ class Settings(BaseSettings):
     RAZORPAY_API_KEY: str | None = None
     RAZORPAY_SECRET_KEY: str | None = None
 
+
+
+def production_problems(s: "Settings") -> list[str]:
+    """Settings that must not reach production. `main` refuses to start on them when ENV=production and only warns otherwise."""
+    problems = []
+    if s.JWT_SECRET in ("dev-secret-change-me", "change-me-to-a-long-random-string") or len(s.JWT_SECRET) < 32:
+        problems.append("JWT_SECRET is a default or shorter than 32 characters")
+    if s.DEBUG:
+        problems.append("DEBUG is on")
+    if s.ALLOW_DEV_FALLBACKS:
+        problems.append("ALLOW_DEV_FALLBACKS is on (unmatched calls go to the newest business; old WhatsApp verify tokens accepted)")
+    if "amsh:amsh@" in s.DATABASE_URL:
+        problems.append("DATABASE_URL uses the default amsh/amsh password")
+    if not s.TWILIO_AUTH_TOKEN and not s.EXOTEL_WEBHOOK_SECRET:
+        problems.append("no TWILIO_AUTH_TOKEN or EXOTEL_WEBHOOK_SECRET: telephony webhooks cannot be verified")
+    return problems
 
 
 @lru_cache

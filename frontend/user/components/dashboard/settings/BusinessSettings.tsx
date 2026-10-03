@@ -5,6 +5,7 @@ import { STRINGS } from '../../../utils/strings/en';
 import { DashboardController } from '../../../controllers/dashboard.controller';
 import { StorageService } from '../../../services/storage.service';
 import { FormSkeleton } from '../../../components/common/ShimmerSkeleton';
+import { ASSET_BASE } from '../../../utils/api_endpoints';
 
 interface DaySchedule {
   day: string;
@@ -88,7 +89,7 @@ export function BusinessSettings({ focusDangerZone }: { focusDangerZone?: boolea
         });
         const savedLocalLogo = typeof window !== 'undefined' ? localStorage.getItem('business_logo') : null;
         if (b.logo_url) {
-          const fullLogo = b.logo_url.startsWith('http') ? b.logo_url : `http://localhost:8010${b.logo_url}`;
+          const fullLogo = b.logo_url.startsWith('http') ? b.logo_url : `${ASSET_BASE}${b.logo_url}`;
           setLogoPreview(fullLogo);
         } else if (savedLocalLogo) {
           setLogoPreview(savedLocalLogo);
@@ -132,7 +133,7 @@ export function BusinessSettings({ focusDangerZone }: { focusDangerZone?: boolea
       try {
         const res = await DashboardController.uploadBusinessLogo(file);
         if (res?.logo_url) {
-          const fullLogo = res.logo_url.startsWith('http') ? res.logo_url : `http://localhost:8010${res.logo_url}`;
+          const fullLogo = res.logo_url.startsWith('http') ? res.logo_url : `${ASSET_BASE}${res.logo_url}`;
           setLogoPreview(fullLogo);
           const currentBiz = StorageService.getBusiness() || {};
           StorageService.setBusiness({ ...currentBiz, logo_url: res.logo_url });

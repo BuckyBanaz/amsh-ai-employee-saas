@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { STRINGS } from '../../utils/strings/en';
 import { useWhatsappEmbeddedSignup } from '../../hooks/useWhatsappEmbeddedSignup';
 import { StorageService } from '../../services/storage.service';
+import { BASE_URL } from '../../utils/api_endpoints';
 
 interface TenantIntegration {
   id: string;
@@ -204,7 +205,7 @@ export function IntegrationsGrid({ filter = 'All Integrations' }: { filter?: str
   const fetchIntegrations = async () => {
     try {
       const token = StorageService.getToken();
-      const res = await fetch(`http://localhost:8010/api/businesses/${businessId}/integrations`, {
+      const res = await fetch(`${BASE_URL}/businesses/${businessId}/integrations`, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -247,7 +248,7 @@ export function IntegrationsGrid({ filter = 'All Integrations' }: { filter?: str
     try {
       const token = StorageService.getToken();
       const res = await fetch(
-        `http://localhost:8010/api/businesses/${businessId}/integrations/${activeModalItem.providerKey}/connect`,
+        `${BASE_URL}/businesses/${businessId}/integrations/${activeModalItem.providerKey}/connect`,
         {
           method: 'POST',
           headers: {
@@ -283,7 +284,7 @@ export function IntegrationsGrid({ filter = 'All Integrations' }: { filter?: str
     try {
       const token = StorageService.getToken();
       const res = await fetch(
-        `http://localhost:8010/api/businesses/${businessId}/integrations/${providerKey}/disconnect`,
+        `${BASE_URL}/businesses/${businessId}/integrations/${providerKey}/disconnect`,
         {
           method: 'POST',
           headers: {

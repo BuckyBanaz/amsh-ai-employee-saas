@@ -1,4 +1,7 @@
-export const BASE_URL = 'http://localhost:8010/api';
+// Set NEXT_PUBLIC_API_URL (for example https://api.amsh.ai/api) for any deployed build; the default is local development.
+export const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010/api';
+// Where uploaded files (logos) are served from: the API host without the /api suffix.
+export const ASSET_BASE = BASE_URL.replace(/\/api\/?$/, '');
 
 export const API_ENDPOINTS = {
   AUTH: {
@@ -13,6 +16,7 @@ export const API_ENDPOINTS = {
   VOICE: {
     GET_VOICES: `${BASE_URL}/voice/voices`,
     PREVIEW: `${BASE_URL}/voice/preview`,
+    MEDIA_TOKEN: `${BASE_URL}/voice/media-token`,
     LLM_MODELS: `${BASE_URL}/voice/llm-models`,
     SIMULATE: `${BASE_URL}/voice/simulate`,
     CALL_ME: `${BASE_URL}/voice/call-me`,

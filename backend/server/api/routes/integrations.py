@@ -320,7 +320,9 @@ async def receive_whatsapp_webhook(request: Request, background: BackgroundTasks
     raw = await request.body()
     secret = get_settings().META_APP_SECRET
     if not secret:
-        logger.warning("[WHATSAPP] META_APP_SECRET is not set: webhook signatures are NOT being verified")
+        if not get_settings().ALLOW_DEV_FALLBACKS:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="WhatsApp webhook verification is not configured")
+        logger.warning("[WHATSAPP] META_APP_SECRET is not set: webhook signatures are NOT being verified (development only)")
     if not verify_signature(raw, request.headers.get("X-Hub-Signature-256"), secret):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid signature")
     try:

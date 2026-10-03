@@ -5,16 +5,21 @@ Zero-Dropped-Calls 20-second transfer fallback, per DOCS/11.
 """
 
 import logging
+import re
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Form, Query, Response, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.ai.realtime.twilio.call_control import build_base_url, to_ws_url
 from backend.ai.tools.common.send_sms import SendSmsTool
 from backend.ai.tools.framework.base import ToolContext
+from backend.server.auth.security import create_media_token, get_voice_user
+from backend.server.auth.webhook_signatures import create_stream_token, verify_twilio
+from backend.server.common import ratelimit
 from backend.server.common.config import get_settings
+from backend.server.database.models.user import User
 from backend.server.database.models.business import Business
 from backend.server.database.session import get_db
 from backend.ai.speech.tts.cartesia import cartesia_tts
@@ -31,24 +36,36 @@ from pydantic import BaseModel
 from backend.ai.realtime.exotel.client import exotel_client
 
 
+MAX_AUDIO_BYTES = 10 * 1024 * 1024
+_PHONE = re.compile(r"^\+?[0-9]{8,15}$")
+
+
 class CallMeRequest(BaseModel):
     phone_number: str
     business_id: Optional[str] = None
 
 
+@router.post("/media-token")
+async def media_token(user: User = Depends(get_voice_user)):
+    """A 10-minute token for `<audio src="/api/voice/preview?...&token=...">`: audio elements cannot send an Authorization header."""
+    return {"token": create_media_token(user.id), "expires_in": 600}
+
+
 @router.get("/voices")
-async def list_voices():
+async def list_voices(user: User = Depends(get_voice_user)):
     """Fetch available TTS voices from Cartesia."""
+    ratelimit.check("voices", user.id, 60, 60)
     voices = await cartesia_tts.get_voices()
     return {"voices": voices}
 
 
 @router.get("/llm-models")
-async def list_llm_models(refresh: bool = False):
+async def list_llm_models(refresh: bool = False, user: User = Depends(get_voice_user)):
     """Chat models available right now from Groq and Gemini (fetched live from their APIs, cached for a few minutes), for
     the dashboard's model picker. Each row: value ("groq:<id>" / "gemini:<id>", what the agent config stores), label,
     context window, whether it is in the current fallback chain and where, and tool-calling status ('no' once a model
     has refused tools, otherwise 'unknown': providers publish no reliable flag)."""
+    ratelimit.check("llm-models", user.id, 30, 60)
     from backend.ai.engine.agent.llm_backend import parse_provider_spec, tool_calling_status
     from backend.ai.llm.catalog import fetch_catalog
     from backend.ai.llm.client import llm_client
@@ -79,9 +96,13 @@ async def preview_voice(
     speed: Optional[float] = Query(None, ge=0.6, le=1.5),
     emotion: Optional[str] = Query(None),
     language: Optional[str] = Query(None),
+    user: User = Depends(get_voice_user),
 ):
     """Generate and return MP3 audio preview for a voice and text (optional speed multiplier / emotion / language).
     The dashboard already sends `language`; it used to be dropped here. Without it the language is detected from the text."""
+    ratelimit.check("preview", user.id, 120, 60)
+    if len(text) > 500:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Text is too long for a preview (500 characters at most)")
     lang = (language or "").strip().lower()[:2] or detect_tts_language(text)
     audio_bytes = await cartesia_tts.generate_preview_audio(text, voice_id, speed=speed, emotion=emotion, language=lang)
     if not audio_bytes:
@@ -95,31 +116,32 @@ async def preview_voice(
 @router.post("/transcribe")
 async def transcribe_audio_file(
     file: UploadFile = File(...),
+    user: User = Depends(get_voice_user),
 ):
     """Transcribe browser microphone audio payload using Deepgram Nova-2."""
     from backend.ai.speech.stt.deepgram import deepgram_stt
-    content = await file.read()
+    ratelimit.check("transcribe", user.id, 60, 60)
+    content = await file.read(MAX_AUDIO_BYTES + 1)
+    if len(content) > MAX_AUDIO_BYTES:
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Audio is too large (10 MB at most)")
     mimetype = file.content_type or "audio/webm"
     text = await deepgram_stt.transcribe_audio(content, mimetype=mimetype)
     return {"transcript": text or ""}
 
 
 @router.post("/call-me")
-async def trigger_test_call(payload: CallMeRequest, db: Session = Depends(get_db)):
-    """Triggers a real phone call to the user's phone via Exotel."""
-    phone = payload.phone_number.strip().replace(" ", "")
-    logger.info(f"[VOICE CALL-ME] User requested outbound test call to {phone}")
+async def trigger_test_call(payload: CallMeRequest, db: Session = Depends(get_db), user: User = Depends(get_voice_user)):
+    """Places a real test call to the signed-in user's own phone via Exotel (a call costs money, so it needs a login, is limited
+    per user and per number, and always uses the caller's own business)."""
+    phone = payload.phone_number.strip().replace(" ", "").replace("-", "")
+    if not _PHONE.match(phone):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Enter a phone number with country code, like +919876543210")
+    ratelimit.check("call-me-user", user.id, 5, 3600)
+    ratelimit.check("call-me-number", phone, 2, 3600)
+    logger.info(f"[VOICE CALL-ME] {user.id} requested an outbound test call")
 
-    # Resolve business_id – use payload value or fall back to latest active business
-    business_id = payload.business_id
-    if not business_id:
-        biz = db.execute(
-            select(Business)
-            .where(Business.status == "active")
-            .order_by(Business.created_at.desc())
-        ).scalars().first()
-        if biz:
-            business_id = biz.id
+    # A business user always tests their own business; only platform admins may name another one.
+    business_id = payload.business_id if user.scope == "platform" else user.business_id
 
     if exotel_client.is_configured():
         try:
@@ -128,8 +150,13 @@ async def trigger_test_call(payload: CallMeRequest, db: Session = Depends(get_db
             # the call lands on.
             base_url = build_base_url()
             callback_url = f"{base_url}/api/voice/exotel/incoming"
+            params = []
             if business_id:
-                callback_url = f"{callback_url}?business_id={business_id}"
+                params.append(f"business_id={business_id}")
+            if get_settings().EXOTEL_WEBHOOK_SECRET:
+                params.append(f"key={get_settings().EXOTEL_WEBHOOK_SECRET}")
+            if params:
+                callback_url = f"{callback_url}?{'&'.join(params)}"
 
             res = await exotel_client.create_outbound_call(phone, callback_url=callback_url)
             if "error" in res:
@@ -156,7 +183,7 @@ async def trigger_test_call(payload: CallMeRequest, db: Session = Depends(get_db
     }
 
 
-@router.post("/incoming")
+@router.post("/incoming", dependencies=[Depends(verify_twilio)])
 async def handle_incoming_call(
     To: str = Form(...),
     From: str = Form(...),
@@ -203,6 +230,7 @@ async def handle_incoming_call(
         "<Connect>"
         f'<Stream url="{stream_url}">'
         f'<Parameter name="caller_number" value="{From}"/>'
+        f'<Parameter name="token" value="{create_stream_token(business.id)}"/>'
         "</Stream>"
         "</Connect>"
         "</Response>"
@@ -211,7 +239,7 @@ async def handle_incoming_call(
     return Response(content=twiml, media_type="application/xml")
 
 
-@router.post("/status")
+@router.post("/status", dependencies=[Depends(verify_twilio)])
 async def handle_status_callback(
     CallSid: str = Form(...),
     CallStatus: str = Form(...),
@@ -236,7 +264,7 @@ async def handle_status_callback(
     return Response(content="", media_type="application/xml")
 
 
-@router.post("/recording-status")
+@router.post("/recording-status", dependencies=[Depends(verify_twilio)])
 async def handle_recording_callback(
     CallSid: str = Form(...),
     RecordingUrl: Optional[str] = Form(None),
@@ -261,7 +289,7 @@ async def handle_recording_callback(
     return Response(content="", media_type="application/xml")
 
 
-@router.post("/transfer-status")
+@router.post("/transfer-status", dependencies=[Depends(verify_twilio)])
 async def handle_transfer_status(
     DialCallStatus: str = Form(...),
     From: str = Form(...),

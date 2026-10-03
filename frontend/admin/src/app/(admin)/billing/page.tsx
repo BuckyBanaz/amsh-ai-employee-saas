@@ -1,7 +1,7 @@
 "use client";
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { adminAuth, createPlan, fetchOverview, fetchPlans, fetchTenants, updatePlan, Overview, PlanApi, PlanBody, TenantItem } from '../../../lib/api';
+import { API_BASE, Overview, PlanApi, PlanBody, TenantItem, adminAuth, createPlan, fetchOverview, fetchPlans, fetchTenants, updatePlan } from '../../../lib/api';
 
 type PlanStatus = 'Active' | 'Draft' | 'Archived';
 type BillingCycle = 'Monthly' | 'Yearly';
@@ -593,7 +593,7 @@ export default function BillingPage() {
   const [trialSavedMsg, setTrialSavedMsg] = useState('');
 
   useEffect(() => {
-    fetch('http://localhost:8010/api/billing/trial-config')
+    fetch(`${API_BASE}/billing/trial-config`)
       .then((r) => r.json())
       .then((data) => {
         if (data && typeof data === 'object') {
@@ -608,7 +608,7 @@ export default function BillingPage() {
     setTrialSavedMsg('');
     try {
       const token = adminAuth.getToken();
-      const res = await fetch('http://localhost:8010/api/billing/trial-config', {
+      const res = await fetch(`${API_BASE}/billing/trial-config`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify(trialConfig),

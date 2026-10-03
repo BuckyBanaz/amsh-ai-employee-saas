@@ -33,6 +33,11 @@ from backend.ai.realtime import latency
 from backend.ai.realtime.audio.mulaw import FRAME_BYTES, FRAME_DURATION_S, PCM_FRAME_BYTES, frame_stream
 from backend.ai.realtime.barge_in.coordinator import BargeInCoordinator
 from backend.ai.realtime.twilio.call_control import redirect_call
+from backend.server.auth.security import get_current_user
+from backend.server.auth.webhook_signatures import stream_token_ok
+from backend.server.common import ratelimit
+from backend.server.common.config import get_settings
+from backend.server.database.models.user import User
 from backend.server.services.call_recorder import (
     record_call_start,
     record_call_turn,
@@ -553,6 +558,12 @@ async def twilio_media_stream(websocket: WebSocket, business_id: str) -> None:
                 media_format = start.get("media_format") or {}
                 if custom_params.get("codec") == "pcm" or media_format.get("bit_rate") == "128kbps":
                     session.pcm = True
+                if not stream_token_ok(business_id, custom_params.get("token") or websocket.query_params.get("token")):
+                    if not get_settings().ALLOW_DEV_FALLBACKS:
+                        logger.warning(f"[WS GATEWAY] refusing a media stream for business {business_id}: missing or invalid token")
+                        await websocket.close(code=4403)
+                        return
+                    logger.warning("[WS GATEWAY] media stream without a valid token accepted (ALLOW_DEV_FALLBACKS)")
                 await session.start(stream_sid, call_id, caller_number)
 
             elif event_type in ("media", "audio"):
@@ -758,15 +769,26 @@ async def _legacy_turn(payload: VoiceSimulateRequest, call_id: str, state_machin
     }
 
 
+def _check_simulate_access(user: User, business_id: str) -> None:
+    """The playground runs the paid AI models: only a member of that business (or a platform admin) may use it, at a limited rate."""
+    from fastapi import HTTPException, status
+
+    if user.scope != "platform" and user.business_id != business_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a member of this business")
+    ratelimit.check("simulate", user.id, 60, 60)
+
+
 @router.post("/api/voice/simulate")
 async def simulate_voice_turn(
     payload: VoiceSimulateRequest,
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """
     Simulates a voice conversation turn.
     Used by the user dashboard's TestPlaygroundModal and automated tests.
     """
+    _check_simulate_access(user, payload.business_id)
     call_id, state_machine = await _ensure_sim_session(payload, db)
     sim_rt = get_sim_runtime(call_id)
     if sim_rt:
@@ -807,10 +829,12 @@ def speech_chunks(sentence: str, soft_limit: int = 90, min_piece: int = 28) -> l
 async def simulate_voice_turn_stream(
     payload: VoiceSimulateRequest,
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ) -> StreamingResponse:
     """Same turn as /simulate, but as newline-delimited JSON: one {"type":"sentence"} event the moment each sentence is
     ready (its audio is already being synthesised), then a final {"type":"done", ...same payload as /simulate}. The
     browser can start speaking the first sentence while the model is still writing the rest."""
+    _check_simulate_access(user, payload.business_id)
     call_id, state_machine = await _ensure_sim_session(payload, db)
     sim_rt = get_sim_runtime(call_id)
 

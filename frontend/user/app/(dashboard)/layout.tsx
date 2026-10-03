@@ -3,6 +3,8 @@
 import React, { useState } from 'react';
 import { Sidebar } from '../../components/dashboard/Sidebar';
 import { StorageService } from '../../services/storage.service';
+import { warmPreviewToken } from '../../services/voice_preview.service';
+import { ASSET_BASE } from '../../utils/api_endpoints';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false);
@@ -13,13 +15,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   React.useEffect(() => {
     setMounted(true);
+    void warmPreviewToken(); // voice previews play from a URL, so they carry a short-lived token
     const refreshData = () => {
       const cachedB = StorageService.getBusiness();
       const localLogo = typeof window !== 'undefined' ? localStorage.getItem('business_logo') : null;
       if (cachedB?.name) setBusinessName(cachedB.name);
       if (cachedB?.logo_url || localLogo) {
         const raw = cachedB?.logo_url || localLogo;
-        setLogo(raw?.startsWith('http') || raw?.startsWith('data:') ? raw : `http://localhost:8010${raw}`);
+        setLogo(raw?.startsWith('http') || raw?.startsWith('data:') ? raw : `${ASSET_BASE}${raw}`);
       }
 
       const cachedU = StorageService.getUser();

@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from backend.ai.realtime.twilio.call_control import build_base_url, to_ws_url
 from backend.ai.tools.framework.base import ToolContext
+from backend.server.auth.webhook_signatures import create_stream_token, verify_exotel
 from backend.server.common.config import get_settings
 from backend.server.database.models.business import Business
 from backend.server.database.session import get_db
@@ -23,7 +24,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/voice/exotel", tags=["Exotel Telephony"])
 
 
-@router.api_route("/incoming", methods=["GET", "POST"])
+@router.api_route("/incoming", methods=["GET", "POST"], dependencies=[Depends(verify_exotel)])
 async def handle_exotel_incoming_call(
     request: Request,
     CallSid: Optional[str] = Form(None),
@@ -89,7 +90,7 @@ async def handle_exotel_incoming_call(
 
     # 2. Build websocket stream URL
     base_url = build_base_url()
-    stream_url = f"{to_ws_url(base_url)}/media-stream/{business.id}?codec=pcm"
+    stream_url = f"{to_ws_url(base_url)}/media-stream/{business.id}?codec=pcm&token={create_stream_token(business.id)}"
     
     logger.info(f"[EXOTEL INCOMING] Bridging call {call_sid} to business {business.id} ({business.name}) -> stream_url: {stream_url}")
 
@@ -105,7 +106,7 @@ async def handle_exotel_incoming_call(
     }
 
 
-@router.api_route("/status", methods=["GET", "POST"])
+@router.api_route("/status", methods=["GET", "POST"], dependencies=[Depends(verify_exotel)])
 async def handle_exotel_status_callback(
     request: Request,
     CallSid: Optional[str] = Form(None),

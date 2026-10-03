@@ -1,0 +1,17 @@
+# Production overrides. Use: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# Requires in .env: ENV=production, a real JWT_SECRET (32+ characters), POSTGRES_PASSWORD, TWILIO_AUTH_TOKEN and/or EXOTEL_WEBHOOK_SECRET,
+# META_APP_SECRET, PUBLIC_BASE_URL, CORS_ORIGINS. The API refuses to start in production with unsafe settings (see production_problems()).
+services:
+  postgres:
+    ports: !reset []        # not reachable from outside the compose network
+  redis:
+    ports: !reset []
+  api:
+    volumes: !reset []      # run the code baked into the image, not a mounted folder
+    environment:
+      ENV: production
+      DEBUG: "false"
+      ALLOW_DEV_FALLBACKS: "false"
+      UVICORN_ARGS: ""      # no --reload
+    ports: !override
+      - "127.0.0.1:8010:8000"   # put a TLS reverse proxy (nginx, Caddy) in front

@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { API_ENDPOINTS } from '../../../utils/api_endpoints';
 import { StorageService } from '../../../services/storage.service';
+import { withPreviewToken } from '../../../services/voice_preview.service';
 
 export interface VoiceOption {
   id: string;
@@ -359,7 +360,7 @@ export function ChooseVoiceModal({
     // Hindi voices are previewed in Hindi (their samples are written in Devanagari); everything else in English.
     const langPrefix = v.accent.toLowerCase().includes('hindi') ? 'hi' : 'en';
     const previewUrl = `${API_ENDPOINTS.VOICE.PREVIEW}?voice_id=${encodeURIComponent(v.voice_id)}&text=${encodeURIComponent(sampleText.slice(0, 250))}&language=${encodeURIComponent(langPrefix)}`;
-    const audio = new Audio(previewUrl);
+    const audio = new Audio(withPreviewToken(previewUrl));
 
     audio.onended = () => setPreviewingId(null);
     audio.onerror = () => {

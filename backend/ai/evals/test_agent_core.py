@@ -23,6 +23,11 @@ def run(coro):
     return asyncio.run(coro)
 
 
+from types import SimpleNamespace
+
+_TEST_USER = SimpleNamespace(id="test-user", scope="platform", business_id=None)  # what the paid voice routes now require
+
+
 class ScriptedBackend:
     """Fake LLM: returns pre-written responses in order and records what it was asked."""
 
@@ -833,12 +838,12 @@ class BehaviorSettings(unittest.TestCase):
         from backend.server.api.routes import voice
 
         with patch.object(voice.cartesia_tts, "generate_preview_audio", AsyncMock(return_value=b"mp3")) as gen:
-            aio.run(voice.preview_voice(voice_id="v", text="Hello there", speed=1.2, emotion=None, language="hi"))
+            aio.run(voice.preview_voice(voice_id="v", text="Hello there", speed=1.2, emotion=None, language="hi", user=_TEST_USER))
             self.assertEqual(gen.call_args.kwargs["language"], "hi")  # the dashboard sends it; it used to be dropped
             self.assertEqual(gen.call_args.kwargs["speed"], 1.2)
-            aio.run(voice.preview_voice(voice_id="v", text="Aapka naam kya hai?", speed=None, emotion=None, language=None))
+            aio.run(voice.preview_voice(voice_id="v", text="Aapka naam kya hai?", speed=None, emotion=None, language=None, user=_TEST_USER))
             self.assertEqual(gen.call_args.kwargs["language"], "hi")  # detected from the text when not supplied
-            aio.run(voice.preview_voice(voice_id="v", text="How can I help you today?", speed=None, emotion=None, language=None))
+            aio.run(voice.preview_voice(voice_id="v", text="How can I help you today?", speed=None, emotion=None, language=None, user=_TEST_USER))
             self.assertEqual(gen.call_args.kwargs["language"], "en")
 
     def test_cartesia_generation_config(self):
@@ -1137,7 +1142,7 @@ class CartesiaCredits(unittest.TestCase):
 
         with patch.object(voice.cartesia_tts, "generate_preview_audio", AsyncMock(return_value=None)), \
              patch.object(voice.cartesia_tts, "last_error", (402, "Insufficient credits")):
-            resp = run(voice.preview_voice(voice_id="v", text="Hello", speed=None, emotion=None, language=None))
+            resp = run(voice.preview_voice(voice_id="v", text="Hello", speed=None, emotion=None, language=None, user=_TEST_USER))
         self.assertEqual(resp.status_code, 402)
         self.assertIn("credits", resp.body.decode().lower())
 
@@ -1668,7 +1673,7 @@ class StreamedPlayground(unittest.TestCase):
         ]
 
         async def go():
-            resp = await gw.simulate_voice_turn_stream(payload, db=None)
+            resp = await gw.simulate_voice_turn_stream(payload, db=None, user=_TEST_USER)
             return [json.loads(chunk) async for chunk in resp.body_iterator], resp
 
         for p in patches:
@@ -1789,7 +1794,7 @@ class LiveModelCatalog(unittest.TestCase):
         _NO_TOOLS.add(("groq", "allam-2-7b"))
         with patch("backend.ai.llm.catalog.fetch_catalog", AsyncMock(return_value={"models": rows, "errors": {}})), \
              patch("backend.server.common.config.get_settings", return_value=settings):
-            out = run(voice.list_llm_models())
+            out = run(voice.list_llm_models(user=_TEST_USER))
         self.assertEqual(out["chain"], ["groq:openai/gpt-oss-120b", "gemini:gemini-x"])
         self.assertEqual([m["value"] for m in out["models"]], ["groq:openai/gpt-oss-120b", "gemini:gemini-x", "groq:allam-2-7b"])  # chain first
         by = {m["value"]: m for m in out["models"]}

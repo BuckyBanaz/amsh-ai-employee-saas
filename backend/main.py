@@ -40,13 +40,8 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://localhost:3001",
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:3001",
-    ],
-    allow_origin_regex=r"https?://.*",
+    allow_origins=settings.CORS_ORIGINS,
+    allow_origin_regex=settings.CORS_ORIGIN_REGEX or None,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -55,6 +50,13 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def on_startup() -> None:
+    from backend.server.common.config import production_problems
+
+    problems = production_problems(get_settings())
+    if problems and get_settings().ENV.lower() in ("production", "prod"):
+        raise RuntimeError("Refusing to start in production: " + "; ".join(problems))
+    for problem in problems:
+        logging.getLogger(__name__).warning("[CONFIG] not production-safe: %s", problem)
     # Schema: Alembic migrations (backend/migrations). Older databases created by create_all are stamped and upgraded.
     # If migrations cannot run, fall back to create_all so the API still starts (new tables only, no column changes).
     try:

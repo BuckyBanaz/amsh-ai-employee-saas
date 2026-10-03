@@ -6,6 +6,7 @@ import { STRINGS } from '../../../utils/strings/en';
 import { OnboardingController } from '../../../controllers/onboarding.controller';
 import { API_ENDPOINTS } from '../../../utils/api_endpoints';
 import { StorageService } from '../../../services/storage.service';
+import { withPreviewToken } from '../../../services/voice_preview.service';
 
 const initialPersonalities = [
   { id: 'professional', name: 'Professional', desc: 'Polite, clinical, focused on scheduling accuracy' },
@@ -139,7 +140,7 @@ export default function AiReceptionistOnboardingPage() {
       setPlayingVoice(voiceId);
       
       const audioUrl = `${API_ENDPOINTS.VOICE.PREVIEW}?voice_id=${voiceId}&text=${encodeURIComponent(greeting)}`;
-      const audio = new Audio(audioUrl);
+      const audio = new Audio(withPreviewToken(audioUrl));
       
       audio.onended = () => {
         setPlayingVoice(null);

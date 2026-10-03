@@ -137,3 +137,42 @@ def require_platform_admin(current_user: User = Depends(get_current_user)) -> Us
     if current_user.scope != "platform":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Platform administrators only")
     return current_user
+
+
+# --- Short-lived media token (for <audio src> URLs, which cannot send an Authorization header) ---
+MEDIA_TOKEN_EXPIRE_MINUTES = 10
+
+
+def create_media_token(user_id: str) -> str:
+    expire = datetime.now(timezone.utc) + timedelta(minutes=MEDIA_TOKEN_EXPIRE_MINUTES)
+    payload = {"sub": user_id, "purpose": "voice_media", "exp": expire}
+    return jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
+
+
+def decode_media_token(token: str) -> str:
+    try:
+        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+        if payload.get("purpose") != "voice_media" or not payload.get("sub"):
+            raise ValueError("not a media token")
+        return payload["sub"]
+    except (JWTError, ValueError) as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token") from exc
+
+
+def get_voice_user(
+    token: str | None = None,
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    db: Session = Depends(get_db),
+) -> User:
+    """Who is asking for text-to-speech / transcription / a call: a normal login (Authorization header) or, for audio elements,
+    a short-lived `?token=` media token."""
+    if credentials is not None:
+        user_id = decode_access_token(credentials.credentials)
+    elif token:
+        user_id = decode_media_token(token)
+    else:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+    user = db.get(User, user_id)
+    if user is None or not user.is_active:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive")
+    return user

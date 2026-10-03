@@ -1,4 +1,4 @@
-import { API_ENDPOINTS } from '../utils/api_endpoints';
+import { API_ENDPOINTS, BASE_URL } from '../utils/api_endpoints';
 import { ApiService } from '../services/api.service';
 import { StorageService } from '../services/storage.service';
 
@@ -495,7 +495,7 @@ export const DashboardController = {
 
   /** Chat models available right now from Groq and Gemini (fetched live by the server, nothing hard-coded). */
   async getLlmModels(refresh = false): Promise<LlmModelCatalog> {
-    return ApiService.get<LlmModelCatalog>(`${API_ENDPOINTS.VOICE.LLM_MODELS}${refresh ? '?refresh=true' : ''}`, { requireAuth: false });
+    return ApiService.get<LlmModelCatalog>(`${API_ENDPOINTS.VOICE.LLM_MODELS}${refresh ? '?refresh=true' : ''}`);
   },
 
   /**
@@ -585,7 +585,7 @@ export const DashboardController = {
   async transcribeAudio(audioBlob: Blob): Promise<{ transcript: string }> {
     const formData = new FormData();
     formData.append('file', audioBlob, 'mic_recording.webm');
-    const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+    const token = StorageService.getToken();
     const res = await fetch(API_ENDPOINTS.VOICE.TRANSCRIBE, {
       method: 'POST',
       headers: {
@@ -614,7 +614,7 @@ export const DashboardController = {
     const form = new FormData();
     form.append('file', file);
     const token = StorageService.getToken();
-    const res = await fetch(`http://localhost:8010/api/businesses/${bId}/logo`, {
+    const res = await fetch(`${BASE_URL}/businesses/${bId}/logo`, {
       method: 'POST',
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: form,
@@ -627,32 +627,32 @@ export const DashboardController = {
 
   async getTeamMembers(businessId?: string): Promise<any[]> {
     const bId = this.getEffectiveBusinessId(businessId);
-    return ApiService.get<any[]>(`http://localhost:8010/api/businesses/${bId}/users`);
+    return ApiService.get<any[]>(`${BASE_URL}/businesses/${bId}/users`);
   },
 
   async inviteTeamMember(payload: { name: string; email: string; role: string }, businessId?: string): Promise<any> {
     const bId = this.getEffectiveBusinessId(businessId);
-    return ApiService.post<any>(`http://localhost:8010/api/businesses/${bId}/users`, payload);
+    return ApiService.post<any>(`${BASE_URL}/businesses/${bId}/users`, payload);
   },
 
   async updateTeamMember(userId: string, payload: { role?: string; is_active?: boolean }, businessId?: string): Promise<any> {
     const bId = this.getEffectiveBusinessId(businessId);
-    return ApiService.patch<any>(`http://localhost:8010/api/businesses/${bId}/users/${userId}`, payload);
+    return ApiService.patch<any>(`${BASE_URL}/businesses/${bId}/users/${userId}`, payload);
   },
 
   async deleteTeamMember(userId: string, businessId?: string): Promise<void> {
     const bId = this.getEffectiveBusinessId(businessId);
-    return ApiService.delete<void>(`http://localhost:8010/api/businesses/${bId}/users/${userId}`);
+    return ApiService.delete<void>(`${BASE_URL}/businesses/${bId}/users/${userId}`);
   },
 
   async getNotifications(businessId?: string): Promise<any[]> {
     const bId = this.getEffectiveBusinessId(businessId);
-    return ApiService.get<any[]>(`http://localhost:8010/api/businesses/${bId}/notifications`);
+    return ApiService.get<any[]>(`${BASE_URL}/businesses/${bId}/notifications`);
   },
 
   async markAllNotificationsRead(businessId?: string): Promise<void> {
     const bId = this.getEffectiveBusinessId(businessId);
-    return ApiService.post<void>(`http://localhost:8010/api/businesses/${bId}/notifications/mark-read`, {});
+    return ApiService.post<void>(`${BASE_URL}/businesses/${bId}/notifications/mark-read`, {});
   },
 };
 

@@ -8,6 +8,7 @@ import { BargeInDetector } from '../../../utils/barge_in';
 import { CallRecorder } from '../../../utils/call_recorder';
 import { isEchoOfAI, isRealInterruption } from '../../../utils/voice_echo';
 import { ChooseVoiceModal, VoiceOption, AVAILABLE_VOICES } from './ChooseVoiceModal';
+import { withPreviewToken } from '../../../services/voice_preview.service';
 
 const HeroOrb = dynamic(() => import('../../landing/HeroOrb'), {
   ssr: false,
@@ -542,7 +543,7 @@ export function AIStudioWorkbench({ onBack, onSave }: AIStudioWorkbenchProps) {
       const voiceId = selectedVoice.voice_id;
       // No `language` here: the server detects it per sentence, which is also what it pre-generates the audio with.
       // `voice`: how this sentence should sound (the emotion engine's emotion, and a real laugh as a [laughter] prefix).
-      const previewUrl = `${API_ENDPOINTS.VOICE.PREVIEW}?voice_id=${encodeURIComponent(voiceId)}&text=${encodeURIComponent((voice?.ttsText ?? text).slice(0, 250))}${voice?.emotion ? `&emotion=${encodeURIComponent(voice.emotion)}` : ''}`;
+      const previewUrl = withPreviewToken(`${API_ENDPOINTS.VOICE.PREVIEW}?voice_id=${encodeURIComponent(voiceId)}&text=${encodeURIComponent((voice?.ttsText ?? text).slice(0, 250))}${voice?.emotion ? `&emotion=${encodeURIComponent(voice.emotion)}` : ''}`);
       const startAudio = (src: string, revoke?: () => void) => {
         if (token !== speakTokenRef.current) { revoke?.(); return; } // a newer sentence / hang-up took over while this loaded
         const audio = new Audio(src);

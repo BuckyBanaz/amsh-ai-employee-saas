@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { STRINGS } from '../../utils/strings/en';
 import { StorageService } from '../../services/storage.service';
 import { DashboardController } from '../../controllers/dashboard.controller';
+import { ASSET_BASE } from '../../utils/api_endpoints';
 
 const navGroups = [
   {
@@ -82,7 +83,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
 
     const resolveLogoUrl = (raw: string | null) => {
       if (!raw) return null;
-      return raw.startsWith('http') || raw.startsWith('data:') ? raw : `http://localhost:8010${raw}`;
+      return raw.startsWith('http') || raw.startsWith('data:') ? raw : `${ASSET_BASE}${raw}`;
     };
 
     const cachedBusiness = StorageService.getBusiness();

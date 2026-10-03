@@ -4,6 +4,7 @@ import { DashboardController, AgentItem } from '../../../controllers/dashboard.c
 import { API_ENDPOINTS } from '../../../utils/api_endpoints';
 import { StorageService } from '../../../services/storage.service';
 import { GlobalLoader } from '../../common/GlobalLoader';
+import { withPreviewToken } from '../../../services/voice_preview.service';
 import {
   VoiceOption,
   AVAILABLE_VOICES,
@@ -217,7 +218,7 @@ export function VoiceTab() {
     const previewUrl = `${API_ENDPOINTS.VOICE.PREVIEW}?voice_id=${encodeURIComponent(
       voice.voice_id
     )}&text=${encodeURIComponent(sampleText)}&language=${encodeURIComponent(langPrefix)}`;
-    const audio = new Audio(previewUrl);
+    const audio = new Audio(withPreviewToken(previewUrl));
     audioRef.current = audio;
 
     setPlayingVoiceId(voice.voice_id);
