@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Sidebar } from '../../components/dashboard/Sidebar';
 import { StorageService } from '../../services/storage.service';
 import { warmPreviewToken } from '../../services/voice_preview.service';
+import { AnnouncementBanner } from '../../components/dashboard/AnnouncementBanner';
 import { ASSET_BASE } from '../../utils/api_endpoints';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -89,6 +90,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* Main Content Area */}
         <main className="flex-1 overflow-y-auto flex flex-col">
+          <AnnouncementBanner />
           <div className="w-full px-3.5 sm:px-6 lg:px-8 py-3 pb-10 flex-1 flex flex-col max-w-[1600px] mx-auto min-w-0">
             {children}
           </div>

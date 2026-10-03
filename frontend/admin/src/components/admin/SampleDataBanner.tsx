@@ -18,6 +18,12 @@ const REAL_PAGES = [
   '/conversations',
   '/usage',
   '/seo',
+  '/audit',
+  '/security',
+  '/admin-users',
+  '/tickets',
+  '/announcements',
+  '/verticals',
 ];
 
 export function SampleDataBanner() {

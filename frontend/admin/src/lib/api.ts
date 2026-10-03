@@ -569,3 +569,204 @@ export const fetchSeo = () => adminFetch<SeoOverview>('/admin/seo');
 export const saveSeoGlobal = (body: SeoGlobal) => adminFetch<SeoOverview>('/admin/seo/global', { method: 'PUT', body: JSON.stringify(body) });
 export const saveSeoPage = (body: SeoPage) => adminFetch<SeoOverview>('/admin/seo/pages', { method: 'PUT', body: JSON.stringify(body) });
 export const deleteSeoPage = (path: string) => adminFetch<SeoOverview>(`/admin/seo/pages?path=${encodeURIComponent(path)}`, { method: 'DELETE' });
+
+// ---- Audit and security --------------------------------------------------------------------------------------------
+
+export interface AuditEntry {
+  id: string;
+  created_at: string | null;
+  actor_email: string | null;
+  business_id: string | null;
+  business_name: string | null;
+  action: string;
+  target_type: string | null;
+  target_id: string | null;
+  outcome: string;
+  ip: string | null;
+  meta: Record<string, unknown>;
+}
+
+export interface AuditList {
+  items: AuditEntry[];
+  total: number;
+  limit: number;
+  offset: number;
+  facets: { actions: string[]; outcomes: string[] };
+}
+
+export interface AuditQuery {
+  action?: string;
+  outcome?: string;
+  actor?: string;
+  q?: string;
+  since?: string;
+  limit?: number;
+  offset?: number;
+}
+
+function queryString(params: Record<string, string | number | undefined>): string {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) if (value !== undefined && value !== '') query.set(key, String(value));
+  const text = query.toString();
+  return text ? `?${text}` : '';
+}
+
+export const fetchAudit = (params: AuditQuery) => adminFetch<AuditList>(`/admin/audit${queryString({ ...params })}`);
+
+/** Downloads the audit log as CSV with the admin's token (a plain link cannot send it). */
+export async function downloadAuditCsv(params: AuditQuery): Promise<void> {
+  const token = adminAuth.getToken();
+  const res = await fetch(`${API_BASE}/admin/audit/export.csv${queryString({ ...params, limit: undefined, offset: undefined })}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  if (!res.ok) throw new ApiError(`Export failed (${res.status})`, res.status);
+  const url = URL.createObjectURL(await res.blob());
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'amsh-audit-log.csv';
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+export interface SecurityOverview {
+  counters: Record<string, number>;
+  top_ips: { ip: string; failures: number }[];
+  top_accounts: { email: string; failures: number }[];
+  admins: { id: string; name: string; email: string; role: string; active: boolean; verified: boolean; last_active_at: string | null }[];
+  checks: { key: string; label: string; ok: boolean; fix: string }[];
+  problems: string[];
+  policy: { login_max_failures: number; token_lifetime_minutes: number; cors_origins: string[]; environment: string };
+}
+
+export const fetchSecurity = () => adminFetch<SecurityOverview>('/admin/security');
+
+// ---- Staff accounts ------------------------------------------------------------------------------------------------
+
+export interface StaffAccount {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  active: boolean;
+  verified: boolean;
+  last_active_at: string | null;
+  created_at: string | null;
+}
+
+export const fetchStaff = () => adminFetch<{ items: StaffAccount[]; roles: string[]; me: string }>('/admin/admin-users');
+export const createStaff = (body: { name: string; email: string; role: string }) =>
+  adminFetch<StaffAccount & { setup_email_sent: boolean }>('/admin/admin-users', { method: 'POST', body: JSON.stringify(body) });
+export const updateStaff = (id: string, body: { name?: string; role?: string; is_active?: boolean }) =>
+  adminFetch<StaffAccount>(`/admin/admin-users/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(body) });
+export const sendStaffSetupLink = (id: string) => adminFetch<{ setup_email_sent: boolean }>(`/admin/admin-users/${encodeURIComponent(id)}/setup-link`, { method: 'POST' });
+
+// ---- Support tickets -----------------------------------------------------------------------------------------------
+
+export interface TicketMessage {
+  id: string;
+  author: string;
+  from_staff: boolean;
+  internal: boolean;
+  body: string;
+  created_at: string | null;
+}
+
+export interface TicketItem {
+  id: string;
+  number: number;
+  subject: string;
+  category: string;
+  priority: string;
+  status: string;
+  business_id: string;
+  business_name: string | null;
+  requester: string | null;
+  requester_email: string | null;
+  assignee_id: string | null;
+  assignee: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  first_response_at: string | null;
+  resolved_at: string | null;
+  message_count: number;
+  last_message: string;
+  messages?: TicketMessage[];
+}
+
+export interface TicketList {
+  items: TicketItem[];
+  counts: Record<string, number>;
+  total: number;
+  staff: { id: string; name: string }[];
+  options: { statuses: string[]; priorities: string[]; categories: string[] };
+}
+
+export const fetchTickets = (params: { status?: string; priority?: string; category?: string; assignee?: string; q?: string }) =>
+  adminFetch<TicketList>(`/admin/tickets${queryString({ ...params })}`);
+export const fetchTicket = (id: string) => adminFetch<TicketItem>(`/admin/tickets/${encodeURIComponent(id)}`);
+export const patchTicket = (id: string, body: { status?: string; priority?: string; assignee_id?: string; unassign?: boolean }) =>
+  adminFetch<TicketItem>(`/admin/tickets/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(body) });
+export const replyTicket = (id: string, body: { body: string; internal: boolean }) =>
+  adminFetch<TicketItem>(`/admin/tickets/${encodeURIComponent(id)}/messages`, { method: 'POST', body: JSON.stringify(body) });
+
+// ---- Announcements -------------------------------------------------------------------------------------------------
+
+export interface AnnouncementItem {
+  id: string;
+  title: string;
+  body: string;
+  level: string;
+  status: string;
+  plans: string[];
+  business_ids: string[];
+  starts_at: string | null;
+  ends_at: string | null;
+  published_at: string | null;
+  created_at: string | null;
+  live?: boolean;
+}
+
+export interface AnnouncementBody {
+  title: string;
+  body: string;
+  level: string;
+  status: string;
+  plans: string[];
+  business_ids: string[];
+  starts_at: string | null;
+  ends_at: string | null;
+}
+
+export const fetchAnnouncements = () => adminFetch<{ items: AnnouncementItem[]; levels: string[]; statuses: string[] }>('/admin/announcements');
+export const createAnnouncement = (body: AnnouncementBody) => adminFetch<AnnouncementItem>('/admin/announcements', { method: 'POST', body: JSON.stringify(body) });
+export const updateAnnouncement = (id: string, body: AnnouncementBody) =>
+  adminFetch<AnnouncementItem>(`/admin/announcements/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(body) });
+export const deleteAnnouncement = (id: string) => adminFetch<void>(`/admin/announcements/${encodeURIComponent(id)}`, { method: 'DELETE' });
+
+// ---- Verticals -----------------------------------------------------------------------------------------------------
+
+export interface VerticalItem {
+  name: string;
+  description: string;
+  languages: Record<string, { display_name: string; version: string; intents: number }>;
+  tools: string[];
+  intents: string[];
+  terminology: Record<string, string>;
+  businesses: number;
+  status: string;
+}
+
+export interface VerticalDetail {
+  name: string;
+  language: string;
+  version: string;
+  display_name: string;
+  description: string;
+  terminology: Record<string, string>;
+  greeting_template: string;
+  system_prompt_template: string;
+  default_tools: string[];
+  intents: { name: string; description: string; tool: string | null; confirmation_required: boolean; slots: { name: string; type: string; required: boolean }[] }[];
+  escalation_rules: { keywords: string[]; action: string; target_role: string | null }[];
+}
+
+export const fetchVerticals = () => adminFetch<{ items: VerticalItem[]; unconfigured: { name: string; businesses: number }[]; editable: boolean; source: string }>('/admin/verticals');
+export const fetchVertical = (name: string, language: string) => adminFetch<VerticalDetail>(`/admin/verticals/${encodeURIComponent(name)}${queryString({ language })}`);

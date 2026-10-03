@@ -1,485 +1,87 @@
 "use client";
-import React, { useMemo, useState } from 'react';
 
-type Priority = 'Low' | 'Normal' | 'High';
-type Status = 'Published' | 'Scheduled' | 'Draft';
-type AudienceScope = 'All' | 'BusinessType' | 'Plan' | 'Country';
+import { useCallback, useEffect, useState } from 'react';
+import { AnnouncementBody, AnnouncementItem, createAnnouncement, deleteAnnouncement, fetchAnnouncements, updateAnnouncement } from '@/lib/api';
+import { BTN, Card, Chip, Empty, ErrorBox, INPUT, Loading, PRIMARY, PageHeader, Tone, errorText, label, when } from '@/components/admin/ui';
 
-interface Audience {
-  scope: AudienceScope;
-  values: string[];
-}
-
-interface Announcement {
-  id: string;
-  title: string;
-  body: string;
-  priority: Priority;
-  status: Status;
-  date: string;
-  audience: Audience;
-}
-
-const BUSINESS_TYPES = [
-  'Dental Clinic',
-  'Medical Center',
-  'Restaurant',
-  'Beauty Salon',
-  'Fitness Studio',
-  'Retail Store',
-];
-
-const PLANS = ['Starter', 'Professional', 'Business', 'Enterprise'];
-const COUNTRIES = ['NL', 'DE', 'FR', 'GB', 'IT'];
-
-/** Rough tenant counts per business type, used to preview how many accounts an announcement reaches. */
-const BUSINESS_TYPE_COUNTS: Record<string, number> = {
-  'Dental Clinic': 54,
-  'Medical Center': 21,
-  Restaurant: 18,
-  'Beauty Salon': 14,
-  'Fitness Studio': 12,
-  'Retail Store': 9,
-};
-
-const TOTAL_BUSINESSES = Object.values(BUSINESS_TYPE_COUNTS).reduce((sum, n) => sum + n, 0);
-
-const priorityStyles: Record<Priority, string> = {
-  High: 'bg-[#FEF3C7] text-[#92400E]',
-  Normal: 'bg-[#DBEAFE] text-[#1E40AF]',
-  Low: 'bg-[#F1F5F9] text-[#334155]',
-};
-
-const statusStyles: Record<Status, string> = {
-  Published: 'bg-[#D1FAE5] text-[#065F46]',
-  Scheduled: 'bg-[#FEF3C7] text-[#92400E]',
-  Draft: 'bg-[#F1F5F9] text-[#334155]',
-};
-
-const scopeOptions: { value: AudienceScope; label: string }[] = [
-  { value: 'All', label: 'All Businesses' },
-  { value: 'BusinessType', label: 'Specific Business Type' },
-  { value: 'Plan', label: 'Specific Plan' },
-  { value: 'Country', label: 'Specific Country' },
-];
-
-const optionsForScope = (scope: AudienceScope) => {
-  if (scope === 'BusinessType') return BUSINESS_TYPES;
-  if (scope === 'Plan') return PLANS;
-  if (scope === 'Country') return COUNTRIES;
-  return [];
-};
-
-const audienceLabel = (audience: Audience) => {
-  if (audience.scope === 'All') return 'All Businesses';
-  const joined = audience.values.join(', ');
-  if (audience.scope === 'BusinessType') return `Business Type (${joined})`;
-  if (audience.scope === 'Plan') return `Specific Plan (${joined})`;
-  return `Specific Country (${joined})`;
-};
-
-const estimatedReach = (audience: Audience) => {
-  if (audience.scope === 'All') return TOTAL_BUSINESSES;
-  if (audience.scope === 'BusinessType') {
-    return audience.values.reduce((sum, type) => sum + (BUSINESS_TYPE_COUNTS[type] ?? 0), 0);
-  }
-  // Plan and country splits are not modelled per tenant yet, so reach stays unknown.
-  return null;
-};
-
-const seedAnnouncements: Announcement[] = [
-  {
-    id: 'ann-1',
-    title: 'Scheduled Voice Server Maintenance',
-    body: 'We will be performing routine infrastructure updates to voice gateways on Feb 2 between 02:00 and 04:00 UTC.',
-    priority: 'High',
-    status: 'Published',
-    date: '2026-01-29',
-    audience: { scope: 'All', values: [] },
-  },
-  {
-    id: 'ann-2',
-    title: 'Introducing Dieter: New German AI Receptionist',
-    body: 'Dieter is now available for all DACH region accounts. Highly optimized for medical scheduling.',
-    priority: 'Normal',
-    status: 'Published',
-    date: '2026-01-24',
-    audience: { scope: 'BusinessType', values: ['Medical Center', 'Dental Clinic'] },
-  },
-  {
-    id: 'ann-3',
-    title: 'Upcoming EUR Billing Regulation Updates',
-    body: 'Compliance and tax calculation adjustments starting mid February for EEA-based subscribers.',
-    priority: 'High',
-    status: 'Scheduled',
-    date: 'Scheduled: Feb 5',
-    audience: { scope: 'Country', values: ['NL', 'DE', 'FR'] },
-  },
-  {
-    id: 'ann-4',
-    title: 'Table Reservation Flow Improvements',
-    body: 'Party-size handling and waitlist callbacks are now generally available for hospitality accounts.',
-    priority: 'Normal',
-    status: 'Published',
-    date: '2026-01-21',
-    audience: { scope: 'BusinessType', values: ['Restaurant'] },
-  },
-  {
-    id: 'ann-5',
-    title: 'Twilio Gateway API Upgrade Beta',
-    body: 'Testing a highly optimized low latency audio connection. Contact support to register.',
-    priority: 'Low',
-    status: 'Draft',
-    date: 'Draft',
-    audience: { scope: 'All', values: [] },
-  },
-];
-
-const inputClass =
-  'w-full px-3 py-2.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg text-[13px] text-[#0F172A] placeholder-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB]';
+const LEVEL_TONE: Record<string, Tone> = { info: 'blue', feature: 'green', warning: 'amber', critical: 'red' };
+const BLANK: AnnouncementBody = { title: '', body: '', level: 'info', status: 'draft', plans: [], business_ids: [], starts_at: null, ends_at: null };
+const toLocal = (iso: string | null) => (iso ? new Date(new Date(iso).getTime() - new Date(iso).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : '');
+const fromLocal = (v: string) => (v ? new Date(v).toISOString() : null);
 
 export default function AnnouncementsPage() {
-  const [announcements, setAnnouncements] = useState<Announcement[]>(seedAnnouncements);
+  const [items, setItems] = useState<AnnouncementItem[] | null>(null);
+  const [levels, setLevels] = useState<string[]>([]);
+  const [error, setError] = useState('');
+  const [editing, setEditing] = useState<{ id: string | null; draft: AnnouncementBody; plans: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState('');
 
-  const [title, setTitle] = useState('');
-  const [body, setBody] = useState('');
-  const [priority, setPriority] = useState<Priority>('Normal');
-  const [scope, setScope] = useState<AudienceScope>('All');
-  const [values, setValues] = useState<string[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
+  const load = useCallback(() => fetchAnnouncements().then((d) => { setItems(d.items); setLevels(d.levels); setError(''); }).catch((e: unknown) => setError(errorText(e, 'Could not load announcements'))), []);
+  useEffect(() => { void load(); }, [load]);
 
-  const [statusFilter, setStatusFilter] = useState<'All' | Status>('All');
-  const [typeFilter, setTypeFilter] = useState('All');
+  const start = (a?: AnnouncementItem) => { setNote(''); setEditing(a ? { id: a.id, draft: { title: a.title, body: a.body, level: a.level, status: a.status, plans: a.plans, business_ids: a.business_ids, starts_at: a.starts_at, ends_at: a.ends_at }, plans: a.plans.join(', ') } : { id: null, draft: BLANK, plans: '' }); };
+  async function save(status: string) {
+    if (!editing) return;
+    setBusy(true); setError('');
+    const body = { ...editing.draft, status, plans: editing.plans.split(',').map((p) => p.trim()).filter(Boolean) };
+    try { if (editing.id) await updateAnnouncement(editing.id, body); else await createAnnouncement(body); setEditing(null); setNote(status === 'published' ? 'Published. Clinics see it in their dashboard.' : 'Saved.'); await load(); } catch (e) { setError(errorText(e)); } finally { setBusy(false); }
+  }
+  async function remove(a: AnnouncementItem) {
+    if (!window.confirm(`Delete "${a.title}"? This cannot be undone.`)) return;
+    try { await deleteAnnouncement(a.id); await load(); } catch (e) { setError(errorText(e)); }
+  }
+  const set = (patch: Partial<AnnouncementBody>) => setEditing((x) => (x ? { ...x, draft: { ...x.draft, ...patch } } : x));
 
-  const draftAudience: Audience = { scope, values };
-  const draftReach = estimatedReach(draftAudience);
-
-  const visible = useMemo(
-    () =>
-      announcements.filter((item) => {
-        const matchesStatus = statusFilter === 'All' || item.status === statusFilter;
-        const matchesType =
-          typeFilter === 'All' ||
-          item.audience.scope === 'All' ||
-          (item.audience.scope === 'BusinessType' && item.audience.values.includes(typeFilter));
-        return matchesStatus && matchesType;
-      }),
-    [announcements, statusFilter, typeFilter]
-  );
-
-  const flash = (message: string) => {
-    setToast(message);
-    window.setTimeout(() => setToast(null), 2600);
-  };
-
-  const toggleValue = (value: string) =>
-    setValues((current) =>
-      current.includes(value) ? current.filter((v) => v !== value) : [...current, value]
-    );
-
-  const changeScope = (next: AudienceScope) => {
-    setScope(next);
-    setValues([]);
-    setError(null);
-  };
-
-  const resetForm = () => {
-    setTitle('');
-    setBody('');
-    setPriority('Normal');
-    setScope('All');
-    setValues([]);
-    setError(null);
-  };
-
-  const submit = (status: Status) => {
-    if (!title.trim()) {
-      setError('Announcement title is required.');
-      return;
-    }
-    if (!body.trim()) {
-      setError('Message content is required.');
-      return;
-    }
-    if (scope !== 'All' && values.length === 0) {
-      setError('Pick at least one target, or switch back to All Businesses.');
-      return;
-    }
-
-    const created: Announcement = {
-      id: `ann-${Date.now()}`,
-      title: title.trim(),
-      body: body.trim(),
-      priority,
-      status,
-      date: status === 'Draft' ? 'Draft' : status === 'Scheduled' ? 'Scheduled' : '2026-01-30',
-      audience: { scope, values: [...values] },
-    };
-
-    setAnnouncements((current) => [created, ...current]);
-    resetForm();
-    flash(status === 'Published' ? 'Announcement published' : `Saved as ${status.toLowerCase()}`);
-  };
-
-  const publishExisting = (id: string) => {
-    setAnnouncements((current) =>
-      current.map((item) => (item.id === id ? { ...item, status: 'Published', date: '2026-01-30' } : item))
-    );
-    flash('Announcement published');
-  };
-
-  const remove = (id: string) => {
-    setAnnouncements((current) => current.filter((item) => item.id !== id));
-    flash('Announcement deleted');
-  };
+  if (!items && error) return <div className="p-5"><ErrorBox message={error} /></div>;
+  if (!items) return <Loading what="announcements" />;
 
   return (
     <div className="flex-1 overflow-y-auto scrollbar-hide p-4 sm:p-5 animate-in fade-in duration-500">
-      <header className="mb-4 pb-3 border-b border-[#E2E8F0] flex flex-wrap justify-between items-center gap-2.5">
-        <div>
-          <h1 className="text-lg font-bold text-[#0F172A] tracking-tight leading-tight">Announcements</h1>
-          <p className="text-xs text-[#475569] mt-0.5 font-normal">Platform-wide announcements.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button className="flex items-center gap-1.5 border border-[#E2E8F0] rounded-lg py-1.5 px-2.5 text-xs font-medium text-[#475569] bg-white shadow-2xs hover:bg-gray-50 transition-colors">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-              <line x1="16" y1="2" x2="16" y2="6"></line>
-              <line x1="8" y1="2" x2="8" y2="6"></line>
-              <line x1="3" y1="10" x2="21" y2="10"></line>
-            </svg>
-            Jan 1 - Jan 30, 2026
-          </button>
-          <button className="flex items-center justify-center border border-[#E2E8F0] rounded-full w-7 h-7 text-[#475569] bg-white shadow-2xs hover:bg-gray-50 transition-colors">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
-              <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
-            </svg>
-          </button>
-        </div>
-      </header>
+      <PageHeader title="Announcements" subtitle="Notices shown as a banner in every clinic's dashboard while they are published and inside their dates.">
+        {!editing && <button className={PRIMARY} onClick={() => start()}>New announcement</button>}
+      </PageHeader>
+      {error && <div className="mb-3"><ErrorBox message={error} /></div>}
+      {note && <p role="status" className="mb-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{note}</p>}
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-3.5">
-        {/* List */}
-        <div className="xl:col-span-2">
-          <div className="flex flex-wrap items-center justify-between gap-2.5 mb-3">
-            <h2 className="text-xs font-bold text-[#475569] uppercase tracking-wider">Recent Announcements</h2>
-            <div className="flex items-center gap-2">
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as 'All' | Status)}
-                className="px-2 py-1 bg-[#F8FAFC] border border-[#E2E8F0] rounded-md text-xs font-semibold text-[#475569] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 cursor-pointer"
-              >
-                <option value="All">Status: All</option>
-                <option value="Published">Published</option>
-                <option value="Scheduled">Scheduled</option>
-                <option value="Draft">Draft</option>
-              </select>
-              <select
-                value={typeFilter}
-                onChange={(e) => setTypeFilter(e.target.value)}
-                className="px-2 py-1 bg-[#F8FAFC] border border-[#E2E8F0] rounded-md text-xs font-semibold text-[#475569] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 cursor-pointer"
-              >
-                <option value="All">Business Type: All</option>
-                {BUSINESS_TYPES.map((type) => (
-                  <option key={type} value={type}>
-                    {type}
-                  </option>
-                ))}
-              </select>
-            </div>
+      {editing && (
+        <Card className="mb-4 p-4">
+          <h2 className="mb-3 text-sm font-bold text-[#0F172A]">{editing.id ? 'Edit announcement' : 'New announcement'}</h2>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="text-xs font-medium text-[#475569] sm:col-span-2">Title<input className={`${INPUT} mt-1`} maxLength={160} value={editing.draft.title} onChange={(e) => set({ title: e.target.value })} /></label>
+            <label className="text-xs font-medium text-[#475569] sm:col-span-2">Message<textarea rows={3} maxLength={2000} className={`${INPUT} mt-1`} value={editing.draft.body} onChange={(e) => set({ body: e.target.value })} /></label>
+            <label className="text-xs font-medium text-[#475569]">Type<select className={`${INPUT} mt-1`} value={editing.draft.level} onChange={(e) => set({ level: e.target.value })}>{levels.map((l) => <option key={l} value={l}>{label(l)}</option>)}</select></label>
+            <label className="text-xs font-medium text-[#475569]">Only these plans (comma separated, empty = everyone)<input className={`${INPUT} mt-1`} value={editing.plans} onChange={(e) => setEditing({ ...editing, plans: e.target.value })} placeholder="starter, growth" /></label>
+            <label className="text-xs font-medium text-[#475569]">Show from<input type="datetime-local" className={`${INPUT} mt-1`} value={toLocal(editing.draft.starts_at)} onChange={(e) => set({ starts_at: fromLocal(e.target.value) })} /></label>
+            <label className="text-xs font-medium text-[#475569]">Show until<input type="datetime-local" className={`${INPUT} mt-1`} value={toLocal(editing.draft.ends_at)} onChange={(e) => set({ ends_at: fromLocal(e.target.value) })} /></label>
           </div>
-
-          <div className="space-y-3">
-            {visible.length === 0 ? (
-              <div className="bg-white border border-[#E2E8F0] rounded-lg p-6 shadow-2xs text-center text-xs text-[#94A3B8]">
-                No announcements match these filters.
-              </div>
-            ) : (
-              visible.map((item) => {
-                const reach = estimatedReach(item.audience);
-                return (
-                  <article key={item.id} className="bg-white border border-[#E2E8F0] rounded-lg p-3.5 shadow-2xs">
-                    <div className="flex flex-wrap items-start justify-between gap-2.5 mb-1.5">
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-sm font-bold text-[#0F172A]">{item.title}</h3>
-                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${priorityStyles[item.priority]}`}>
-                          {item.priority}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${statusStyles[item.status]}`}>
-                          {item.status}
-                        </span>
-                        <span className="text-[11px] text-[#94A3B8]">{item.date}</span>
-                      </div>
-                    </div>
-
-                    <p className="text-xs text-[#475569] leading-relaxed mb-2.5">{item.body}</p>
-
-                    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 pt-2.5 border-t border-[#E2E8F0]">
-                      <span className="text-[11px] text-[#94A3B8]">Target Audience:</span>
-                      <span className="text-xs font-semibold text-[#2563EB]">{audienceLabel(item.audience)}</span>
-                      {reach !== null && (
-                        <span className="text-[10px] text-[#94A3B8]">· approx {reach} businesses</span>
-                      )}
-                      <div className="ml-auto flex items-center gap-2">
-                        {item.status !== 'Published' && (
-                          <button
-                            onClick={() => publishExisting(item.id)}
-                            className="text-xs font-semibold text-[#10B981] hover:underline"
-                          >
-                            Publish
-                          </button>
-                        )}
-                        <button
-                          onClick={() => remove(item.id)}
-                          className="text-xs font-semibold text-[#991B1B] hover:underline"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                  </article>
-                );
-              })
-            )}
+          <div className="mt-4 flex flex-wrap gap-2 border-t border-[#F1F5F9] pt-3">
+            <button className={PRIMARY} disabled={busy || editing.draft.title.trim().length < 3} onClick={() => save('published')}>Publish</button>
+            <button className={BTN} disabled={busy || editing.draft.title.trim().length < 3} onClick={() => save('draft')}>Save as draft</button>
+            <button className={BTN} disabled={busy} onClick={() => setEditing(null)}>Cancel</button>
           </div>
-        </div>
-
-        {/* Create form */}
-        <aside className="bg-white border border-[#E2E8F0] rounded-lg p-4 shadow-2xs h-fit">
-          <h2 className="text-xs font-bold text-[#0F172A] mb-3 pb-2.5 border-b border-[#E2E8F0]">New Announcement</h2>
-
-          {error && (
-            <div className="mb-3 rounded-lg border border-[#EF4444] bg-[#FEE2E2] px-2.5 py-1.5 text-xs font-semibold text-[#991B1B]">
-              {error}
-            </div>
-          )}
-
-          <div className="space-y-3">
-            <label className="block">
-              <span className="text-xs font-semibold text-[#475569]">Announcement Title</span>
-              <input
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g. System upgrade notification"
-                className={`${inputClass} mt-1`}
-              />
-            </label>
-
-            <label className="block">
-              <span className="text-xs font-semibold text-[#475569]">Message Content</span>
-              <textarea
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-                rows={3}
-                placeholder="Write announcement details here..."
-                className={`${inputClass} mt-1 resize-y`}
-              />
-            </label>
-
-            <label className="block">
-              <span className="text-xs font-semibold text-[#475569]">Target Audience</span>
-              <select
-                value={scope}
-                onChange={(e) => changeScope(e.target.value as AudienceScope)}
-                className={`${inputClass} mt-1 cursor-pointer`}
-              >
-                {scopeOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            {scope !== 'All' && (
-              <div className="border border-[#E2E8F0] rounded-md p-2.5">
-                <div className="text-[11px] font-semibold text-[#475569] mb-1.5">
-                  {scope === 'BusinessType' ? 'Pick business types' : scope === 'Plan' ? 'Pick plans' : 'Pick countries'}
-                </div>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {optionsForScope(scope).map((option) => (
-                    <label key={option} className="flex items-center gap-1.5 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={values.includes(option)}
-                        onChange={() => toggleValue(option)}
-                        className="w-3.5 h-3.5 accent-[#2563EB]"
-                      />
-                      <span className="text-[11px] text-[#0F172A]">
-                        {option}
-                        {scope === 'BusinessType' && (
-                          <span className="text-[#94A3B8]"> ({BUSINESS_TYPE_COUNTS[option]})</span>
-                        )}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <label className="block">
-              <span className="text-xs font-semibold text-[#475569]">Priority</span>
-              <select
-                value={priority}
-                onChange={(e) => setPriority(e.target.value as Priority)}
-                className={`${inputClass} mt-1 cursor-pointer`}
-              >
-                <option value="Low">Low</option>
-                <option value="Normal">Normal</option>
-                <option value="High">High</option>
-              </select>
-            </label>
-
-            <div className="bg-[#F8FAFC] rounded-md p-2.5 text-xs">
-              <div className="flex justify-between">
-                <span className="text-[#64748B]">Audience</span>
-                <span className="font-semibold text-[#0F172A] text-right">{audienceLabel(draftAudience)}</span>
-              </div>
-              <div className="flex justify-between mt-1">
-                <span className="text-[#64748B]">Estimated reach</span>
-                <span className="font-semibold text-[#0F172A]">
-                  {draftReach === null ? 'Not estimated' : `${draftReach} businesses`}
-                </span>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 pt-1">
-              <button
-                onClick={() => submit('Draft')}
-                className="flex-1 px-2.5 py-1.5 border border-[#E2E8F0] bg-white text-[#475569] rounded-lg text-xs font-semibold hover:bg-gray-50 transition-colors"
-              >
-                Save Draft
-              </button>
-              <button
-                onClick={() => submit('Scheduled')}
-                className="flex-1 px-2.5 py-1.5 border border-[#E2E8F0] bg-white text-[#475569] rounded-lg text-xs font-semibold hover:bg-gray-50 transition-colors"
-              >
-                Schedule
-              </button>
-              <button
-                onClick={() => submit('Published')}
-                className="flex-1 px-2.5 py-1.5 bg-[#2563EB] hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition-colors"
-              >
-                Publish Now
-              </button>
-            </div>
-          </div>
-        </aside>
-      </div>
-
-      {toast && (
-        <div
-          role="status"
-          className="fixed bottom-6 right-6 z-40 bg-[#0F172A] text-white text-[13px] font-semibold px-4 py-2.5 rounded-lg shadow-lg"
-        >
-          {toast}
-        </div>
+        </Card>
       )}
+
+      <Card className="overflow-x-auto">
+        {items.length === 0 ? <Empty>No announcements yet.</Empty> : (
+          <table className="w-full min-w-[640px] text-left text-sm">
+            <thead><tr className="border-b border-[#E2E8F0] bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-[#64748B]"><th className="px-4 py-2.5">Announcement</th><th className="px-3">Type</th><th className="px-3">Status</th><th className="px-3">Audience</th><th className="px-3">Dates</th><th className="px-3" /></tr></thead>
+            <tbody>
+              {items.map((a) => (
+                <tr key={a.id} className="border-t border-[#F1F5F9] align-top">
+                  <td className="max-w-[320px] px-4 py-2.5"><p className="font-medium text-[#0F172A]">{a.title}</p><p className="line-clamp-2 text-xs text-[#64748B]">{a.body}</p></td>
+                  <td className="px-3 py-2.5"><Chip tone={LEVEL_TONE[a.level]}>{a.level}</Chip></td>
+                  <td className="px-3 py-2.5"><Chip tone={a.live ? 'green' : a.status === 'published' ? 'amber' : 'grey'}>{a.live ? 'Live' : a.status === 'published' ? 'Scheduled or ended' : a.status}</Chip></td>
+                  <td className="px-3 py-2.5 text-xs text-[#475569]">{a.plans.length || a.business_ids.length ? [...a.plans, ...(a.business_ids.length ? [`${a.business_ids.length} clinic(s)`] : [])].join(', ') : 'Everyone'}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-xs text-[#64748B]">{a.starts_at ? `from ${when(a.starts_at)}` : 'now'}{a.ends_at ? `, until ${when(a.ends_at)}` : ''}</td>
+                  <td className="px-3 py-2.5 text-right"><span className="inline-flex gap-2"><button className={BTN} onClick={() => start(a)}>Edit</button><button className={BTN} onClick={() => remove(a)}>Delete</button></span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Card>
     </div>
   );
 }
