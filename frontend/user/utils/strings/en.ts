@@ -454,6 +454,7 @@ export const STRINGS = {
           PROFILE: "Profile",
           SECURITY: "Security",
           NOTIFICATIONS: "Notifications",
+          MESSAGES: "Messages",
           AI_DEFAULTS: "AI Defaults",
           BILLING: "Billing",
           DANGER_ZONE: "Danger Zone"
