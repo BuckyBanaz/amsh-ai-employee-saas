@@ -20,3 +20,4 @@ from backend.server.database.models.message_template import MessageLog, MessageP
 from backend.server.database.models.seo_setting import SeoSetting  # noqa: F401
 from backend.server.database.models.support import Announcement, SupportTicket, TicketMessage  # noqa: F401
 from backend.server.database.models.admin_alert import AdminAlertState  # noqa: F401
+from backend.server.database.models.spend import CostRate, UsageEvent  # noqa: F401

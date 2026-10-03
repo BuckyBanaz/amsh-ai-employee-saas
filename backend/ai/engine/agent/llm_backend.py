@@ -10,7 +10,7 @@ import json
 import logging
 import re
 import time
-from typing import Any, AsyncIterator, Dict, List, Optional, Protocol, Set, Tuple
+from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Protocol, Set, Tuple
 
 import httpx
 
@@ -84,6 +84,8 @@ class OpenAICompatBackend:
         self.max_attempts = max_attempts
         self.max_retry_wait = max_retry_wait  # live calls cannot wait long; evals raise this to ride out rate limits
         self.usage = {"calls": 0, "prompt_tokens": 0, "completion_tokens": 0, "rate_limited": 0}
+        # Set by the engine: sink(provider, model, prompt_tokens, completion_tokens, estimated) so spend is attributed to a clinic.
+        self.usage_sink: Optional[Callable[[str, str, int, int, bool], None]] = None
 
     # ---- provider hooks -------------------------------------------------------------------------------------
     def default_model(self) -> str:
@@ -105,11 +107,21 @@ class OpenAICompatBackend:
         return messages
 
     # ---- shared ---------------------------------------------------------------------------------------------
-    def _record_usage(self, usage: Optional[Dict[str, Any]]) -> None:
+    def _record_usage(self, usage: Optional[Dict[str, Any]], estimated: bool = False) -> None:
         if usage:
+            prompt, completion = int(usage.get("prompt_tokens") or 0), int(usage.get("completion_tokens") or 0)
             self.usage["calls"] += 1
-            self.usage["prompt_tokens"] += int(usage.get("prompt_tokens") or 0)
-            self.usage["completion_tokens"] += int(usage.get("completion_tokens") or 0)
+            self.usage["prompt_tokens"] += prompt
+            self.usage["completion_tokens"] += completion
+            if self.usage_sink:
+                try:
+                    self.usage_sink(self.provider, self.model, prompt, completion, estimated)
+                except Exception:  # metering must never break a reply
+                    logger.debug("usage sink failed", exc_info=True)
+
+    @staticmethod
+    def _estimate_tokens(chars: int) -> int:
+        return max(1, chars // 4)  # about four characters per token; streamed replies carry no provider count
 
     @staticmethod
     def _retry_delay(resp: Any) -> float:
@@ -231,6 +243,10 @@ class OpenAICompatBackend:
             {"id": c["id"] or f"call_{i}", "name": c["name"], "arguments": c["arguments"] or "{}", "extra_content": c["extra_content"]}
             for i, c in sorted(acc.items())
         ]
+        if self.usage_sink:  # streamed turns report no usage: count from text length, and say so
+            sent = sum(len(str(m.get("content") or "")) + len(json.dumps(m.get("tool_calls") or [], default=str)) for m in messages) + len(json.dumps(tools, default=str))
+            produced = sum(len(p) for p in text_parts) + sum(len(c["arguments"]) + len(c["name"]) for c in acc.values())
+            self._record_usage({"prompt_tokens": self._estimate_tokens(sent), "completion_tokens": self._estimate_tokens(produced)}, estimated=True)
         yield {"type": "final", "content": "".join(text_parts).strip() or None, "tool_calls": calls}
 
 

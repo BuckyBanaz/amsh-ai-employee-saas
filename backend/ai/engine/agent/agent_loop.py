@@ -288,6 +288,7 @@ class AgentEngine:
         self.facts = facts
         self.vertical_config = vertical_config
         self.backend = backend
+        self._meter_backend(backend, business_id, call_id)
         self.agent_name = agent_name
         self.language = language_code(language)
         self.dry_run = dry_run
@@ -323,6 +324,20 @@ class AgentEngine:
         """Add what the clinic's own records say about THIS caller (see rules/patient_privacy.py) to the system prompt."""
         if text:
             self._system = self._system + "\n" + text
+
+    def _meter_backend(self, backend: Any, business_id: str, call_id: Optional[str]) -> None:
+        """Attribute the model's token use to this clinic so the admin spend report can price it. Test conversations are marked
+        as testing spend. A backend without a usage hook (a scripted test backend) is left alone."""
+        from backend.server.services.cost_tracking import record_llm
+
+        test = self.sandbox is not None
+
+        def sink(provider: str, model: str, prompt: int, completion: int, estimated: bool) -> None:
+            record_llm(business_id, call_id, provider, prompt, completion, estimated=estimated, test=test)
+
+        for b in getattr(backend, "backends", None) or [backend]:
+            if hasattr(b, "usage_sink"):
+                b.usage_sink = sink
 
     def restore(self, turns: List[Tuple[str, str]]) -> None:
         """Rebuild the conversation from (caller, agent) pairs saved earlier, after the server restarted mid-call (a code

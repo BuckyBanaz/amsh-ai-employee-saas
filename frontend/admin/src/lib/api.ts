@@ -900,3 +900,22 @@ export const fetchAlerts = (category?: string) => adminFetch<AlertFeed>(`/admin/
 export const fetchAlertsUnread = () => adminFetch<{ unread: number }>('/admin/alerts/unread-count');
 export const markAlertsRead = () => adminFetch<{ unread: number }>('/admin/alerts/mark-read', { method: 'POST' });
 export const saveAlertPrefs = (muted: string[]) => adminFetch<{ muted: string[] }>('/admin/alerts/preferences', { method: 'PUT', body: JSON.stringify({ muted }) });
+
+// ---- Spend and profit (Usage & Limits) ------------------------------------------------------------------------------
+
+export interface SpendTool { tool: string; label: string; provider: string; unit: string; quantity: number; cost: number; test_cost: number; share_pct: number; estimated: boolean }
+export interface SpendTenant { id: string; name: string; plan: string | null; status: string | null; calls: number; minutes: number; spend: number; test_spend: number; revenue: number; profit: number }
+export interface SpendReport {
+  days: number;
+  currency: string;
+  totals: { spend: number; testing_spend: number; trial_spend: number; unattributed_spend: number; revenue: number; profit: number; margin_pct: number | null };
+  by_tool: SpendTool[];
+  by_tenant: SpendTenant[];
+  by_day: { date: string; spend: number }[];
+  limits: { id: string; name: string; plan: string | null; key: string; label: string; unit: string; used: number; limit: number | null; percent: number | null; state: string }[];
+  notes: string[];
+}
+export interface RateItem { key: string; tool: string; label: string; provider: string; unit: string; default: number; price: number; edited: boolean }
+export const fetchSpend = (days: number) => adminFetch<SpendReport>(`/admin/spend?days=${days}`);
+export const fetchRates = () => adminFetch<{ currency: string; items: RateItem[] }>('/admin/spend/rates');
+export const saveRates = (prices: Record<string, number>) => adminFetch<{ currency: string; items: RateItem[] }>('/admin/spend/rates', { method: 'PUT', body: JSON.stringify({ prices }) });

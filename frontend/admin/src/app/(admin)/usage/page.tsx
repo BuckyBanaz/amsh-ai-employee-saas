@@ -1,402 +1,202 @@
 "use client";
-import React, { useState } from 'react';
 
-interface CapacityMetric {
-  id: string;
-  label: string;
-  value: string;
-  delta: string;
-  deltaTone: 'up' | 'down' | 'neutral';
-  /** Footer describes a real upstream constraint or a cost figure, never a self-imposed plan quota. */
-  footer: string;
-  /** Percentage of a genuine provider/infra ceiling. Null when no real ceiling exists. */
-  utilization: number | null;
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import Link from 'next/link';
+import { AdminUser, RateItem, SpendReport, fetchRates, fetchSpend, getUserSnapshot, saveRates, subscribeSession } from '@/lib/api';
+import { BTN, Card, Chip, Empty, ErrorBox, INPUT, Loading, PRIMARY, PageHeader, Tone, errorText } from '@/components/admin/ui';
+
+const PERIODS = [7, 30, 90];
+const STATUS_TONE: Record<string, Tone> = { active: 'green', trial: 'blue', pending: 'grey', paused: 'amber', suspended: 'red' };
+
+/** Small amounts need more decimals: a tool can cost a fraction of a cent per use. */
+const money = (n: number, currency = 'USD') => {
+  const digits = Math.abs(n) >= 100 ? 0 : Math.abs(n) >= 1 ? 2 : 4;
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency, minimumFractionDigits: digits === 4 ? 2 : digits, maximumFractionDigits: digits }).format(n);
+};
+const qty = (n: number) => new Intl.NumberFormat('en-US', { maximumFractionDigits: 1, notation: n >= 1e6 ? 'compact' : 'standard' }).format(n);
+
+function Stat({ label, value, hint, tone }: { label: string; value: string; hint?: string; tone?: 'good' | 'bad' }) {
+  return (
+    <Card className="p-3">
+      <p className="text-[10px] font-bold uppercase tracking-wider text-[#94A3B8]">{label}</p>
+      <p className={`mt-1 text-lg font-bold leading-none ${tone === 'bad' ? 'text-red-600' : tone === 'good' ? 'text-emerald-600' : 'text-[#0F172A]'}`}>{value}</p>
+      {hint && <p className="mt-1.5 text-[10px] text-[#94A3B8]">{hint}</p>}
+    </Card>
+  );
 }
 
-const capacityMetrics: CapacityMetric[] = [
-  {
-    id: 'voice-minutes',
-    label: 'Voice Minutes Consumed',
-    value: '48,291',
-    delta: '+8.2% vs last month',
-    deltaTone: 'up',
-    footer: '186,000 min sold to tenants · 26% utilized',
-    utilization: 26,
-  },
-  {
-    id: 'calls-today',
-    label: 'Calls Today',
-    value: '4,892',
-    delta: '+12% vs last week',
-    deltaTone: 'up',
-    footer: 'Peak concurrency 340 / 500 Twilio channels',
-    utilization: 68,
-  },
-  {
-    id: 'ai-tokens',
-    label: 'AI Tokens (30d)',
-    value: '2.4M',
-    delta: '+15% vs last month',
-    deltaTone: 'up',
-    footer: 'Provider rate limit 38% of sustained TPM',
-    utilization: 38,
-  },
-  {
-    id: 'knowledge-docs',
-    label: 'Knowledge Docs Indexed',
-    value: '1,284',
-    delta: 'Active indices',
-    deltaTone: 'neutral',
-    footer: 'Vector storage 42 GB / 200 GB provisioned',
-    utilization: 21,
-  },
-  {
-    id: 'appointments',
-    label: 'Appointments Booked',
-    value: '12,847',
-    delta: 'Automated',
-    deltaTone: 'neutral',
-    footer: '98.2% completed without human handoff',
-    utilization: null,
-  },
-  {
-    id: 'whatsapp',
-    label: 'WhatsApp Messages',
-    value: '3,421',
-    delta: '99.1% delivered',
-    deltaTone: 'neutral',
-    footer: 'Est. spend €41 this month',
-    utilization: null,
-  },
-];
-
-interface CostLine {
-  provider: string;
-  spend: number;
-  share: number;
+function DailyBars({ days }: { days: { date: string; spend: number }[] }) {
+  const max = Math.max(...days.map((d) => d.spend), 0.0001);
+  return (
+    <div className="flex h-28 items-end gap-[2px]" role="img" aria-label="Daily spend">
+      {days.map((d) => (
+        <div key={d.date} className="group relative flex-1" title={`${d.date}: ${money(d.spend)}`}>
+          <div className="w-full rounded-t bg-[#2563EB]/80 group-hover:bg-[#2563EB]" style={{ height: `${Math.max(2, (d.spend / max) * 100)}%` }} />
+        </div>
+      ))}
+    </div>
+  );
 }
 
-const costBreakdown: CostLine[] = [
-  { provider: 'Twilio (telephony)', spend: 3863, share: 54 },
-  { provider: 'OpenAI + Groq (inference)', spend: 1642, share: 23 },
-  { provider: 'ElevenLabs (TTS)', spend: 1024, share: 14 },
-  { provider: 'Infrastructure & storage', spend: 641, share: 9 },
-];
+function RateCard({ canEdit, onSaved }: { canEdit: boolean; onSaved: () => void }) {
+  const [items, setItems] = useState<RateItem[] | null>(null);
+  const [draft, setDraft] = useState<Record<string, string>>({});
+  const [error, setError] = useState('');
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const load = useCallback(() => fetchRates().then((d) => { setItems(d.items); setDraft({}); }).catch((e: unknown) => setError(errorText(e, 'Could not load the rate card'))), []);
+  useEffect(() => { void load(); }, [load]);
 
-interface TenantUsage {
-  id: string;
-  business: string;
-  calls: number;
-  minutes: number;
-  aiTokens: string;
-  minuteLimit: number;
+  async function save() {
+    const prices: Record<string, number> = {};
+    for (const [k, v] of Object.entries(draft)) { const n = Number(v); if (v.trim() === '' || Number.isNaN(n) || n < 0) { setError(`"${v}" is not a valid price`); return; } prices[k] = n; }
+    setBusy(true); setError(''); setNote('');
+    try { const d = await saveRates(prices); setItems(d.items); setDraft({}); setNote('Saved. The report above now uses these prices, for past days too.'); onSaved(); } catch (e) { setError(errorText(e)); } finally { setBusy(false); }
+  }
+  if (!items) return error ? <ErrorBox message={error} /> : <Loading what="rate card" />;
+  return (
+    <Card className="p-4">
+      <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-sm font-bold text-[#0F172A]">Rate card</h2>
+        {canEdit && <button className={PRIMARY} onClick={save} disabled={busy || !Object.keys(draft).length}>Save prices</button>}
+      </div>
+      <p className="mb-3 text-xs text-[#475569]">What each tool charges us, in US dollars. These start as estimates from public price lists: check them against your invoices.{!canEdit && ' Only a super admin can change them.'}</p>
+      {error && <div className="mb-2"><ErrorBox message={error} /></div>}
+      {note && <p role="status" className="mb-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">{note}</p>}
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-xs">
+          <thead><tr className="border-b border-[#E2E8F0] text-[10px] uppercase tracking-wider text-[#94A3B8]"><th className="py-1.5 pr-3">Tool</th><th className="pr-3">Provider</th><th className="pr-3">Unit</th><th className="pr-3">Price (USD)</th><th>Default</th></tr></thead>
+          <tbody>
+            {items.map((r) => (
+              <tr key={r.key} className="border-b border-[#F1F5F9]">
+                <td className="py-1.5 pr-3 font-medium text-[#0F172A]">{r.label}{r.edited && <span className="ml-1.5"><Chip tone="blue">edited</Chip></span>}</td>
+                <td className="pr-3 text-[#475569]">{r.provider}</td>
+                <td className="pr-3 text-[#475569]">{r.unit}</td>
+                <td className="pr-3">
+                  {canEdit
+                    ? <input aria-label={`${r.label} price`} className={`${INPUT} w-24`} inputMode="decimal" value={draft[r.key] ?? String(r.price)} onChange={(e) => setDraft((d) => ({ ...d, [r.key]: e.target.value }))} />
+                    : <span className="font-semibold">{r.price}</span>}
+                </td>
+                <td className="text-[#94A3B8]">{r.default}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
 }
-
-const tenantUsage: TenantUsage[] = [
-  { id: 'b-1', business: 'Smile Dental Business', calls: 1248, minutes: 13050, aiTokens: '840K', minuteLimit: 15000 },
-  { id: 'b-2', business: 'Amsterdam Dental Care', calls: 982, minutes: 8920, aiTokens: '610K', minuteLimit: 15000 },
-  { id: 'b-3', business: 'Berlin Health Center', calls: 450, minutes: 6900, aiTokens: '290K', minuteLimit: 10000 },
-  { id: 'b-4', business: 'Bella Rosa Ristorante', calls: 386, minutes: 3240, aiTokens: '210K', minuteLimit: 10000 },
-  { id: 'b-5', business: 'Glow & Shine Salon', calls: 274, minutes: 2180, aiTokens: '150K', minuteLimit: 10000 },
-];
-
-const tokenTrend = [
-  42, 48, 45, 52, 61, 58, 55, 67, 72, 69, 74, 81, 78, 85, 92,
-  88, 95, 101, 97, 104, 112, 108, 115, 121, 118, 126, 133, 129, 138, 145,
-];
-
-const trendPath = (values: number[], width: number, height: number) => {
-  const max = Math.max(...values);
-  const min = Math.min(...values);
-  const span = max - min || 1;
-  const step = width / (values.length - 1);
-  return values
-    .map((v, i) => `${i === 0 ? 'M' : 'L'} ${(i * step).toFixed(1)} ${(height - ((v - min) / span) * height).toFixed(1)}`)
-    .join(' ');
-};
-
-const usageTone = (percent: number) => {
-  if (percent >= 85) return { bg: 'bg-[#FEE2E2]', text: 'text-[#991B1B]', bar: 'bg-[#EF4444]' };
-  if (percent >= 60) return { bg: 'bg-[#FEF3C7]', text: 'text-[#92400E]', bar: 'bg-[#F59E0B]' };
-  return { bg: 'bg-[#D1FAE5]', text: 'text-[#065F46]', bar: 'bg-[#10B981]' };
-};
-
-const usageTiers = ['All', 'High', 'Medium', 'Low'] as const;
-type UsageTier = (typeof usageTiers)[number];
-
-const tierOf = (percent: number): Exclude<UsageTier, 'All'> => {
-  if (percent >= 85) return 'High';
-  if (percent >= 60) return 'Medium';
-  return 'Low';
-};
-
-const tierLabel: Record<Exclude<UsageTier, 'All'>, string> = {
-  High: 'High (85%+)',
-  Medium: 'Medium (60-84%)',
-  Low: 'Low (<60%)',
-};
-
-const CHART_WIDTH = 700;
-const CHART_HEIGHT = 140;
 
 export default function UsageAndLimitsPage() {
-  const [selectedTier, setSelectedTier] = useState<UsageTier>('All');
+  const [days, setDays] = useState(30);
+  const [report, setReport] = useState<SpendReport | null>(null);
+  const [error, setError] = useState('');
+  const rawAdmin = useSyncExternalStore(subscribeSession, getUserSnapshot, () => null);
+  const canEdit = useMemo(() => { try { const r = (rawAdmin ? (JSON.parse(rawAdmin) as AdminUser) : null)?.role; return r === 'superadmin' || r === 'super_admin'; } catch { return false; } }, [rawAdmin]);
 
-  const totalSpend = costBreakdown.reduce((sum, line) => sum + line.spend, 0);
-  const linePath = trendPath(tokenTrend, CHART_WIDTH, CHART_HEIGHT);
-  const areaPath = `${linePath} L ${CHART_WIDTH} ${CHART_HEIGHT} L 0 ${CHART_HEIGHT} Z`;
+  const load = useCallback((d: number) => fetchSpend(d).then((r) => { setReport(r); setError(''); }).catch((e: unknown) => setError(errorText(e, 'Could not load the spend report'))), []);
+  useEffect(() => { void load(days); }, [load, days]);
 
-  const rankedTenants = tenantUsage.map((tenant) => {
-    const percent = Math.round((tenant.minutes / tenant.minuteLimit) * 100);
-    return { ...tenant, percent, tier: tierOf(percent) };
-  });
-
-  const visibleTenants = rankedTenants.filter(
-    (tenant) => selectedTier === 'All' || tenant.tier === selectedTier
-  );
+  if (!report && error) return <div className="p-5"><ErrorBox message={error} /></div>;
+  if (!report) return <Loading what="spend and usage" />;
+  const t = report.totals;
+  const cur = report.currency;
 
   return (
     <div className="flex-1 overflow-y-auto scrollbar-hide p-4 sm:p-5 animate-in fade-in duration-500">
-      {/* Header */}
-      <header className="mb-4 pb-3 border-b border-[#E2E8F0] flex justify-between items-center">
-        <div>
-          <h1 className="text-lg font-bold text-[#0F172A] tracking-tight leading-tight">
-            Usage &amp; Capacity
-          </h1>
-          <p className="text-xs text-[#475569] mt-0.5 font-normal">
-            Aggregate consumption, upstream capacity, and platform cost.
-          </p>
+      <PageHeader title="Usage & Limits" subtitle="What every paid tool costs us, what is left after revenue, and which clinics are near their plan limits.">
+        <div className="flex gap-1" role="tablist" aria-label="Period">
+          {PERIODS.map((p) => (
+            <button key={p} role="tab" aria-selected={days === p} onClick={() => setDays(p)}
+              className={`rounded-lg border px-3 py-1.5 text-xs font-semibold ${days === p ? 'border-[#0066FF] bg-[#EFF6FF] text-[#0066FF]' : 'border-[#E2E8F0] bg-white text-[#475569] hover:bg-[#F8FAFC]'}`}>Last {p} days</button>
+          ))}
         </div>
-        <div className="flex items-center gap-2">
-          <button className="flex items-center gap-1.5 border border-[#E2E8F0] rounded-lg py-1.5 px-2.5 text-xs font-medium text-[#475569] bg-white shadow-2xs hover:bg-gray-50 transition-colors">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-              <line x1="16" y1="2" x2="16" y2="6"></line>
-              <line x1="8" y1="2" x2="8" y2="6"></line>
-              <line x1="3" y1="10" x2="21" y2="10"></line>
-            </svg>
-            Jan 1 - Jan 30, 2026
-          </button>
-          <button className="flex items-center justify-center border border-[#E2E8F0] rounded-full w-7 h-7 text-[#475569] bg-white shadow-2xs hover:bg-gray-50 transition-colors">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
-              <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
-            </svg>
-          </button>
-        </div>
-      </header>
+      </PageHeader>
+      {error && <div className="mb-3"><ErrorBox message={error} /></div>}
 
-      {/* Tenant threshold alert */}
-      <div className="flex items-center gap-2 bg-[#FEF3C7] border border-[#F59E0B] rounded-lg p-2.5 mb-3.5 text-xs">
-        <span className="text-[#92400E] flex-shrink-0">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-            <line x1="12" y1="9" x2="12" y2="13"></line>
-            <line x1="12" y1="17" x2="12.01" y2="17"></line>
-          </svg>
-        </span>
-        <span className="font-semibold text-[#92400E]">
-          Smile Dental Business has used 87% of its contracted monthly voice minutes.
-        </span>
+      <div className="mb-4 grid grid-cols-2 gap-2.5 md:grid-cols-3 xl:grid-cols-6">
+        <Stat label="Tool spend" value={money(t.spend, cur)} hint={`last ${report.days} days`} />
+        <Stat label="Revenue" value={money(t.revenue, cur)} hint="cash collected" />
+        <Stat label="Profit" value={money(t.profit, cur)} tone={t.profit < 0 ? 'bad' : t.revenue > 0 ? 'good' : undefined} hint="revenue − spend" />
+        <Stat label="Margin" value={t.margin_pct === null ? 'No revenue yet' : `${t.margin_pct}%`} tone={t.margin_pct !== null && t.margin_pct < 0 ? 'bad' : undefined} />
+        <Stat label="Trial burn" value={money(t.trial_spend, cur)} hint="spend by clinics on a trial" />
+        <Stat label="Testing" value={money(t.testing_spend, cur)} hint="playground and test calls" />
       </div>
 
-      {/* Consumption & capacity cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-2.5 mb-3.5">
-        {capacityMetrics.map((metric) => (
-          <div key={metric.id} className="bg-white border border-[#E2E8F0] rounded-lg p-2.5 sm:p-3 shadow-2xs flex flex-col gap-2">
-            <div className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider">
-              {metric.label}
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <div className="flex items-end justify-between gap-1.5">
-                <span className="text-lg font-bold text-[#0F172A] leading-none">{metric.value}</span>
-                <span
-                  className={`text-[11px] font-semibold ${
-                    metric.deltaTone === 'up'
-                      ? 'text-[#10B981]'
-                      : metric.deltaTone === 'down'
-                        ? 'text-[#EF4444]'
-                        : 'text-[#64748B]'
-                  }`}
-                >
-                  {metric.delta}
-                </span>
-              </div>
-              <div className="flex flex-col gap-1">
-                {metric.utilization !== null && (
-                  <div className="h-1.5 w-full bg-[#E2E8F0] rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full ${
-                        metric.utilization >= 85 ? 'bg-[#EF4444]' : metric.utilization >= 60 ? 'bg-[#F59E0B]' : 'bg-[#2563EB]'
-                      }`}
-                      style={{ width: `${metric.utilization}%` }}
-                    />
-                  </div>
-                )}
-                <span className="text-[10px] text-[#94A3B8]">{metric.footer}</span>
-              </div>
-            </div>
+      <div className="mb-4 grid gap-4 xl:grid-cols-3">
+        <Card className="overflow-hidden xl:col-span-2">
+          <div className="border-b border-[#F1F5F9] px-4 py-3"><h2 className="text-sm font-bold text-[#0F172A]">Spend by tool</h2></div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead><tr className="border-b border-[#E2E8F0] bg-[#F8FAFC] text-[10px] uppercase tracking-wider text-[#94A3B8]"><th className="px-4 py-2">Tool</th><th className="px-2">Used</th><th className="px-2 text-right">Spend</th><th className="px-4">Share</th></tr></thead>
+              <tbody>
+                {report.by_tool.map((r) => (
+                  <tr key={r.tool} className="border-b border-[#F1F5F9]">
+                    <td className="px-4 py-2"><span className="font-semibold text-[#0F172A]">{r.label}</span><span className="block text-[10px] text-[#94A3B8]">{r.provider}</span></td>
+                    <td className="px-2 text-[#475569]">{qty(r.quantity)} {r.unit}{r.estimated && <span className="ml-1 text-[10px] text-amber-600" title="Counted from text length, not reported by the provider">est.</span>}</td>
+                    <td className="px-2 text-right font-semibold text-[#0F172A]">{money(r.cost, cur)}</td>
+                    <td className="px-4"><div className="flex items-center gap-2"><div className="h-1.5 w-24 overflow-hidden rounded-full bg-[#E2E8F0]"><div className="h-full rounded-full bg-[#2563EB]" style={{ width: `${r.share_pct}%` }} /></div><span className="w-9 text-[#475569]">{r.share_pct}%</span></div></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        ))}
+        </Card>
+        <Card className="p-4">
+          <h2 className="mb-2 text-sm font-bold text-[#0F172A]">Spend per day</h2>
+          {t.spend > 0 ? <DailyBars days={report.by_day} /> : <p className="py-8 text-center text-xs text-[#94A3B8]">No spend recorded in this period.</p>}
+          <p className="mt-2 text-[10px] text-[#94A3B8]">{report.by_day[0]?.date} to {report.by_day[report.by_day.length - 1]?.date}</p>
+        </Card>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-3.5">
-        {/* Trend chart */}
-        <div className="xl:col-span-2 bg-white border border-[#E2E8F0] rounded-lg p-3.5 shadow-2xs flex flex-col gap-2.5">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xs font-bold text-[#0F172A]">
-              AI Tokens &amp; API Usage Trend (30 Days)
-            </h2>
-            <span className="text-[11px] font-semibold text-[#10B981]">+245% growth</span>
-          </div>
-          <div className="pt-1.5 pb-2">
-            <svg
-              viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
-              className="w-full h-[140px]"
-              preserveAspectRatio="none"
-              role="img"
-              aria-label="AI token consumption over the last 30 days, trending upward"
-            >
-              <defs>
-                <linearGradient id="tokenTrendFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#2563EB" stopOpacity="0.18" />
-                  <stop offset="100%" stopColor="#2563EB" stopOpacity="0" />
-                </linearGradient>
-              </defs>
-              {[0, 0.25, 0.5, 0.75, 1].map((ratio) => (
-                <line
-                  key={ratio}
-                  x1="0"
-                  y1={CHART_HEIGHT * ratio}
-                  x2={CHART_WIDTH}
-                  y2={CHART_HEIGHT * ratio}
-                  stroke="#E2E8F0"
-                  strokeWidth="1"
-                />
-              ))}
-              <path d={areaPath} fill="url(#tokenTrendFill)" />
-              <path d={linePath} fill="none" stroke="#2563EB" strokeWidth="2" vectorEffect="non-scaling-stroke" />
-            </svg>
-          </div>
+      <Card className="mb-4 overflow-hidden">
+        <div className="border-b border-[#F1F5F9] px-4 py-3">
+          <h2 className="text-sm font-bold text-[#0F172A]">Profit by clinic</h2>
+          <p className="text-xs text-[#475569]">Clinics that cost the most compared with what they paid come first.</p>
         </div>
-
-        {/* Cost breakdown */}
-        <div className="bg-white border border-[#E2E8F0] rounded-lg shadow-2xs flex flex-col">
-          <div className="p-3 border-b border-[#E2E8F0] flex items-baseline justify-between">
-            <h2 className="text-xs font-bold text-[#0F172A]">Provider Spend (MTD)</h2>
-            <span className="text-sm font-bold text-[#0F172A]">
-              €{totalSpend.toLocaleString('en-US')}
-            </span>
+        {report.by_tenant.length === 0 ? <Empty>No clinic activity or payments in this period.</Empty> : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead><tr className="border-b border-[#E2E8F0] bg-[#F8FAFC] text-[10px] uppercase tracking-wider text-[#94A3B8]"><th className="px-4 py-2">Clinic</th><th className="px-2">Plan</th><th className="px-2 text-right">Calls</th><th className="px-2 text-right">Minutes</th><th className="px-2 text-right">Spend</th><th className="px-2 text-right">Revenue</th><th className="px-4 text-right">Profit</th></tr></thead>
+              <tbody>
+                {report.by_tenant.map((r) => (
+                  <tr key={r.id} className="border-b border-[#F1F5F9]">
+                    <td className="px-4 py-2"><Link href={`/businesses/${r.id}`} className="font-semibold text-[#0F172A] hover:text-[#0066FF]">{r.name}</Link> {r.status && <Chip tone={STATUS_TONE[r.status] ?? 'grey'}>{r.status}</Chip>}</td>
+                    <td className="px-2 text-[#475569]">{r.plan ?? '—'}</td>
+                    <td className="px-2 text-right text-[#475569]">{r.calls}</td>
+                    <td className="px-2 text-right text-[#475569]">{r.minutes}</td>
+                    <td className="px-2 text-right text-[#0F172A]">{money(r.spend, cur)}{r.test_spend > 0 && <span className="block text-[10px] text-[#94A3B8]">{money(r.test_spend, cur)} testing</span>}</td>
+                    <td className="px-2 text-right text-[#0F172A]">{money(r.revenue, cur)}</td>
+                    <td className={`px-4 text-right font-bold ${r.profit < 0 ? 'text-red-600' : 'text-emerald-600'}`}>{money(r.profit, cur)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-          <div className="p-3 flex flex-col gap-2.5">
-            {costBreakdown.map((line) => (
-              <div key={line.provider} className="flex flex-col gap-1">
-                <div className="flex justify-between items-baseline">
-                  <span className="text-xs font-medium text-[#475569]">{line.provider}</span>
-                  <span className="text-xs font-semibold text-[#0F172A]">
-                    €{line.spend.toLocaleString('en-US')}
-                  </span>
-                </div>
-                <div className="h-1.5 w-full bg-[#F1F5F9] rounded-full overflow-hidden">
-                  <div className="h-full bg-[#2563EB] rounded-full" style={{ width: `${line.share}%` }} />
-                </div>
-              </div>
+        )}
+      </Card>
+
+      <Card className="mb-4 overflow-hidden">
+        <div className="border-b border-[#F1F5F9] px-4 py-3"><h2 className="text-sm font-bold text-[#0F172A]">Near or over a plan limit this month</h2></div>
+        {report.limits.length === 0 ? <Empty>No clinic is near a plan limit.</Empty> : (
+          <ul className="divide-y divide-[#F1F5F9]">
+            {report.limits.map((l) => (
+              <li key={`${l.id}:${l.key}`} className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 text-xs">
+                <span><Link href={`/businesses/${l.id}`} className="font-semibold text-[#0F172A] hover:text-[#0066FF]">{l.name}</Link> <span className="text-[#94A3B8]">· {l.plan}</span></span>
+                <span className="flex items-center gap-2 text-[#475569]">{l.label}: {qty(l.used)} of {l.limit === null ? 'unlimited' : qty(l.limit)} {l.unit}<Chip tone={l.state === 'over' ? 'red' : 'amber'}>{l.percent}%</Chip></span>
+              </li>
             ))}
-          </div>
-          <div className="mt-auto p-2.5 border-t border-[#E2E8F0] bg-[#F8FAFC] rounded-b-lg">
-            <div className="flex justify-between text-xs">
-              <span className="text-[#64748B]">Blended cost per minute</span>
-              <span className="font-semibold text-[#0F172A]">€0.148</span>
-            </div>
-          </div>
-        </div>
-      </div>
+          </ul>
+        )}
+      </Card>
 
-      {/* Per-tenant contracted limits */}
-      <div className="bg-white border border-[#E2E8F0] rounded-lg shadow-2xs overflow-hidden mt-3.5">
-        <div className="p-3 border-b border-[#E2E8F0] flex flex-wrap items-center justify-between gap-2.5">
-          <div>
-            <h2 className="text-xs font-bold text-[#0F172A]">Top Consuming Businesses</h2>
-            <p className="text-[11px] text-[#64748B] mt-0.5">
-              Limits below are contractual tenant allowances enforced by the platform.
-            </p>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] font-bold text-[#94A3B8] uppercase">Consumption:</span>
-            <select
-              value={selectedTier}
-              onChange={(e) => setSelectedTier(e.target.value as UsageTier)}
-              className="px-2 py-1 bg-[#F8FAFC] border border-[#E2E8F0] rounded-md text-xs font-semibold text-[#475569] hover:bg-gray-100/80 transition-colors focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 cursor-pointer"
-            >
-              {usageTiers.map((tier) => (
-                <option key={tier} value={tier}>
-                  {tier === 'All' ? 'All Tiers' : tierLabel[tier]}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0]">
-                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider">Business</th>
-                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider">Calls</th>
-                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider">Minutes</th>
-                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider">AI Tokens</th>
-                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider">Limit</th>
-                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider">Tier</th>
-                <th className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider w-[120px]">Usage %</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#E2E8F0]">
-              {visibleTenants.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-3.5 py-6 text-center text-xs text-[#94A3B8]">
-                    No businesses in this consumption tier.
-                  </td>
-                </tr>
-              ) : (
-                visibleTenants.map((tenant) => {
-                  const tone = usageTone(tenant.percent);
-                  return (
-                    <tr key={tenant.id} className="hover:bg-[#F8FAFC]/70 transition-colors">
-                      <td className="px-3.5 py-2 text-xs font-semibold text-[#0F172A] whitespace-nowrap">
-                        {tenant.business}
-                      </td>
-                      <td className="px-3.5 py-2 text-xs text-[#475569] whitespace-nowrap">
-                        {tenant.calls.toLocaleString('en-US')}
-                      </td>
-                      <td className="px-3.5 py-2 text-xs text-[#475569] whitespace-nowrap">
-                        {tenant.minutes.toLocaleString('en-US')}
-                      </td>
-                      <td className="px-3.5 py-2 text-xs text-[#475569] whitespace-nowrap">{tenant.aiTokens}</td>
-                      <td className="px-3.5 py-2 text-xs text-[#475569] whitespace-nowrap">
-                        {tenant.minuteLimit.toLocaleString('en-US')}
-                      </td>
-                      <td className="px-3.5 py-2 whitespace-nowrap">
-                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold ${tone.bg} ${tone.text}`}>
-                          {tenant.tier}
-                        </span>
-                      </td>
-                      <td className="px-3.5 py-2 whitespace-nowrap">
-                        <div className="flex items-center gap-1.5">
-                          <div className="w-10 h-1 bg-[#E2E8F0] rounded-full overflow-hidden">
-                            <div className={`h-full rounded-full ${tone.bar}`} style={{ width: `${Math.min(tenant.percent, 100)}%` }} />
-                          </div>
-                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${tone.bg} ${tone.text}`}>
-                            {tenant.percent}%
-                          </span>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <div className="mb-4"><RateCard canEdit={canEdit} onSaved={() => void load(days)} /></div>
+
+      <Card className="p-4">
+        <h2 className="mb-1 text-sm font-bold text-[#0F172A]">How to read this</h2>
+        <ul className="list-disc space-y-1 pl-5 text-xs text-[#475569]">{report.notes.map((n) => <li key={n}>{n}</li>)}</ul>
+        <p className="mt-2"><button className={BTN} onClick={() => void load(days)}>Refresh</button></p>
+      </Card>
     </div>
   );
 }
