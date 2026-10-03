@@ -32,6 +32,7 @@ const navGroups = [
     title: 'PLATFORM',
     items: [
       { label: 'Vertical Templates', href: '/verticals', icon: 'layers' },
+      { label: 'Message Templates', href: '/templates', icon: 'message' },
       { label: 'Integrations', href: '/integrations', icon: 'link' },
       { label: 'Usage & Limits', href: '/usage', icon: 'activity' },
       { label: 'Analytics', href: '/analytics', icon: 'bar-chart' },
