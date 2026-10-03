@@ -13,17 +13,34 @@ import FeatureBento from "@/components/landing/FeatureBento";
 import ProductTour from "@/components/landing/ProductTour";
 import { Icon, type IconName } from "@/components/landing/icons";
 import { Logo } from "@/components/landing/Logo";
+import SeoScripts from "@/components/landing/SeoScripts";
+import { getSeo } from "@/lib/seo";
 
 // Positioning: AMSh is the clinic's 24/7 AI employee that works alongside the
 // team — outcome first (no missed enquiries, booked appointments), tech later.
 // Design (ui-ux-pro-max): glass + 3D depth, trust indigo/cyan, Sora display.
 const sora = Sora({ subsets: ["latin"], variable: "--font-display", display: "swap" });
 
-export const metadata: Metadata = {
-  title: "AMSh — Your Clinic's 24/7 AI Employee",
-  description:
-    "AMSh answers calls, handles WhatsApp conversations, books appointments and follows up with patients — even when your team is busy or your clinic is closed.",
-};
+const FALLBACK_TITLE = "AMSh — Your Clinic's 24/7 AI Employee";
+const FALLBACK_DESCRIPTION =
+  "AMSh answers calls, handles WhatsApp conversations, books appointments and follows up with patients — even when your team is busy or your clinic is closed.";
+
+// Title, description, social image, canonical and noindex come from the admin portal's SEO page (cached 5 minutes);
+// the text above is only used when the API cannot be reached.
+export async function generateMetadata(): Promise<Metadata> {
+  const seo = await getSeo();
+  const page = seo?.pages["/landing"];
+  if (!seo || !page) return { title: FALLBACK_TITLE, description: FALLBACK_DESCRIPTION };
+  return {
+    title: page.full_title || FALLBACK_TITLE,
+    description: page.description || FALLBACK_DESCRIPTION,
+    alternates: page.canonical ? { canonical: page.canonical } : undefined,
+    robots: page.noindex ? { index: false, follow: false } : undefined,
+    openGraph: { title: page.full_title, description: page.description, siteName: seo.site_name, locale: seo.locale, type: "website", url: page.canonical || undefined, images: page.og_image ? [page.og_image] : undefined },
+    twitter: { card: page.og_image ? "summary_large_image" : "summary", title: page.full_title, description: page.description, site: seo.twitter_handle || undefined, images: page.og_image ? [page.og_image] : undefined },
+    verification: { google: seo.verification.google || undefined, other: seo.verification.bing ? { "msvalidate.01": seo.verification.bing } : undefined },
+  };
+}
 
 const DISPLAY = "font-[family-name:var(--font-display)]";
 const FOCUS_DARK = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950";
@@ -443,9 +460,11 @@ function Footer() {
   );
 }
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  const seo = await getSeo(); // structured data and analytics tags from the admin SEO settings
   return (
     <div className={`${sora.variable} min-h-screen bg-[#050816]`}>
+      <SeoScripts seo={seo} />
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-lg focus:bg-white focus:px-4 focus:py-2 focus:shadow-lg">
         Skip to content
       </a>

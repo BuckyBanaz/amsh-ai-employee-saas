@@ -507,3 +507,65 @@ export function deleteAdminReceptionist(agentId: string) {
   });
 }
 
+
+// ---- SEO -----------------------------------------------------------------------------------------------------------
+
+export interface SeoGlobal {
+  site_name: string;
+  site_url: string;
+  title_template: string;
+  default_title: string;
+  default_description: string;
+  default_og_image: string;
+  twitter_handle: string;
+  locale: string;
+  index_site: boolean;
+  disallow_paths: string[];
+  verification: { google: string; bing: string };
+  analytics: { ga4_id: string; gtm_id: string };
+  organization: { name: string; logo_url: string; phone: string; email: string; same_as: string[] };
+}
+
+export interface SeoPage {
+  path: string;
+  title?: string;
+  description?: string;
+  og_image?: string;
+  canonical?: string;
+  noindex?: boolean;
+  changefreq?: string;
+  priority?: number;
+}
+
+export interface SeoEffective {
+  path: string;
+  title: string;
+  full_title: string;
+  description: string;
+  og_image: string;
+  canonical: string;
+  noindex: boolean;
+}
+
+export interface SeoIssue {
+  level: 'error' | 'warning' | 'info';
+  where: string;
+  message: string;
+}
+
+export interface SeoOverview {
+  global: SeoGlobal;
+  pages: Record<string, SeoPage>;
+  updated_at: string | null;
+  known_pages: { path: string; label: string; index: boolean }[];
+  changefreq: string[];
+  limits: { title: [number, number]; description: [number, number] };
+  effective: Record<string, SeoEffective>;
+  health: { score: number; issues: SeoIssue[] };
+  previews: { robots_txt: string; sitemap_urls: { loc: string; changefreq: string; priority: number }[]; json_ld: Record<string, unknown> | null };
+}
+
+export const fetchSeo = () => adminFetch<SeoOverview>('/admin/seo');
+export const saveSeoGlobal = (body: SeoGlobal) => adminFetch<SeoOverview>('/admin/seo/global', { method: 'PUT', body: JSON.stringify(body) });
+export const saveSeoPage = (body: SeoPage) => adminFetch<SeoOverview>('/admin/seo/pages', { method: 'PUT', body: JSON.stringify(body) });
+export const deleteSeoPage = (path: string) => adminFetch<SeoOverview>(`/admin/seo/pages?path=${encodeURIComponent(path)}`, { method: 'DELETE' });

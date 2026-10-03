@@ -17,6 +17,7 @@ const REAL_PAGES = [
   '/appointments',
   '/conversations',
   '/usage',
+  '/seo',
 ];
 
 export function SampleDataBanner() {

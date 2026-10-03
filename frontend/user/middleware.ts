@@ -28,7 +28,8 @@ export function middleware(request: NextRequest) {
   // These must open without a session: someone who forgot their password, or a teammate opening an invite link, has none.
   const PUBLIC_AUTH_PATHS = ['/login', '/register', '/forgot-password', '/reset-password', '/accept-invite', '/verify-email'];
   const isAuthPage = PUBLIC_AUTH_PATHS.some((path) => pathname.startsWith(path));
-  const isLandingPage = pathname === '/' || pathname.startsWith('/landing');
+  // robots.txt and sitemap.xml are for crawlers: no session.
+  const isLandingPage = pathname === '/' || pathname.startsWith('/landing') || pathname === '/robots.txt' || pathname === '/sitemap.xml';
 
   // 1. Unauthenticated users trying to access protected routes (dashboard or onboarding)
   if (!accessToken) {
