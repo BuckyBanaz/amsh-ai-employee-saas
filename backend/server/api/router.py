@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from backend.server.api.routes import (
     admin,
+    admin_audit,
     admin_calls,
     admin_platform_data,
     admin_integrations,
@@ -9,7 +10,10 @@ from backend.server.api.routes import (
     admin_plans,
     message_templates,
     seo,
+    support,
     admin_tenant_data,
+    admin_users,
+    admin_verticals,
     agents,
     analytics,
     appointments,
@@ -70,9 +74,16 @@ api_router.include_router(message_templates.admin_router)
 api_router.include_router(message_templates.router)
 api_router.include_router(seo.admin_router)
 api_router.include_router(seo.public_router)
+api_router.include_router(support.tenant_router)
+api_router.include_router(support.admin_router)
+api_router.include_router(support.announce_admin_router)
+api_router.include_router(support.announce_public_router)
 api_router.include_router(admin_tenant_data.router)
 api_router.include_router(admin_overview.router)
 api_router.include_router(admin_calls.router)
+api_router.include_router(admin_audit.router)
+api_router.include_router(admin_users.router)
+api_router.include_router(admin_verticals.router)
 api_router.include_router(admin_platform_data.router)
 api_router.include_router(admin_integrations.router)
 api_router.include_router(calendar_feed.router)

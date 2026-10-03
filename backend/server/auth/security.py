@@ -176,3 +176,13 @@ def get_voice_user(
     if user is None or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive")
     return user
+
+
+SUPER_ROLES = ("superadmin", "super_admin")
+
+
+def require_super_admin(current_user: User = Depends(require_platform_admin)) -> User:
+    """Guard for managing AMSh staff accounts: platform scope AND the superadmin role."""
+    if current_user.role not in SUPER_ROLES:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only a super admin can do this")
+    return current_user

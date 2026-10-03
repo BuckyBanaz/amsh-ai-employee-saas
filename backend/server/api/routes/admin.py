@@ -8,6 +8,7 @@ Built: /auth/login, /auth/me, /tenants (list, detail, suspend / reactivate / cha
 health, audit, tickets, announcements.
 """
 
+import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Literal, Optional
 
@@ -17,7 +18,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from backend.server.api.routes.auth import LoginRequest, TOO_MANY_ATTEMPTS, TokenOut, UserOut, login_locked
-from backend.server.auth.security import create_access_token, require_platform_admin, verify_password
+from backend.server.auth.security import MIN_PASSWORD_LENGTH, create_access_token, hash_password, require_platform_admin, verify_password
 from backend.server.database.models.agent import Agent
 from backend.server.database.models.business import Business
 from backend.server.database.models.call import Call
@@ -25,6 +26,7 @@ from backend.server.database.models.plan import Plan
 from backend.server.database.models.transaction import Transaction
 from backend.server.database.models.user import User
 from backend.server.database.session import get_db
+from backend.server.services.account_emails import send_password_setup_email
 from backend.server.services.audit import audit, client_ip
 from backend.server.services.plans import find_by_key
 
@@ -875,7 +877,7 @@ class BusinessUserInvite(BaseModel):
     name: str
     email: str
     role: str = "staff"
-    password: Optional[str] = "Password123!"
+    password: Optional[str] = None  # left empty: a random one is set and the user gets a "choose your password" email
 
 
 @router.get("/business-users")
@@ -1093,7 +1095,7 @@ def update_business_user(
 
 
 @router.post("/business-users/invite")
-def invite_business_user(
+async def invite_business_user(
     payload: BusinessUserInvite,
     request: Request,
     db: Session = Depends(get_db),
@@ -1108,7 +1110,9 @@ def invite_business_user(
     if existing:
         raise HTTPException(status_code=409, detail="User with this email already exists")
         
-    pwd = payload.password or "Password123!"
+    if payload.password is not None and len(payload.password) < MIN_PASSWORD_LENGTH:
+        raise HTTPException(status_code=400, detail=f"Password must be at least {MIN_PASSWORD_LENGTH} characters")
+    pwd = payload.password or secrets.token_urlsafe(18)  # never a shared default: without one the user sets it from the email link
     new_user = User(
         name=payload.name.strip(),
         email=payload.email.strip().lower(),
@@ -1134,7 +1138,11 @@ def invite_business_user(
         meta={"email": new_user.email, "role": new_user.role, "business_name": biz.name},
     )
     
+    setup_email_sent = False
+    if not payload.password:
+        setup_email_sent = await send_password_setup_email(new_user, biz.name)
     return {
+        "setup_email_sent": setup_email_sent,
         "id": new_user.id,
         "name": new_user.name,
         "email": new_user.email,
