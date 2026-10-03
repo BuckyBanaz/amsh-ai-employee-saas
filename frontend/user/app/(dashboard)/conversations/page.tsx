@@ -54,10 +54,10 @@ export default function ConversationsPage() {
       // Search
       if (search) {
         const q = search.toLowerCase();
-        const matchesName = (c.customer_name || '').toLowerCase().includes(q);
+        const matchesName = (c.caller_name || '').toLowerCase().includes(q);
         const matchesPhone = (c.caller_number || '').includes(q);
         const matchesSummary = (c.summary || '').toLowerCase().includes(q);
-        const matchesTranscript = (c.transcription || '').toLowerCase().includes(q);
+        const matchesTranscript = (c.messages ?? []).some((m) => m.content.toLowerCase().includes(q));
         if (!matchesName && !matchesPhone && !matchesSummary && !matchesTranscript) {
           return false;
         }

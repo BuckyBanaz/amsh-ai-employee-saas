@@ -1393,7 +1393,7 @@ export function AIStudioWorkbench({ onBack, onSave }: AIStudioWorkbenchProps) {
                   </div>
                   <div className="font-semibold text-slate-600">Start speaking or tap the orb above</div>
                   <span className="text-[11px] text-slate-400 max-w-xs">
-                    Your voice turns and the AI receptionist's spoken responses will appear here in real-time.
+                    Your voice turns and the AI receptionist&apos;s spoken responses will appear here in real-time.
                   </span>
                 </div>
               )}
@@ -1449,7 +1449,7 @@ export function AIStudioWorkbench({ onBack, onSave }: AIStudioWorkbenchProps) {
                 <div className="flex justify-end">
                   <div className="p-2.5 rounded-2xl rounded-tr-xs text-xs bg-emerald-50 border border-emerald-200 text-emerald-800 italic flex items-center gap-2 max-w-[85%]">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping shrink-0"></span>
-                    <span>"{interimTranscript}..."</span>
+                    <span>&quot;{interimTranscript}...&quot;</span>
                   </div>
                 </div>
               )}

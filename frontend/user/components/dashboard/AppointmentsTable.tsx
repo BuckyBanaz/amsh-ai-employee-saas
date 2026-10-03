@@ -155,7 +155,7 @@ export function AppointmentsTable({ items, loading: propLoading }: AppointmentsT
     <div className="bg-white border border-gray-100/90 rounded-2xl shadow-xs overflow-hidden h-full flex flex-col justify-between">
       <div>
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100">
-          <h2 className="text-sm font-bold text-gray-900 tracking-tight">Today's Appointments</h2>
+          <h2 className="text-sm font-bold text-gray-900 tracking-tight">Today&apos;s Appointments</h2>
           <Link href="/appointments" className="text-xs font-bold text-[#0066FF] hover:underline transition-colors">
             View All
           </Link>

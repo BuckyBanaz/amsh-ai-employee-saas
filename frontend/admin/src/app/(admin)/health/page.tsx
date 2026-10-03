@@ -62,7 +62,7 @@ export default function SystemHealthPage() {
   useEffect(() => {
     async function loadHealth() {
       try {
-        const response = await adminFetch<any>('/admin/health');
+        const response = await adminFetch<{ services?: ServiceHealth[]; generatedAt?: string | null }>('/admin/health');
         setServices(response.services || []);
         setCheckedAt(response.generatedAt || null);
       } catch (err) {

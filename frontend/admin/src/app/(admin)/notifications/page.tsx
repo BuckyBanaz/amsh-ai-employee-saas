@@ -3,14 +3,23 @@
 import { useEffect, useState } from 'react';
 import { adminFetch } from '@/lib/api';
 
+interface NotificationRow {
+  id: string;
+  level: 'error' | 'warning' | 'info';
+  title: string;
+  message: string;
+  link?: string | null;
+  date: string;
+}
+
 export default function NotificationsPage() {
-  const [notifications, setNotifications] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<NotificationRow[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function loadNotifications() {
       try {
-        const response = await adminFetch<any>('/admin/notifications');
+        const response = await adminFetch<{ notifications?: NotificationRow[] }>('/admin/notifications');
         setNotifications(response.notifications || []);
       } catch (err) {
         console.error('Failed to load notifications:', err);
@@ -40,7 +49,7 @@ export default function NotificationsPage() {
             <p className="text-sm text-[#475569]">No new notifications.</p>
           </div>
         ) : (
-          notifications.map((notif: any) => (
+          notifications.map((notif) => (
             <div key={notif.id} className="flex items-start justify-between gap-4 rounded-lg border border-[#E2E8F0] bg-white p-4 shadow-2xs">
               <div className="flex items-start gap-3">
                 <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${notif.level === 'error' ? 'bg-red-500' : notif.level === 'warning' ? 'bg-amber-500' : 'bg-slate-300'}`} aria-hidden="true" />

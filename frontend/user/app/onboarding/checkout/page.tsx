@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { Suspense, useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ApiService } from '../../../services/api.service';
 import { StorageService } from '../../../services/storage.service';
@@ -12,7 +12,16 @@ declare global {
   }
 }
 
+// useSearchParams() must sit under a Suspense boundary or the production build cannot prerender this page.
 export default function CheckoutOrderPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-sm text-gray-500">Loading checkout...</div>}>
+      <CheckoutOrderContent />
+    </Suspense>
+  );
+}
+
+function CheckoutOrderContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 

@@ -86,9 +86,9 @@ export function ConversationsSidebar({
           <div className="divide-y divide-gray-50">
             {calls.map((call) => {
               const isSelected = selectedCallId === call.id;
-              const title = call.customer_name || call.caller_number || 'Inbound Caller';
+              const title = call.caller_name || call.caller_number || 'Inbound Caller';
               const timeStr = call.started_at ? new Date(call.started_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : 'Live';
-              const preview = call.summary || call.transcription || 'Call transcript recorded.';
+              const preview = call.summary || call.messages?.[call.messages.length - 1]?.content || 'Call transcript recorded.';
 
               return (
                 <div 

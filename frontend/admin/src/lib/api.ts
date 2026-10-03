@@ -86,7 +86,7 @@ function readableError(body: unknown, fallback: string): string {
   const detail = (body as { detail?: unknown } | null)?.detail;
   if (typeof detail === 'string') return detail;
   if (Array.isArray(detail)) {
-    return detail.map((d) => (d && typeof d === 'object' && 'msg' in d ? String((d as { msg: unknown }).msg) : '')).filter(Boolean).join('; ') || fallback;
+    return detail.map((d: unknown) => (d && typeof d === 'object' && 'msg' in d ? String((d as { msg: unknown }).msg) : '')).filter(Boolean).join('; ') || fallback;
   }
   return fallback;
 }

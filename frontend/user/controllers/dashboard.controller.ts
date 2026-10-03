@@ -211,6 +211,7 @@ export interface BusinessInfo {
   city?: string;
   address?: string;
   postal_code?: string;
+  website?: string;
   business_email?: string;
   business_phone?: string;
   logo_url?: string;
@@ -597,11 +598,6 @@ export const DashboardController = {
       throw new Error(`Transcription failed: ${res.statusText}`);
     }
     return res.json();
-  },
-
-  async getBusinessInfo(businessId?: string): Promise<any> {
-    const bId = this.getEffectiveBusinessId(businessId);
-    return ApiService.get<any>(API_ENDPOINTS.BUSINESS.GET(bId));
   },
 
   async updateBusiness(payload: any, businessId?: string): Promise<any> {

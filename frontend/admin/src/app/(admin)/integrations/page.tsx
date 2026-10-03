@@ -1,5 +1,5 @@
 "use client";
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { adminAuth, API_BASE } from '../../../lib/api';
 import { ProviderLogo } from '../../../components/admin/ProviderLogo';
 import { SmtpConfigDialog } from '../../../components/admin/SmtpConfigDialog';
@@ -129,6 +129,7 @@ export default function AdminIntegrationsPage() {
     });
   }, []);
 
+  const loadRef = useRef<() => Promise<void>>(async () => undefined);
   const load = useCallback(async () => {
     try {
       const res = await request('/admin/integrations');
@@ -137,7 +138,7 @@ export default function AdminIntegrationsPage() {
         setItems(Array.isArray(data) ? data : []);
         setLoadError('');
         if (Array.isArray(data) && data.some((i: Integration) => !i.last_checked_at)) {
-          window.setTimeout(() => load(), 4000);
+          window.setTimeout(() => void loadRef.current(), 4000); // poll again until every provider has been checked
         }
       } else {
         setLoadError(
@@ -152,6 +153,9 @@ export default function AdminIntegrationsPage() {
       setLoaded(true);
     }
   }, [request]);
+  useEffect(() => {
+    loadRef.current = load;
+  }, [load]);
 
   useEffect(() => {
     load();

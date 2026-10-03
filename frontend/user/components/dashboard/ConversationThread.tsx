@@ -29,47 +29,18 @@ export function ConversationThread({ call, loading }: ConversationThreadProps) {
     );
   }
 
-  const callerTitle = call.customer_name || call.caller_number || 'Caller';
+  const callerTitle = call.caller_name || call.caller_number || 'Caller';
   const durationMin = Math.floor((call.duration_seconds || 0) / 60);
   const durationSec = (call.duration_seconds || 0) % 60;
   const durationStr = `${durationMin}m ${durationSec < 10 ? '0' : ''}${durationSec}s`;
 
-  // Parse messages or transcription
-  let messageList: Array<{ isAI: boolean; sender: string; text: string; time?: string }> = [];
-
-  if (Array.isArray(call.messages) && call.messages.length > 0) {
-    messageList = call.messages.map((m) => ({
-      isAI: m.sender === 'ai',
-      sender: m.sender === 'ai' ? 'AI Receptionist' : 'Caller',
-      text: m.text,
-      time: m.timestamp || '',
-    }));
-  } else if (call.transcription) {
-    // If transcription has turn delimiters like "AI:" / "Caller:"
-    const lines = call.transcription.split('\n').filter(Boolean);
-    const hasLabels = lines.some((l) => l.startsWith('AI:') || l.startsWith('Caller:') || l.startsWith('User:'));
-    
-    if (hasLabels) {
-      messageList = lines.map((l) => {
-        const isAI = l.startsWith('AI:');
-        const text = l.replace(/^(AI:|Caller:|User:)\s*/i, '');
-        return {
-          isAI,
-          sender: isAI ? 'AI Receptionist' : 'Caller',
-          text,
-        };
-      });
-    } else {
-      // Single block
-      messageList = [
-        {
-          isAI: false,
-          sender: 'Call Transcript',
-          text: call.transcription,
-        },
-      ];
-    }
-  }
+  // The server sends one row per spoken turn: role "assistant" is the AI, anything else is the caller.
+  const messageList: Array<{ isAI: boolean; sender: string; text: string; time?: string }> = (call.messages ?? []).map((m) => ({
+    isAI: m.role === 'assistant',
+    sender: m.role === 'assistant' ? 'AI Receptionist' : 'Caller',
+    text: m.content,
+    time: m.created_at ? new Date(m.created_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '',
+  }));
 
   return (
     <div className="bg-white border border-gray-100 rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.03)] flex flex-col h-full overflow-hidden">

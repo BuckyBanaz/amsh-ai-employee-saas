@@ -29,7 +29,7 @@ export function AnalyticsHeader({
           Analytics
         </h1>
         <p className="text-xs text-gray-500 font-medium mt-0.5">
-          Understand your clinic's calling volume and performance metrics
+          Understand your clinic&apos;s calling volume and performance metrics
         </p>
       </div>
 

@@ -19,7 +19,7 @@ export function AIDefaultsSettings() {
       .then((agent) => {
         if (agent) {
           if (agent.name) setAgentName(agent.name);
-          if (agent.greeting) setGreeting(agent.greeting);
+          if (agent.greeting_message) setGreeting(agent.greeting_message);
           if (agent.config?.voice_name) setVoice(agent.config.voice_name);
           if (agent.config?.speed) setSpeed(agent.config.speed);
           if (agent.config?.language) setLanguage(agent.config.language);
@@ -35,7 +35,7 @@ export function AIDefaultsSettings() {
     try {
       await DashboardController.updateAgent({
         name: agentName,
-        greeting: greeting || undefined,
+        greeting_message: greeting || undefined,
         config: {
           voice_name: voice,
           speed,

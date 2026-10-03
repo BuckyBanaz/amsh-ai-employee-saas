@@ -72,7 +72,7 @@ export function TopBar() {
           <span className="inline-block animate-bounce select-none text-base sm:text-lg">👋</span>
         </h1>
         <p className="text-xs text-gray-500 font-medium mt-0.5 truncate">
-          Here's what's happening at <span className="font-semibold text-gray-700">{businessName}</span> today.
+          Here&apos;s what&apos;s happening at <span className="font-semibold text-gray-700">{businessName}</span> today.
         </p>
       </div>
 

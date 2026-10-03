@@ -1,4 +1,5 @@
 "use client";
+import Link from 'next/link';
 import React, { useEffect, useMemo, useState } from 'react';
 import { adminFetch } from '@/lib/api';
 import type { Analytics } from '@/lib/analyticsTypes';
@@ -380,7 +381,7 @@ export default function AnalyticsPage() {
               )}
             </Card>
 
-            <Card title="Top Performing Businesses" action={<a href="/businesses" className="text-xs font-medium text-[#2563EB] hover:underline">View all</a>}>
+            <Card title="Top Performing Businesses" action={<Link href="/businesses" className="text-xs font-medium text-[#2563EB] hover:underline">View all</Link>}>
               <MiniTable
                 head={['Business', 'Calls', 'AI bookings', 'Conversion']}
                 empty="No calls in this period."
@@ -390,7 +391,7 @@ export default function AnalyticsPage() {
           </div>
 
           <div className="grid gap-3.5 md:grid-cols-2 xl:grid-cols-3">
-            <Card title="Recent Signups" action={<a href="/businesses" className="text-xs font-medium text-[#2563EB] hover:underline">View all</a>}>
+            <Card title="Recent Signups" action={<Link href="/businesses" className="text-xs font-medium text-[#2563EB] hover:underline">View all</Link>}>
               <MiniTable
                 head={['Business', 'Vertical', 'Plan', 'Signed up', 'Status']}
                 empty="No businesses yet."

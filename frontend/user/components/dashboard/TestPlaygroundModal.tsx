@@ -1554,7 +1554,7 @@ export function TestPlaygroundModal({ isOpen, onClose }: TestPlaygroundModalProp
                     {interimSpeech && (
                       <div className="p-2 rounded-xl text-[11.5px] bg-emerald-50/80 border border-emerald-200 text-emerald-900 ml-3 animate-in fade-in flex items-center gap-2">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
-                        <span className="italic">"{interimSpeech}..."</span>
+                        <span className="italic">&quot;{interimSpeech}...&quot;</span>
                       </div>
                     )}
 

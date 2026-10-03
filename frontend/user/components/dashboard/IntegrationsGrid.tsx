@@ -77,7 +77,21 @@ const getIconForIntegration = (type: string) => {
 };
 
 // Base definitions enriched with BYO / Managed distinctions
-const baseCatalog = [
+interface CatalogItem {
+  id: string;
+  providerKey: string;
+  name: string;
+  description: string;
+  iconType: string;
+  iconBg: string;
+  iconColor: string;
+  category: string;
+  badgeText: string;
+  fields: { key: string; label: string; placeholder: string }[];
+  isWhatsappSpecial?: boolean; // true: show the one-click Meta sign-up button instead of the manual form (not enabled for any item today)
+}
+
+const baseCatalog: CatalogItem[] = [
   {
     id: 'google-calendar',
     providerKey: 'google_calendar',
@@ -325,7 +339,7 @@ export function IntegrationsGrid({ filter = 'All Integrations' }: { filter?: str
         <div className="text-xs text-blue-900 leading-relaxed">
           <p className="font-bold mb-0.5">Managed Platform Engine Active</p>
           <p className="text-blue-700">
-            AMSh provides managed AI voice numbers, high-speed LLM processing, and SMS delivery out of the box. Connect the integrations below to sync doctor calendars, use your clinic's branded WhatsApp, or send emails from your own domain.
+            AMSh provides managed AI voice numbers, high-speed LLM processing, and SMS delivery out of the box. Connect the integrations below to sync doctor calendars, use your clinic&apos;s branded WhatsApp, or send emails from your own domain.
           </p>
         </div>
       </div>
