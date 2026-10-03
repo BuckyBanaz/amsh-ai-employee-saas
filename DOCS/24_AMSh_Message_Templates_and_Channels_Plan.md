@@ -1,6 +1,8 @@
 # 24. Message Templates and Channels Plan (Email, SMS, WhatsApp, In-app)
 
-Status: **PLANNED** (written 2026-10-03, nothing built yet). Owner of the decision: Parikshit.
+Status: **PARTLY BUILT** (written 2026-10-03). Owner of the decision: Parikshit.
+Built: admin Templates and clinic Settings > Messages screens (design previews with sample data, not yet connected), and the backend API
+(section 11). Not built: moving the hardcoded senders onto it, the single `dispatcher.send()`, Meta template sync, delivery webhooks, plan caps.
 Why: today every outgoing message is a string inside Python code. The admin cannot change a wording, a clinic cannot make a reminder sound
 like itself, and there is no record of what was sent. This plan gives both portals one template system over four channels.
 
@@ -134,3 +136,24 @@ The one entry point replaces the scattered senders: `NotificationDispatcher.send
 3. How long is the message body kept in `message_log` (30, 90 days, or only metadata)?
 4. Which regions need regulator-registered SMS templates first (India DLT is the known one)?
 5. Should the platform charge per SMS / WhatsApp beyond the plan quota, or stop at the limit?
+
+## 11. Backend API (built 2026-10-03)
+
+Code: `server/database/models/message_template.py` (tables `message_templates`, `message_log`, `message_preferences`, migration `0006`),
+`server/services/message_templates.py` (event catalogue, built-in defaults, renderer, resolver), `server/api/routes/message_templates.py`.
+Tests: `ai/evals/test_message_templates.py` (16, including tenant isolation and role checks).
+
+| Who | Endpoint |
+|---|---|
+| Platform admin | `GET /api/admin/message-templates/meta`, `GET /api/admin/message-templates` (grid), `GET / PUT / DELETE /api/admin/message-templates/{event}/{channel}`, `POST .../preview`, `POST .../restore`, `GET /api/admin/message-log` |
+| Clinic (members read, owner / admin write) | `GET /api/businesses/{id}/message-templates`, `GET / PUT / DELETE .../message-templates/{event}/{channel}`, `POST .../preview`, `POST .../restore`, `GET / PUT .../message-preferences`, `GET .../message-log` |
+
+Rules in code: only the event's own `{{variables}}` are accepted (400 otherwise); an email needs a subject; length limits per channel; every save
+makes a version (20 kept) and is audited; a clinic can only touch clinic-owned events (account, billing and platform alerts are admin-only, 403);
+editing WhatsApp text clears its Meta approval; a draft is never sent; resolution is clinic override, platform template, same in English,
+built-in default. The log masks phone numbers and emails.
+
+Still to do on the backend: `NotificationDispatcher.send(event, recipient, context, business_id)` that uses `resolve()`, `render()`,
+the channel order and quiet hours from `message_preferences`, and writes `message_log`; move each hardcoded string over (with a golden check);
+Meta template submission (the screens' "Submit for approval" has no endpoint yet); "send test to me"; provider status webhooks; plan caps;
+`html_body` for email. Open: message-log retention (question 3 below).

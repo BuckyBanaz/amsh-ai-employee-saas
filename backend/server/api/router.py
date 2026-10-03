@@ -7,6 +7,7 @@ from backend.server.api.routes import (
     admin_integrations,
     admin_overview,
     admin_plans,
+    message_templates,
     admin_tenant_data,
     agents,
     analytics,
@@ -64,6 +65,8 @@ api_router.include_router(stt.router)
 api_router.include_router(plans_public.router)
 api_router.include_router(languages.router)
 api_router.include_router(admin_plans.router)
+api_router.include_router(message_templates.admin_router)
+api_router.include_router(message_templates.router)
 api_router.include_router(admin_tenant_data.router)
 api_router.include_router(admin_overview.router)
 api_router.include_router(admin_calls.router)

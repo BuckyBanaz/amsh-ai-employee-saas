@@ -3110,7 +3110,7 @@ class DatabaseMigrations(unittest.TestCase):
         self.assertIn("email_verified_at", {c["name"] for c in inspect(eng).get_columns("users")})
         self.assertTrue({"sentiment", "action_items", "analyzed_at"} <= {c["name"] for c in inspect(eng).get_columns("calls")})
         with eng.connect() as c:
-            self.assertEqual(c.execute(text("select version_num from alembic_version")).scalar(), "0004")
+            self.assertEqual(c.execute(text("select version_num from alembic_version")).scalar(), "0006")
             self.assertEqual([r[0] for r in c.execute(text("select key from plans order by sort_order"))], ["starter", "professional", "business"])
         self.assertEqual(run_migrations(url), "upgraded")  # running twice is harmless
 
