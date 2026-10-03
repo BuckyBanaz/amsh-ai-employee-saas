@@ -1,0 +1,183 @@
+{
+  "ran_at": "2026-10-03 21:54:01",
+  "seconds": 5.1,
+  "passed": 35,
+  "failed": 0,
+  "checks": [
+    {
+      "check": "API starts and migrates an empty SQLite database (0001 to latest)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "/api/admin/alerts refuses no token",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "/api/admin/alerts refuses a clinic owner",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "/api/admin/alerts/unread-count refuses no token",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "/api/admin/alerts/unread-count refuses a clinic owner",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "/api/admin/spend refuses no token",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "/api/admin/spend refuses a clinic owner",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "/api/admin/spend/rates refuses no token",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "/api/admin/spend/rates refuses a clinic owner",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "rate card edit refuses a clinic owner",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "alerts feed loads for an admin",
+      "ok": true,
+      "detail": "200"
+    },
+    {
+      "check": "alert: new signup",
+      "ok": true,
+      "detail": "['Admin signed in', 'Sanjeevani Clinic started a free trial', 'New clinic: Sanjeevani Clinic', 'Sign-in', 'New signup']"
+    },
+    {
+      "check": "alert: new clinic",
+      "ok": true,
+      "detail": "['Admin signed in', 'Sanjeevani Clinic started a free trial', 'New clinic: Sanjeevani Clinic', 'Sign-in', 'New signup']"
+    },
+    {
+      "check": "alert: clinic sign-in",
+      "ok": true,
+      "detail": "['Admin signed in', 'Sanjeevani Clinic started a free trial', 'New clinic: Sanjeevani Clinic', 'Sign-in', 'New signup']"
+    },
+    {
+      "check": "alert: free trial started",
+      "ok": true,
+      "detail": "['Admin signed in', 'Sanjeevani Clinic started a free trial', 'New clinic: Sanjeevani Clinic', 'Sign-in', 'New signup']"
+    },
+    {
+      "check": "first look leaves nothing unread, then a new event is unread",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "unread count rises after a new sign-in",
+      "ok": true,
+      "detail": "{'unread': 2}"
+    },
+    {
+      "check": "mark-read clears the badge",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "muting sign-ins hides them",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "spend report loads",
+      "ok": true,
+      "detail": "200"
+    },
+    {
+      "check": "spend: every tool present and LLM/telephony/SMS priced",
+      "ok": true,
+      "detail": "{\"telephony\": 0.264, \"stt\": 0.0946, \"llm.groq\": 0.0868, \"tts\": 0.0475, \"sms\": 0.045, \"llm.gemini\": 0.0168, \"whatsapp\": 0.0125, \"email\": 0.0}"
+    },
+    {
+      "check": "spend: revenue is the recorded payment, profit = revenue - spend",
+      "ok": true,
+      "detail": "{\"spend\": 0.5673, \"testing_spend\": 0.0, \"trial_spend\": 0.5673, \"unattributed_spend\": 0.0, \"revenue\": 49.0, \"profit\": 48.4327, \"margin_pct\": 98.8}"
+    },
+    {
+      "check": "spend: the clinic is listed with its own profit",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "rate card saves (super admin)",
+      "ok": true,
+      "detail": "200"
+    },
+    {
+      "check": "an edited price reprices the report",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "an unknown rate is refused",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "admin can simulate any clinic",
+      "ok": true,
+      "detail": "200"
+    },
+    {
+      "check": "playground reply says test mode",
+      "ok": true,
+      "detail": "{\"call_id\": \"sim_my-own-id\", \"test_mode\": true, \"test_actions\": [], \"state\": \"intent_detection\", \"bot_response\": \"I'm sorry, I'm having trouble right now. Could you say that again, or would you like m"
+    },
+    {
+      "check": "playground call id is forced to a test call",
+      "ok": true,
+      "detail": "sim_my-own-id"
+    },
+    {
+      "check": "the clinic owner can use their own playground",
+      "ok": true,
+      "detail": "200"
+    },
+    {
+      "check": "playground created no appointment",
+      "ok": true,
+      "detail": "[]"
+    },
+    {
+      "check": "simulate refuses no token",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "admin can suspend a clinic",
+      "ok": true,
+      "detail": "200"
+    },
+    {
+      "check": "a suspended clinic cannot sign in",
+      "ok": true,
+      "detail": "403"
+    },
+    {
+      "check": "alert: clinic suspended",
+      "ok": true,
+      "detail": ""
+    }
+  ]
+}

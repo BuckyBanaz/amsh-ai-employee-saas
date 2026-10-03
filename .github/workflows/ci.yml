@@ -26,6 +26,10 @@ jobs:
         env:
           PYTHONPATH: .
           AMSH_DISABLE_SMS: "1"
+      # The real app on a throwaway SQLite database: migrations, auth, alerts, spend report, playground test mode (testing/README.md).
+      - run: python testing/api_smoke.py
+        env:
+          PYTHONPATH: .
 
   dependencies:
     name: Dependency audit

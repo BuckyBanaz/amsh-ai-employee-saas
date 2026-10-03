@@ -30,7 +30,7 @@ function DailyBars({ days }: { days: { date: string; spend: number }[] }) {
   return (
     <div className="flex h-28 items-end gap-[2px]" role="img" aria-label="Daily spend">
       {days.map((d) => (
-        <div key={d.date} className="group relative flex-1" title={`${d.date}: ${money(d.spend)}`}>
+        <div key={d.date} className="group relative flex h-full flex-1 items-end" title={`${d.date}: ${money(d.spend)}`}>
           <div className="w-full rounded-t bg-[#2563EB]/80 group-hover:bg-[#2563EB]" style={{ height: `${Math.max(2, (d.spend / max) * 100)}%` }} />
         </div>
       ))}
@@ -133,7 +133,7 @@ export default function UsageAndLimitsPage() {
                 {report.by_tool.map((r) => (
                   <tr key={r.tool} className="border-b border-[#F1F5F9]">
                     <td className="px-4 py-2"><span className="font-semibold text-[#0F172A]">{r.label}</span><span className="block text-[10px] text-[#94A3B8]">{r.provider}</span></td>
-                    <td className="px-2 text-[#475569]">{qty(r.quantity)} {r.unit}{r.estimated && <span className="ml-1 text-[10px] text-amber-600" title="Counted from text length, not reported by the provider">est.</span>}</td>
+                    <td className="px-2 text-[#475569]">{qty(r.quantity)} {r.quantity === 1 ? r.unit.replace(/s$/, '') : r.unit}{r.estimated && <span className="ml-1 text-[10px] text-amber-600" title="Counted from text length, not reported by the provider">est.</span>}</td>
                     <td className="px-2 text-right font-semibold text-[#0F172A]">{money(r.cost, cur)}</td>
                     <td className="px-4"><div className="flex items-center gap-2"><div className="h-1.5 w-24 overflow-hidden rounded-full bg-[#E2E8F0]"><div className="h-full rounded-full bg-[#2563EB]" style={{ width: `${r.share_pct}%` }} /></div><span className="w-9 text-[#475569]">{r.share_pct}%</span></div></td>
                   </tr>

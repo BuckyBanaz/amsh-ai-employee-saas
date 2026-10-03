@@ -1,0 +1,98 @@
+{
+  "ran_at": "2026-10-03 21:55:02",
+  "seconds": 22.0,
+  "passed": 18,
+  "failed": 0,
+  "checks": [
+    {
+      "check": "admin: real login form reaches the dashboard",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "admin: Alerts badge in the sidebar shows unread events",
+      "ok": true,
+      "detail": "1"
+    },
+    {
+      "check": "admin: alerts page lists the free trial",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "admin: alerts page lists the new signup and clinic",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "admin: alerts page lists the sign-in",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "admin: mark all read clears the badge",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "admin: category tab filters to trials",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "admin: playground shows the test-mode banner",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "admin: playground gets a reply for the chosen clinic",
+      "ok": true,
+      "detail": "I want to book a checkup tomorrow at 10 AM\nI'm sorry, I'm having trouble right now. Could you say that again, or would you like me to connect you to the front desk?\ngroq \u00b7 0.0s"
+    },
+    {
+      "check": "admin: usage page shows spend, revenue and profit",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "admin: usage page lists the tools and the clinic",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "admin: usage page notes that prices are estimates",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "admin: the daily spend chart draws bars",
+      "ok": true,
+      "detail": "{'x': 1393.265625, 'y': 270.453125, 'width': 9.6875, 'height': 76.046875}"
+    },
+    {
+      "check": "admin: editing a price saves and marks it edited",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "admin: no uncaught script errors on admin pages",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "user: real login form signs the clinic owner in",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "user: playground shows the test-mode banner",
+      "ok": true,
+      "detail": "TEST MODE\nNothing here is real: no booking is saved and no message is sent."
+    },
+    {
+      "check": "user: no uncaught script errors on user pages",
+      "ok": true,
+      "detail": ""
+    }
+  ]
+}

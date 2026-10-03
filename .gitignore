@@ -19,3 +19,6 @@ Thumbs.db
 
 # call recordings uploaded from the dashboard playground
 backend/data/
+
+# test logs (the JSON results and screenshots in testing/ are kept)
+testing/results/*.log
