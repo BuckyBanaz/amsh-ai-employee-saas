@@ -1,8 +1,8 @@
 "use client";
-import React, { useMemo, useSyncExternalStore } from 'react';
+import React, { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { adminAuth, AdminUser, getUserSnapshot, subscribeSession } from '../../lib/api';
+import { adminAuth, AdminUser, fetchAlertsUnread, getUserSnapshot, subscribeSession } from '../../lib/api';
 
 const navGroups = [
   {
@@ -44,6 +44,7 @@ const navGroups = [
   {
     title: 'MONITORING',
     items: [
+      { label: 'Alerts', href: '/notifications', icon: 'bell' },
       { label: 'System Health', href: '/health', icon: 'heart' },
       { label: 'Audit Logs', href: '/audit', icon: 'shield' },
     ]
@@ -101,6 +102,16 @@ export function Sidebar() {
     }
   }, [rawAdmin]);
   const pathname = usePathname();
+  const [unreadAlerts, setUnreadAlerts] = useState(0);
+  useEffect(() => {
+    // The badge on Alerts: new sign-ups, trials and plan changes since this admin last looked.
+    let live = true;
+    const poll = () => fetchAlertsUnread().then((r) => { if (live) setUnreadAlerts(r.unread); }).catch(() => undefined);
+    void poll();
+    const timer = window.setInterval(poll, 60000);
+    window.addEventListener('alerts-read', poll);
+    return () => { live = false; window.clearInterval(timer); window.removeEventListener('alerts-read', poll); };
+  }, [pathname]);
 
   return (
     <aside className="w-[220px] bg-white border-r border-[#E2E8F0] flex flex-col h-screen flex-shrink-0 text-[#334155] select-none">
@@ -154,9 +165,12 @@ export function Sidebar() {
                       <span className={`${isActive ? 'text-[#2563EB]' : 'text-[#94A3B8] group-hover/item:text-[#475569]'} transition-colors shrink-0`}>
                         {getIcon(item.icon)}
                       </span>
-                      <span className="text-xs truncate">
+                      <span className="text-xs truncate flex-1">
                         {item.label}
                       </span>
+                      {item.href === '/notifications' && unreadAlerts > 0 && (
+                        <span className="ml-auto rounded-full bg-[#0066FF] px-1.5 py-0.5 text-[9px] font-bold leading-none text-white" aria-label={`${unreadAlerts} unread alerts`}>{unreadAlerts > 99 ? '99+' : unreadAlerts}</span>
+                      )}
                     </div>
                   </Link>
                 );

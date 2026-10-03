@@ -872,3 +872,31 @@ export const restoreTemplate = (event: string, channel: string, body: { language
   adminFetch<TemplateRow>(`${cellPath(event, channel)}/restore`, { method: 'POST', body: JSON.stringify(body) });
 export const fetchMessageLog = (params: { channel?: string; status?: string; event_key?: string; limit?: number; offset?: number }) =>
   adminFetch<{ items: MessageLogRow[]; limit: number; offset: number }>(`/admin/message-log${queryString({ ...params })}`);
+
+// ---- Alerts (sign-ups, sign-ins, trials, plan changes, tickets, security) ------------------------------------------
+
+export interface AlertItem {
+  id: string;
+  category: string;
+  level: 'info' | 'success' | 'warning' | 'critical';
+  title: string;
+  message: string;
+  at: string | null;
+  unread: boolean;
+  business_id: string | null;
+  business_name: string | null;
+  link: string | null;
+}
+export interface AlertFeed {
+  items: AlertItem[];
+  unread: number;
+  counts: Record<string, number>;
+  categories: Record<string, string>;
+  muted: string[];
+  attention: { id: string; title: string; message: string; level: string; link: string | null }[];
+  window_days: number;
+}
+export const fetchAlerts = (category?: string) => adminFetch<AlertFeed>(`/admin/alerts${category ? `?category=${encodeURIComponent(category)}` : ''}`);
+export const fetchAlertsUnread = () => adminFetch<{ unread: number }>('/admin/alerts/unread-count');
+export const markAlertsRead = () => adminFetch<{ unread: number }>('/admin/alerts/mark-read', { method: 'POST' });
+export const saveAlertPrefs = (muted: string[]) => adminFetch<{ muted: string[] }>('/admin/alerts/preferences', { method: 'PUT', body: JSON.stringify({ muted }) });

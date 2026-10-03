@@ -2,7 +2,7 @@ import os
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -10,6 +10,7 @@ from backend.server.auth.security import get_current_user
 from backend.server.database.models.business import Business
 from backend.server.database.models.user import User
 from backend.server.database.session import get_db
+from backend.server.services.audit import audit, client_ip
 
 router = APIRouter(prefix="/api/onboarding/businesses", tags=["businesses"])
 
@@ -94,7 +95,7 @@ class BusinessOut(BaseModel):
 
 
 @router.post("", response_model=BusinessOut, status_code=status.HTTP_201_CREATED)
-def create_business(payload: BusinessCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def create_business(payload: BusinessCreate, request: Request, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     _validate_vertical(payload.vertical)
     business = Business(
         name=payload.name,
@@ -118,6 +119,8 @@ def create_business(payload: BusinessCreate, db: Session = Depends(get_db), curr
     current_user.business_id = business.id
     db.commit()
     db.refresh(business)
+    audit(db, "business.created", current_user, business_id=business.id, target_type="business", target_id=business.id, ip=client_ip(request),
+          meta={"name": business.name, "vertical": business.vertical, "country": business.country})
     return business
 
 

@@ -6,7 +6,7 @@ Implements Section 11 of the AMSh Architecture Specification:
 - Business subscription activation & status retrieval
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from typing import Optional, Tuple
@@ -18,6 +18,7 @@ from backend.server.database.session import get_db
 from backend.server.common.config import get_settings
 from backend.server.database.models.business import Business
 from backend.server.database.models.plan import Plan
+from backend.server.services.audit import audit, client_ip
 from backend.server.services.plans import find_by_key
 from backend.server.billing.razorpay_gateway import RazorpayGateway
 
@@ -117,7 +118,7 @@ async def create_razorpay_order(payload: CreateOrderRequest, db: Session = Depen
 
 
 @router.post("/razorpay/verify")
-async def verify_razorpay_payment(payload: VerifyPaymentRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def verify_razorpay_payment(payload: VerifyPaymentRequest, request: Request, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Confirms a payment and activates the plan. Trusts only what Razorpay says about the order (plan, business, amount,
     paid), not what the browser claims, so paying for a cheap plan cannot unlock an expensive one or another business."""
     if payload.business_id:
@@ -163,6 +164,7 @@ async def verify_razorpay_payment(payload: VerifyPaymentRequest, db: Session = D
     if payload.business_id:
         biz = db.query(Business).filter(Business.id == payload.business_id).first()
         if biz:
+            previous_plan, previous_status = biz.plan, (biz.status or "").lower()
             biz.plan = plan.key
             biz.status = "active"
             db.add(Transaction(
@@ -182,6 +184,10 @@ async def verify_razorpay_payment(payload: VerifyPaymentRequest, db: Session = D
             ))
             db.commit()
             db.refresh(biz)
+            # Feeds the admin alerts: a trial turning into a paid plan is the moment the owner wants to hear about.
+            audit(db, "billing.plan_purchased", current_user, business_id=biz.id, target_type="business", target_id=biz.id, ip=client_ip(request),
+                  meta={"plan": plan.key, "plan_name": plan.name, "previous_plan": previous_plan, "from_trial": previous_status == "trial",
+                        "amount": amount_paid, "currency": plan.currency})
 
     return {
         "success": True,
@@ -382,7 +388,7 @@ TRIAL_PAYMENT_ID = "trial_no_card_required"
 
 
 @router.post("/businesses/{business_id}/start-trial")
-def start_business_free_trial(business_id: str, payload: StartTrialRequest = StartTrialRequest(), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def start_business_free_trial(business_id: str, request: Request, payload: StartTrialRequest = StartTrialRequest(), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Activates the free trial on the specified plan without a card. Owner or admin only, and once per business."""
     require_owner_or_admin(business_id, current_user)
     biz = db.query(Business).filter(Business.id == business_id).first()
@@ -419,6 +425,7 @@ def start_business_free_trial(business_id: str, payload: StartTrialRequest = Sta
     ))
     db.commit()
     db.refresh(biz)
+    audit(db, "billing.trial_started", current_user, business_id=biz.id, target_type="business", target_id=biz.id, ip=client_ip(request), meta={"plan": plan_key, "plan_name": plan_name})
 
     return {
         "success": True,
@@ -431,7 +438,7 @@ def start_business_free_trial(business_id: str, payload: StartTrialRequest = Sta
 
 
 @router.post("/businesses/{business_id}/change-plan")
-def change_business_plan(business_id: str, payload: ChangePlanRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def change_business_plan(business_id: str, payload: ChangePlanRequest, request: Request, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Switch plan without paying. Owner or admin only, and only to a plan that costs the same or less: an upgrade has to go
     through checkout (create-order / verify). Platform staff can set any plan."""
     require_owner_or_admin(business_id, current_user)
@@ -450,9 +457,12 @@ def change_business_plan(business_id: str, payload: ChangePlanRequest, db: Sessi
         if float(target.price or 0) > float(current.price if current and current.price is not None else 0):
             raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail="Upgrading a plan requires payment. Use checkout.")
 
+    previous_plan = biz.plan
     biz.plan = target.key
     db.commit()
     db.refresh(biz)
+    audit(db, "billing.plan_changed", current_user, business_id=biz.id, target_type="business", target_id=biz.id, ip=client_ip(request),
+          meta={"plan": target.key, "plan_name": target.name, "previous_plan": previous_plan, "by_platform": current_user.scope == "platform"})
     return {
         "success": True,
         "message": f"Successfully switched subscription to {target.name} plan.",
