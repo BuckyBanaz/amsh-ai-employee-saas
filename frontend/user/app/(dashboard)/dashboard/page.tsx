@@ -42,10 +42,10 @@ export default function DashboardPage() {
   useAutoRefresh(loadStats);  // calls and bookings change while the dashboard is open
 
   const metrics = data?.metrics;
-  const totalCalls = metrics?.total_calls ?? 42;
-  const bookedAppointments = metrics?.booked_appointments ?? 28;
-  const newPatients = metrics?.new_patients ?? 16;
-  const resolutionRate = metrics?.resolution_rate ?? '96.8%';
+  const totalCalls = metrics?.total_calls ?? 0;
+  const bookedAppointments = metrics?.booked_appointments ?? 0;
+  const newPatients = metrics?.new_patients ?? 0;
+  const resolutionRate = metrics?.resolution_rate ?? null; // null: no finished calls yet, so there is no rate to show
 
   return (
     <div className="space-y-3.5 sm:space-y-4 animate-in fade-in duration-300 pb-8">
@@ -57,6 +57,9 @@ export default function DashboardPage() {
         calls={totalCalls}
         appointments={bookedAppointments}
         resolutionRate={resolutionRate}
+        callsTrend={metrics?.calls_trend}
+        appointmentsTrend={metrics?.appointments_trend}
+        resolutionTrend={metrics?.resolution_trend}
         loading={loading}
         onTestClick={() => setIsPlaygroundOpen(true)}
       />
@@ -66,7 +69,7 @@ export default function DashboardPage() {
         <MetricCard
           title="Total Calls Today"
           value={loading ? '...' : totalCalls}
-          trendText={metrics?.calls_trend || '+12% from yesterday'}
+          trendText={metrics?.calls_trend}
           trendUp={true}
           variant="blue"
           icon={
@@ -74,13 +77,13 @@ export default function DashboardPage() {
               <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
             </svg>
           }
-          sparklineData={[30, 45, 60, 50, 75, 95]}
+          sparklineData={metrics?.calls_spark}
         />
 
         <MetricCard
           title="Appointments Booked"
           value={loading ? '...' : bookedAppointments}
-          trendText={metrics?.appointments_trend || '+22% from yesterday'}
+          trendText={metrics?.appointments_trend}
           trendUp={true}
           variant="emerald"
           icon={
@@ -91,13 +94,13 @@ export default function DashboardPage() {
               <line x1="3" y1="10" x2="21" y2="10" />
             </svg>
           }
-          sparklineData={[20, 35, 45, 65, 80, 100]}
+          sparklineData={metrics?.appointments_spark}
         />
 
         <MetricCard
-          title="New Patients"
+          title="New Patients This Week"
           value={loading ? '...' : newPatients}
-          trendText={metrics?.patients_trend || '+8% from last week'}
+          trendText={metrics?.patients_trend}
           trendUp={true}
           variant="purple"
           icon={
@@ -108,13 +111,13 @@ export default function DashboardPage() {
               <line x1="23" y1="11" x2="17" y2="11" />
             </svg>
           }
-          sparklineData={[40, 55, 50, 70, 65, 85]}
+          sparklineData={metrics?.patients_spark}
         />
 
         <MetricCard
           title="Resolution Rate"
-          value={loading ? '...' : resolutionRate}
-          trendText={metrics?.resolution_trend || '+4% vs target'}
+          value={loading ? '...' : (resolutionRate ?? '—')}
+          trendText={metrics?.resolution_trend}
           trendUp={true}
           variant="amber"
           icon={
@@ -123,7 +126,7 @@ export default function DashboardPage() {
               <polyline points="22 4 12 14.01 9 11.01" />
             </svg>
           }
-          sparklineData={[70, 75, 82, 88, 92, 98]}
+          sparklineData={metrics?.resolution_spark}
         />
       </div>
 

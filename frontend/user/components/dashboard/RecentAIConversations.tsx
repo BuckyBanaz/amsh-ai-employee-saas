@@ -1,6 +1,7 @@
 "use client";
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { CallLogItem, DashboardController } from '../../controllers/dashboard.controller';
 import { ListSkeleton } from '../common/ShimmerSkeleton';
 
 export interface RecentConversationItem {
@@ -19,61 +20,46 @@ interface RecentAIConversationsProps {
   loading?: boolean;
 }
 
-export function RecentAIConversations({ items, loading = false }: RecentAIConversationsProps) {
-  const defaultItems: RecentConversationItem[] = [
-    {
-      id: 'conv-1',
-      channel: 'phone',
-      caller: 'Sarah Jenkins',
-      phoneNumber: '+44 7700 900891',
-      intent: 'Booked Dental Cleaning for Thursday 3:00 PM',
-      outcome: 'Booked',
-      duration: '1m 42s',
-      timeAgo: '5m ago',
-    },
-    {
-      id: 'conv-2',
-      channel: 'phone',
-      caller: 'David Ross',
-      phoneNumber: '+44 7700 900342',
-      intent: 'Inquired about orthodontic consultation & pricing',
-      outcome: 'Answered',
-      duration: '2m 10s',
-      timeAgo: '18m ago',
-    },
-    {
-      id: 'conv-3',
-      channel: 'whatsapp',
-      caller: 'Elena Rostova',
-      phoneNumber: '+44 7700 900115',
-      intent: 'Rescheduled Teeth Whitening appointment to Oct 2',
-      outcome: 'Handled',
-      duration: 'Chat (6 msgs)',
-      timeAgo: '42m ago',
-    },
-    {
-      id: 'conv-4',
-      channel: 'phone',
-      caller: 'Michael Scott',
-      phoneNumber: '+44 7700 900673',
-      intent: 'Complex surgical insurance query transferred to front desk',
-      outcome: 'Escalated',
-      duration: '58s',
-      timeAgo: '1h ago',
-    },
-    {
-      id: 'conv-5',
-      channel: 'phone',
-      caller: 'Amelia Clark',
-      phoneNumber: '+44 7700 900224',
-      intent: 'Booked Emergency Toothache appointment for today',
-      outcome: 'Booked',
-      duration: '1m 15s',
-      timeAgo: '2h ago',
-    },
-  ];
+const ago = (iso: string | null): string => {
+  if (!iso) return 'Live';
+  const sec = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
+  if (sec < 60) return 'Just now';
+  if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
+  if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`;
+  return `${Math.floor(sec / 86400)}d ago`;
+};
 
-  const conversations = items && items.length > 0 ? items : defaultItems;
+function toItem(c: CallLogItem): RecentConversationItem {
+  const booked = (c.intent || '').toLowerCase().includes('book');
+  const outcome: RecentConversationItem['outcome'] = c.outcome === 'transferred' ? 'Escalated' : c.outcome === 'live' ? 'Answered' : booked ? 'Booked' : 'Handled';
+  const secs = c.duration_seconds || 0;
+  return {
+    id: c.id,
+    channel: c.channel === 'whatsapp' ? 'whatsapp' : 'phone',
+    caller: c.caller_name || c.caller_number || 'Caller',
+    phoneNumber: c.caller_name ? c.caller_number : undefined,
+    intent: c.summary || c.intent || 'Not analysed yet',
+    outcome,
+    duration: secs ? `${Math.floor(secs / 60)}m ${String(secs % 60).padStart(2, '0')}s` : undefined,
+    timeAgo: ago(c.started_at),
+  };
+}
+
+/** The clinic's latest real conversations. Pass `items` to control the list; otherwise it loads the last calls itself. */
+export function RecentAIConversations({ items, loading: parentLoading = false }: RecentAIConversationsProps) {
+  const [loaded, setLoaded] = useState<RecentConversationItem[] | null>(items ?? null);
+
+  useEffect(() => {
+    if (items) return;
+    let cancelled = false;
+    DashboardController.getCalls(undefined, { limit: 4 })
+      .then((rows) => { if (!cancelled) setLoaded(rows.map(toItem)); })
+      .catch(() => { if (!cancelled) setLoaded([]); });
+    return () => { cancelled = true; };
+  }, [items]);
+
+  const loading = parentLoading || (!items && loaded === null);
+  const conversations = items ?? loaded ?? [];
 
   const getOutcomeBadge = (outcome: RecentConversationItem['outcome']) => {
     switch (outcome) {
@@ -135,6 +121,8 @@ export function RecentAIConversations({ items, loading = false }: RecentAIConver
       {/* Conversation Feed List */}
       {loading ? (
         <ListSkeleton count={4} />
+      ) : conversations.length === 0 ? (
+        <p className="py-8 text-center text-xs text-gray-500">No conversations yet. Calls and WhatsApp chats handled by the AI appear here.</p>
       ) : (
         <div className="divide-y divide-gray-100 -mx-1">
           {conversations.slice(0, 4).map((item) => (

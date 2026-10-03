@@ -6,7 +6,7 @@ export type MetricVariant = 'blue' | 'purple' | 'emerald' | 'amber';
 interface MetricCardProps {
   title: string;
   value: string | number;
-  trendText: string;
+  trendText?: string | null;
   trendUp?: boolean;
   variant?: MetricVariant;
   icon?: React.ReactNode;
@@ -20,7 +20,7 @@ export function MetricCard({
   trendUp = true,
   variant = 'blue',
   icon,
-  sparklineData = [35, 45, 60, 55, 75, 90],
+  sparklineData = [],
 }: MetricCardProps) {
   const getTheme = () => {
     switch (variant) {
@@ -68,11 +68,12 @@ export function MetricCard({
           <span className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight leading-none">
             {value}
           </span>
-          <div className="flex items-center gap-1 mt-1.5">
-            <span className="text-emerald-500 font-bold text-[10px] sm:text-[11px] flex items-center gap-0.5">
-              <span>↑</span>
-              <span>{trendText}</span>
-            </span>
+          <div className="flex items-center gap-1 mt-1.5 min-h-[14px]">
+            {trendText ? (
+              <span className={`${trendText.startsWith('-') ? 'text-red-500' : 'text-emerald-500'} font-bold text-[10px] sm:text-[11px]`}>{trendText}</span>
+            ) : (
+              <span className="text-gray-400 font-medium text-[10px] sm:text-[11px]">No earlier data to compare</span>
+            )}
           </div>
         </div>
 

@@ -24,18 +24,23 @@ export interface DashboardMetrics {
   booked_appointments: number;
   new_patients?: number;
   transferred_calls: number;
-  resolution_rate?: string;
-  conversion_rate: string;
-  avg_latency: string;
-  ai_accuracy: string;
-  calls_trend?: string;
-  appointments_trend?: string;
-  patients_trend?: string;
-  resolution_trend?: string;
+  // Rates and trends are null when there is nothing to compute them from (no calls yet, no earlier period): show a dash, never a guess.
+  resolution_rate?: string | null;
+  conversion_rate?: string | null;
+  avg_latency?: string | null;
+  ai_accuracy?: string | null;
+  calls_trend?: string | null;
+  appointments_trend?: string | null;
+  patients_trend?: string | null;
+  resolution_trend?: string | null;
+  calls_spark?: number[];
+  appointments_spark?: number[];
+  patients_spark?: number[];
+  resolution_spark?: number[];
 }
 
 export interface AIPerformanceData {
-  resolution_rate: number;
+  resolution_rate: number | null;
   resolved: number;
   booked_appointments: number;
   general_inquiries: number;

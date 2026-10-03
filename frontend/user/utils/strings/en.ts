@@ -93,7 +93,7 @@ export const STRINGS = {
       KNOWLEDGE_BASE: "Knowledge Base", AI_CONVERSATIONS: "AI Conversations",
       SERVICES: "Services", INTEGRATIONS: "Integrations", ANALYTICS: "Analytics",
       NOTIFICATIONS: "Notifications", BILLING: "Billing", TEAM: "Team & Permissions",
-      SETTINGS: "Settings",
+      SETTINGS: "Settings", SUPPORT: "Help & Support",
     }
   },
   TABLES: {

@@ -17,31 +17,13 @@ export function AIKpiCards() {
       .finally(() => setLoading(false));
   }, []);
 
+  // Everything comes from the server's real numbers; a figure it cannot compute yet shows a dash.
+  const dash = (v: string | null | undefined) => (loading ? '...' : v ?? '—');
   const cards = [
-    {
-      title: 'Calls Handled',
-      value: loading ? '...' : (metrics?.total_calls ?? 14),
-      subtext: '+12% from last week',
-      isGood: true,
-    },
-    {
-      title: 'AI Resolution Rate',
-      value: loading ? '...' : (metrics?.conversion_rate ? `${metrics.conversion_rate}` : '92.8%'),
-      subtext: 'Zero dropped calls',
-      isGood: true,
-    },
-    {
-      title: 'Avg Response Latency',
-      value: loading ? '...' : (metrics?.avg_latency ? `${metrics.avg_latency}` : '175ms'),
-      subtext: 'Deepgram + Cartesia sonic',
-      isGood: true,
-    },
-    {
-      title: 'Appointments Booked',
-      value: loading ? '...' : (metrics?.booked_appointments ?? 6),
-      subtext: 'Auto-synced with calendar',
-      isGood: true,
-    },
+    { title: 'Calls Today', value: loading ? '...' : (metrics?.total_calls ?? 0), subtext: metrics?.calls_trend ?? 'No earlier day to compare', isGood: !metrics?.calls_trend?.startsWith('-') },
+    { title: 'AI Resolution Rate', value: dash(metrics?.resolution_rate), subtext: metrics ? `${metrics.transferred_calls} handed to staff today` : '', isGood: true },
+    { title: 'Avg Response Latency', value: dash(metrics?.avg_latency), subtext: 'Average over the last 7 days', isGood: true },
+    { title: 'Appointments Booked Today', value: loading ? '...' : (metrics?.booked_appointments ?? 0), subtext: metrics?.appointments_trend ?? 'No earlier day to compare', isGood: !metrics?.appointments_trend?.startsWith('-') },
   ];
 
   return (
@@ -52,7 +34,7 @@ export function AIKpiCards() {
           <div className="text-xl font-bold text-gray-900 tracking-tight leading-tight mb-1">
             {kpi.value}
           </div>
-          <p className="text-[10px] font-semibold text-[#10B981]">{kpi.subtext}</p>
+          <p className={`text-[10px] font-semibold ${kpi.isGood ? 'text-[#10B981]' : 'text-red-500'}`}>{kpi.subtext}</p>
         </div>
       ))}
     </div>

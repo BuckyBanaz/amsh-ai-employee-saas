@@ -6,16 +6,22 @@ import aiRobotImg from '../../assets/icons/ai.png';
 interface AIBannerProps {
   calls?: number;
   appointments?: number;
-  resolutionRate?: string;
+  resolutionRate?: string | null;
+  callsTrend?: string | null;
+  appointmentsTrend?: string | null;
+  resolutionTrend?: string | null;
   loading?: boolean;
   businessType?: string;
   onTestClick?: () => void;
 }
 
 export function AIBanner({
-  calls = 42,
-  appointments = 28,
-  resolutionRate = '96.8%',
+  calls = 0,
+  appointments = 0,
+  resolutionRate = null,
+  callsTrend = null,
+  appointmentsTrend = null,
+  resolutionTrend = null,
   loading = false,
   businessType = 'clinic',
   onTestClick,
@@ -80,9 +86,7 @@ export function AIBanner({
                 <span className="text-sm sm:text-base font-black leading-none">{loading ? '...' : calls}</span>
                 <span className="text-[10px] font-bold text-blue-100">Calls Handled</span>
               </div>
-              <span className="text-[9px] font-bold text-emerald-300 flex items-center gap-0.5 mt-0.5">
-                <span>↑</span> 12%
-              </span>
+              {callsTrend && <span className="text-[9px] font-bold text-emerald-300 flex items-center gap-0.5 mt-0.5">{callsTrend}</span>}
             </div>
           </div>
 
@@ -101,9 +105,7 @@ export function AIBanner({
                 <span className="text-sm sm:text-base font-black leading-none">{loading ? '...' : appointments}</span>
                 <span className="text-[10px] font-bold text-blue-100">Appointments Booked</span>
               </div>
-              <span className="text-[9px] font-bold text-emerald-300 flex items-center gap-0.5 mt-0.5">
-                <span>↑</span> 22%
-              </span>
+              {appointmentsTrend && <span className="text-[9px] font-bold text-emerald-300 flex items-center gap-0.5 mt-0.5">{appointmentsTrend}</span>}
             </div>
           </div>
 
@@ -116,12 +118,10 @@ export function AIBanner({
             </div>
             <div>
               <div className="flex items-baseline gap-1">
-                <span className="text-sm sm:text-base font-black leading-none">{loading ? '...' : resolutionRate}</span>
+                <span className="text-sm sm:text-base font-black leading-none">{loading ? '...' : (resolutionRate ?? '—')}</span>
                 <span className="text-[10px] font-bold text-blue-100">Resolution Rate</span>
               </div>
-              <span className="text-[9px] font-bold text-emerald-300 flex items-center gap-0.5 mt-0.5">
-                <span>↑</span> 4%
-              </span>
+              {resolutionTrend && <span className="text-[9px] font-bold text-emerald-300 flex items-center gap-0.5 mt-0.5">{resolutionTrend}</span>}
             </div>
           </div>
 

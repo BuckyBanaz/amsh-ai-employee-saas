@@ -770,3 +770,103 @@ export interface VerticalDetail {
 
 export const fetchVerticals = () => adminFetch<{ items: VerticalItem[]; unconfigured: { name: string; businesses: number }[]; editable: boolean; source: string }>('/admin/verticals');
 export const fetchVertical = (name: string, language: string) => adminFetch<VerticalDetail>(`/admin/verticals/${encodeURIComponent(name)}${queryString({ language })}`);
+
+// ---- Message templates ---------------------------------------------------------------------------------------------
+
+export type TemplateChannel = 'email' | 'sms' | 'whatsapp' | 'push';
+
+export interface TemplateEvent {
+  key: string;
+  label: string;
+  group: string;
+  owner: 'platform' | 'business';
+  to: string;
+  variables: string[];
+  channels: TemplateChannel[];
+}
+
+export interface TemplateMeta {
+  channels: TemplateChannel[];
+  languages: string[];
+  statuses: string[];
+  events: TemplateEvent[];
+}
+
+export interface TemplateGridCell {
+  status: 'active' | 'draft' | 'default' | 'missing';
+  languages: string[];
+  meta_status: string | null;
+}
+
+export interface TemplateGrid {
+  items: { key: string; label: string; group: string; owner: string; to: string; cells: Partial<Record<TemplateChannel, TemplateGridCell>> }[];
+}
+
+export interface TemplateRow {
+  id: string;
+  language: string;
+  subject: string | null;
+  body: string;
+  status: string;
+  whatsapp_name: string | null;
+  meta_status: string | null;
+  sms_template_id: string | null;
+  version: number;
+  history: { version: number; subject: string | null; body: string; updated_by: string | null; updated_at: string | null }[];
+  updated_at: string | null;
+}
+
+export interface TemplateCell {
+  event_key: string;
+  channel: TemplateChannel;
+  label: string;
+  to: string;
+  variables: string[];
+  languages: string[];
+  own: Record<string, TemplateRow>;
+  inherited: Record<string, TemplateRow>;
+  default: { subject: string | null; body: string; language: string } | null;
+  requires_approval: boolean;
+}
+
+export interface TemplateSave {
+  language: string;
+  subject?: string | null;
+  body: string;
+  status: 'draft' | 'active' | 'archived';
+  whatsapp_name?: string | null;
+  sms_template_id?: string | null;
+}
+
+export interface TemplatePreview {
+  subject: string | null;
+  body: string;
+  unknown_variables: string[];
+  sms?: { characters: number; segments: number; unicode: boolean };
+}
+
+export interface MessageLogRow {
+  id: string;
+  event: string;
+  event_key: string;
+  channel: string;
+  recipient: string;
+  status: string;
+  provider: string | null;
+  error: string | null;
+  business_id: string | null;
+  created_at: string | null;
+}
+
+const cellPath = (event: string, channel: string) => `/admin/message-templates/${encodeURIComponent(event)}/${encodeURIComponent(channel)}`;
+export const fetchTemplateMeta = () => adminFetch<TemplateMeta>('/admin/message-templates/meta');
+export const fetchTemplateGrid = () => adminFetch<TemplateGrid>('/admin/message-templates');
+export const fetchTemplateCell = (event: string, channel: string) => adminFetch<TemplateCell>(cellPath(event, channel));
+export const saveTemplate = (event: string, channel: string, body: TemplateSave) => adminFetch<TemplateRow>(cellPath(event, channel), { method: 'PUT', body: JSON.stringify(body) });
+export const resetTemplate = (event: string, channel: string, language: string) => adminFetch<{ removed: number }>(`${cellPath(event, channel)}${queryString({ language })}`, { method: 'DELETE' });
+export const previewTemplate = (event: string, channel: string, body: { subject?: string | null; body: string }) =>
+  adminFetch<TemplatePreview>(`${cellPath(event, channel)}/preview`, { method: 'POST', body: JSON.stringify(body) });
+export const restoreTemplate = (event: string, channel: string, body: { language: string; version: number }) =>
+  adminFetch<TemplateRow>(`${cellPath(event, channel)}/restore`, { method: 'POST', body: JSON.stringify(body) });
+export const fetchMessageLog = (params: { channel?: string; status?: string; event_key?: string; limit?: number; offset?: number }) =>
+  adminFetch<{ items: MessageLogRow[]; limit: number; offset: number }>(`/admin/message-log${queryString({ ...params })}`);

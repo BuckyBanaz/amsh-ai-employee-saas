@@ -233,3 +233,9 @@ class MessageTemplateMigration(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class EveryChannelHasText(unittest.TestCase):
+    def test_every_event_has_built_in_text_for_every_channel_it_can_use(self):
+        missing = [(k, c) for k, e in svc.EVENTS.items() for c in e["channels"] if not svc.builtin(k, c)]
+        self.assertEqual(missing, [])  # a clinic must be able to open, customize and reorder every channel

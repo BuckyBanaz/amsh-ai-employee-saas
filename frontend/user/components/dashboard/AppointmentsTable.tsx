@@ -46,78 +46,8 @@ export function AppointmentsTable({ items, loading: propLoading }: AppointmentsT
     if (!items) refresh();
   });
 
-  const defaultAppointments: AppointmentItem[] = [
-    {
-      id: 'demo-1',
-      business_id: 'demo',
-      type: 'appointment',
-      status: 'Completed',
-      customer_name: 'Emily Carter',
-      phone_number: '+44 7700 900123',
-      service_name: 'Dental Checkup',
-      doctor_name: 'Dr. Sarah Wilson',
-      preferred_date: '2026-09-28',
-      preferred_time: '09:00 AM',
-      details: { source: 'AI Call' },
-    },
-    {
-      id: 'demo-2',
-      business_id: 'demo',
-      type: 'appointment',
-      status: 'Confirmed',
-      customer_name: 'James Mitchell',
-      phone_number: '+44 7700 900456',
-      service_name: 'Teeth Cleaning',
-      doctor_name: 'Dr. Sarah Wilson',
-      preferred_date: '2026-09-28',
-      preferred_time: '10:30 AM',
-      details: { source: 'WhatsApp' },
-    },
-    {
-      id: 'demo-3',
-      business_id: 'demo',
-      type: 'appointment',
-      status: 'Confirmed',
-      customer_name: 'Sarah Jenkins',
-      phone_number: '+44 7700 900789',
-      service_name: 'Root Canal Consult',
-      doctor_name: 'Dr. Sarah Wilson',
-      preferred_date: '2026-09-28',
-      preferred_time: '11:45 AM',
-      details: { source: 'AI Call' },
-    },
-    {
-      id: 'demo-4',
-      business_id: 'demo',
-      type: 'appointment',
-      status: 'Confirmed',
-      customer_name: 'Parikshit Verma',
-      phone_number: '+91 98765 43210',
-      service_name: 'Dental Consultation',
-      doctor_name: 'Dr. Sarah Wilson',
-      preferred_date: '2026-09-28',
-      preferred_time: '01:15 PM',
-      details: { source: 'AI Call' },
-    },
-    {
-      id: 'demo-5',
-      business_id: 'demo',
-      type: 'appointment',
-      status: 'Pending',
-      customer_name: 'Amelia Clark',
-      phone_number: '+44 7700 900224',
-      service_name: 'Toothache Assessment',
-      doctor_name: 'Duty Doctor',
-      preferred_date: '2026-09-28',
-      preferred_time: '02:30 PM',
-      details: { source: 'Website' },
-    },
-  ];
-
-  // If appointments has fewer than 4 items, merge or use default to keep card aesthetically balanced
-  const displayList = appointments && appointments.length > 0 
-    ? (appointments.length < 4 ? [...appointments, ...defaultAppointments.slice(appointments.length, 5)] : appointments.slice(0, 5))
-    : defaultAppointments;
+  // Only real bookings are listed; with none, the card says so instead of showing sample patients.
+  const displayList = (appointments ?? []).slice(0, 5);
 
   const getInitials = (name: string) => {
     if (!name) return 'PT';
@@ -155,7 +85,7 @@ export function AppointmentsTable({ items, loading: propLoading }: AppointmentsT
     <div className="bg-white border border-gray-100/90 rounded-2xl shadow-xs overflow-hidden h-full flex flex-col justify-between">
       <div>
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100">
-          <h2 className="text-sm font-bold text-gray-900 tracking-tight">Today&apos;s Appointments</h2>
+          <h2 className="text-sm font-bold text-gray-900 tracking-tight">Recent Appointments</h2>
           <Link href="/appointments" className="text-xs font-bold text-[#0066FF] hover:underline transition-colors">
             View All
           </Link>
@@ -175,10 +105,13 @@ export function AppointmentsTable({ items, loading: propLoading }: AppointmentsT
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
+              {!loading && displayList.length === 0 && (
+                <tr><td colSpan={7} className="px-3.5 py-8 text-center text-xs text-gray-500">No appointments yet. Bookings made by the AI or your team will appear here.</td></tr>
+              )}
               {displayList.map((appt) => (
                 <tr key={appt.id} className="hover:bg-gray-50/50 transition-colors">
                   <td className="px-3.5 py-2 text-xs font-bold text-gray-900 whitespace-nowrap">
-                    {appt.preferred_time || '10:00 AM'}
+                    {appt.preferred_time || '—'}
                   </td>
                   <td className="px-3.5 py-2 whitespace-nowrap">
                     <div className="flex items-center gap-2">
@@ -192,7 +125,7 @@ export function AppointmentsTable({ items, loading: propLoading }: AppointmentsT
                     {appt.service_name || 'Dental Checkup'}
                   </td>
                   <td className="px-3.5 py-2 text-xs text-gray-600 font-medium whitespace-nowrap">
-                    {appt.doctor_name || 'Dr. Sarah Wilson'}
+                    {appt.doctor_name || 'Unassigned'}
                   </td>
                   <td className="px-3.5 py-2 whitespace-nowrap">
                     {getStatusBadge(appt.status)}
@@ -213,7 +146,7 @@ export function AppointmentsTable({ items, loading: propLoading }: AppointmentsT
       </div>
 
       <div className="px-4 py-2 border-t border-gray-100 flex items-center justify-between text-[11px] text-gray-400 bg-gray-50/40">
-        <span>Showing {displayList.length} scheduled visits today</span>
+        <span>Showing {displayList.length} most recent {displayList.length === 1 ? 'booking' : 'bookings'}</span>
         <span className="text-[#0066FF] font-semibold">Synced in real-time</span>
       </div>
     </div>

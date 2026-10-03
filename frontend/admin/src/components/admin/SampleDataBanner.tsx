@@ -24,6 +24,7 @@ const REAL_PAGES = [
   '/tickets',
   '/announcements',
   '/verticals',
+  '/templates',
 ];
 
 export function SampleDataBanner() {

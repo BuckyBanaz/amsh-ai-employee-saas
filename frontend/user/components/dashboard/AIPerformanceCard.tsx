@@ -8,13 +8,7 @@ interface AIPerformanceCardProps {
 }
 
 export function AIPerformanceCard({ performance, loading = false }: AIPerformanceCardProps) {
-  const data = performance || {
-    resolution_rate: 96.8,
-    resolved: 42,
-    booked_appointments: 28,
-    general_inquiries: 10,
-    escalated_to_human: 2,
-  };
+  const data: AIPerformanceData = performance || { resolution_rate: null, resolved: 0, booked_appointments: 0, general_inquiries: 0, escalated_to_human: 0 };
 
   const categories = [
     { label: 'Resolved Calls', count: data.resolved, color: '#10B981', bg: 'bg-emerald-500' },
@@ -56,7 +50,7 @@ export function AIPerformanceCard({ performance, loading = false }: AIPerformanc
           type="button"
           className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold text-gray-600 bg-gray-50 hover:bg-gray-100 border border-gray-200/80 transition-colors"
         >
-          <span>Today</span>
+          <span>Last 7 days</span>
           <svg className="w-3 h-3 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
             <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
           </svg>
@@ -97,7 +91,7 @@ export function AIPerformanceCard({ performance, loading = false }: AIPerformanc
           {/* Center text */}
           <div className="absolute inset-0 flex flex-col items-center justify-center text-center select-none">
             <span className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight leading-none">
-              {loading ? '...' : `${data.resolution_rate}%`}
+              {loading ? '...' : data.resolution_rate === null ? '—' : `${data.resolution_rate}%`}
             </span>
             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mt-0.5">
               Resolved

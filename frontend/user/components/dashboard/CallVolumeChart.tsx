@@ -10,19 +10,11 @@ interface CallVolumeChartProps {
 export function CallVolumeChart({ data, loading = false }: CallVolumeChartProps) {
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
 
-  const defaultData: CallVolumeHour[] = [
-    { time: '8 AM', calls: 4 },
-    { time: '10 AM', calls: 12 },
-    { time: '12 PM', calls: 9 },
-    { time: '2 PM', calls: 18 },
-    { time: '4 PM', calls: 14 },
-    { time: '6 PM', calls: 8 },
-    { time: '8 PM', calls: 3 },
-  ];
-
-  const chartData = data && data.length > 0 ? data : defaultData;
-  const maxCalls = Math.max(...chartData.map((d) => d.calls), 20);
+  const chartData = data ?? [];
+  const maxCalls = Math.max(...chartData.map((d) => d.calls), 4);
   const totalCalls = chartData.reduce((acc, d) => acc + d.calls, 0);
+  const topCalls = Math.max(0, ...chartData.map((d) => d.calls));
+  const peak = topCalls > 0 ? chartData.find((d) => d.calls === topCalls) : undefined;
 
   return (
     <div className="bg-white border border-gray-100/90 rounded-2xl p-3.5 sm:p-4 shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between h-full">
@@ -35,7 +27,7 @@ export function CallVolumeChart({ data, loading = false }: CallVolumeChartProps)
               {totalCalls} calls
             </span>
           </div>
-          <p className="text-[11px] text-gray-500 font-medium">Hourly call distribution</p>
+          <p className="text-[11px] text-gray-500 font-medium">Calls today, by 3-hour window</p>
         </div>
         <button
           type="button"
@@ -63,7 +55,7 @@ export function CallVolumeChart({ data, loading = false }: CallVolumeChartProps)
           {chartData.map((item, idx) => {
             const heightPercent = Math.max((item.calls / maxCalls) * 100, 8);
             const isHovered = hoveredIdx === idx;
-            const isPeak = item.calls === Math.max(...chartData.map((c) => c.calls));
+            const isPeak = topCalls > 0 && item.calls === topCalls;
 
             return (
               <div
@@ -121,9 +113,8 @@ export function CallVolumeChart({ data, loading = false }: CallVolumeChartProps)
       <div className="pt-2 border-t border-gray-100 flex items-center justify-between text-[11px] text-gray-500">
         <span className="flex items-center gap-1 font-medium">
           <span className="w-1.5 h-1.5 rounded-full bg-[#0066FF]" />
-          Peak: 2:00 PM (18 calls)
+          {peak ? `Busiest: ${peak.time} window (${peak.calls} ${peak.calls === 1 ? 'call' : 'calls'})` : 'No calls yet today'}
         </span>
-        <span className="text-[10px] font-bold text-gray-400">100% logged</span>
       </div>
     </div>
   );

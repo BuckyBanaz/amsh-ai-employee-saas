@@ -37,10 +37,11 @@ const navGroups = [
   {
     title: STRINGS.SIDEBAR.GROUPS.SYSTEM,
     items: [
-      { label: STRINGS.SIDEBAR.LINKS.NOTIFICATIONS, href: '/notifications', icon: 'bell', badge: 3 },
+      { label: STRINGS.SIDEBAR.LINKS.NOTIFICATIONS, href: '/notifications', icon: 'bell' },
       { label: STRINGS.SIDEBAR.LINKS.TEAM, href: '/team', icon: 'activity' },
       { label: STRINGS.SIDEBAR.LINKS.BILLING, href: '/billing', icon: 'credit-card' },
       { label: STRINGS.SIDEBAR.LINKS.SETTINGS, href: '/settings', icon: 'sliders' },
+      { label: STRINGS.SIDEBAR.LINKS.SUPPORT, href: '/support', icon: 'help' },
     ]
   }
 ];
@@ -61,6 +62,7 @@ const getIcon = (name: string) => {
     case 'chart': return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>;
     case 'bell': return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>;
     case 'credit-card': return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>;
+    case 'help': return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>;
     case 'sliders': return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>;
     default: return null;
   }
@@ -73,10 +75,19 @@ interface SidebarProps {
 
 export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
   const pathname = usePathname();
+  const [unread, setUnread] = React.useState(0); // real count from the notifications feed, not a placeholder
   const [mounted, setMounted] = React.useState(false);
   const [business, setBusiness] = React.useState<any>(null);
   const [businessLogo, setBusinessLogo] = React.useState<string | null>(null);
   const [user, setUser] = React.useState<any>(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    DashboardController.getNotifications()
+      .then((rows) => { if (!cancelled) setUnread(rows.filter((n) => n.unread).length); })
+      .catch(() => { if (!cancelled) setUnread(0); });
+    return () => { cancelled = true; };
+  }, [pathname]);
 
   React.useEffect(() => {
     setMounted(true);
@@ -212,9 +223,9 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
                         </span>
                       </div>
                       
-                      {item.badge && (
+                      {(item.href === '/notifications' ? unread : 0) > 0 && (
                         <span className="w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center leading-none">
-                          {item.badge}
+                          {unread > 9 ? '9+' : unread}
                         </span>
                       )}
                     </div>
