@@ -1,0 +1,86 @@
+{
+ "_about": "Per-turn system notes and model-facing messages sent by the engine. See backend/ai/prompts/__init__.py. Edit, then restart the API.",
+ "no_regreet": "You already started answering this turn before that correction; do not greet or acknowledge again (no new \"Sure\"/\"Got it\"/\"Right\"), just continue with the corrected content.",
+ "language_retry": "Your draft reply was in English, but the caller is speaking Hindi. Write the whole reply again in Hindi (Devanagari if they wrote Devanagari), keeping only names and everyday English words like appointment or doctor. Do not switch to English.",
+ "devanagari": "The caller's latest message is speech-to-text in Devanagari, which often writes English words phonetically (टुमारो = tomorrow, अपॉइंटमेंट = appointment). They are speaking Hindi/Hinglish: reply in Hindi written in Devanagari, keeping names and everyday English words (appointment, doctor, clinic) as they are. Do not switch to English.",
+ "language_note": {
+  "hi": "The caller asked you to speak Hindi. Reply in Hindi for the rest of the call, even when their next message contains English words or names, until they ask for another language. Use Devanagari if they write Devanagari, otherwise Roman Hinglish.",
+  "en": "The caller asked you to speak English. Reply in English for the rest of the call, even when their next message is transcribed in another script, until they ask for another language."
+ },
+ "language_note_generic": {
+  "asked": "The caller asked you to speak {name}. Reply in {name} for the rest of the call, even when their next message is transcribed in another script or contains words from another language, until they ask for another language.",
+  "native": "Speak {name} the way a native speaker does on the phone: real everyday filler words, acknowledgements and politeness forms of that language (never translate English fillers word for word)."
+ },
+ "hindi_emergency": {
+  "hindi": "Yeh emergency lag rahi hai. Main aapko turant emergency coordinator se connect kar rahi hoon. Agar aap khatre mein hain toh abhi emergency services ko call kijiye.",
+  "default": "This sounds like an emergency. I am transferring you to an emergency care coordinator immediately. If you are in immediate danger, please dial emergency services right now."
+ },
+ "guard_note": "Your draft mentioned the time(s) {times}, but the caller did not say them and no tool returned them. Never state or offer a time that did not come from check_availability or the caller. Call check_availability first, or ask the caller what time suits them.",
+ "claim_note": "Your draft said the appointment was {kinds}, but no tool has confirmed that. Never claim an action is done before the tool result says so. If the caller has already said yes to the read-back, call the tool now (book_appointment with confirmed_by_caller=true); otherwise read the details back and ask for their confirmation.",
+ "mood_notes": {
+  "amused": "MOOD: the caller is joking or laughing. You may answer with a light laugh ([laugh]) and a playful line, then steer back.",
+  "worried": "MOOD: the caller sounds worried or in discomfort. Be gentle and reassuring ([sympathetic]); no jokes, no laughing.",
+  "upset": "MOOD: the caller sounds upset. Stay calm and take it seriously ([apologetic] or [calm]); no jokes, no laughing.",
+  "thankful": "MOOD: the caller is thanking you. Answer warmly ([warm] or [happy]) in a few words."
+ },
+ "booking_note": "BOOKING IN PROGRESS: the caller wants an appointment and it is not finished. From the caller's own words so far: {known}. Not yet settled: {missing}. Do not drop this. If the caller asks a side question or chats, answer it in one short sentence and then bring the booking back with the next missing item; when the date and time are known, use check_availability and read the details back for the caller to confirm.",
+ "language_layer": {
+  "layer_note": "HINDI/HINGLISH MODE (affects only how you talk; booking, availability, tools and safety rules are exactly the same as in English). LANGUAGE: reply in Hindi/Hinglish for the rest of the call, including confirmations: not \"Great! Your appointment is confirmed\" but \"बहुत बढ़िया Rohan जी। आपकी appointment गुरुवार, 8 अक्टूबर को सुबह 10:30 बजे confirm हो गई है।\" Use Devanagari when the caller writes Devanagari, otherwise Roman Hinglish. Natural Hinglish is right: keep everyday English words (appointment, confirm, doctor, clinic, slot) instead of stiff translations. NAMES stay unchanged: doctor names, service names (e.g. Dental Consultation), the clinic name, AMSh. DATES AND TIMES: say them the Hindi way (weekday and month in Hindi, \"सुबह 10:30 बजे\" / \"shaam 5 baje\"); the actual day and time must match exactly what the tools returned. INTERRUPTIONS: short words like हेलो, जी, हाँ जी, अच्छा, ठीक है जी, या फिर, फिर?, क्या?, सुन रहे हो? (or hello, ji, haan ji, accha, theek hai ji, phir?, kya?, sun rahe ho?) are not new requests. Read them against where the conversation is: never restart, never re-greet, never ask \"how can I help\" again. Acknowledge in one short phrase (\"जी, मैं सुन रही हूँ\") and carry on with the pending step, using what the caller already told you. FILLERS: an occasional short \"जी, एक सेकंड।\" while you check something is natural; do not overuse it.",
+  "interruption_note": "The caller's latest message, \"{said}\", is only a Hindi acknowledgement or nudge, not a new request. Do NOT start over or greet again. Briefly acknowledge (\"जी, मैं सुन रही हूँ\" / \"जी, बोलिए\", in your own voice), then continue exactly where you were. Your last message was: \"{last}\". Repeat or gently rephrase that pending question once, keeping everything already collected (name, date, appointment)."
+ },
+ "known_patient": {
+  "new_patient": "NEW PATIENT: no earlier bookings on this number. Their WhatsApp profile name is \"{profile}\" (not verified: confirm the name they want on the booking).",
+  "visit": "{service} on {date} at {time} ({status})",
+  "visit_default_service": "a visit",
+  "visit_separator": "; ",
+  "name_on_file": "name on file: {name}",
+  "no_name": "no name on file",
+  "returning_patient": "RETURNING PATIENT: this number has booked here before ({who}). Latest bookings: {visits}. Greet them warmly by first name once, like staff who remember them. Do not read their history out unless it helps (for example \"same service as last time?\"). Their number is already known: offer it, never ask for it again."
+ },
+ "messages": {
+  "toolbox": {
+   "tools.param.date_example": "e.g. tomorrow, Thursday, 2026-10-03",
+   "tools.param.confirmed_by_caller": "true only after the caller heard these exact details and said yes",
+   "tools.check_availability": "Real open times for a date. Call before offering a time.",
+   "tools.book_appointment": "Book. First confirmed_by_caller=false (returns details to read back), then true after the caller says yes.",
+   "tools.lookup_appointment": "Caller's upcoming appointments by phone; needed before cancel/reschedule.",
+   "tools.cancel_appointment": "Cancel an appointment by ref (e.g. A1) from lookup_appointment; two-step confirmation.",
+   "tools.reschedule_appointment": "Move an appointment (ref from lookup_appointment); two-step confirmation.",
+   "tools.search_knowledge": "Search the clinic's documents for facts not in your context.",
+   "tools.transfer_to_human": "Transfer to staff: 'emergency', or 'front_desk' only if the caller asked for a person or agreed to it.",
+   "tools.end_call": "End the call when the caller is finished.",
+   "execute.disabled": "The clinic has turned this off. Politely say you cannot do that here and offer the front desk.",
+   "execute.bad_arguments": "Tool arguments were not valid JSON. Call the tool again with valid arguments.",
+   "execute.tool_error": "That action failed on our side. Apologise briefly and offer the front desk.",
+   "check_availability.bad_date": "Could not understand the date. Ask for a specific day.",
+   "check_availability.not_from_caller_date": "The caller has not said which day they want. Do not pick a day yourself: ask them which day suits them.",
+   "check_availability.unknown_doctor": "No doctor by that name. Doctors here: {doctors}.",
+   "check_availability.hours_not_configured": "Working hours are not set up, so exact times cannot be confirmed. Offer to take the caller's details for the front desk to call back, or transfer.",
+   "check_availability.closed": "The clinic is closed {label}. Offer another day.",
+   "check_availability.bad_time": "The time is unclear. Ask for an exact time including AM or PM.",
+   "book_appointment.already_booked": "This appointment already exists. Confirm it to the caller.",
+   "when": "{date} at {time}",
+   "book_appointment.existing_appointment": "This number already has an upcoming {service_name} on {when_existing}. Do NOT create another booking. If the caller wants to change it, call lookup_appointment and then reschedule_appointment. Only if they clearly want an additional appointment, ask them to confirm that and say so in their own words.",
+   "book_appointment.dry_run": "Booked (shadow mode, nothing saved).",
+   "book_appointment.booked": "Booked. Tell the caller it is confirmed. Do not promise an SMS or email.",
+   "lookup_appointment.not_yours": "In chat you can only look up appointments for the number you are messaging from. Politely say you cannot check another number's appointments.",
+   "lookup_appointment.bad_phone": "Need a full phone number to look up appointments.",
+   "lookup_appointment.none_found": "No upcoming appointments found for that number.",
+   "owned_appointment.lookup_first": "Look up the caller's appointments with lookup_appointment first, then use the ref it returns.",
+   "owned_appointment.not_found": "That appointment could not be found.",
+   "cancel_appointment.dry_run": "Cancelled (shadow mode, nothing saved).",
+   "cancel_appointment.cancelled": "The appointment is cancelled. Confirm to the caller and offer to rebook.",
+   "reschedule_appointment.bad_date": "Could not understand the new date. Ask for a specific day.",
+   "reschedule_appointment.bad_time": "The new time is unclear. Ask for an exact time including AM or PM.",
+   "reschedule_appointment.not_from_caller_date": "The caller has not told you the new date. Ask for it; do not choose it yourself.",
+   "reschedule_appointment.not_from_caller_time": "The caller has not told you the new time. Ask for it; do not choose it yourself.",
+   "reschedule_appointment.dry_run": "Rescheduled (shadow mode, nothing saved).",
+   "reschedule_appointment.rescheduled": "Rescheduled. Confirm the new time to the caller.",
+   "search_knowledge.not_found": "Nothing found in the clinic's documents. Say you are not sure and offer the front desk.",
+   "transfer_to_human.not_requested": "The caller did not ask for a person. Ask if they would like to be connected to the front desk, and wait for their answer. Do not transfer yet.",
+   "transfer_to_human.dry_run": "Transfer requested (shadow mode).",
+   "transfer.transfer_unavailable": "Transfer is not possible right now. Apologise, and offer to take a message.",
+   "transfer.started": "Transfer started. Say one short sentence that you are connecting them."
+  }
+ }
+}

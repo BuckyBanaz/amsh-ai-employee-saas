@@ -25,6 +25,12 @@ from typing import Optional
 
 from backend.ai.engine.agent.hindi import has_devanagari
 from backend.ai.lexicon import load_lexicon
+from backend.ai.prompts import load_prompts
+
+
+def _engine_note(key):
+    return load_prompts("engine_notes")[key]
+
 
 
 class LanguageMode(str, Enum):
@@ -39,29 +45,9 @@ _LEXICON = load_lexicon("hi")
 _HINGLISH_WORDS = frozenset(_LEXICON.get("hinglish_words", []))
 _INTERJECTION = re.compile(_LEXICON.get("interjections_pattern", "(?!)"), re.IGNORECASE)
 
-_LAYER_NOTE = (
-    "HINDI/HINGLISH MODE (affects only how you talk; booking, availability, tools and safety rules are exactly the same as in "
-    "English). "
-    "LANGUAGE: reply in Hindi/Hinglish for the rest of the call, including confirmations: not \"Great! Your appointment is "
-    "confirmed\" but \"बहुत बढ़िया Rohan जी। आपकी appointment गुरुवार, 8 अक्टूबर को सुबह 10:30 बजे confirm हो गई है।\" Use Devanagari "
-    "when the caller writes Devanagari, otherwise Roman Hinglish. Natural Hinglish is right: keep everyday English words "
-    "(appointment, confirm, doctor, clinic, slot) instead of stiff translations. "
-    "NAMES stay unchanged: doctor names, service names (e.g. Dental Consultation), the clinic name, AMSh. "
-    "DATES AND TIMES: say them the Hindi way (weekday and month in Hindi, \"सुबह 10:30 बजे\" / \"shaam 5 baje\"); the actual day and "
-    "time must match exactly what the tools returned. "
-    "INTERRUPTIONS: short words like हेलो, जी, हाँ जी, अच्छा, ठीक है जी, या फिर, फिर?, क्या?, सुन रहे हो? (or hello, ji, haan ji, "
-    "accha, theek hai ji, phir?, kya?, sun rahe ho?) are not new requests. Read them against where the conversation is: never "
-    "restart, never re-greet, never ask \"how can I help\" again. Acknowledge in one short phrase (\"जी, मैं सुन रही हूँ\") and "
-    "carry on with the pending step, using what the caller already told you. "
-    "FILLERS: an occasional short \"जी, एक सेकंड।\" while you check something is natural; do not overuse it."
-)
+_LAYER_NOTE = _engine_note("language_layer")["layer_note"]
 
-_INTERRUPTION_NOTE = (
-    "The caller's latest message, \"{said}\", is only a Hindi acknowledgement or nudge, not a new request. Do NOT start over or "
-    "greet again. Briefly acknowledge (\"जी, मैं सुन रही हूँ\" / \"जी, बोलिए\", in your own voice), then continue exactly where you "
-    "were. Your last message was: \"{last}\". Repeat or gently rephrase that pending question once, keeping everything already "
-    "collected (name, date, appointment)."
-)
+_INTERRUPTION_NOTE = _engine_note("language_layer")["interruption_note"]
 
 
 def is_interjection(text: Optional[str]) -> bool:

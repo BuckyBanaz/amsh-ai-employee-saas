@@ -36,12 +36,20 @@ from backend.ai.engine.agent.validator import (
     match_doctor,
 )
 from backend.ai.tools.framework.base import ToolContext
+from backend.ai.prompts import load_prompts
+
+
+def _msg(key: str, **fmt) -> str:
+    """Model-facing message from ai/prompts/engine_notes.json ("messages"); `fmt` fills the {placeholders}."""
+    group, name = key.split(".", 1)
+    text = load_prompts("engine_notes")["messages"][group][name]
+    return text.format(**fmt) if fmt else text.replace("{{", "{").replace("}}", "}")
 
 logger = logging.getLogger(__name__)
 
-_DATE = {"type": "string", "description": "e.g. tomorrow, Thursday, 2026-10-03"}
+_DATE = {"type": "string", "description": _msg("toolbox.tools.param.date_example")}
 _TIME = {"type": "string", "description": "with AM/PM, e.g. 5:30 PM"}
-_CONFIRMED = {"type": "boolean", "description": "true only after the caller heard these exact details and said yes"}
+_CONFIRMED = {"type": "boolean", "description": _msg("toolbox.tools.param.confirmed_by_caller")}
 
 
 def _fn(name: str, description: str, properties: Dict[str, Any], required: List[str]) -> Dict[str, Any]:
@@ -58,13 +66,13 @@ def _fn(name: str, description: str, properties: Dict[str, Any], required: List[
 TOOL_SCHEMAS: List[Dict[str, Any]] = [
     _fn(
         "check_availability",
-        "Real open times for a date. Call before offering a time.",
+        _msg("toolbox.tools.check_availability"),
         {"date": _DATE, "doctor_name": {"type": "string"}, "time": {"type": "string", "description": "test one time"}},
         ["date"],
     ),
     _fn(
         "book_appointment",
-        "Book. First confirmed_by_caller=false (returns details to read back), then true after the caller says yes.",
+        _msg("toolbox.tools.book_appointment"),
         {
             "patient_name": {"type": "string"},
             "phone_number": {"type": "string"},
@@ -78,30 +86,30 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
     ),
     _fn(
         "lookup_appointment",
-        "Caller's upcoming appointments by phone; needed before cancel/reschedule.",
+        _msg("toolbox.tools.lookup_appointment"),
         {"phone_number": {"type": "string"}},
         ["phone_number"],
     ),
     _fn(
         "cancel_appointment",
-        "Cancel an appointment by ref (e.g. A1) from lookup_appointment; two-step confirmation.",
+        _msg("toolbox.tools.cancel_appointment"),
         {"ref": {"type": "string"}, "confirmed_by_caller": _CONFIRMED},
         ["ref", "confirmed_by_caller"],
     ),
     _fn(
         "reschedule_appointment",
-        "Move an appointment (ref from lookup_appointment); two-step confirmation.",
+        _msg("toolbox.tools.reschedule_appointment"),
         {"ref": {"type": "string"}, "new_date": _DATE, "new_time": _TIME, "confirmed_by_caller": _CONFIRMED},
         ["ref", "new_date", "new_time", "confirmed_by_caller"],
     ),
-    _fn("search_knowledge", "Search the clinic's documents for facts not in your context.", {"query": {"type": "string"}}, ["query"]),
+    _fn("search_knowledge", _msg("toolbox.tools.search_knowledge"), {"query": {"type": "string"}}, ["query"]),
     _fn(
         "transfer_to_human",
-        "Transfer to staff: 'emergency', or 'front_desk' only if the caller asked for a person or agreed to it.",
+        _msg("toolbox.tools.transfer_to_human"),
         {"department": {"type": "string"}, "reason": {"type": "string"}, "confirmed_by_caller": _CONFIRMED},
         ["department"],
     ),
-    _fn("end_call", "End the call when the caller is finished.", {}, []),
+    _fn("end_call", _msg("toolbox.tools.end_call"), {}, []),
 ]
 
 
@@ -151,9 +159,9 @@ class AgentToolbox:
     async def execute(self, name: str, raw_args: Any) -> Dict[str, Any]:
         args = self._parse_args(raw_args)
         if name in self.disabled_tools:
-            result = err("disabled", "The clinic has turned this off. Politely say you cannot do that here and offer the front desk.")
+            result = err("disabled", _msg("toolbox.execute.disabled"))
         elif args is None:
-            result = err("bad_arguments", "Tool arguments were not valid JSON. Call the tool again with valid arguments.")
+            result = err("bad_arguments", _msg("toolbox.execute.bad_arguments"))
         else:
             handler = getattr(self, f"_tool_{name}", None)
             if handler is None:
@@ -166,7 +174,7 @@ class AgentToolbox:
                         result = await asyncio.to_thread(self._run_sync, handler, args)
                 except Exception as e:  # tool failure must never crash the call
                     logger.error("agent tool %s failed: %s", name, e, exc_info=True)
-                    result = err("tool_error", "That action failed on our side. Apologise briefly and offer the front desk.")
+                    result = err("tool_error", _msg("toolbox.execute.tool_error"))
         self.calls.append({"tool": name, "args": args, "result_code": result.get("code") or ("ok" if result.get("ok") else "error"), "ok": result.get("ok")})
         for kind, codes in SUCCESS_CODES.items():  # what may now be truthfully claimed to the caller, for the whole call
             if result.get("code") in codes and name.startswith(kind):  # book_appointment / cancel_appointment / ...
@@ -211,19 +219,19 @@ class AgentToolbox:
         now = self.now_fn()
         when = parse_date(args.get("date"), now.date())
         if not when:
-            return err("bad_date", "Could not understand the date. Ask for a specific day.")
+            return err("bad_date", _msg("toolbox.check_availability.bad_date"))
         if not any(when in dates_in(s, now.date()) for s in self.effective_said()):
-            return err("not_from_caller", "The caller has not said which day they want. Do not pick a day yourself: ask them which day suits them.", field="date")
+            return err("not_from_caller", _msg("toolbox.check_availability.not_from_caller_date"), field="date")
         doctor = match_doctor(args.get("doctor_name"), self.facts.doctors)
         if not no_doctor_preference(args.get("doctor_name")) and not doctor:
-            return err("unknown_doctor", f"No doctor by that name. Doctors here: {', '.join(self.facts.doctors) or 'none listed'}.")
+            return err("unknown_doctor", _msg("toolbox.check_availability.unknown_doctor", doctors=', '.join(self.facts.doctors) or 'none listed'))
 
         avail = day_ranges(self.facts.working_hours, when)
         label = speak_date(when, now.date())
         if not avail.configured:
-            return {"ok": True, "configured": False, "date": label, "message": "Working hours are not set up, so exact times cannot be confirmed. Offer to take the caller's details for the front desk to call back, or transfer."}
+            return {"ok": True, "configured": False, "date": label, "message": _msg("toolbox.check_availability.hours_not_configured")}
         if not avail.ranges:
-            return {"ok": True, "date": label, "open": False, "message": f"The clinic is closed {label}. Offer another day."}
+            return {"ok": True, "date": label, "open": False, "message": _msg("toolbox.check_availability.closed", label=label)}
 
         booked = self._booked(db, when)
         floor = slot_floor(when, now, self.facts.notice_hours)
@@ -233,7 +241,7 @@ class AgentToolbox:
         if args.get("time"):
             t = parse_time(args["time"])
             if not t:
-                return err("bad_time", "The time is unclear. Ask for an exact time including AM or PM.")
+                return err("bad_time", _msg("toolbox.check_availability.bad_time"))
             problem = validate_slot(when, t, doctor, self.facts, booked, now)
             result["requested_time"] = format_time(t)
             result["requested_time_free"] = problem is None
@@ -260,18 +268,16 @@ class AgentToolbox:
         existing = self.ops.read.get_appointments(db, self.business_id, date=fields["date"].isoformat(), statuses=BLOCKING_STATUSES)
         for row in existing:
             if same_phone(row.get("phone_number"), fields["phone_number"]) and parse_time(row.get("preferred_time")) == fields["time"]:
-                return {"ok": True, "code": "already_booked", "message": "This appointment already exists. Confirm it to the caller.", "when": describe(fields, now.date())}
+                return {"ok": True, "code": "already_booked", "message": _msg("toolbox.book_appointment.already_booked"), "when": describe(fields, now.date())}
 
         # A patient who already has an upcoming appointment and wants a change must reschedule it, never get a second booking.
         upcoming = self.ops.read.get_appointments(db, self.business_id, statuses=BLOCKING_STATUSES)
         clash = existing_appointment_conflict(upcoming, fields["phone_number"], fields["service_name"], self.effective_said(), now.date())
         if clash:
-            when_existing = f"{clash.get('preferred_date')} at {clash.get('preferred_time')}"
+            when_existing = _msg("toolbox.when", date=clash.get('preferred_date'), time=clash.get('preferred_time'))
             return err(
                 "existing_appointment",
-                f"This number already has an upcoming {clash.get('service_name')} on {when_existing}. Do NOT create another booking. If the caller "
-                "wants to change it, call lookup_appointment and then reschedule_appointment. Only if they clearly want an additional appointment, "
-                "ask them to confirm that and say so in their own words.",
+                _msg("toolbox.book_appointment.existing_appointment", service_name=clash.get('service_name'), when_existing=when_existing),
             )
 
         booked = booked_from_appointments(existing)
@@ -286,7 +292,7 @@ class AgentToolbox:
             return gate_result
 
         if self.dry_run:
-            return {"ok": True, "code": "dry_run", "message": "Booked (shadow mode, nothing saved).", "when": describe(fields, now.date())}
+            return {"ok": True, "code": "dry_run", "message": _msg("toolbox.book_appointment.dry_run"), "when": describe(fields, now.date())}
         row = self.ops.write.store_appointment(
             db=db,
             business_id=self.business_id,
@@ -301,15 +307,15 @@ class AgentToolbox:
             status="confirmed",
         )
         self.gate.proposals.pop("book", None)
-        return {"ok": True, "code": "booked", "message": "Booked. Tell the caller it is confirmed. Do not promise an SMS or email.", "appointment_id": row["id"], "when": describe(fields, now.date())}
+        return {"ok": True, "code": "booked", "message": _msg("toolbox.book_appointment.booked"), "appointment_id": row["id"], "when": describe(fields, now.date())}
 
     def _tool_lookup_appointment(self, args: Dict[str, Any], db: Session) -> Dict[str, Any]:
         asked = args.get("phone_number")
         if getattr(self, "channel", "voice") == "chat" and asked and not same_phone(asked, self.caller_number):
-            return err("not_yours", "In chat you can only look up appointments for the number you are messaging from. Politely say you cannot check another number's appointments.")
+            return err("not_yours", _msg("toolbox.lookup_appointment.not_yours"))
         phone = normalize_phone(args.get("phone_number") or self.caller_number)
         if len(phone) < 10:
-            return err("bad_phone", "Need a full phone number to look up appointments.")
+            return err("bad_phone", _msg("toolbox.lookup_appointment.bad_phone"))
         today = self.now_fn().date()
         rows = self.ops.read.get_appointments(db, self.business_id, status="confirmed")
         mine = []
@@ -319,7 +325,7 @@ class AgentToolbox:
                 mine.append((d, row))
         mine.sort(key=lambda x: (x[0], str(x[1].get("preferred_time"))))
         if not mine:
-            return {"ok": True, "appointments": [], "message": "No upcoming appointments found for that number."}
+            return {"ok": True, "appointments": [], "message": _msg("toolbox.lookup_appointment.none_found")}
         out = []
         for i, (d, row) in enumerate(mine[:5], start=1):
             ref = f"A{i}"
@@ -331,10 +337,10 @@ class AgentToolbox:
     def _owned_appointment(self, ref: Optional[str], db: Session):
         appt_id = self.gate.refs.get(str(ref or ""))
         if not appt_id:
-            return None, err("lookup_first", "Look up the caller's appointments with lookup_appointment first, then use the ref it returns.")
+            return None, err("lookup_first", _msg("toolbox.owned_appointment.lookup_first"))
         row = self.ops.read.get_appointment_by_id(db, self.business_id, appt_id)
         if not row or not same_phone(row.get("phone_number"), self.gate.ref_phone.get(str(ref))):
-            return None, err("not_found", "That appointment could not be found.")
+            return None, err("not_found", _msg("toolbox.owned_appointment.not_found"))
         return row, None
 
     def _tool_cancel_appointment(self, args: Dict[str, Any], db: Session) -> Dict[str, Any]:
@@ -346,13 +352,13 @@ class AgentToolbox:
         fields = {"ref": args["ref"], "id": row["id"]}
         gate_result = check_confirmation(self.gate, f"cancel:{args['ref']}", fields, bool(args.get("confirmed_by_caller")))
         if gate_result:
-            gate_result["when"] = f"{speak_date(d, today) if d else row.get('preferred_date')} at {row.get('preferred_time')}"
+            gate_result["when"] = _msg("toolbox.when", date=speak_date(d, today) if d else row.get('preferred_date'), time=row.get('preferred_time'))
             return gate_result
         if self.dry_run:
-            return {"ok": True, "code": "dry_run", "message": "Cancelled (shadow mode, nothing saved)."}
+            return {"ok": True, "code": "dry_run", "message": _msg("toolbox.cancel_appointment.dry_run")}
         self.ops.write.cancel_appointment(db, self.business_id, row["id"])
         self.gate.refs.pop(str(args["ref"]), None)
-        return {"ok": True, "code": "cancelled", "message": "The appointment is cancelled. Confirm to the caller and offer to rebook."}
+        return {"ok": True, "code": "cancelled", "message": _msg("toolbox.cancel_appointment.cancelled")}
 
     def _tool_reschedule_appointment(self, args: Dict[str, Any], db: Session) -> Dict[str, Any]:
         row, error = self._owned_appointment(args.get("ref"), db)
@@ -362,14 +368,14 @@ class AgentToolbox:
         when = parse_date(args.get("new_date"), now.date())
         start = parse_time(args.get("new_time"))
         if not when:
-            return err("bad_date", "Could not understand the new date. Ask for a specific day.")
+            return err("bad_date", _msg("toolbox.reschedule_appointment.bad_date"))
         if not start:
-            return err("bad_time", "The new time is unclear. Ask for an exact time including AM or PM.")
+            return err("bad_time", _msg("toolbox.reschedule_appointment.bad_time"))
         said = self.effective_said()
         if not any(when in dates_in(s, now.date()) for s in said):
-            return err("not_from_caller", "The caller has not told you the new date. Ask for it; do not choose it yourself.", field="new_date")
+            return err("not_from_caller", _msg("toolbox.reschedule_appointment.not_from_caller_date"), field="new_date")
         if not any(parse_time(s) == start or (start.hour, start.minute) in times_in(s) for s in said):
-            return err("not_from_caller", "The caller has not told you the new time. Ask for it; do not choose it yourself.", field="new_time")
+            return err("not_from_caller", _msg("toolbox.reschedule_appointment.not_from_caller_time"), field="new_time")
         doctor = match_doctor(row.get("doctor_name"), self.facts.doctors)
         problem = validate_slot(when, start, doctor, self.facts, self._booked(db, when), now, ignore_id=row["id"])
         if problem:
@@ -377,12 +383,12 @@ class AgentToolbox:
         fields = {"ref": args["ref"], "date": when, "time": start}
         gate_result = check_confirmation(self.gate, f"reschedule:{args['ref']}", fields, bool(args.get("confirmed_by_caller")))
         if gate_result:
-            gate_result["when"] = f"{speak_date(when, now.date())} at {format_time(start)}"
+            gate_result["when"] = _msg("toolbox.when", date=speak_date(when, now.date()), time=format_time(start))
             return gate_result
         if self.dry_run:
-            return {"ok": True, "code": "dry_run", "message": "Rescheduled (shadow mode, nothing saved)."}
+            return {"ok": True, "code": "dry_run", "message": _msg("toolbox.reschedule_appointment.dry_run")}
         self.ops.write.reschedule_appointment(db, self.business_id, row["id"], when.isoformat(), format_time(start))
-        return {"ok": True, "code": "rescheduled", "message": "Rescheduled. Confirm the new time to the caller.", "when": f"{speak_date(when, now.date())} at {format_time(start)}"}
+        return {"ok": True, "code": "rescheduled", "message": _msg("toolbox.reschedule_appointment.rescheduled"), "when": _msg("toolbox.when", date=speak_date(when, now.date()), time=format_time(start))}
 
     def _tool_search_knowledge(self, args: Dict[str, Any], db: Session) -> Dict[str, Any]:
         query = str(args.get("query") or "").strip()
@@ -398,7 +404,7 @@ class AgentToolbox:
             logger.warning("search_knowledge failed: %s", e)
             snippets = []
         if not snippets:
-            return {"ok": True, "snippets": [], "message": "Nothing found in the clinic's documents. Say you are not sure and offer the front desk."}
+            return {"ok": True, "snippets": [], "message": _msg("toolbox.search_knowledge.not_found")}
         return {"ok": True, "snippets": snippets}
 
     async def _tool_transfer_to_human(self, args: Dict[str, Any]) -> Dict[str, Any]:
@@ -412,13 +418,13 @@ class AgentToolbox:
                 "transfer",
                 {"department": department},
                 bool(args.get("confirmed_by_caller")),
-                prompt="The caller did not ask for a person. Ask if they would like to be connected to the front desk, and wait for their answer. Do not transfer yet.",
+                prompt=_msg("toolbox.transfer_to_human.not_requested"),
             )
             if gate_result:
                 return gate_result
         if self.dry_run:  # counted as a transfer for scoring/logging, but no call is placed
             self.pending = {"type": "transfer", "department": department, "twiml": None, "dry_run": True}
-            return {"ok": True, "code": "dry_run", "message": "Transfer requested (shadow mode)."}
+            return {"ok": True, "code": "dry_run", "message": _msg("toolbox.transfer_to_human.dry_run")}
         return await self.transfer(department, reason)
 
     async def transfer(self, department: str, reason: str) -> Dict[str, Any]:
@@ -440,9 +446,9 @@ class AgentToolbox:
 
         res = await asyncio.to_thread(_run)
         if not res.success:
-            return err("transfer_unavailable", "Transfer is not possible right now. Apologise, and offer to take a message.")
+            return err("transfer_unavailable", _msg("toolbox.transfer.transfer_unavailable"))
         self.pending = {"type": "transfer", "department": department, "twiml": res.data.get("twiml"), "data": res.data}
-        return {"ok": True, "code": "transferring", "message": "Transfer started. Say one short sentence that you are connecting them."}
+        return {"ok": True, "code": "transferring", "message": _msg("toolbox.transfer.started")}
 
     async def _tool_end_call(self, args: Dict[str, Any]) -> Dict[str, Any]:
         self.pending = {"type": "hangup"}

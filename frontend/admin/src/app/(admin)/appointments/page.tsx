@@ -1,5 +1,6 @@
 "use client";
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { adminFetch } from '@/lib/api';
 import Link from 'next/link';
 
 interface AppointmentItem {
@@ -10,101 +11,81 @@ interface AppointmentItem {
   doctorName: string;
   serviceName: string;
   dateTime: string;
-  status: 'Confirmed' | 'Completed' | 'Cancelled' | 'No-show';
+  status: 'Scheduled' | 'Confirmed' | 'Completed' | 'Cancelled' | 'No-show';
   statusColor: { bg: string; text: string };
   source: 'AI' | 'Website' | 'Staff' | 'WhatsApp';
   sourceColor: { bg: string; text: string };
   businessType: string;
 }
 
-const appointmentsData: AppointmentItem[] = [
-  {
-    id: 'apt-1',
-    businessId: 'b-1',
-    businessName: 'Smile Dental Clinic',
-    patientName: 'Sarah Wilson',
-    doctorName: 'Dr. Evans',
-    serviceName: 'Teeth Cleaning',
-    dateTime: 'Today, 11:30 AM',
-    status: 'Confirmed',
-    statusColor: { bg: 'bg-[#D1FAE5]', text: 'text-[#065F46]' },
-    source: 'AI',
-    sourceColor: { bg: 'bg-[#EFF6FF]', text: 'text-[#2563EB]' },
-    businessType: 'Dental Clinic',
-  },
-  {
-    id: 'apt-2',
-    businessId: 'b-2',
-    businessName: 'Amsterdam Dental Care',
-    patientName: 'Mark de Jong',
-    doctorName: 'Dr. Wilson',
-    serviceName: 'Check-up',
-    dateTime: 'Today, 12:00 PM',
-    status: 'Completed',
-    statusColor: { bg: 'bg-[#DBEAFE]', text: 'text-[#1D4ED8]' },
-    source: 'Website',
-    sourceColor: { bg: 'bg-purple-50', text: 'text-purple-700' },
-    businessType: 'Dental Clinic',
-  },
-  {
-    id: 'apt-3',
-    businessId: 'b-3',
-    businessName: 'Berlin Health Center',
-    patientName: 'Klaus Schmidt',
-    doctorName: 'Dr. Schmidt',
-    serviceName: 'Root Canal',
-    dateTime: 'Today, 02:15 PM',
-    status: 'Cancelled',
-    statusColor: { bg: 'bg-[#FEE2E2]', text: 'text-[#991B1B]' },
-    source: 'Staff',
-    sourceColor: { bg: 'bg-gray-100', text: 'text-gray-700' },
-    businessType: 'Medical Center',
-  },
-  {
-    id: 'apt-4',
-    businessId: 'b-4',
-    businessName: 'Bella Rosa Ristorante',
-    patientName: 'Lisa Muller',
-    doctorName: 'Dr. Muller',
-    serviceName: 'Table Reservation (4p)',
-    dateTime: 'Today, 03:00 PM',
-    status: 'No-show',
-    statusColor: { bg: 'bg-[#FFEDD5]', text: 'text-[#C2410C]' },
-    source: 'WhatsApp',
-    sourceColor: { bg: 'bg-emerald-50', text: 'text-emerald-700' },
-    businessType: 'Restaurant',
-  },
-  {
-    id: 'apt-5',
-    businessId: 'b-5',
-    businessName: 'Glow & Shine Salon',
-    patientName: 'Pierre Dubois',
-    doctorName: 'Marie Dubois',
-    serviceName: 'Hair Styling & Spa',
-    dateTime: 'Jan 31, 10:00 AM',
-    status: 'Confirmed',
-    statusColor: { bg: 'bg-[#D1FAE5]', text: 'text-[#065F46]' },
-    source: 'AI',
-    sourceColor: { bg: 'bg-[#EFF6FF]', text: 'text-[#2563EB]' },
-    businessType: 'Beauty Salon',
-  },
-  {
-    id: 'apt-6',
-    businessId: 'b-6',
-    businessName: 'FitLife Studio',
-    patientName: 'Oliver Twist',
-    doctorName: 'James Smith',
-    serviceName: 'Personal Fitness Assessment',
-    dateTime: 'Jan 31, 11:15 AM',
-    status: 'Confirmed',
-    statusColor: { bg: 'bg-[#D1FAE5]', text: 'text-[#065F46]' },
-    source: 'AI',
-    sourceColor: { bg: 'bg-[#EFF6FF]', text: 'text-[#2563EB]' },
-    businessType: 'Fitness Studio',
-  },
-];
+
+
+const cap = (v: string | null | undefined) => (v ? v.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase()) : '');
+const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '–');
+const ago = (iso: string | null) => {
+  if (!iso) return 'No calls yet';
+  const s = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
+  if (s < 60) return 'Just now';
+  if (s < 3600) return `${Math.floor(s / 60)} min ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)} hr ago`;
+  return `${Math.floor(s / 86400)} d ago`;
+};
+const STATUS_VIEW: Record<string, { label: AppointmentItem['status']; color: { bg: string; text: string } }> = {
+  confirmed: { label: 'Confirmed', color: { bg: 'bg-[#D1FAE5]', text: 'text-[#065F46]' } },
+  completed: { label: 'Completed', color: { bg: 'bg-[#DBEAFE]', text: 'text-[#1D4ED8]' } },
+  cancelled: { label: 'Cancelled', color: { bg: 'bg-[#FEE2E2]', text: 'text-[#991B1B]' } },
+  pending: { label: 'Scheduled', color: { bg: 'bg-[#FFEDD5]', text: 'text-[#C2410C]' } },
+  no_show: { label: 'No-show', color: { bg: 'bg-[#FFEDD5]', text: 'text-[#C2410C]' } },
+};
+const SOURCE_VIEW: Record<string, { label: AppointmentItem['source']; color: { bg: string; text: string } }> = {
+  phone: { label: 'AI', color: { bg: 'bg-[#EFF6FF]', text: 'text-[#2563EB]' } },
+  playground: { label: 'AI', color: { bg: 'bg-[#EFF6FF]', text: 'text-[#2563EB]' } },
+  whatsapp: { label: 'WhatsApp', color: { bg: 'bg-emerald-50', text: 'text-emerald-700' } },
+  manual: { label: 'Staff', color: { bg: 'bg-gray-100', text: 'text-gray-700' } },
+};
 
 export default function AppointmentsPage() {
+  const [appointmentsData, setAppointmentsData] = useState<AppointmentItem[]>([]);
+  const [loadError, setLoadError] = useState('');
+
+  useEffect(() => {
+    let alive = true;
+    const load = () =>
+      adminFetch<{ items: any[] }>('/admin/appointments')
+        .then((r) => {
+          if (!alive) return;
+          setLoadError('');
+          setAppointmentsData(
+            r.items.map((a) => {
+              const st = STATUS_VIEW[a.status] || STATUS_VIEW.pending;
+              const src = SOURCE_VIEW[a.source] || SOURCE_VIEW.manual;
+              const day = a.date ? new Date(`${a.date}T00:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
+              return {
+                id: a.id,
+                businessId: a.businessId,
+                businessName: a.businessName,
+                patientName: a.patient || '–',
+                doctorName: a.doctor || '–',
+                serviceName: a.service || '–',
+                dateTime: [day, a.time].filter(Boolean).join(', ') || when(a.createdAt),
+                status: st.label,
+                statusColor: st.color,
+                source: src.label,
+                sourceColor: src.color,
+                businessType: a.businessType || 'Business',
+              };
+            })
+          );
+        })
+        .catch(() => alive && setLoadError('Could not load appointments from the API.'));
+    load();
+    const t = window.setInterval(() => document.visibilityState === 'visible' && load(), 30000);
+    return () => {
+      alive = false;
+      window.clearInterval(t);
+    };
+  }, []);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedBusiness, setSelectedBusiness] = useState<string>('All');
   const [selectedStatus, setSelectedStatus] = useState<string>('All');

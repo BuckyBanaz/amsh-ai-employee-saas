@@ -25,5 +25,13 @@
  },
  "style": "Natural, warm spoken English. Short sentences, contractions, everyday acknowledgements (\"sure\", \"of course\", \"got it\"), the way a friendly front-desk person talks.",
  "native_name": "English",
- "direction": "ltr"
+ "direction": "ltr",
+ "strings": {
+  "fallback": "I'm sorry, I'm having trouble right now. Could you say that again, or would you like me to connect you to the front desk?",
+  "no_transfer": "I'm sorry, I can't connect you right now. Can I take a message for the front desk?",
+  "billing": "Billing and refunds are handled by our front desk team. Let me connect you right away.",
+  "frustrated": "I'm really sorry about the trouble. Let me connect you to someone at our front desk right away.",
+  "unsure_claim": "Let me just double-check that with you first. Could you confirm the details once more?",
+  "unsure_times": "Let me make sure I give you the right time. Which day would suit you?"
+ }
 }

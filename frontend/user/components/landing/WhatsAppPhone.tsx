@@ -157,7 +157,7 @@ export default function WhatsAppPhone({ compact = false }: { compact?: boolean }
           <div
             ref={scroller}
             aria-live="polite"
-            className={`scrollbar-hide flex ${compact ? "h-[340px]" : "h-[430px]"} flex-col gap-1.5 overflow-y-auto px-4 py-3`}
+            className={`scrollbar-hide flex ${compact ? "h-[220px]" : "h-[430px]"} flex-col gap-1.5 overflow-y-auto px-4 py-3`}
             style={{
               backgroundImage:
                 "radial-gradient(circle at 20% 20%, rgba(0,0,0,0.035) 2px, transparent 2.5px), radial-gradient(circle at 70% 60%, rgba(0,0,0,0.03) 3px, transparent 3.5px)",

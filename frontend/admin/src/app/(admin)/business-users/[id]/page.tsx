@@ -1,78 +1,129 @@
 "use client";
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import {
+  fetchBusinessUser,
+  updateBusinessUser,
+  BusinessUserDetail,
+} from '@/lib/api';
 
 export default function UserDetailPage() {
   const params = useParams();
+  const userId = typeof params?.id === 'string' ? params.id : '';
+
+  const [user, setUser] = useState<BusinessUserDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState<'businesses' | 'activity' | 'permissions'>('businesses');
+  const [actionSuccess, setActionSuccess] = useState('');
+  const [actionError, setActionError] = useState('');
+  const [updating, setUpdating] = useState(false);
 
-  // Associated businesses for this user
-  const associatedBusinesses = [
-    {
-      id: 'b-1',
-      name: 'Smile Dental Clinic',
-      type: 'Dental Clinic',
-      typeColor: { bg: 'bg-[#DBEAFE]', text: 'text-[#1D4ED8]' },
-      country: 'NL',
-      aiReceptionist: 'Sarah',
-      plan: 'Professional',
-      usagePercent: 78,
-      status: 'Active',
-      roleInBusiness: 'Primary Owner',
-      appointmentsToday: 34,
-      callsToday: 128,
-    },
-    {
-      id: 'b-2',
-      name: 'Amsterdam Dental Care',
-      type: 'Dental Clinic',
-      typeColor: { bg: 'bg-[#DBEAFE]', text: 'text-[#1D4ED8]' },
-      country: 'NL',
-      aiReceptionist: 'Anna',
-      plan: 'Business',
-      usagePercent: 92,
-      status: 'Active',
-      roleInBusiness: 'Managing Partner',
-      appointmentsToday: 22,
-      callsToday: 94,
-    },
-  ];
+  const loadUser = useCallback(async () => {
+    if (!userId) return;
+    try {
+      setError('');
+      const data = await fetchBusinessUser(userId);
+      setUser(data);
+    } catch {
+      setError('Could not load user profile from the database.');
+    } finally {
+      setLoading(false);
+    }
+  }, [userId]);
 
-  const activityLogs = [
-    {
-      id: 'act-1',
-      action: 'Updated AI Voice Prompt Configuration',
-      target: 'Smile Dental Clinic',
-      time: '2 hours ago',
-      ip: '194.109.12.84 (Amsterdam, NL)',
-    },
-    {
-      id: 'act-2',
-      action: 'Downloaded Call Recordings & Transcripts',
-      target: 'Smile Dental Clinic',
-      time: 'Yesterday at 4:15 PM',
-      ip: '194.109.12.84 (Amsterdam, NL)',
-    },
-    {
-      id: 'act-3',
-      action: 'Upgraded Subscription Plan to Professional',
-      target: 'Amsterdam Dental Care',
-      time: 'Nov 02, 2025',
-      ip: '82.161.44.12 (Utrecht, NL)',
-    },
-    {
-      id: 'act-4',
-      action: 'Added Business User (Receptionist)',
-      target: 'Smile Dental Clinic',
-      time: 'Oct 28, 2025',
-      ip: '194.109.12.84 (Amsterdam, NL)',
-    },
-  ];
+  useEffect(() => {
+    loadUser();
+  }, [loadUser]);
+
+  const handleToggleStatus = async () => {
+    if (!user) return;
+    setUpdating(true);
+    setActionError('');
+    try {
+      const newStatus = !user.is_active;
+      await updateBusinessUser(user.id, { is_active: newStatus });
+      setUser((prev) =>
+        prev
+          ? {
+              ...prev,
+              is_active: newStatus,
+              status: newStatus ? 'Active' : 'Suspended',
+            }
+          : null
+      );
+      setActionSuccess(`User status changed to ${newStatus ? 'Active' : 'Suspended'}.`);
+      setTimeout(() => setActionSuccess(''), 3000);
+    } catch {
+      setActionError('Failed to update user status.');
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleChangeRole = async (newRole: string) => {
+    if (!user) return;
+    setUpdating(true);
+    setActionError('');
+    try {
+      await updateBusinessUser(user.id, { role: newRole });
+      setUser((prev) => (prev ? { ...prev, role: newRole.charAt(0).toUpperCase() + newRole.slice(1) } : null));
+      setActionSuccess(`User role updated to ${newRole}.`);
+      setTimeout(() => setActionSuccess(''), 3000);
+    } catch {
+      setActionError('Failed to update user role.');
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex-1 p-6 flex flex-col items-center justify-center min-h-[400px]">
+        <div className="w-7 h-7 border-2 border-[#2563EB] border-t-transparent rounded-full animate-spin mb-3"></div>
+        <p className="text-xs text-[#94A3B8]">Loading user profile from live database...</p>
+      </div>
+    );
+  }
+
+  if (error || !user) {
+    return (
+      <div className="flex-1 p-6">
+        <div className="mb-4">
+          <Link
+            href="/business-users"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#475569] hover:text-[#2563EB]"
+          >
+            ← Back to Business Users
+          </Link>
+        </div>
+        <div className="bg-white border border-[#E2E8F0] rounded-xl p-8 text-center max-w-md mx-auto">
+          <div className="text-red-500 font-bold text-sm mb-1">User Not Found</div>
+          <p className="text-xs text-[#64748B] mb-4">
+            {error || 'The requested business user could not be located in the database.'}
+          </p>
+          <Link
+            href="/business-users"
+            className="px-4 py-2 bg-[#2563EB] text-white rounded-lg text-xs font-semibold"
+          >
+            Return to Users Directory
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  const initials = user.name
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .substring(0, 2)
+    .toUpperCase();
 
   return (
-    <div className="flex-1 overflow-y-auto scrollbar-hide p-4 sm:p-5 animate-in fade-in duration-500">
-      {/* Breadcrumb / Back button */}
+    <div className="flex-1 overflow-y-auto scrollbar-hide p-4 sm:p-5 lg:p-6 w-full animate-in fade-in duration-500">
+      {/* Breadcrumb */}
       <div className="mb-3">
         <Link
           href="/business-users"
@@ -86,310 +137,249 @@ export default function UserDetailPage() {
         </Link>
       </div>
 
-      {/* Top Banner */}
-      <div className="mb-3.5 flex items-center justify-between px-3.5 py-1.5 bg-[#EFF6FF] border border-[#BFDBFE] rounded-md text-[#2563EB]">
-        <div className="flex items-center gap-2">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-            <circle cx="12" cy="10" r="3"></circle>
-          </svg>
-          <span className="text-[11px] font-bold uppercase tracking-wide">
-            TENANT USER PROFILE: DR. SARAH WILSON (ID: {params?.id || 'u-1'})
-          </span>
+      {/* Notifications */}
+      {actionSuccess && (
+        <div className="mb-3 p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg text-xs font-medium flex items-center justify-between">
+          <span>{actionSuccess}</span>
+          <button onClick={() => setActionSuccess('')}>✕</button>
         </div>
-        <span className="text-[10px] font-semibold bg-white/80 px-1.5 py-0.5 rounded border border-[#BFDBFE]">
-          2FA Verified
-        </span>
-      </div>
+      )}
+      {actionError && (
+        <div className="mb-3 p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-lg text-xs font-medium flex items-center justify-between">
+          <span>{actionError}</span>
+          <button onClick={() => setActionError('')}>✕</button>
+        </div>
+      )}
 
-      {/* User Header Profile Card */}
-      <div className="bg-white border border-[#E2E8F0] rounded-lg p-4 shadow-2xs mb-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          {/* User Left Details */}
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-[#EFF6FF] border border-[#BFDBFE] text-[#2563EB] font-bold text-xs flex items-center justify-center shrink-0">
-              SW
+      {/* Profile Header Card */}
+      <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 shadow-2xs mb-4">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-xl bg-blue-600 text-white font-bold text-sm flex items-center justify-center shrink-0 shadow-xs">
+              {initials}
             </div>
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-lg font-bold text-[#0F172A] tracking-tight">
-                  Dr. Sarah Wilson
+                <h1 className="text-xl font-bold text-[#0F172A] tracking-tight">
+                  {user.name}
                 </h1>
-                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#EFF6FF] text-[#2563EB]">
-                  Owner
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-[#EFF6FF] text-[#2563EB] border border-blue-100">
+                  {user.role}
                 </span>
-                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#D1FAE5] text-[#065F46]">
-                  ● Active Account
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+                  user.is_active
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                    : 'bg-rose-50 text-rose-700 border border-rose-200'
+                }`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${user.is_active ? 'bg-emerald-500' : 'bg-rose-500'}`}></span>
+                  {user.status}
                 </span>
               </div>
 
-              <div className="flex flex-wrap items-center gap-y-1 gap-x-3.5 text-xs text-[#475569] mt-1">
+              <div className="flex flex-wrap items-center gap-y-1 gap-x-4 text-xs text-[#475569] mt-1.5">
                 <span className="flex items-center gap-1.5">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#94A3B8]">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[#94A3B8]">
                     <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
                     <polyline points="22,6 12,13 2,6"></polyline>
                   </svg>
-                  sarah.w@smile.nl
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#94A3B8]">
-                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
-                  </svg>
-                  +31 20 555 0192
+                  {user.email}
                 </span>
                 <span className="text-[#94A3B8]">
-                  Joined: Oct 12, 2025
+                  Created {user.createdAt || 'N/A'}
+                </span>
+                <span className="text-[#94A3B8]">
+                  Last active: {user.lastActive}
                 </span>
               </div>
             </div>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex items-center gap-1.5">
-            <button className="px-2.5 py-1.5 bg-white border border-[#E2E8F0] rounded-md text-xs font-semibold text-[#0F172A] hover:bg-gray-50 shadow-2xs transition-colors">
-              Reset Password
+          <div className="flex items-center gap-2">
+            <select
+              value={user.role.toLowerCase()}
+              disabled={updating}
+              onChange={(e) => handleChangeRole(e.target.value)}
+              className="px-2.5 py-1.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg text-xs font-semibold text-[#475569] hover:bg-gray-100 focus:outline-none"
+            >
+              <option value="owner">Role: Owner</option>
+              <option value="admin">Role: Admin</option>
+              <option value="manager">Role: Manager</option>
+              <option value="doctor">Role: Doctor</option>
+              <option value="receptionist">Role: Receptionist</option>
+              <option value="staff">Role: Staff</option>
+            </select>
+
+            <button
+              onClick={handleToggleStatus}
+              disabled={updating}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                user.is_active
+                  ? 'border-rose-200 text-rose-600 bg-rose-50 hover:bg-rose-100'
+                  : 'border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100'
+              }`}
+            >
+              {updating ? 'Updating...' : user.is_active ? 'Suspend User' : 'Reactivate User'}
             </button>
-            <button className="px-2.5 py-1.5 bg-white border border-[#EF4444] rounded-md text-xs font-semibold text-[#EF4444] hover:bg-red-50 shadow-2xs transition-colors">
-              Suspend Access
-            </button>
-            <button className="px-2.5 py-1.5 bg-[#2563EB] hover:bg-blue-700 text-white rounded-md text-xs font-semibold shadow-2xs transition-colors">
-              Edit User Info
-            </button>
-          </div>
-        </div>
-
-        {/* 4 Quick Stat Cards in Profile */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mt-3 pt-3 border-t border-[#E2E8F0]">
-          <div className="p-2 sm:p-2.5 bg-[#F8FAFC] rounded-md border border-[#E2E8F0]">
-            <div className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-0.5">
-              Associated Businesses
-            </div>
-            <div className="text-base font-bold text-[#0F172A]">
-              {associatedBusinesses.length} Clinics
-            </div>
-          </div>
-
-          <div className="p-2 sm:p-2.5 bg-[#F8FAFC] rounded-md border border-[#E2E8F0]">
-            <div className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-0.5">
-              Total Managed Calls
-            </div>
-            <div className="text-base font-bold text-[#0F172A]">
-              5,312 calls
-            </div>
-          </div>
-
-          <div className="p-3 bg-[#F8FAFC] rounded-lg border border-[#E2E8F0]">
-            <div className="text-[11px] font-semibold text-[#94A3B8] uppercase tracking-wider mb-1">
-              Security Level
-            </div>
-            <div className="text-[14px] font-bold text-[#10B981] mt-1 flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-[#10B981]"></span>
-              Tier 1 (Admin Full)
-            </div>
-          </div>
-
-          <div className="p-3 bg-[#F8FAFC] rounded-lg border border-[#E2E8F0]">
-            <div className="text-[11px] font-semibold text-[#94A3B8] uppercase tracking-wider mb-1">
-              Last Active Session
-            </div>
-            <div className="text-[14px] font-bold text-[#0F172A] mt-1">
-              10 min ago (Amsterdam)
-            </div>
           </div>
         </div>
       </div>
 
-      {/* Tabs Switcher for Associated Details */}
-      <div className="flex items-center gap-2 mb-4 border-b border-[#E2E8F0] pb-2">
+      {/* Tabs */}
+      <div className="flex items-center gap-2 border-b border-[#E2E8F0] mb-4">
         <button
           onClick={() => setActiveTab('businesses')}
-          className={`px-3.5 py-1.5 rounded-lg text-[13px] font-semibold transition-colors ${
+          className={`px-3.5 py-2 text-xs font-bold border-b-2 transition-colors ${
             activeTab === 'businesses'
-              ? 'bg-[#EFF6FF] text-[#2563EB]'
-              : 'text-[#475569] hover:bg-gray-100/70 hover:text-[#0F172A]'
+              ? 'border-[#2563EB] text-[#2563EB]'
+              : 'border-transparent text-[#64748B] hover:text-[#0F172A]'
           }`}
         >
-          Associated Businesses ({associatedBusinesses.length})
+          Associated Clinics ({user.associatedBusinesses?.length || 0})
         </button>
         <button
           onClick={() => setActiveTab('activity')}
-          className={`px-3.5 py-1.5 rounded-lg text-[13px] font-semibold transition-colors ${
+          className={`px-3.5 py-2 text-xs font-bold border-b-2 transition-colors ${
             activeTab === 'activity'
-              ? 'bg-[#EFF6FF] text-[#2563EB]'
-              : 'text-[#475569] hover:bg-gray-100/70 hover:text-[#0F172A]'
+              ? 'border-[#2563EB] text-[#2563EB]'
+              : 'border-transparent text-[#64748B] hover:text-[#0F172A]'
           }`}
         >
-          User Audit & Activity Log
+          Activity Trail ({user.activityLogs?.length || 0})
+        </button>
+        <button
+          onClick={() => setActiveTab('permissions')}
+          className={`px-3.5 py-2 text-xs font-bold border-b-2 transition-colors ${
+            activeTab === 'permissions'
+              ? 'border-[#2563EB] text-[#2563EB]'
+              : 'border-transparent text-[#64748B] hover:text-[#0F172A]'
+          }`}
+        >
+          Security & Access
         </button>
       </div>
 
-      {/* TAB 1: Associated Businesses (Previous Screen Design Integrated Below) */}
+      {/* Tab 1: Associated Clinics */}
       {activeTab === 'businesses' && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-[18px] font-bold text-[#0F172A] tracking-tight">
-                Businesses Managed by Dr. Sarah Wilson
-              </h2>
-              <p className="text-[13px] text-[#475569] mt-0.5">
-                All platform tenants and businesses linked to this user&apos;s administrative authority.
-              </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {user.associatedBusinesses && user.associatedBusinesses.length > 0 ? (
+            user.associatedBusinesses.map((b) => (
+              <div key={b.id} className="bg-white border border-[#E2E8F0] rounded-xl p-4 shadow-2xs hover:shadow-xs transition-shadow">
+                <div className="flex items-start justify-between mb-3">
+                  <div>
+                    <Link
+                      href={`/businesses/${b.id}`}
+                      className="text-sm font-bold text-[#0F172A] hover:text-[#2563EB] transition-colors flex items-center gap-1.5"
+                    >
+                      {b.name}
+                      <span className="text-xs text-[#94A3B8]">↗</span>
+                    </Link>
+                    <p className="text-xs text-[#64748B] mt-0.5">{b.type} · {b.country}</p>
+                  </div>
+                  <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    {b.status}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs bg-[#F8FAFC] p-3 rounded-lg border border-[#E2E8F0] mb-3">
+                  <div>
+                    <span className="text-[#94A3B8] block text-[10px] uppercase font-bold">Assigned Receptionist</span>
+                    <span className="font-semibold text-[#0F172A]">{b.aiReceptionist}</span>
+                  </div>
+                  <div>
+                    <span className="text-[#94A3B8] block text-[10px] uppercase font-bold">Subscription Plan</span>
+                    <span className="font-semibold text-[#2563EB]">{b.plan}</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-xs text-[#64748B]">
+                  <span>Calls Today: <strong className="text-[#0F172A]">{b.callsToday}</strong></span>
+                  <span>Appointments Today: <strong className="text-[#0F172A]">{b.appointmentsToday}</strong></span>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="col-span-2 bg-white border border-[#E2E8F0] rounded-xl p-8 text-center text-xs text-[#94A3B8]">
+              No linked business assigned yet.
             </div>
-            <button className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-[#E2E8F0] hover:bg-gray-50 text-[#0F172A] rounded-lg text-[12px] font-semibold shadow-sm transition-colors">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="12" y1="5" x2="12" y2="19"></line>
-                <line x1="5" y1="12" x2="19" y2="12"></line>
-              </svg>
-              Assign to New Business
-            </button>
-          </div>
+          )}
+        </div>
+      )}
 
-          {/* Businesses Table (Exact same columns and rich styling as the Businesses screen) */}
-          <div className="bg-white border border-[#E2E8F0] rounded-xl shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0]">
-                    <th className="px-4 py-3 text-[12px] font-bold text-[#475569] uppercase tracking-wider min-w-[170px]">
-                      Business Name
-                    </th>
-                    <th className="px-4 py-3 text-[12px] font-bold text-[#475569] uppercase tracking-wider min-w-[130px]">
-                      Type
-                    </th>
-                    <th className="px-4 py-3 text-[12px] font-bold text-[#475569] uppercase tracking-wider min-w-[140px]">
-                      Role in Business
-                    </th>
-                    <th className="px-4 py-3 text-[12px] font-bold text-[#475569] uppercase tracking-wider min-w-[80px]">
-                      Country
-                    </th>
-                    <th className="px-4 py-3 text-[12px] font-bold text-[#475569] uppercase tracking-wider min-w-[120px]">
-                      AI Receptionist
-                    </th>
-                    <th className="px-4 py-3 text-[12px] font-bold text-[#475569] uppercase tracking-wider min-w-[110px]">
-                      Plan
-                    </th>
-                    <th className="px-4 py-3 text-[12px] font-bold text-[#475569] uppercase tracking-wider min-w-[130px]">
-                      Usage (API)
-                    </th>
-                    <th className="px-4 py-3 text-[12px] font-bold text-[#475569] uppercase tracking-wider min-w-[90px]">
-                      Status
-                    </th>
-                    <th className="px-4 py-3 text-[12px] font-bold text-[#475569] uppercase tracking-wider text-right min-w-[110px]">
-                      Action
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#E2E8F0]">
-                  {associatedBusinesses.map((b) => (
-                    <tr key={b.id} className="hover:bg-[#F8FAFC]/70 transition-colors">
-                      {/* Name */}
-                      <td className="px-4 py-3.5 whitespace-nowrap">
-                        <Link
-                          href={`/businesses/${b.id}`}
-                          className="text-[14px] font-semibold text-[#0F172A] hover:text-[#2563EB] transition-colors flex items-center gap-1.5"
-                        >
-                          {b.name}
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-[#94A3B8]">
-                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-                            <polyline points="15 3 21 3 21 9"></polyline>
-                            <line x1="10" y1="14" x2="21" y2="3"></line>
-                          </svg>
-                        </Link>
-                        <div className="text-[11px] text-[#94A3B8] font-normal">
-                          Today: {b.callsToday} calls · {b.appointmentsToday} appts
-                        </div>
-                      </td>
-
-                      {/* Type */}
-                      <td className="px-4 py-3.5 whitespace-nowrap">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold ${b.typeColor.bg} ${b.typeColor.text}`}>
-                          {b.type}
+      {/* Tab 2: Activity Logs */}
+      {activeTab === 'activity' && (
+        <div className="bg-white border border-[#E2E8F0] rounded-xl shadow-2xs overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0] text-[10px] font-bold text-[#475569] uppercase tracking-wider">
+                  <th className="px-4 py-2.5">Event Action</th>
+                  <th className="px-4 py-2.5">Target</th>
+                  <th className="px-4 py-2.5">Outcome</th>
+                  <th className="px-4 py-2.5">Origin IP / Host</th>
+                  <th className="px-4 py-2.5 text-right">Timestamp</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#E2E8F0]">
+                {user.activityLogs && user.activityLogs.length > 0 ? (
+                  user.activityLogs.map((log) => (
+                    <tr key={log.id} className="hover:bg-[#F8FAFC]/80 transition-colors">
+                      <td className="px-4 py-2.5 font-semibold text-[#0F172A]">{log.action}</td>
+                      <td className="px-4 py-2.5 text-[#475569]">{log.target}</td>
+                      <td className="px-4 py-2.5">
+                        <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                          log.outcome === 'success' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
+                        }`}>
+                          {log.outcome}
                         </span>
                       </td>
-
-                      {/* Role in Business */}
-                      <td className="px-4 py-3.5 text-[13px] font-medium text-[#0F172A] whitespace-nowrap">
-                        {b.roleInBusiness}
-                      </td>
-
-                      {/* Country */}
-                      <td className="px-4 py-3.5 text-[13px] text-[#475569] whitespace-nowrap">
-                        {b.country}
-                      </td>
-
-                      {/* AI Receptionist */}
-                      <td className="px-4 py-3.5 text-[13px] font-medium text-[#2563EB] whitespace-nowrap">
-                        {b.aiReceptionist}
-                      </td>
-
-                      {/* Plan */}
-                      <td className="px-4 py-3.5 text-[13px] font-medium text-[#475569] whitespace-nowrap">
-                        {b.plan}
-                      </td>
-
-                      {/* Usage Progress */}
-                      <td className="px-4 py-3.5 whitespace-nowrap">
-                        <div className="w-[100px] h-2 bg-[#E2E8F0] rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-[#2563EB] rounded-full transition-all"
-                            style={{ width: `${b.usagePercent}%` }}
-                          />
-                        </div>
-                        <span className="text-[10px] text-[#94A3B8] font-semibold mt-0.5 block">
-                          {b.usagePercent}% limit used
-                        </span>
-                      </td>
-
-                      {/* Status */}
-                      <td className="px-4 py-3.5 whitespace-nowrap">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold bg-[#D1FAE5] text-[#065F46]">
-                          {b.status}
-                        </span>
-                      </td>
-
-                      {/* Actions */}
-                      <td className="px-4 py-3.5 text-right whitespace-nowrap">
-                        <Link
-                          href={`/businesses/${b.id}`}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 bg-white border border-[#E2E8F0] rounded-md text-[11px] font-semibold text-[#2563EB] hover:bg-blue-50 transition-colors"
-                        >
-                          Manage
-                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="9 18 15 12 9 6"></polyline>
-                          </svg>
-                        </Link>
-                      </td>
+                      <td className="px-4 py-2.5 text-[#64748B] font-mono text-[11px]">{log.ip}</td>
+                      <td className="px-4 py-2.5 text-right text-[#94A3B8]">{log.time}</td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-8 text-center text-[#94A3B8]">
+                      No audit events recorded for this user yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
 
-      {/* TAB 2: Audit & Activity Log */}
-      {activeTab === 'activity' && (
-        <div className="bg-white border border-[#E2E8F0] rounded-xl p-5 shadow-sm">
-          <h3 className="text-[15px] font-bold text-[#0F172A] mb-4">
-            Recent Audit & Security Trail
-          </h3>
-          <div className="divide-y divide-[#E2E8F0]">
-            {activityLogs.map((log) => (
-              <div key={log.id} className="py-3.5 flex items-center justify-between">
-                <div>
-                  <div className="text-[13px] font-semibold text-[#0F172A]">
-                    {log.action}
-                  </div>
-                  <div className="text-[12px] text-[#94A3B8] mt-0.5">
-                    Target: <span className="text-[#475569] font-medium">{log.target}</span> · IP: {log.ip}
-                  </div>
-                </div>
-                <span className="text-[12px] text-[#94A3B8] font-medium">
-                  {log.time}
-                </span>
-              </div>
-            ))}
+      {/* Tab 3: Security & Permissions */}
+      {activeTab === 'permissions' && (
+        <div className="bg-white border border-[#E2E8F0] rounded-xl p-5 shadow-2xs space-y-4 max-w-2xl">
+          <div>
+            <h3 className="text-sm font-bold text-[#0F172A] mb-1">Account Permissions & Scope</h3>
+            <p className="text-xs text-[#64748B]">
+              Tenant users have isolated access restricted strictly to their assigned clinic ({user.associatedBusinesses?.[0]?.name || 'Unassigned'}).
+            </p>
+          </div>
+
+          <div className="border border-[#E2E8F0] rounded-lg p-3 space-y-2 text-xs">
+            <div className="flex justify-between py-1 border-b border-[#E2E8F0]">
+              <span className="text-[#94A3B8]">Database User ID</span>
+              <span className="font-mono text-[#0F172A] font-semibold">{user.id}</span>
+            </div>
+            <div className="flex justify-between py-1 border-b border-[#E2E8F0]">
+              <span className="text-[#94A3B8]">Security Scope</span>
+              <span className="font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
+                business (Tenant Isolated)
+              </span>
+            </div>
+            <div className="flex justify-between py-1 border-b border-[#E2E8F0]">
+              <span className="text-[#94A3B8]">Email Verification</span>
+              <span className={`font-semibold ${user.emailVerified ? 'text-emerald-600' : 'text-amber-600'}`}>
+                {user.emailVerified ? 'Verified' : 'Pending Verification'}
+              </span>
+            </div>
+            <div className="flex justify-between py-1">
+              <span className="text-[#94A3B8]">Assigned Role</span>
+              <span className="font-semibold text-[#0F172A]">{user.role}</span>
+            </div>
           </div>
         </div>
       )}

@@ -11,9 +11,9 @@ bottom (some are stale, see "Doc index").
 | Part | Done | Main pending |
 |---|---|---|
 | User frontend | ~80% | onboarding plans / review / Twilio, conversations and analytics polish, dashboard still shows invented numbers when data is thin; billing invoices are fake |
-| Admin frontend | ~23% | 20 mock pages (6 of 26 are real) |
+| Admin frontend | ~44% | 14 mock pages (11 of 25 are real, incl. analytics, health, integrations, receptionists, appointments, conversations) |
 | AI / voice | ~55% | real phone-call test (also confirms the latency work), outbound, live take-over; WhatsApp works on the Meta test number; Hindi/Hinglish layer tested offline only |
-| Server | ~66% | **auth on the new billing endpoints**, payment records, admin APIs, quotas, Twilio / Exotel signatures, CI |
+| Server | ~72% | **auth on the new billing endpoints**, payment records, admin APIs, quotas, Twilio / Exotel signatures, CI |
 | **Overall** | **~56%** | little of it has been verified in a real browser or on a real call |
 
 Method and lists: [`../.brain/progress.md`](../.brain/progress.md). What changed since 2026-09-28: tracker entries for 2026-09-30, 2026-10-01 (branch `v1.1`) and 2026-10-02/03 in `17_...`; new docs `19`, `20`, `21` (index in section 11).
@@ -426,9 +426,11 @@ Still to do: blocking a suspended clinic's dashboard login, admin password reset
 | Doc | About | State |
 |---|---|---|
 | `README.md` (this file) | overview, pipelines, status | current |
-| `17_AMSh_Claude_Change_Tracker.md` | every change with evidence and limits | current (to 2026-10-03; the 2026-10-01 latency entries are on branch `v1.1`) |
+| `17_AMSh_Claude_Change_Tracker.md` | every change with evidence and limits | current (to 2026-10-03; the 2026-10-01 latency entries came in with the merge of `v1.1` into `v1.5`) |
 | `19_AMSh_Summit_Pitch.md` | summit talking points, competitors, ask checklist | current |
 | `20_AMSh_Returning_Patient_Memory_and_Privacy.md` | patient memory, privacy rules, booking channels, WhatsApp go-live checklist | current |
+| `23_AMSh_System_Audit_2026-10-03.md` | full system audit: what works, P0 / P1 problems, unused code, order of work | current |
+| `24_AMSh_Message_Templates_and_Channels_Plan.md` | plan: editable templates for email, SMS, WhatsApp and in-app messages in the admin and user portals, channel order, logs, compliance | planned |
 | `22_AMSh_Language_Packs_and_Runtime_Context.md` | five independent dimensions (vertical, language, accent, region, timezone), language packs, RTL readiness, languages endpoint | current |
 | `21_AMSh_Language_Layer_and_Slot_Rules.md` | BusinessContext (vertical + region + language config), Hindi/Hinglish layer, slot rules, booking guard | current |
 | `18_AMSh_Completion_Plan_User_and_Admin.md` | phased plan for the user app, admin portal and server APIs (done / pending) | current |

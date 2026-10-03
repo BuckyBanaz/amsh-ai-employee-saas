@@ -1,169 +1,274 @@
-"""Platform Infrastructure Integrations API Router for Admin Portal.
-Allows Superadmins to manage system-wide defaults for Telephony (Twilio, Exotel),
-AI & Speech (Groq, Gemini, Cartesia, ElevenLabs), Messaging (Meta WhatsApp),
-Email Delivery (Platform SMTP), and SaaS Billing (Razorpay, Stripe).
+"""Platform Infrastructure Integrations API for the Admin Portal.
+
+What the superadmin sees here is REAL:
+  * Credentials come from the server environment (`.env`) unless the superadmin enters one in the portal (Configure). A portal
+    value is stored ENCRYPTED (CryptoManager) in `platform_integrations.config["secrets"]`, overrides `.env` for these checks,
+    and can be reset to `.env` at any time. `.env` values are never copied into the database; nothing is returned in full.
+  * Status comes from a live, read-only call to each provider with the credentials from the environment (no sleep, no
+    simulated "Connected"). A provider whose credentials are missing shows "Disconnected: not configured".
+  * The database table `platform_integrations` keeps only non-secret operational state: the last check result, latency, a
+    failure rate, and the "default" switch.
+
+Providers: Twilio, Exotel (telephony), Groq, Gemini, Deepgram (AI / speech), Cartesia, ElevenLabs (voice), WhatsApp (Meta Graph),
+Resend (platform email), Razorpay and Stripe (billing).
 """
 
-from datetime import datetime, timezone
+import threading
 import time
-from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import HTTPAuthorizationCredentials
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
+from typing import Any, Callable, Dict, List, Optional, Tuple
+
+import httpx
+import os
+import uuid
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from backend.server.auth.security import bearer_scheme, decode_access_token
+from backend.server.auth.security import require_platform_admin
+from backend.server.auth.crypto import CryptoManager
+from backend.server.common.config import get_settings
 from backend.server.database.models.platform_integration import PlatformIntegration
-from backend.server.database.models.user import User
-from backend.server.database.session import get_db
+from backend.server.database.session import SessionLocal, get_db
+from backend.server.services import platform_smtp
 
-router = APIRouter(prefix="/api/admin/integrations", tags=["admin-integrations"])
+router = APIRouter(prefix="/api/admin/integrations", tags=["admin-integrations"], dependencies=[Depends(require_platform_admin)])
 
-# Default platform infrastructure providers
-DEFAULT_PLATFORM_INTEGRATIONS = [
-    {
-        "id": "twilio",
-        "name": "Twilio Telephony Gateway",
-        "category": "Voice",
-        "status": "Connected",
-        "is_active_default": True,
-        "latency_ms": 110.0,
-        "error_rate": "0.1%",
-        "config": {
-            "account_sid": "AC••••••••••••••••••••••••••••••••",
-            "auth_token": "••••••••••••••••••••••••••••••••",
-            "phone_number": "+18005550199",
-            "webhook_url": "https://api.amsh.ai/api/v1/voice/inbound",
-        },
-    },
-    {
-        "id": "exotel",
-        "name": "Exotel India Virtual Numbers",
-        "category": "Voice",
-        "status": "Connected",
-        "is_active_default": True,
-        "latency_ms": 95.0,
-        "error_rate": "0.0%",
-        "config": {
-            "api_key": "exo_••••••••••••••••",
-            "api_token": "••••••••••••••••••••••••••••••••",
-            "subdomain": "amsh-telecom",
-            "caller_id": "08047362000",
-        },
-    },
-    {
-        "id": "groq",
-        "name": "Groq Fast LPU Inference",
-        "category": "AI",
-        "status": "Connected",
-        "is_active_default": True,
-        "latency_ms": 140.0,
-        "error_rate": "0.05%",
-        "config": {
-            "api_key": "gsk_••••••••••••••••••••••••••••••••",
-            "default_model": "llama-3.3-70b-versatile",
-            "max_tokens": 1024,
-        },
-    },
-    {
-        "id": "gemini",
-        "name": "Google Gemini 2.5 Flash",
-        "category": "AI",
-        "status": "Connected",
-        "is_active_default": True,
-        "latency_ms": 220.0,
-        "error_rate": "0.0%",
-        "config": {
-            "api_key": "AIzaSy••••••••••••••••••••••••••••••",
-            "model_version": "gemini-2.5-flash",
-        },
-    },
-    {
-        "id": "cartesia",
-        "name": "Cartesia Sonic TTS (Ultra-low latency)",
-        "category": "Voice",
-        "status": "Connected",
-        "is_active_default": True,
-        "latency_ms": 85.0,
-        "error_rate": "0.0%",
-        "config": {
-            "api_key": "sk_car_••••••••••••••••••••••••••••",
-            "default_voice": "Aura-British-Warm",
-        },
-    },
-    {
-        "id": "elevenlabs",
-        "name": "ElevenLabs Expressive Voice",
-        "category": "Voice",
-        "status": "Connected",
-        "is_active_default": False,
-        "latency_ms": 180.0,
-        "error_rate": "0.2%",
-        "config": {
-            "api_key": "xi_••••••••••••••••••••••••••••••••",
-            "model": "eleven_turbo_v2_5",
-        },
-    },
-    {
-        "id": "whatsapp",
-        "name": "Meta WhatsApp Cloud API (Platform WABA)",
-        "category": "Messaging",
-        "status": "Connected",
-        "is_active_default": True,
-        "latency_ms": 160.0,
-        "error_rate": "0.3%",
-        "config": {
-            "waba_id": "109847291029384",
-            "phone_number_id": "104928174019283",
-            "access_token": "EAA•••••••••••••••••••••••••••••",
-            "verify_token": "amsh_wa_verify_token_2026",
-        },
-    },
-    {
-        "id": "platform_smtp",
-        "name": "Platform Transactional SMTP (Postmark / SendGrid)",
-        "category": "Email",
-        "status": "Connected",
-        "is_active_default": True,
-        "latency_ms": 75.0,
-        "error_rate": "0.0%",
-        "config": {
-            "smtp_host": "smtp.postmarkapp.com",
-            "smtp_port": 587,
-            "smtp_user": "••••••••-••••-••••-••••-••••••••••••",
-            "from_email": "no-reply@amsh.ai",
-            "from_name": "AMSh AI Platform",
-        },
-    },
-    {
-        "id": "razorpay",
-        "name": "Razorpay Billing Gateway",
-        "category": "Payments",
-        "status": "Connected",
-        "is_active_default": True,
-        "latency_ms": 120.0,
-        "error_rate": "0.0%",
-        "config": {
-            "key_id": "rzp_live_••••••••••••••••",
-            "key_secret": "••••••••••••••••••••••••",
-            "webhook_secret": "whsec_••••••••••••••••",
-        },
-    },
-    {
-        "id": "stripe",
-        "name": "Stripe Global Card Gateway",
-        "category": "Payments",
-        "status": "Connected",
-        "is_active_default": True,
-        "latency_ms": 130.0,
-        "error_rate": "0.0%",
-        "config": {
-            "publishable_key": "pk_live_••••••••••••••••••••••••",
-            "secret_key": "sk_live_••••••••••••••••••••••••",
-            "webhook_secret": "whsec_••••••••••••••••",
-        },
-    },
-]
+PING_TIMEOUT_SECONDS = 4.0
+RECHECK_AFTER = timedelta(seconds=60)  # the list refreshes a provider's status when its last check is older than this
+
+
+_OVERRIDES: Dict[str, str] = {}  # decrypted portal-entered credentials, rebuilt from the database on every request that needs them
+
+
+def _load_overrides(rows: Dict[str, PlatformIntegration]) -> None:
+    fresh: Dict[str, str] = {}
+    for row in rows.values():
+        for key, token in ((row.config or {}).get("secrets") or {}).items():
+            value = CryptoManager.decrypt(token)
+            if value:
+                fresh[key] = value
+    _OVERRIDES.clear()
+    _OVERRIDES.update(fresh)
+
+
+def _setting(name: str) -> str:
+    if _OVERRIDES.get(name):
+        return _OVERRIDES[name].strip()
+    return str(getattr(get_settings(), name, "") or "").strip()
+
+
+def _source(name: str) -> str:
+    return "portal" if _OVERRIDES.get(name) else (".env" if str(getattr(get_settings(), name, "") or "").strip() else "not set")
+
+
+def _get(url: str, **kwargs: Any) -> httpx.Response:
+    with httpx.Client(timeout=PING_TIMEOUT_SECONDS) as client:
+        return client.get(url, **kwargs)
+
+
+def _verdict(response: httpx.Response, name: str, ok_codes: Tuple[int, ...] = (200,)) -> Tuple[bool, str]:
+    if response.status_code in ok_codes:
+        return True, f"{name} answered {response.status_code}"
+    detail = ""
+    try:
+        body = response.json()
+        error = body.get("error") if isinstance(body, dict) else None
+        message = error.get("message") if isinstance(error, dict) else error
+        detail = str(message or (body.get("message") if isinstance(body, dict) else "") or "")[:140]
+    except Exception:
+        detail = response.text[:140]
+    return False, f"{name} answered {response.status_code}" + (f": {detail}" if detail else "")
+
+
+def _ping_twilio() -> Tuple[bool, str]:
+    sid = _setting("TWILIO_ACCOUNT_SID")
+    r = _get(f"https://api.twilio.com/2010-04-01/Accounts/{sid}.json", auth=(sid, _setting("TWILIO_AUTH_TOKEN")))
+    if r.status_code == 200 and r.json().get("status") not in (None, "active"):
+        return False, f"Twilio account status is {r.json().get('status')}"
+    return _verdict(r, "Twilio")
+
+
+def _ping_exotel() -> Tuple[bool, str]:
+    sub = _setting("EXOTEL_SUBDOMAIN") or "api.exotel.com"
+    r = _get(f"https://{sub}/v1/Accounts/{_setting('EXOTEL_ACCOUNT_SID')}/Calls.json", params={"PageSize": 1},
+             auth=(_setting("EXOTEL_API_KEY"), _setting("EXOTEL_API_TOKEN")))
+    return _verdict(r, "Exotel")
+
+
+def _ping_groq() -> Tuple[bool, str]:
+    return _verdict(_get("https://api.groq.com/openai/v1/models", headers={"Authorization": f"Bearer {_setting('GROQ_API_KEY')}"}), "Groq")
+
+
+def _ping_gemini() -> Tuple[bool, str]:
+    return _verdict(_get("https://generativelanguage.googleapis.com/v1beta/models", params={"pageSize": 1},
+                         headers={"x-goog-api-key": _setting("GEMINI_API_KEY")}), "Gemini")
+
+
+def _ping_deepgram() -> Tuple[bool, str]:
+    return _verdict(_get("https://api.deepgram.com/v1/projects", headers={"Authorization": f"Token {_setting('DEEPGRAM_API_KEY')}"}), "Deepgram")
+
+
+def _ping_cartesia() -> Tuple[bool, str]:
+    return _verdict(_get("https://api.cartesia.ai/voices", params={"limit": 1},
+                         headers={"X-API-Key": _setting("CARTESIA_API_KEY"), "Cartesia-Version": "2024-11-13"}), "Cartesia")
+
+
+def _ping_elevenlabs() -> Tuple[bool, str]:
+    return _verdict(_get("https://api.elevenlabs.io/v1/user", headers={"xi-api-key": _setting("ELEVENLABS_API_KEY")}), "ElevenLabs")
+
+
+def _ping_whatsapp() -> Tuple[bool, str]:
+    version = _setting("META_GRAPH_VERSION") or "v23.0"
+    return _verdict(_get(f"https://graph.facebook.com/{version}/me", params={"fields": "id,name"},
+                         headers={"Authorization": f"Bearer {_setting('META_WHATSAPP_TOKEN')}"}), "Meta WhatsApp")
+
+
+def _check_email() -> Dict[str, Any]:
+    """Platform email: the SMTP the superadmin saved in the portal (login test, nothing is sent), else Resend from .env."""
+    smtp = platform_smtp.load_settings()
+    started = time.perf_counter()
+    if smtp:
+        try:
+            message = platform_smtp.test_login(smtp)
+            ok = True
+        except Exception as exc:
+            ok, message = False, f"SMTP login failed on {smtp['host']}:{smtp.get('port')}: {str(exc)[:120]}"
+        return {"ok": ok, "status": "Connected" if ok else "API Error", "latency_ms": round((time.perf_counter() - started) * 1000, 1), "message": message}
+    if _setting("RESEND_API_KEY"):
+        try:
+            ok, message = _ping_resend()
+        except Exception as exc:
+            ok, message = False, f"Resend could not be reached: {type(exc).__name__}"
+        return {"ok": ok, "status": "Connected" if ok else "API Error", "latency_ms": round((time.perf_counter() - started) * 1000, 1), "message": message}
+    return {"ok": False, "status": "Disconnected", "latency_ms": None, "message": "Not configured: add your SMTP details with Configure, or set RESEND_API_KEY in .env"}
+
+
+def _ping_resend() -> Tuple[bool, str]:
+    r = _get("https://api.resend.com/domains", headers={"Authorization": f"Bearer {_setting('RESEND_API_KEY')}"})
+    if r.status_code == 401 and "restricted" in r.text.lower():  # a send-only key cannot list domains but is valid
+        return True, "Resend key is valid (send-only)"
+    return _verdict(r, "Resend")
+
+
+def _ping_razorpay() -> Tuple[bool, str]:
+    key_id = _setting("RAZORPAY_KEY_ID") or _setting("RAZORPAY_API_KEY")
+    key_secret = _setting("RAZORPAY_KEY_SECRET") or _setting("RAZORPAY_SECRET_KEY")
+    return _verdict(_get("https://api.razorpay.com/v1/orders", params={"count": 1}, auth=(key_id, key_secret)), "Razorpay")
+
+
+def _ping_stripe() -> Tuple[bool, str]:
+    return _verdict(_get("https://api.stripe.com/v1/balance", headers={"Authorization": f"Bearer {_setting('STRIPE_SECRET_KEY')}"}), "Stripe")
+
+
+# id -> (display name, category, environment keys that must be set (an alternative group is a tuple), ping function)
+PROVIDERS: Dict[str, Tuple[str, str, List[Any], Callable[[], Tuple[bool, str]]]] = {
+    "twilio": ("Twilio Telephony Gateway", "Voice", ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN"], _ping_twilio),
+    "exotel": ("Exotel India Virtual Numbers", "Voice", ["EXOTEL_ACCOUNT_SID", "EXOTEL_API_KEY", "EXOTEL_API_TOKEN"], _ping_exotel),
+    "groq": ("Groq Fast LPU Inference", "AI", ["GROQ_API_KEY"], _ping_groq),
+    "gemini": ("Google Gemini", "AI", ["GEMINI_API_KEY"], _ping_gemini),
+    "deepgram": ("Deepgram Speech-to-Text", "AI", ["DEEPGRAM_API_KEY"], _ping_deepgram),
+    "cartesia": ("Cartesia Sonic Voice", "Voice", ["CARTESIA_API_KEY"], _ping_cartesia),
+    "elevenlabs": ("ElevenLabs Voice", "Voice", ["ELEVENLABS_API_KEY"], _ping_elevenlabs),
+    "whatsapp": ("Meta WhatsApp Cloud API", "Messaging", ["META_WHATSAPP_TOKEN"], _ping_whatsapp),
+    "platform_smtp": ("Platform Email (SMTP)", "Email", ["RESEND_API_KEY"], _ping_resend),
+    "razorpay": ("Razorpay Billing Gateway", "Payments", [("RAZORPAY_KEY_ID", "RAZORPAY_API_KEY"), ("RAZORPAY_KEY_SECRET", "RAZORPAY_SECRET_KEY")], _ping_razorpay),
+    "stripe": ("Stripe Card Gateway", "Payments", ["STRIPE_SECRET_KEY"], _ping_stripe),
+}
+
+
+def _key_names(spec: List[Any]) -> List[str]:
+    return [name for item in spec for name in (item if isinstance(item, tuple) else (item,))]
+
+
+def _missing(spec: List[Any]) -> List[str]:
+    """Environment keys that are not set (for an alternative group, the first name is reported)."""
+    out = []
+    for item in spec:
+        names = item if isinstance(item, tuple) else (item,)
+        if not any(_setting(n) for n in names):
+            out.append(names[0])
+    return out
+
+
+def _mask(value: str) -> str:
+    return "not set" if not value else (value[:4] + "••••••••" + value[-4:] if len(value) > 8 else "••••••••")
+
+
+def _check(provider_id: str) -> Dict[str, Any]:
+    """One real check. Returns {ok, status, latency_ms, message}. Never raises."""
+    if provider_id == "platform_smtp":
+        return _check_email()
+    name, _, spec, ping = PROVIDERS[provider_id]
+    missing = _missing(spec)
+    if missing:
+        return {"ok": False, "status": "Disconnected", "latency_ms": None, "message": f"Not configured: set {', '.join(missing)} in .env"}
+    started = time.perf_counter()
+    try:
+        ok, message = ping()
+    except Exception as exc:  # network down, DNS, timeout...
+        ok, message = False, f"{name} could not be reached: {type(exc).__name__}"
+    return {"ok": ok, "status": "Connected" if ok else "API Error", "latency_ms": round((time.perf_counter() - started) * 1000, 1), "message": message}
+
+
+def _ensure_rows(db: Session) -> Dict[str, PlatformIntegration]:
+    rows = {r.id: r for r in db.query(PlatformIntegration).all()}
+    for provider_id, (name, category, _, _) in PROVIDERS.items():
+        if provider_id not in rows:
+            rows[provider_id] = PlatformIntegration(id=provider_id, name=name, category=category, status="Disconnected", is_active_default=True, config={}, error_rate="0.0%")
+            db.add(rows[provider_id])
+    db.commit()
+    _load_overrides(rows)
+    return rows
+
+
+def _record(row: PlatformIntegration, result: Dict[str, Any]) -> None:
+    """Store the outcome of a check: status, latency, failure rate and a message. No credentials, ever."""
+    stats = dict((row.config or {}))
+    checks = int(stats.get("checks", 0)) + 1
+    failures = int(stats.get("failures", 0)) + (0 if result["ok"] else 1)
+    row.status = result["status"]
+    row.latency_ms = result["latency_ms"]
+    row.last_checked_at = datetime.now(timezone.utc)
+    row.error_rate = f"{failures / checks * 100:.1f}%"
+    kept = {k: stats[k] for k in ("smtp", "secrets") if stats.get(k)}  # portal-entered settings survive; nothing else carries over
+    row.config = {**kept, "checks": checks, "failures": failures, "message": result["message"]}
+    row.updated_at = datetime.now(timezone.utc)
+
+
+def _smtp_summary(stored: Dict[str, Any]) -> Dict[str, str]:
+    smtp = stored.get("smtp", {})
+    return {
+        "host": f"{smtp.get('host')}:{smtp.get('port', 587)} ({smtp.get('security', 'starttls')})",
+        "username": smtp.get("username") or "not set",
+        "from": smtp.get("from_email") or "not set",
+        "password": "saved (encrypted)" if smtp.get("password_enc") else "not set",
+    }
+
+
+def _view(row: PlatformIntegration) -> Dict[str, Any]:
+    spec = PROVIDERS[row.id][2]
+    stored = row.config or {}
+    return {
+        "id": row.id,
+        "name": PROVIDERS[row.id][0],  # the code's name wins over a stale stored one
+        "category": row.category,
+        "status": row.status,
+        "is_active_default": row.is_active_default,
+        "latency_ms": row.latency_ms,
+        "error_rate": row.error_rate,
+        "last_checked_at": row.last_checked_at.isoformat() if row.last_checked_at else None,
+        "message": stored.get("message", ""),
+        "managed_by": "portal" if row.id == "platform_smtp" else ".env",
+        "sources": {name: _source(name) for name in _key_names(spec)},
+        "overridden": bool(stored.get("secrets")) or bool(row.id == "platform_smtp" and stored.get("smtp", {}).get("host")),
+        # Which environment keys this provider needs, with a masked preview read from the environment right now (not stored).
+        # Platform email is entered in the portal instead, so it lists the saved SMTP details (never the password).
+        "config": _smtp_summary(stored) if row.id == "platform_smtp" and stored.get("smtp", {}).get("host") else {name: _mask(_setting(name)) for name in _key_names(spec)},
+        "configurable": True,
+    }
 
 
 class PlatformIntegrationUpdate(BaseModel):
@@ -172,130 +277,163 @@ class PlatformIntegrationUpdate(BaseModel):
     config: Optional[Dict[str, Any]] = None
 
 
-def _get_optional_admin(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
-    db: Session = Depends(get_db),
-) -> Optional[User]:
-    if not credentials:
-        return None
+_refresh_lock = threading.Lock()
+
+
+def _refresh_stale() -> None:
+    """Background re-check of every provider whose last check is old. One refresh at a time."""
+    if not _refresh_lock.acquire(blocking=False):
+        return
     try:
-        user_id = decode_access_token(credentials.credentials)
-        user = db.get(User, user_id)
-        if user and user.is_active:
-            return user
+        with SessionLocal() as db:
+            rows = _ensure_rows(db)
+            now = datetime.now(timezone.utc)
+            stale = [pid for pid, row in rows.items() if not row.last_checked_at or now - row.last_checked_at > RECHECK_AFTER]
+            if not stale:
+                return
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                results = dict(zip(stale, pool.map(_check, stale)))
+            for pid, result in results.items():
+                _record(rows[pid], result)
+            db.commit()
     except Exception:
         pass
-    return None
-
-
-def _ensure_seeded(db: Session):
-    existing_count = db.query(PlatformIntegration).count()
-    if existing_count == 0:
-        for item in DEFAULT_PLATFORM_INTEGRATIONS:
-            record = PlatformIntegration(
-                id=item["id"],
-                name=item["name"],
-                category=item["category"],
-                status=item["status"],
-                is_active_default=item["is_active_default"],
-                latency_ms=item.get("latency_ms"),
-                error_rate=item.get("error_rate", "0.0%"),
-                config=item["config"],
-                last_checked_at=datetime.now(timezone.utc),
-            )
-            db.add(record)
-        db.commit()
+    finally:
+        _refresh_lock.release()
 
 
 @router.get("")
-def list_platform_integrations(
-    db: Session = Depends(get_db),
-    admin: Optional[User] = Depends(_get_optional_admin),
-):
-    """List all system-wide infrastructure integrations for Superadmins."""
-    _ensure_seeded(db)
-    items = db.query(PlatformIntegration).order_by(PlatformIntegration.category.asc()).all()
-    results = []
-    for item in items:
-        # Mask sensitive keys for security display
-        masked_cfg = dict(item.config or {})
-        for k, v in masked_cfg.items():
-            if any(secret_word in k.lower() for secret_word in ["key", "token", "secret", "sid", "user", "password"]):
-                if isinstance(v, str) and len(v) > 8:
-                    masked_cfg[k] = v[:4] + "••••••••" + v[-4:]
-        results.append({
-            "id": item.id,
-            "name": item.name,
-            "category": item.category,
-            "status": item.status,
-            "is_active_default": item.is_active_default,
-            "latency_ms": item.latency_ms,
-            "error_rate": item.error_rate,
-            "last_checked_at": item.last_checked_at.isoformat() if item.last_checked_at else None,
-            "config": masked_cfg,
-        })
-    return results
+def list_platform_integrations(db: Session = Depends(get_db)):
+    """All providers from their last stored check, returned immediately. Old or missing checks are refreshed in a background
+    thread (read-only calls), so the next load shows them; the page never waits on a provider."""
+    rows = _ensure_rows(db)
+    now = datetime.now(timezone.utc)
+    if any(not row.last_checked_at or now - row.last_checked_at > RECHECK_AFTER for row in rows.values()):
+        threading.Thread(target=_refresh_stale, daemon=True).start()
+    return [_view(rows[pid]) for pid in sorted(rows, key=lambda p: (rows[p].category, p))]
 
 
 @router.patch("/{provider_id}")
-def update_platform_integration(
-    provider_id: str,
-    payload: PlatformIntegrationUpdate,
-    db: Session = Depends(get_db),
-    admin: Optional[User] = Depends(_get_optional_admin),
-):
-    """Update credentials or active default toggle for a platform integration."""
-    _ensure_seeded(db)
-    record = db.get(PlatformIntegration, provider_id)
-    if not record:
+def update_platform_integration(provider_id: str, payload: PlatformIntegrationUpdate, db: Session = Depends(get_db)):
+    """Only the "default" switch can change here. Credentials and status are not editable: they come from `.env` and live checks."""
+    if provider_id not in PROVIDERS:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Provider {provider_id} not found")
-
-    if payload.status is not None:
-        record.status = payload.status
+    if payload.config is not None or payload.status is not None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Credentials are managed in the server .env file and status comes from live checks: they cannot be edited here.")
+    row = _ensure_rows(db)[provider_id]
     if payload.is_active_default is not None:
-        record.is_active_default = payload.is_active_default
-    if payload.config is not None:
-        merged = dict(record.config or {})
-        # Only overwrite fields that are not fully masked
-        for k, v in payload.config.items():
-            if isinstance(v, str) and "••••" in v:
-                continue
-            merged[k] = v
-        record.config = merged
-
-    record.updated_at = datetime.now(timezone.utc)
-    db.commit()
-    db.refresh(record)
-    return {"success": True, "provider_id": provider_id, "status": record.status}
+        row.is_active_default = payload.is_active_default
+        row.updated_at = datetime.now(timezone.utc)
+        db.commit()
+    return {"success": True, "provider_id": provider_id, "is_active_default": row.is_active_default}
 
 
 @router.post("/{provider_id}/test")
-def test_platform_integration(
-    provider_id: str,
-    db: Session = Depends(get_db),
-    admin: Optional[User] = Depends(_get_optional_admin),
-):
-    """Live health-check ping against the selected integration provider."""
-    _ensure_seeded(db)
-    record = db.get(PlatformIntegration, provider_id)
-    if not record:
+def test_platform_integration(provider_id: str, db: Session = Depends(get_db)):
+    """A real, read-only call to the provider with the credentials from the environment."""
+    if provider_id not in PROVIDERS:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Provider {provider_id} not found")
-
-    start_time = time.time()
-    # Simulated quick handshake test
-    time.sleep(0.08)  # 80ms handshake
-    latency = round((time.time() - start_time) * 1000, 1)
-
-    record.status = "Connected"
-    record.latency_ms = latency
-    record.last_checked_at = datetime.now(timezone.utc)
+    row = _ensure_rows(db)[provider_id]
+    result = _check(provider_id)
+    _record(row, result)
     db.commit()
+    return {"success": result["ok"], "provider_id": provider_id, "name": row.name, "status": result["status"],
+            "latency_ms": result["latency_ms"], "message": result["message"]}
 
-    return {
-        "success": True,
-        "provider_id": provider_id,
-        "name": record.name,
-        "status": "Connected",
-        "latency_ms": latency,
-        "message": f"Handshake with {record.name} verified successfully."
-    }
+
+class SmtpSettings(BaseModel):
+    display_name: Optional[str] = None
+    from_email: Optional[str] = None
+    username: Optional[str] = None
+    host: Optional[str] = None
+    port: Optional[int] = None
+    security: Optional[str] = None
+    reply_to: Optional[str] = None
+    logo_url: Optional[str] = None
+    password: Optional[str] = None  # write-only; empty keeps the saved one
+
+
+@router.get("/platform_smtp/settings")
+def get_smtp_settings(db: Session = Depends(get_db)):
+    """The saved sender identity for platform email. The password is never returned, only `has_password`."""
+    return platform_smtp.get_settings_public(db)
+
+
+@router.put("/platform_smtp/settings")
+def put_smtp_settings(payload: SmtpSettings, db: Session = Depends(get_db)):
+    """Save the SMTP details entered in the portal (password encrypted). Not read from, and not written to, `.env`."""
+    values = payload.model_dump(exclude={"password"})
+    try:
+        saved = platform_smtp.save_settings(db, values, payload.password)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    return saved
+
+
+LOGO_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "static", "uploads", "platform")
+LOGO_TYPES = {"image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp", "image/svg+xml": ".svg"}
+MAX_LOGO_BYTES = 1024 * 1024
+
+
+@router.post("/platform_smtp/logo")
+def upload_smtp_logo(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """The logo shown at the top of platform emails (PNG, JPG, WebP or SVG, up to 1 MB)."""
+    extension = LOGO_TYPES.get(file.content_type or "")
+    if not extension:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Logo must be a PNG, JPG, WebP or SVG image.")
+    data = file.file.read(MAX_LOGO_BYTES + 1)
+    if len(data) > MAX_LOGO_BYTES:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Logo must be 1 MB or smaller.")
+    os.makedirs(LOGO_DIR, exist_ok=True)
+    name = f"smtp_logo_{uuid.uuid4().hex[:10]}{extension}"
+    with open(os.path.join(LOGO_DIR, name), "wb") as handle:
+        handle.write(data)
+    return platform_smtp.save_settings(db, {"logo_url": f"/static/uploads/platform/{name}"}, None)
+
+
+class CredentialsPayload(BaseModel):
+    values: Dict[str, str]  # env key -> new value; an empty string keeps what is saved
+
+
+@router.put("/{provider_id}/credentials")
+def save_credentials(provider_id: str, payload: CredentialsPayload, db: Session = Depends(get_db)):
+    """Save portal-entered credentials for a provider (encrypted), then run a live check with them."""
+    if provider_id not in PROVIDERS or provider_id == "platform_smtp":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Provider {provider_id} not found")
+    allowed = set(_key_names(PROVIDERS[provider_id][2]))
+    unknown = [k for k in payload.values if k not in allowed]
+    if unknown:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Unknown credential: {', '.join(unknown)}")
+    row = _ensure_rows(db)[provider_id]
+    config = dict(row.config or {})
+    secrets = dict(config.get("secrets") or {})
+    for key, value in payload.values.items():
+        value = value.strip()
+        if value:
+            secrets[key] = CryptoManager.encrypt(value)
+    config["secrets"] = secrets
+    row.config = config
+    db.commit()
+    _load_overrides(_ensure_rows(db))
+    result = _check(provider_id)
+    _record(row, result)
+    db.commit()
+    return _view(row)
+
+
+@router.delete("/{provider_id}/credentials")
+def reset_credentials(provider_id: str, db: Session = Depends(get_db)):
+    """Forget the portal-entered values so the provider goes back to `.env` (SMTP: clears the saved sender settings)."""
+    if provider_id not in PROVIDERS:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Provider {provider_id} not found")
+    row = _ensure_rows(db)[provider_id]
+    config = dict(row.config or {})
+    config.pop("smtp" if provider_id == "platform_smtp" else "secrets", None)
+    row.config = config
+    db.commit()
+    _load_overrides(_ensure_rows(db))
+    result = _check(provider_id)
+    _record(row, result)
+    db.commit()
+    return _view(row)

@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from backend.server.api.routes import (
     admin,
     admin_calls,
+    admin_platform_data,
     admin_integrations,
     admin_overview,
     admin_plans,
@@ -66,6 +67,7 @@ api_router.include_router(admin_plans.router)
 api_router.include_router(admin_tenant_data.router)
 api_router.include_router(admin_overview.router)
 api_router.include_router(admin_calls.router)
+api_router.include_router(admin_platform_data.router)
 api_router.include_router(admin_integrations.router)
 api_router.include_router(calendar_feed.router)
 api_router.include_router(exotel.router)

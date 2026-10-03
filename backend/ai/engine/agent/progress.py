@@ -12,6 +12,12 @@ from typing import Iterable, List, Optional
 
 from backend.ai.engine.agent.datetime_utils import dates_in, parse_time
 from backend.ai.engine.agent.hindi import normalize
+from backend.ai.prompts import load_prompts
+
+
+def _engine_note(key):
+    return load_prompts("engine_notes")[key]
+
 
 _INTENT = re.compile(
     r"appoint|apoin|apaint|apoint|\bbook|\bbuk|booking|\bslot\b|बुक|अपॉइंट|अपाइंट|अपोइंट|अपॉइन्ट|एपॉइंट",
@@ -19,12 +25,7 @@ _INTENT = re.compile(
 )
 _WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
-BOOKING_NOTE = (
-    "BOOKING IN PROGRESS: the caller wants an appointment and it is not finished. From the caller's own words so far: "
-    "{known}. Not yet settled: {missing}. Do not drop this. If the caller asks a side question or chats, answer it in one "
-    "short sentence and then bring the booking back with the next missing item; when the date and time are known, use "
-    "check_availability and read the details back for the caller to confirm."
-)
+BOOKING_NOTE = _engine_note("booking_note")
 
 
 def booking_open(said: Iterable[str], succeeded: Iterable[str]) -> bool:

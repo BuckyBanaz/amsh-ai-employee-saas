@@ -101,7 +101,7 @@ const POINTS: { icon: IconName; text: string }[] = [
 
 export default function AuthShowcase() {
   return (
-    <div className="relative flex h-full flex-col overflow-hidden bg-[#050816] px-10 py-9 text-white xl:px-14">
+    <div className="relative flex h-full flex-col justify-between overflow-hidden bg-[#050816] px-6 py-4 text-white lg:px-8 xl:px-10 lg:py-6">
       {/* atmosphere */}
       <div aria-hidden="true" className="pointer-events-none absolute inset-0">
         <div className="absolute -left-32 -top-32 h-[460px] w-[460px] rounded-full bg-[#2F7BFF]/25 blur-[120px]" />
@@ -110,53 +110,53 @@ export default function AuthShowcase() {
       </div>
 
       {/* top bar */}
-      <div className="relative flex items-center justify-between">
+      <div className="relative flex items-center justify-between shrink-0">
         <Link href="/landing" aria-label="AMSh home" className="rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300">
           <Logo />
         </Link>
-        <Link href="/landing" className="flex items-center gap-1.5 rounded-lg text-sm font-medium text-white/60 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300">
+        <Link href="/landing" className="flex items-center gap-1.5 rounded-lg text-xs font-medium text-white/60 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300">
           Back to website <Icon name="arrow" className="h-3.5 w-3.5" />
         </Link>
       </div>
 
       {/* promise */}
-      <div className="relative mt-10 max-w-lg [@media(max-height:860px)]:mt-6">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-300">AMSh for clinics</p>
-        <h1 className="mt-3 font-[family-name:var(--font-display)] text-[2.15rem] font-semibold leading-[1.1] tracking-tight xl:text-[2.5rem]">
+      <div className="relative mt-2 xl:mt-4 max-w-lg shrink-0">
+        <p className="text-[10px] xl:text-xs font-semibold uppercase tracking-[0.18em] text-cyan-300">AMSh for clinics</p>
+        <h1 className="mt-1 font-[family-name:var(--font-display)] text-[1.65rem] xl:text-[2rem] font-semibold leading-[1.12] tracking-tight">
           Your clinic&apos;s{" "}
           <span className="bg-gradient-to-r from-[#7FB2FF] via-[#A5B4FC] to-[#67E8F9] bg-clip-text text-transparent">24/7 AI employee.</span>
         </h1>
       </div>
 
       {/* live product moment */}
-      <div className="relative my-auto flex items-center justify-center gap-6 py-6 [@media(max-height:1000px)]:[zoom:0.84] [@media(max-height:860px)]:[zoom:0.72] [@media(max-height:740px)]:[zoom:0.62]">
-        <div className="w-[280px] shrink-0">
+      <div className="relative my-auto flex items-center justify-center gap-5 py-2">
+        <div className="w-[260px] xl:w-[280px] shrink-0">
           <WhatsAppPhone compact />
         </div>
         <motion.div
           initial={{ opacity: 0, x: 24 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.7, delay: 0.3, ease: [0.22, 1, 0.36, 1] }}
-          className="hidden w-[300px] xl:block"
+          className="hidden w-[270px] xl:block"
         >
           <ActivityFeed />
         </motion.div>
       </div>
 
       {/* outcomes */}
-      <div className="relative [@media(max-height:780px)]:hidden">
-        <ul className="grid grid-cols-3 gap-4 border-t border-white/10 pt-6">
+      <div className="relative shrink-0 pt-3 border-t border-white/10">
+        <ul className="grid grid-cols-3 gap-2.5">
           {POINTS.map((p) => (
-            <li key={p.text} className="flex flex-col gap-2 text-[13px] leading-snug text-white/70">
-              <span className="grid h-8 w-8 place-items-center rounded-lg bg-white/[0.06] text-[#7FB2FF] ring-1 ring-white/10">
-                <Icon name={p.icon} className="h-[18px] w-[18px]" />
+            <li key={p.text} className="flex flex-col gap-1 text-[11px] xl:text-[12px] leading-snug text-white/70">
+              <span className="grid h-6 w-6 xl:h-7 xl:w-7 place-items-center rounded-lg bg-white/[0.06] text-[#7FB2FF] ring-1 ring-white/10">
+                <Icon name={p.icon} className="h-3.5 w-3.5 xl:h-4 xl:w-4" />
               </span>
               {p.text}
             </li>
           ))}
         </ul>
-        <p className="mt-6 flex items-center gap-2 text-xs text-white/40">
-          <Icon name="shield" className="h-4 w-4 text-emerald-400/80" />
+        <p className="mt-2.5 flex items-center gap-2 text-[10px] xl:text-[11px] text-white/40">
+          <Icon name="shield" className="h-3.5 w-3.5 text-emerald-400/80" />
           Encrypted conversations · Your patient data stays yours
         </p>
       </div>

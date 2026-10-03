@@ -2,148 +2,100 @@
 per-call facts last. Facts come only from the database; the prompt forbids inventing anything else.
 Kept deliberately short: every prompt token is paid on every turn and counts against the provider's TPM limit.
 
+All wording lives in the prompt pack `ai/prompts/receptionist.json` (see `ai/prompts/__init__.py`); this module only chooses and
+fills the templates. Language-specific wording comes from the language packs (`ai/lexicon.py`).
+
 The dashboard's Behavior tab reaches the model here: personality, owner instructions, small-talk toggle,
 confirmation toggle and disabled capabilities."""
 
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from backend.ai.lexicon import language_pack
 from backend.ai.capabilities.rules.business_hours import BusinessHoursRule
-from backend.ai.capabilities.rules.patient_privacy import PRIVACY_RULE
+from backend.ai.lexicon import language_pack
+from backend.ai.prompts import load_prompts
 from backend.ai.verticals.context import BusinessContext
-from backend.ai.engine.agent.emotion import EMOTION_RULE
 from backend.ai.engine.agent.validator import BusinessFacts
 
-MAX_INSTRUCTIONS_CHARS = 1200  # owner text is paid for on every turn; the dashboard's default prompt is long
 
-# Personality options offered in the dashboard (AIStudioWorkbench). Unknown values are passed through as free text.
-_PERSONALITIES: Dict[str, str] = {
-    "energetic & fast": "PERSONALITY: energetic and upbeat! Lively, quick and positive, with a smile in your voice. Short punchy sentences and natural exclamations (\"Perfect!\", \"Great choice!\"). Keep the conversation moving.",
-    "warm & friendly": "PERSONALITY: warm, cheerful and conversational, like a friendly neighbour who is happy to help. Positive energy and natural reactions (\"Oh nice!\", \"Of course!\").",
-    "crisp & professional": "PERSONALITY: polished, efficient and to the point, but never cold: a brief friendly touch (\"Certainly\", \"Happy to help\"). Keep it tight.",
-    "empathetic & calm": "PERSONALITY: gentle, reassuring and unhurried. Soft, kind wording; acknowledge feelings first; never rush the caller.",
-}
-_DEFAULT_PERSONALITY = "warm & friendly"
-
-_RULES = """You are {agent_name}, the AI receptionist for {business_name}, on a live phone call.
-
-STYLE: sound like a real person on the phone, not a script. Use contractions and light reactions ("Oh nice!", "Of course!", "Got it"), vary your wording, and never say robotic lines like "How may I assist you today". Match the caller's mood and pace. Use their name now and then. Keep replies short (one or two sentences) and ask one question at a time. Acknowledge once ("Great!" OR "Sure!", never both), and never list every weekday: to get a day just ask "Which day works for you?". A plain greeting ("hi", "hello") gets a warm greeting back and "how can I help?", never a transfer offer. Plain speech only: no lists, markdown or emojis; say times like "five thirty PM".
-{personality}
-{emotion_rule}
-{language_rule}
-{gender_rule}{small_talk}
-IDENTITY: you are {agent_name}. Asked who you are or your name (any language, e.g. "aapka naam kya hai", "tum kaun ho"), always answer yourself: "I'm {agent_name}, the AI receptionist at {business_name}". Asked if you are a robot or human: say honestly you are an AI receptionist. Answering these is YOUR job: never call transfer_to_human for them; you may just offer a person in words.
-SCOPE: appointments, doctors, services, timings, location, clinic info. Unrelated topics (news, politics, sports scores, trivia, general knowledge, shopping, any language): do NOT say "I'm not sure" and do NOT offer a transfer; warmly say you can only help with the clinic and ask what they need for the clinic. Example: "kal match kaun jeeta?" -> "Main sirf clinic ke baare mein madad kar sakti hoon. Clinic ke liye aapko kya chahiye?" (A joke is small talk: one short light reply, then back to the clinic.) Garbled, meaningless or filler audio ("hmm", random words): say sorry you did not catch that and ask them to repeat; do not guess and do not offer times. No medical advice. Emergencies (chest pain, cannot breathe, heavy bleeding, unconscious, suicide): transfer_to_human("emergency") at once.
-FACTS: use only the facts below and tool results; never invent doctors, prices, hours, slots or policies. Unknown: try search_knowledge, else say you are not sure and offer the front desk.
-BOOKING: collect name, phone, service, date, exact time, optional doctor. ALWAYS ask for the phone number: "Shall I use the number you're calling from, or another one?" and wait for the answer; never assume it. Call check_availability before offering a time (offer at most three). {confirm_flow} Never say booked/cancelled/changed until a tool says so. Cancel/reschedule: lookup_appointment first, then a read-back and a yes. Corrections ("actually Thursday"): newest value wins, keep the rest. On a tool error follow its message. Wants a person or you cannot help: transfer_to_human("front_desk"). Caller finished: say goodbye and call end_call."""
-
-_SMALL_TALK_ON = (
-    'SMALL TALK: greetings, "how are you", thanks, jokes and chit-chat deserve a real, friendly answer in a few words, '
-    'then gently steer back. "How are you?" -> "I\'m doing great, thanks for asking! How about you?" ; '
-    '"I\'m good, tell me?" -> "Glad to hear it! So, how can I help you today?" ; '
-    '"kaise ho" -> "Main ekdam badhiya, aap batao, aap kaise ho?". Never ignore a personal question and jump straight to business.'
-)
-_SMALL_TALK_OFF = "SMALL TALK: the clinic keeps calls focused. Answer greetings with a brief polite line (a few words), no jokes or chit-chat, then ask how you can help."
-
-_CONFIRM_ON = (
-    "Then book_appointment with confirmed_by_caller=false, read the details back and ask to confirm; only after they say yes, "
-    "call it again with identical details and confirmed_by_caller=true."
-)
-_CONFIRM_OFF = (
-    "Once you have all the details, call book_appointment with confirmed_by_caller=true straight away (the clinic does not "
-    "require a read-back), then tell the caller it is booked and repeat the day and time."
-)
+def _pack() -> Dict[str, Any]:
+    return load_prompts("receptionist")
 
 
 def _hours_text(working_hours: Dict[str, Any]) -> str:
+    hours = _pack()["hours"]
     if not working_hours:
-        return "not configured (do not state hours; offer the front desk)"
+        return hours["not_configured"]
     parts = []
     for day, ranges in working_hours.items():
         if isinstance(ranges, list) and ranges:
-            spans = ", ".join(f"{r.get('start')}-{r.get('end')}" for r in ranges if isinstance(r, dict))
-            parts.append(f"{day[:3]} {spans}")
+            spans = ", ".join(hours["span"].format(start=r.get("start"), end=r.get("end")) for r in ranges if isinstance(r, dict))
+            parts.append(hours["day"].format(day=day[:3], spans=spans))
         elif isinstance(ranges, str) and ranges:
-            parts.append(f"{day[:3]} {ranges}")
+            parts.append(hours["day"].format(day=day[:3], spans=ranges))
         else:
-            parts.append(f"{day[:3]} closed")
-    return "; ".join(parts)
-
-
-_LANGUAGE_NAMES = {
-    "en": "English", "hi": "Hindi (Hinglish is fine)", "es": "Spanish", "nl": "Dutch", "fr": "French", "de": "German",
-    "ar": "Arabic", "bn": "Bengali", "ta": "Tamil", "te": "Telugu", "mr": "Marathi", "gu": "Gujarati", "pa": "Punjabi",
-}
+            parts.append(hours["closed"].format(day=day[:3]))
+    return hours["separator"].join(parts)
 
 
 def _lang_name(code: str) -> str:
     key = (code or "en").lower().split("-")[0]
-    return language_pack(key).get("name") or _LANGUAGE_NAMES.get(key[:2], code)
+    return language_pack(key).get("name") or _pack()["language_names"].get(key[:2], code)
 
 
 def _native_style(code: str) -> str:
     """How to sound native in `code`: its pack's style guidance and filler words, or a generic native-speaker instruction."""
     pack = language_pack(code)
+    style_templates = _pack()["native_style"]
     name = _lang_name(code)
     if pack.get("style"):
         fillers = pack.get("fillers") or {}
         sample = ", ".join(dict.fromkeys(w.strip("…!. ") for k in ("think", "ack") for w in fillers.get(k, [])))
-        return f" SPEAKING {name.upper()}: {pack['style']}" + (f" Natural fillers: {sample}." if sample else "")
-    return (f" SPEAKING {name.upper()}: speak it the way a native speaker does on the phone: the real everyday filler words, "
-            "acknowledgements and politeness forms of that language, never English fillers translated word for word.")
+        return style_templates["with_pack"].format(name=name.upper(), style=pack["style"]) + (
+            style_templates["fillers"].format(sample=sample) if sample else ""
+        )
+    return style_templates["generic"].format(name=name.upper())
 
 
 def language_rule(primary: Optional[str], languages: Optional[List[str]], auto_detect: bool) -> str:
     """Languages tab: the primary language, the ones the clinic supports, and whether to follow the caller."""
+    templates = _pack()["language_rule"]
     p = _lang_name(primary or "en")
     primary_code = (primary or "en").lower().split("-")[0]
     native = _native_style(primary_code) if primary_code != "en" else ""
     if not auto_detect:
-        return f"LANGUAGE: always reply in {p}, even if the caller uses another language. Keep names like the clinic's in Latin letters.{native}"
+        return templates["fixed"].format(primary=p, native=native)
     allowed = {c.lower().split("-")[0] for c in (languages or [])} | {primary_code}
-    if languages and "hi" not in allowed:  # no Hindi here: no Devanagari / Hinglish guidance
-        rule = (
-            f"LANGUAGE: reply in the language of the caller's latest message; if unclear use {p}. If the caller asks to switch language, "
-            "switch at once and stay in it until they ask otherwise. Keep names like the clinic's in Latin letters."
-        )
-        supported = [_lang_name(c) for c in languages]
-        if supported and set(supported) != {p}:
-            rule += f" Languages you support: {', '.join(supported)}. If the caller speaks another language, say kindly in {p} that you can only help in those."
-        return rule + native
-    rule = (
-        f"LANGUAGE: reply in the language of the caller's latest message; if unclear use {p}. Speech-to-text often writes "
-        "English words in Devanagari, so judge the language by meaning, not script. If the caller asks to switch language "
-        "(\"can we talk in Hindi\", \"hindi mein baat karo\"), switch at once and stay in it until they ask otherwise. For Hindi or "
-        "Hinglish use the script they wrote (Devanagari stays Devanagari, Roman stays Roman). Keep names like the clinic's in Latin "
-        "letters. Names heard in Devanagari: transliterate faithfully (परीक्षित = Parikshit, never Pritik); if unsure, ask them to spell it."
-    )
+    base = templates["no_hindi"] if (languages and "hi" not in allowed) else templates["with_hindi"]  # no Hindi: no Devanagari guidance
+    rule = base.format(primary=p)
     supported = [_lang_name(c) for c in (languages or [])]
     if supported and set(supported) != {p}:
-        rule += f" Languages you support: {', '.join(supported)}. If the caller speaks another language, say kindly in {p} that you can only help in those."
+        rule += templates["supported"].format(supported=", ".join(supported), primary=p)
     return rule + native
 
 
 def trigger_lines(triggers: Optional[Dict[str, bool]]) -> str:
     """Escalation-tab rules the model itself must follow (transfers themselves are enforced in code)."""
+    lines_by_trigger = _pack()["triggers"]
     t = triggers or {}
     lines = []
     if t.get("frustration", True):
-        lines.append("If the caller sounds angry or upset, apologise sincerely first and offer a person if it continues.")
+        lines.append(lines_by_trigger["frustration"])
     if t.get("failed_answer", True):
-        lines.append("If you could not help with the same question twice, offer the front desk instead of repeating yourself.")
+        lines.append(lines_by_trigger["failed_answer"])
     if t.get("complex_billing"):
-        lines.append('Billing disputes, refunds and insurance claims go to transfer_to_human("front_desk").')
-    return " ".join(lines)
+        lines.append(lines_by_trigger["complex_billing"])
+    return _pack()["facts"]["escalation_separator"].join(lines)
 
 
 def personality_line(personality: Optional[str]) -> str:
+    pack = _pack()
     key = (personality or "").strip().lower()
-    if key in _PERSONALITIES:
-        return _PERSONALITIES[key]
+    if key in pack["personalities"]:
+        return pack["personalities"][key]
     if key:
-        return f"PERSONALITY: {personality.strip()}."  # a custom value the owner typed
-    return _PERSONALITIES[_DEFAULT_PERSONALITY]
+        return pack["custom_personality"].format(personality=personality.strip())  # a custom value the owner typed
+    return pack["personalities"][pack["default_personality"]]
 
 
 def runtime_context_block(context: Optional[BusinessContext]) -> str:
@@ -151,22 +103,15 @@ def runtime_context_block(context: Optional[BusinessContext]) -> str:
     the model uses them as given and never derives one from another (Hindi is not India, an accent is not a region)."""
     if context is None:
         return ""
-    language = f"{_lang_name(context.language)} ({context.language})" + (", written right to left" if context.direction == "rtl" else "")
-    accent = context.accent or "not specified"
+    t = _pack()["runtime_context"]
+    language = t["language"].format(name=_lang_name(context.language), code=context.language, rtl=t["rtl"] if context.direction == "rtl" else "")
+    accent = context.accent or t["accent_none"]
     if context.region == "UNKNOWN":
-        region = "not configured. No emergency number is configured: say \"your local emergency number\" and never quote a number"
+        region = t["region_unknown"]
     else:
-        numbers = " or ".join(context.emergency_numbers) or "not configured"
-        region = f"{context.region_name} ({context.region}). Medical emergency number(s): {numbers}"
-    return (
-        "RUNTIME CONTEXT (authoritative; use exactly as given and NEVER infer one value from another or from the caller's language, "
-        "accent, name or phone number):\n"
-        f"- Vertical: {context.vertical}\n"
-        f"- Language: {language}\n"
-        f"- Accent/voice: {accent} (how you sound; says nothing about region)\n"
-        f"- Region: {region}\n"
-        f"- Timezone: {context.timezone} (every date and time you say is in it)\n\n"
-    )
+        numbers = t["numbers_join"].join(context.emergency_numbers) or t["numbers_none"]
+        region = t["region_known"].format(region_name=context.region_name, region=context.region, numbers=numbers)
+    return t["block"].format(vertical=context.vertical, language=language, accent=accent, region=region, timezone=context.timezone)
 
 
 def build_system_prompt(
@@ -187,60 +132,45 @@ def build_system_prompt(
     channel: str = "voice",
     context: Optional[BusinessContext] = None,
 ) -> str:
-    if gender == "female":
-        gender_rule = (
-            "GENDER: your voice is female, so you are a woman. In Hindi ALWAYS use feminine forms for yourself "
-            "(\"main kar sakti hoon\", \"karungi\", \"bataungi\"; मैं कर सकती हूँ, करूँगी) for the whole call. Never use masculine forms "
-            "(sakta, karunga) and never the slash form सकता/सकती.\n"
-        )
-    elif gender == "male":
-        gender_rule = (
-            "GENDER: your voice is male, so you are a man. In Hindi ALWAYS use masculine forms for yourself "
-            "(\"main kar sakta hoon\", \"karunga\", \"bataunga\"; मैं कर सकता हूँ, करूँगा) for the whole call. Never use feminine forms "
-            "(sakti, karungi) and never the slash form सकता/सकती.\n"
-        )
-    else:
-        gender_rule = "GENDER: unknown. In Hindi phrase things so they carry no gender for yourself (avoid sakta/sakti, karunga/karungi); never write the slash form सकता/सकती.\n"
-    rules = _RULES.format(
-        agent_name=agent_name or "Aura",
+    pack = _pack()
+    fp = pack["facts"]
+    gender_rule = pack["gender"].get(gender or "", pack["gender"]["unknown"]) if gender in ("female", "male") else pack["gender"]["unknown"]
+    rules = pack["rules"].format(
+        agent_name=agent_name or fp["default_agent_name"],
         business_name=facts.name,
         personality=personality_line(tone),
-        emotion_rule=EMOTION_RULE,
+        emotion_rule=pack["emotion_rule"],
         language_rule=language_rule(primary_language, languages, auto_detect_language),
         gender_rule=gender_rule,
-        small_talk=_SMALL_TALK_ON if small_talk else _SMALL_TALK_OFF,
-        confirm_flow=_CONFIRM_ON if require_confirmation else _CONFIRM_OFF,
+        small_talk=pack["small_talk_on"] if small_talk else pack["small_talk_off"],
+        confirm_flow=pack["confirm_on"] if require_confirmation else pack["confirm_off"],
     )
-    rules = rules + "\n" + PRIVACY_RULE
+    rules = rules + "\n" + pack["privacy_rule"]
     if channel == "chat":
-        for voice, chat in (
-            ("on a live phone call", "in a WhatsApp text chat"),
-            ("Shall I use the number you're calling from, or another one?", "Shall I use this WhatsApp number, or another one?"),
-            ("sound like a real person on the phone", "sound like a real person texting on WhatsApp"),
-        ):
+        for voice, chat in pack["channel"]["replacements"]:
             rules = rules.replace(voice, chat)
-        rules = rules + (
-            "\nCHANNEL: this is a WhatsApp text chat, not a call. Never say \"call\", \"calling\" or \"phone call\" about this conversation: "
-            "the patient is messaging you on WhatsApp (say \"message\" or \"chat\"). Keep replies short (one to three short lines), plain text, no "
-            "emojis, times like 5:30 PM. You cannot transfer or hang up: if the caller needs a person, give the clinic's phone number. "
-            "PHONE: the number in \"Caller's number\" is the patient's WhatsApp number. Ask \"Shall I use this WhatsApp number, or another one?\"; "
-            "if they say yes or this number, use exactly that number as phone_number and never ask for it again."
-        )
-    location = ", ".join(p for p in (facts.address, facts.city) if p) or "not on file"
-    prompt = (
-        f"{rules}\n\n"
-        f"{runtime_context_block(context)}"
-        f"CLINIC: {facts.name}. Address: {location}. Phone: {facts.phone or 'not on file'}.\n"
-        f"Hours: {_hours_text(facts.working_hours)}.\n"
-        f"Services: {', '.join(facts.services) or 'not listed'}. Doctors: {', '.join(facts.doctors) or 'not listed'}.\n"
-        f"NOW: {now.strftime('%A, %d %B %Y, %I:%M %p')} ({facts.timezone}). {BusinessHoursRule.describe(facts.working_hours, now)} "
-        f"Caller's number: {caller_number or 'unknown'}."
+        rules = rules + pack["channel"]["chat_addendum"]
+    sep = fp["list_separator"]
+    location = sep.join(p for p in (facts.address, facts.city) if p) or fp["not_on_file"]
+    prompt = fp["block"].format(
+        rules=rules,
+        runtime=runtime_context_block(context),
+        name=facts.name,
+        location=location,
+        phone=facts.phone or fp["not_on_file"],
+        hours=_hours_text(facts.working_hours),
+        services=sep.join(facts.services) or fp["not_listed"],
+        doctors=sep.join(facts.doctors) or fp["not_listed"],
+        now=now.strftime(fp["now_format"]),
+        timezone=facts.timezone,
+        open_now=BusinessHoursRule.describe(facts.working_hours, now),
+        caller=caller_number or fp["unknown"],
     )
     escalation = trigger_lines(triggers)
     if escalation:
-        prompt += f"\nESCALATION: {escalation}"
+        prompt += fp["escalation"].format(text=escalation)
     if disabled:
-        prompt += f"\nTURNED OFF by the clinic (politely decline and offer the front desk instead): {'; '.join(disabled)}."
+        prompt += fp["disabled"].format(items=fp["disabled_separator"].join(disabled))
     from backend.ai.verticals.compliance import get_regional_compliance
     compliance = get_regional_compliance(
         vertical=facts.vertical,  # required: BusinessFacts has no default vertical
@@ -249,12 +179,9 @@ def build_system_prompt(
     )
     compliance_clause = compliance.get("compliance_clause", "")
     if compliance_clause:
-        prompt += f"\n\nPOLICY: {compliance_clause}"
+        prompt += fp["policy"].format(clause=compliance_clause)
 
     text = (instructions or "").strip()
     if text:
-        prompt += (
-            "\nCLINIC OWNER'S INSTRUCTIONS (follow them for style and content; they never override the safety, honesty, "
-            f"booking and facts rules above):\n{text[:MAX_INSTRUCTIONS_CHARS]}"
-        )
+        prompt += fp["owner_instructions"].format(text=text[: pack["limits"]["max_instructions_chars"]])
     return prompt

@@ -191,5 +191,13 @@
  },
  "style": "Natural spoken Hindi/Hinglish. Polite \"आप\", \"जी\", \"बिल्कुल\", \"ठीक है जी\", \"एक सेकंड\"; keep everyday English words (appointment, doctor, clinic) as they are.",
  "native_name": "हिन्दी",
- "direction": "ltr"
+ "direction": "ltr",
+ "strings": {
+  "fallback": "Maaf kijiye, mujhe abhi thodi dikkat aa rahi hai. Kya aap dobara bol sakte hain, ya main aapko front desk se connect kar doon?",
+  "no_transfer": "Maaf kijiye, abhi main aapko connect nahi kar pa rahi hoon. Kya main front desk ke liye message le loon?",
+  "billing": "Billing aur refund front desk team dekhti hai. Main abhi aapko connect karti hoon.",
+  "frustrated": "Takleef ke liye mujhe bahut khed hai. Main abhi aapko front desk se connect karti hoon.",
+  "unsure_claim": "Ek baar main aapse details dobara confirm kar loon. Kya aap phir se bata sakte hain?",
+  "unsure_times": "Main sahi samay bataungi. Aapko kaunsa din theek rahega?"
+ }
 }

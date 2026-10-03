@@ -11,6 +11,7 @@ How it works
 Only the sentence's delivery changes. The words, booking facts and every guard are untouched.
 """
 
+from backend.ai.prompts import load_prompts
 import re
 from typing import Optional, Tuple
 
@@ -34,11 +35,7 @@ _LAUGH_HI = ("हँस", "हंस")  # हँसते हुए, हंस�
 _WRITTEN_LAUGH = re.compile(r"(?:हा\s*){2,}|\b(?:ha){2,}h?\b|\bhehe+\b|(?:ही\s*){2,}", re.IGNORECASE)
 _ASK_LAUGH = re.compile(r"हंस|हँस|\blaugh|\bhans\b|\bhasna\b|\bhans\s+ke\b", re.IGNORECASE)
 
-EMOTION_RULE = (
-    "VOICE: you may start a sentence with one cue: [warm] [happy] [excited] [playful] [sympathetic] [apologetic] "
-    "[calm]. [laugh] = a light laugh, only if the caller jokes (rare, never if they are worried). "
-    "Cues are never spoken; most sentences need none."
-)
+EMOTION_RULE = load_prompts("receptionist")["emotion_rule"]  # wording lives in ai/prompts/receptionist.json
 
 # --- the caller's mood ----------------------------------------------------------------------------------------------
 _AMUSED = re.compile(r"\b(?:ha){2,}\b|\bhehe+\b|\blol\b|\blmao\b|😂|🤣|हा\s*हा|हाहा|हीही|\bfunny\b|मज़ा|मजा|मज़ेदार|मजेदार|शायरी|joke|मज़ाक|मजाक", re.IGNORECASE)
@@ -49,12 +46,7 @@ _WORRIED = re.compile(
 _UPSET = re.compile(r"गुस्सा|बेकार|बकवास|\bangry\b|\bfrustrat|\bridiculous\b|\bwaste\b|\bnonsense\b|\bbakwas\b|\bgussa\b|\bnot happy\b|\bterrible\b|\bworst\b", re.IGNORECASE)
 _THANKFUL = re.compile(r"धन्यवाद|शुक्रिया|थैंक|\bthank|\bthanks\b|\bshukriya\b|\bdhanyavad\b|\bappreciate", re.IGNORECASE)
 
-MOOD_NOTES = {
-    "amused": "MOOD: the caller is joking or laughing. You may answer with a light laugh ([laugh]) and a playful line, then steer back.",
-    "worried": "MOOD: the caller sounds worried or in discomfort. Be gentle and reassuring ([sympathetic]); no jokes, no laughing.",
-    "upset": "MOOD: the caller sounds upset. Stay calm and take it seriously ([apologetic] or [calm]); no jokes, no laughing.",
-    "thankful": "MOOD: the caller is thanking you. Answer warmly ([warm] or [happy]) in a few words.",
-}
+MOOD_NOTES = dict(load_prompts("engine_notes")["mood_notes"])
 _MOOD_DEFAULT_CUE = {"amused": "playful", "worried": "sympathetic", "upset": "apologetic", "thankful": "warm"}
 SERIOUS = {"worried", "upset"}
 

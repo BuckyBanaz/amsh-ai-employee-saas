@@ -2,8 +2,22 @@
 import React from 'react';
 import { usePathname } from 'next/navigation';
 
-/** Pages that read real data. Every other admin page is still a design mock and says so at the top. */
-const REAL_PAGES = ['/dashboard', '/businesses', '/billing', '/integrations', '/calls'];
+const REAL_PAGES = [
+  '/dashboard',
+  '/businesses',
+  '/business-users',
+  '/billing',
+  '/integrations',
+  '/calls',
+  '/health',
+  '/notifications',
+  '/settings',
+  '/analytics',
+  '/receptionists',
+  '/appointments',
+  '/conversations',
+  '/usage',
+];
 
 export function SampleDataBanner() {
   const pathname = usePathname() || '';

@@ -36,6 +36,19 @@ from backend.ai.engine.conversation.i18n import t
 from backend.ai.engine.guardrails.safety import SafetyGuardrails
 from backend.ai.realtime import latency
 from backend.ai.verticals.schemas import VerticalConfig
+from backend.ai.prompts import load_prompts
+
+
+def _notes() -> Dict[str, Any]:
+    """Per-turn system notes and model-facing messages: data in ai/prompts/engine_notes.json."""
+    return load_prompts("engine_notes")
+
+
+def _lines(key: str) -> Dict[str, str]:
+    """The English and Hindi version of a fixed line, read from the language packs (`strings.<key>`). Every other language is read
+    from its own pack by `_scripted`."""
+    return {code: language_pack(code)["strings"][key] for code in ("en", "hi")}
+
 
 logger = logging.getLogger(__name__)
 
@@ -46,19 +59,9 @@ MAX_TOOL_ROUNDS = 3
 PARALLEL_SAFE_TOOLS = frozenset({"check_availability"})
 MAX_HISTORY_TURNS = 8
 
-_FALLBACK = {
-    "en": "I'm sorry, I'm having trouble right now. Could you say that again, or would you like me to connect you to the front desk?",
-    "hi": "Maaf kijiye, mujhe abhi thodi dikkat aa rahi hai. Kya aap dobara bol sakte hain, ya main aapko front desk se connect kar doon?",
-}
-_NO_TRANSFER = {
-    "en": "I'm sorry, I can't connect you right now. Can I take a message for the front desk?",
-    "hi": "Maaf kijiye, abhi main aapko connect nahi kar pa rahi hoon. Kya main front desk ke liye message le loon?",
-}
-_DEVANAGARI_NOTE = (
-    "The caller's latest message is speech-to-text in Devanagari, which often writes English words phonetically "
-    "(टुमारो = tomorrow, अपॉइंटमेंट = appointment). They are speaking Hindi/Hinglish: reply in Hindi written in Devanagari, "
-    "keeping names and everyday English words (appointment, doctor, clinic) as they are. Do not switch to English."
-)
+_FALLBACK = _lines("fallback")
+_NO_TRANSFER = _lines("no_transfer")
+_DEVANAGARI_NOTE = _notes()["devanagari"]
 _NUMBER_OFFER = re.compile(
     r"\b(?:same|this|current|calling\s+from)\s+(?:phone\s+|whatsapp\s+)?number\b|\b(?:calling|messaging|chatting)\s+from\b|\bisi\s+number\b|\bis\s+number\s+(?:pe|par)\b|इसी\s+नंबर|इस\s+नंबर",
     re.IGNORECASE,
@@ -70,18 +73,9 @@ _ENGLISH_FILLER = re.compile(
     r"\s*(?:sure|great|okay|ok|alright|perfect|awesome|absolutely|got it|of course|no problem|right|cool|nice)[!.,\s]*", re.IGNORECASE
 )
 _EMOJI = re.compile("[\U0001F000-\U0001FAFF\u2600-\u27BF\uFE0F\u200d]")
-_NO_REGREET_NOTE = (
-    "You already started answering this turn before that correction; do not greet or acknowledge again "
-    "(no new \"Sure\"/\"Got it\"/\"Right\"), just continue with the corrected content."
-)
-_LANGUAGE_RETRY_NOTE = (
-    "Your draft reply was in English, but the caller is speaking Hindi. Write the whole reply again in Hindi (Devanagari if "
-    "they wrote Devanagari), keeping only names and everyday English words like appointment or doctor. Do not switch to English."
-)
-_LANGUAGE_NOTE = {
-    "hi": "The caller asked you to speak Hindi. Reply in Hindi for the rest of the call, even when their next message contains English words or names, until they ask for another language. Use Devanagari if they write Devanagari, otherwise Roman Hinglish.",
-    "en": "The caller asked you to speak English. Reply in English for the rest of the call, even when their next message is transcribed in another script, until they ask for another language.",
-}
+_NO_REGREET_NOTE = _notes()["no_regreet"]
+_LANGUAGE_RETRY_NOTE = _notes()["language_retry"]
+_LANGUAGE_NOTE = dict(_notes()["language_note"])
 def _scripted(table: Dict[str, str], key: str, language: str) -> str:
     """A fixed line the engine speaks itself (apology, transfer...). The base table has English and Hindi; every other language
     reads it from its pack (`strings.<key>`), so a new language needs no code; with neither, English."""
@@ -91,39 +85,22 @@ def _scripted(table: Dict[str, str], key: str, language: str) -> str:
 
 def _language_note(code: str) -> str:
     """The system note for a language the caller asked for. Hindi and English keep their tuned notes; any other language is
-    built from its pack (name + style guidance), or just its name when it has no pack."""
+    built from its pack (name + style guidance), or just its name when it has no pack. All wording is data (engine_notes.json)."""
     if code in _LANGUAGE_NOTE:
         return _LANGUAGE_NOTE[code]
     pack = language_pack(code)
     name = pack.get("name") or code
-    note = (f"The caller asked you to speak {name}. Reply in {name} for the rest of the call, even when their next message is transcribed "
-            "in another script or contains words from another language, until they ask for another language.")
-    style = pack.get("style") or (f"Speak {name} the way a native speaker does on the phone: real everyday filler words, acknowledgements and "
-                                 "politeness forms of that language (never translate English fillers word for word).")
-    return f"{note} {style}"
+    generic = _notes()["language_note_generic"]
+    style = pack.get("style") or generic["native"].format(name=name)
+    return f"{generic['asked'].format(name=name)} {style}"
 
 
-_HINDI_EMERGENCY_MSG = {
-    True: "Yeh emergency lag rahi hai. Main aapko turant emergency coordinator se connect kar rahi hoon. Agar aap khatre mein hain toh abhi emergency services ko call kijiye.",
-    False: "This sounds like an emergency. I am transferring you to an emergency care coordinator immediately. If you are in immediate danger, please dial emergency services right now.",
-}
+_HINDI_EMERGENCY_MSG = {True: _notes()["hindi_emergency"]["hindi"], False: _notes()["hindi_emergency"]["default"]}
 _BILLING = re.compile(r"\b(refunds?|billing|invoice|charged\s+twice|overcharg\w*|chargeback|dispute|bill\s+(?:is\s+)?wrong)\b", re.IGNORECASE)
-_BILLING_MSG = {
-    "en": "Billing and refunds are handled by our front desk team. Let me connect you right away.",
-    "hi": "Billing aur refund front desk team dekhti hai. Main abhi aapko connect karti hoon.",
-}
-_FRUSTRATED_MSG = {
-    "en": "I'm really sorry about the trouble. Let me connect you to someone at our front desk right away.",
-    "hi": "Takleef ke liye mujhe bahut khed hai. Main abhi aapko front desk se connect karti hoon.",
-}
-_UNSURE_CLAIM = {
-    "en": "Let me just double-check that with you first. Could you confirm the details once more?",
-    "hi": "Ek baar main aapse details dobara confirm kar loon. Kya aap phir se bata sakte hain?",
-}
-_UNSURE_TIMES = {
-    "en": "Let me make sure I give you the right time. Which day would suit you?",
-    "hi": "Main sahi samay bataungi. Aapko kaunsa din theek rahega?",
-}
+_BILLING_MSG = _lines("billing")
+_FRUSTRATED_MSG = _lines("frustrated")
+_UNSURE_CLAIM = _lines("unsure_claim")
+_UNSURE_TIMES = _lines("unsure_times")
 _ABBREVIATIONS = {"dr", "mr", "mrs", "ms", "st", "no", "vs"}
 
 

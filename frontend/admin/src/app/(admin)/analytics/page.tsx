@@ -1,663 +1,423 @@
 "use client";
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { adminFetch } from '@/lib/api';
+import type { Analytics } from '@/lib/analyticsTypes';
+import { buildSampleAnalytics } from '@/lib/analyticsSample';
+import { AreaLines, BarsWithLines, COLORS, Donut, Funnel, GroupedBars, Sparkline, StackedBars, downsample } from '../../../components/admin/AnalyticsCharts';
 
-type RangeOption = '1D' | '7D' | '30D' | '90D' | '1Y' | 'Custom';
+const RANGES = [
+  { days: 7, label: '7D' },
+  { days: 30, label: '30D' },
+  { days: 90, label: '90D' },
+  { days: 365, label: '1Y' },
+];
+const PLAN_COLORS = [COLORS.blue, COLORS.green, COLORS.purple, COLORS.orange, COLORS.red, COLORS.slate];
+const STATUS_COLORS: Record<string, string> = { active: COLORS.green, trial: COLORS.lightBlue, pending: COLORS.orange, paused: COLORS.slate, suspended: COLORS.red };
+const STATUS_PILL: Record<string, string> = { active: 'bg-[#D1FAE5] text-[#065F46]', trial: 'bg-[#DBEAFE] text-[#1D4ED8]', pending: 'bg-[#FEF3C7] text-[#92400E]', paused: 'bg-[#F1F5F9] text-[#475569]', suspended: 'bg-[#FEE2E2] text-[#B91C1C]' };
 
-interface RangeMetrics {
-  revenue: number;
-  revenueDelta: number;
-  newSales: number;
-  salesDelta: number;
-  grossProfit: number;
-  profitDelta: number;
-  grossMargin: number;
-  marginDelta: number;
-  usageMinutes: number;
-  soldMinutes: number;
-  limitAlerts: number;
-  criticalAlerts: number;
-  activeBusinesses: number;
-  businessDelta: number;
-  churn: number;
-  churnDelta: number;
+const cap = (v: string) => v.charAt(0).toUpperCase() + v.slice(1);
+const shortDate = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+const money = (value: number, currency: string) => {
+  try {
+    return new Intl.NumberFormat(undefined, { style: 'currency', currency, maximumFractionDigits: value >= 1000 ? 0 : 2 }).format(value);
+  } catch {
+    return `${currency} ${value}`;
+  }
+};
+const pct = (part: number, whole: number) => (whole ? `${Math.round((part / whole) * 1000) / 10}%` : '–');
+const change = (current: number, previous: number) => (previous === 0 ? (current === 0 ? null : `${current} new`) : `${current >= previous ? '+' : ''}${Math.round(((current - previous) / previous) * 100)}% vs previous`);
+
+function Card({ title, children, className = '', action }: { title: string; children: React.ReactNode; className?: string; action?: React.ReactNode }) {
+  return (
+    <section className={`min-w-0 rounded-xl border border-[#E2E8F0] bg-white p-4 shadow-2xs ${className}`}>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h3 className="text-sm font-bold text-[#1E293B]">{title}</h3>
+        {action}
+      </div>
+      {children}
+    </section>
+  );
 }
 
-interface RangeSeries {
-  label: string;
-  compare: string;
-  points: string[];
-  revenue: number[];
-  profit: number[];
-  usage: number[];
-  previousRevenue: number[];
-  metrics: RangeMetrics;
-  funnel: { label: string; value: number }[];
-  verticalSales: { label: string; value: number; color: string }[];
+function Legend({ items }: { items: { name: string; color: string; line?: boolean }[] }) {
+  return (
+    <div className="mb-2 flex flex-wrap gap-x-4 gap-y-1">
+      {items.map((i) => (
+        <span key={i.name} className="inline-flex items-center gap-1.5 text-[11px] text-[#64748B]">
+          <span className={i.line ? 'h-0.5 w-3 rounded' : 'h-2 w-2 rounded-sm'} style={{ backgroundColor: i.color }} />
+          {i.name}
+        </span>
+      ))}
+    </div>
+  );
 }
 
-const rangeOptions: { id: RangeOption; label: string }[] = [
-  { id: '1D', label: 'Today' },
-  { id: '7D', label: '7D' },
-  { id: '30D', label: '30D' },
-  { id: '90D', label: '90D' },
-  { id: '1Y', label: '1Y' },
-  { id: 'Custom', label: 'Custom' },
-];
+function Empty({ text }: { text: string }) {
+  return <p className="py-8 text-center text-xs text-[#94A3B8]">{text}</p>;
+}
 
-/** Fixed reference date keeps SSR and client output identical while the data is still mocked. */
-const REFERENCE_DATE = new Date('2026-01-30T00:00:00Z');
+function Pill({ status }: { status: string }) {
+  const key = status.toLowerCase();
+  return <span className={`rounded-md px-2 py-0.5 text-[10px] font-semibold ${STATUS_PILL[key] || STATUS_PILL.paused}`}>{cap(key)}</span>;
+}
 
-const verticalPalette = ['#2563EB', '#10B981', '#F59E0B', '#0EA5E9', '#64748B'];
-const verticalNames = ['Clinics', 'Restaurants', 'Salons', 'Fitness', 'Retail'];
-
-const buildVerticals = (counts: number[]) =>
-  counts.map((value, index) => ({
-    label: verticalNames[index],
-    value,
-    color: verticalPalette[index],
-  }));
-
-const rangeData: Record<Exclude<RangeOption, 'Custom'>, RangeSeries> = {
-  '1D': {
-    label: 'Today',
-    compare: 'vs yesterday',
-    points: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00'],
-    revenue: [0.2, 0.4, 1.1, 1.6, 1.9, 2.1],
-    profit: [0.1, 0.3, 0.8, 1.2, 1.4, 1.5],
-    usage: [0.3, 0.6, 1.4, 2.0, 2.3, 2.6],
-    previousRevenue: [0.2, 0.5, 1.0, 1.4, 1.7, 1.8],
-    metrics: {
-      revenue: 2100,
-      revenueDelta: 4.8,
-      newSales: 420,
-      salesDelta: 10.5,
-      grossProfit: 1540,
-      profitDelta: 3.9,
-      grossMargin: 73.3,
-      marginDelta: -0.3,
-      usageMinutes: 1640,
-      soldMinutes: 6200,
-      limitAlerts: 3,
-      criticalAlerts: 1,
-      activeBusinesses: 128,
-      businessDelta: 0.8,
-      churn: 2.1,
-      churnDelta: 0,
-    },
-    funnel: [
-      { label: 'Site Leads', value: 48 },
-      { label: 'Demos Booked', value: 12 },
-      { label: 'Trials Started', value: 5 },
-      { label: 'Paid Tenants', value: 2 },
-    ],
-    verticalSales: buildVerticals([2, 1, 1, 0, 0]),
-  },
-  '7D': {
-    label: 'Last 7 days',
-    compare: 'vs previous 7 days',
-    points: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-    revenue: [1.8, 2.0, 2.2, 2.1, 2.4, 1.6, 1.4],
-    profit: [1.3, 1.4, 1.6, 1.5, 1.8, 1.1, 1.0],
-    usage: [2.2, 2.5, 2.7, 2.6, 2.9, 1.9, 1.7],
-    previousRevenue: [1.6, 1.8, 2.0, 1.9, 2.1, 1.5, 1.3],
-    metrics: {
-      revenue: 13500,
-      revenueDelta: 6.2,
-      newSales: 3100,
-      salesDelta: 12.4,
-      grossProfit: 9900,
-      profitDelta: 5.1,
-      grossMargin: 73.3,
-      marginDelta: -0.6,
-      usageMinutes: 11400,
-      soldMinutes: 43400,
-      limitAlerts: 5,
-      criticalAlerts: 1,
-      activeBusinesses: 128,
-      businessDelta: 2.4,
-      churn: 2.1,
-      churnDelta: -0.1,
-    },
-    funnel: [
-      { label: 'Site Leads', value: 296 },
-      { label: 'Demos Booked', value: 74 },
-      { label: 'Trials Started', value: 33 },
-      { label: 'Paid Tenants', value: 9 },
-    ],
-    verticalSales: buildVerticals([8, 4, 3, 2, 1]),
-  },
-  '30D': {
-    label: 'Last 30 days',
-    compare: 'vs previous 30 days',
-    points: ['W1', 'W2', 'W3', 'W4', 'W5'],
-    revenue: [8.4, 9.6, 11.2, 12.1, 12.8],
-    profit: [6.1, 7.0, 8.2, 8.9, 9.4],
-    usage: [9.8, 10.6, 12.4, 13.1, 14.0],
-    previousRevenue: [7.8, 8.6, 10.1, 10.8, 11.2],
-    metrics: {
-      revenue: 42800,
-      revenueDelta: 8.4,
-      newSales: 12600,
-      salesDelta: 18.2,
-      grossProfit: 31400,
-      profitDelta: 6.9,
-      grossMargin: 73.4,
-      marginDelta: -1.1,
-      usageMinutes: 48291,
-      soldMinutes: 186000,
-      limitAlerts: 7,
-      criticalAlerts: 2,
-      activeBusinesses: 128,
-      businessDelta: 12,
-      churn: 2.1,
-      churnDelta: -0.4,
-    },
-    funnel: [
-      { label: 'Site Leads', value: 1240 },
-      { label: 'Demos Booked', value: 318 },
-      { label: 'Trials Started', value: 142 },
-      { label: 'Paid Tenants', value: 41 },
-    ],
-    verticalSales: buildVerticals([32, 18, 14, 11, 8]),
-  },
-  '90D': {
-    label: 'Last 90 days',
-    compare: 'vs previous 90 days',
-    points: ['Nov', 'Dec', 'Jan'],
-    revenue: [34.1, 38.6, 42.8],
-    profit: [24.8, 28.1, 31.4],
-    usage: [39.2, 44.0, 48.3],
-    previousRevenue: [28.4, 31.2, 34.0],
-    metrics: {
-      revenue: 115500,
-      revenueDelta: 14.6,
-      newSales: 33200,
-      salesDelta: 21.7,
-      grossProfit: 84300,
-      profitDelta: 12.8,
-      grossMargin: 73.0,
-      marginDelta: -1.8,
-      usageMinutes: 131500,
-      soldMinutes: 520000,
-      limitAlerts: 14,
-      criticalAlerts: 3,
-      activeBusinesses: 128,
-      businessDelta: 26,
-      churn: 2.3,
-      churnDelta: -0.2,
-    },
-    funnel: [
-      { label: 'Site Leads', value: 3480 },
-      { label: 'Demos Booked', value: 902 },
-      { label: 'Trials Started', value: 401 },
-      { label: 'Paid Tenants', value: 112 },
-    ],
-    verticalSales: buildVerticals([84, 47, 38, 29, 21]),
-  },
-  '1Y': {
-    label: 'Last 12 months',
-    compare: 'vs previous year',
-    points: ['Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan'],
-    revenue: [18, 22, 24, 31, 29, 36, 42, 45, 51, 57, 64, 72],
-    profit: [12, 15, 16, 21, 20, 25, 31, 33, 37, 41, 45, 53],
-    usage: [21, 24, 28, 30, 35, 38, 41, 46, 49, 51, 54, 59],
-    previousRevenue: [11, 13, 15, 17, 18, 21, 24, 26, 29, 32, 35, 39],
-    metrics: {
-      revenue: 491000,
-      revenueDelta: 68.4,
-      newSales: 142000,
-      salesDelta: 74.1,
-      grossProfit: 356000,
-      profitDelta: 61.2,
-      grossMargin: 72.5,
-      marginDelta: -2.4,
-      usageMinutes: 476000,
-      soldMinutes: 1980000,
-      limitAlerts: 38,
-      criticalAlerts: 6,
-      activeBusinesses: 128,
-      businessDelta: 96,
-      churn: 2.6,
-      churnDelta: -1.1,
-    },
-    funnel: [
-      { label: 'Site Leads', value: 14200 },
-      { label: 'Demos Booked', value: 3640 },
-      { label: 'Trials Started', value: 1580 },
-      { label: 'Paid Tenants', value: 421 },
-    ],
-    verticalSales: buildVerticals([310, 176, 141, 108, 79]),
-  },
-};
-
-/** Capacity ceilings are point-in-time facts, so they stay outside the range selection. */
-const capacityLimits = [
-  { label: 'Twilio channels', used: 340, limit: 500 },
-  { label: 'AI provider TPM', used: 38, limit: 100 },
-  { label: 'Vector storage (GB)', used: 42, limit: 200 },
-];
-
-const rangeDays: Record<Exclude<RangeOption, 'Custom'>, number> = {
-  '1D': 1,
-  '7D': 7,
-  '30D': 30,
-  '90D': 90,
-  '1Y': 365,
-};
-
-const toISODate = (date: Date) => date.toISOString().slice(0, 10);
-
-const shiftDays = (date: Date, days: number) => {
-  const next = new Date(date);
-  next.setUTCDate(next.getUTCDate() + days);
-  return next;
-};
-
-const formatDate = (value: string) => {
-  const date = new Date(`${value}T00:00:00Z`);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
-};
-
-const daysBetween = (from: string, to: string) => {
-  const start = new Date(`${from}T00:00:00Z`).getTime();
-  const end = new Date(`${to}T00:00:00Z`).getTime();
-  if (Number.isNaN(start) || Number.isNaN(end)) return 1;
-  return Math.max(1, Math.round((end - start) / 86400000) + 1);
-};
-
-const compact = (value: number) => {
-  if (Math.abs(value) >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
-  if (Math.abs(value) >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
-  return `${Math.round(value)}`;
-};
-
-const signed = (value: number, suffix = '%') => `${value > 0 ? '+' : ''}${Number(value.toFixed(1))}${suffix}`;
-
-const chartPath = (values: number[], width: number, height: number) => {
-  if (values.length === 0) return '';
-  const max = Math.max(...values);
-  const min = Math.min(...values);
-  const span = max - min || 1;
-  const step = values.length === 1 ? width : width / (values.length - 1);
-  return values
-    .map((value, index) => {
-      const x = index * step;
-      const y = height - ((value - min) / span) * height;
-      return `${index === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`;
-    })
-    .join(' ');
-};
-
-const toneClass = (tone: 'positive' | 'warning' | 'neutral') => {
-  if (tone === 'positive') return 'text-[#10B981]';
-  if (tone === 'warning') return 'text-[#F59E0B]';
-  return 'text-[#64748B]';
-};
-
-const limitTone = (percent: number) => {
-  if (percent >= 85) return 'bg-[#EF4444]';
-  if (percent >= 60) return 'bg-[#F59E0B]';
-  return 'bg-[#2563EB]';
-};
-
-const money = (value: number) => `${value < 0 ? '-' : ''}€${Math.abs(Math.round(value)).toLocaleString('en-US')}`;
-
-const scaleSeries = (series: RangeSeries, factor: number): RangeSeries => {
-  const m = series.metrics;
-  return {
-    ...series,
-    revenue: series.revenue.map((v) => v * factor),
-    profit: series.profit.map((v) => v * factor),
-    usage: series.usage.map((v) => v * factor),
-    previousRevenue: series.previousRevenue.map((v) => v * factor),
-    funnel: series.funnel.map((step) => ({ ...step, value: Math.max(1, Math.round(step.value * factor)) })),
-    verticalSales: series.verticalSales.map((item) => ({ ...item, value: Math.round(item.value * factor) })),
-    metrics: {
-      ...m,
-      revenue: m.revenue * factor,
-      newSales: m.newSales * factor,
-      grossProfit: m.grossProfit * factor,
-      usageMinutes: Math.round(m.usageMinutes * factor),
-      soldMinutes: Math.round(m.soldMinutes * factor),
-      limitAlerts: Math.max(0, Math.round(m.limitAlerts * factor)),
-      criticalAlerts: Math.max(0, Math.round(m.criticalAlerts * factor)),
-    },
-  };
-};
-
-const CHART_WIDTH = 700;
-const CHART_HEIGHT = 160;
+function MiniTable({ head, rows, empty }: { head: string[]; rows: React.ReactNode[][]; empty: string }) {
+  if (!rows.length) return <Empty text={empty} />;
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-left text-xs">
+        <thead className="text-[10px] font-semibold uppercase tracking-wider text-[#94A3B8]">
+          <tr>
+            {head.map((h) => (
+              <th key={h} className="pb-2 pr-3 font-semibold">
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-[#F1F5F9]">
+          {rows.map((r, i) => (
+            <tr key={i}>
+              {r.map((cell, j) => (
+                <td key={j} className={`py-2 pr-3 ${j === 0 ? 'font-semibold text-[#1E293B]' : 'text-[#64748B]'}`}>
+                  {cell}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 export default function AnalyticsPage() {
-  const [activeRange, setActiveRange] = useState<RangeOption>('30D');
-  const [customFrom, setCustomFrom] = useState(toISODate(shiftDays(REFERENCE_DATE, -13)));
-  const [customTo, setCustomTo] = useState(toISODate(REFERENCE_DATE));
+  const [days, setDays] = useState(30);
+  const [sample, setSample] = useState(false);
+  const [live, setLive] = useState<Analytics | null>(null);
+  const [error, setError] = useState('');
 
-  const { series, fromLabel, toLabel, dayCount, invalidCustom } = useMemo(() => {
-    if (activeRange === 'Custom') {
-      const span = daysBetween(customFrom, customTo);
-      const invalid = new Date(customFrom).getTime() > new Date(customTo).getTime();
-      const base = rangeData['30D'];
-      return {
-        series: scaleSeries({ ...base, label: 'Custom range', compare: 'vs preceding equal period' }, span / 30),
-        fromLabel: formatDate(customFrom),
-        toLabel: formatDate(customTo),
-        dayCount: span,
-        invalidCustom: invalid,
-      };
-    }
-
-    const days = rangeDays[activeRange];
-    const from = shiftDays(REFERENCE_DATE, -(days - 1));
-    return {
-      series: rangeData[activeRange],
-      fromLabel: formatDate(toISODate(from)),
-      toLabel: formatDate(toISODate(REFERENCE_DATE)),
-      dayCount: days,
-      invalidCustom: false,
+  useEffect(() => {
+    let alive = true;
+    const load = () =>
+      adminFetch<Analytics>(`/admin/analytics?days=${days}`)
+        .then((d) => alive && (setLive(d), setError('')))
+        .catch(() => alive && setError('Could not load analytics from the API.'));
+    load();
+    const timer = window.setInterval(() => document.visibilityState === 'visible' && load(), 60000);
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
     };
-  }, [activeRange, customFrom, customTo]);
+  }, [days]);
 
-  const m = series.metrics;
-  const costTotal = m.revenue - m.grossProfit;
-  const burnPercent = Math.round((m.usageMinutes / m.soldMinutes) * 100);
+  const data = useMemo(() => (sample ? buildSampleAnalytics(days) : live), [sample, days, live]);
 
-  const kpiCards = [
-    { label: 'Revenue', value: `\u20ac${compact(m.revenue)}`, change: signed(m.revenueDelta), tone: 'positive' as const, subtext: `Billed in ${series.label.toLowerCase()}` },
-    { label: 'New Sales', value: `\u20ac${compact(m.newSales)}`, change: signed(m.salesDelta), tone: 'positive' as const, subtext: 'New subscriptions in period' },
-    { label: 'Gross Profit', value: `\u20ac${compact(m.grossProfit)}`, change: signed(m.profitDelta), tone: 'positive' as const, subtext: 'Revenue minus provider costs' },
-    { label: 'Gross Margin', value: `${m.grossMargin}%`, change: signed(m.marginDelta), tone: m.marginDelta < 0 ? ('warning' as const) : ('positive' as const), subtext: 'Watch voice provider spend' },
-    { label: 'Usage Burn', value: `${compact(m.usageMinutes)} min`, change: `${burnPercent}% of sold`, tone: 'neutral' as const, subtext: 'Consumed vs tenant minutes sold' },
-    { label: 'Limit Alerts', value: `${m.limitAlerts}`, change: `${m.criticalAlerts} critical`, tone: 'warning' as const, subtext: 'Tenants above 85% allowance' },
-    { label: 'Active Businesses', value: `${m.activeBusinesses}`, change: signed(m.businessDelta), tone: 'positive' as const, subtext: 'Snapshot, not period scoped' },
-    { label: 'Churn Risk', value: `${m.churn}%`, change: signed(m.churnDelta), tone: 'positive' as const, subtext: 'Predicted logo churn' },
-  ];
+  const derived = useMemo(() => {
+    if (!data) return null;
+    const growth = downsample(data.growth, 45, (c) => c[c.length - 1]);
+    const revenue = downsample(data.revenueSeries, 45, (c) => ({ date: c[c.length - 1].date, revenue: c.reduce((s, x) => s + x.revenue, 0), cumulative: c[c.length - 1].cumulative }));
+    const calls = downsample(data.calls.series, 45, (c) => {
+      const n = c.reduce((s, x) => s + x.calls, 0);
+      const weighted = (key: 'aiRate' | 'transferRate') => (n ? Math.round(c.reduce((s, x) => s + (x[key] ?? 0) * x.calls, 0) / n) : null);
+      return { date: c[c.length - 1].date, calls: n, aiRate: weighted('aiRate'), transferRate: weighted('transferRate') };
+    });
+    return { growth, revenue, calls };
+  }, [data]);
 
-  const providerCosts = [
-    { label: 'Revenue', value: m.revenue, color: '#2563EB' },
-    { label: 'Telephony', value: -(costTotal * 0.539), color: '#EF4444' },
-    { label: 'AI / TTS', value: -(costTotal * 0.372), color: '#F59E0B' },
-    { label: 'Infra', value: -(costTotal * 0.089), color: '#64748B' },
-    { label: 'Profit', value: m.grossProfit, color: '#10B981' },
-  ];
-  const waterfallMax = Math.max(...providerCosts.map((line) => Math.abs(line.value)));
+  const exportCsv = () => {
+    if (!data) return;
+    const lines = [
+      `AMSh analytics,${data.range.from} to ${data.range.to}`,
+      '',
+      'Metric,Value',
+      `Total businesses,${data.kpis.totalBusinesses}`,
+      `Trial businesses,${data.kpis.trial}`,
+      `Paid businesses,${data.kpis.paid}`,
+      `Converted from trial,${data.kpis.converted}`,
+      `Inactive businesses,${data.kpis.inactive}`,
+      ...Object.entries(data.kpis.revenue).map(([c, v]) => `Revenue collected (${c}),${v}`),
+      `Calls,${data.calls.total}`,
+      `AI answer rate %,${data.calls.aiRate ?? ''}`,
+      `Human transfer rate %,${data.calls.transferRate ?? ''}`,
+      '',
+      'Date,Calls,AI answer rate %,Transfer rate %,Revenue,Businesses',
+      ...data.calls.series.map((c, i) => `${c.date},${c.calls},${c.aiRate ?? ''},${c.transferRate ?? ''},${data.revenueSeries[i]?.revenue ?? 0},${data.growth[i]?.total ?? ''}`),
+    ];
+    const url = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `amsh-analytics-${data.range.from}-to-${data.range.to}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
-  const usageLimits = [
-    ...capacityLimits,
-    { label: 'Sold minutes burn', used: m.usageMinutes, limit: m.soldMinutes },
-  ];
+  const k = data?.kpis;
+  const showError = error && !sample;
+  const revenueText = k ? (Object.keys(k.revenue).length ? Object.entries(k.revenue).map(([c, v]) => money(v, c)).join(' + ') : money(0, data!.currency)) : '–';
+  const mrrText = k && Object.keys(k.mrr).length ? Object.entries(k.mrr).map(([c, v]) => money(v, c)).join(' + ') : null;
+  const planData = data ? Object.entries(data.planMix).sort((a, b) => b[1] - a[1]).map(([name, value], i) => ({ name, value, color: PLAN_COLORS[i % PLAN_COLORS.length] })) : [];
+  const verticals = data ? Object.entries(data.calls.byVertical).sort((a, b) => b[1] - a[1]) : [];
+  const verticalTotal = verticals.reduce((s, [, n]) => s + n, 0);
 
-  const revenuePath = chartPath(series.revenue, CHART_WIDTH, CHART_HEIGHT);
-  const profitPath = chartPath(series.profit, CHART_WIDTH, CHART_HEIGHT);
-  const usagePath = chartPath(series.usage, CHART_WIDTH, CHART_HEIGHT);
-  const previousPath = chartPath(series.previousRevenue, CHART_WIDTH, CHART_HEIGHT);
-  const barMax = Math.max(...series.revenue);
+  const kpiCards = data && k ? [
+    { name: 'Total Businesses', value: String(k.totalBusinesses), sub: change(k.newBusinesses, k.newBusinessesPrevious) || 'no new in period', tone: COLORS.green, color: COLORS.blue, spark: data.growth.map((g) => g.total), icon: 'M3 21h18M5 21V7l7-4 7 4v14M9 9h2m2 0h2M9 13h2m2 0h2M9 17h2m2 0h2' },
+    { name: 'Trial Businesses', value: String(k.trial), sub: `${pct(k.trial, k.totalBusinesses)} of total`, tone: '#64748B', color: COLORS.purple, spark: data.growth.map((g) => g.trial), icon: 'M12 8v4l3 2M12 3a9 9 0 100 18 9 9 0 000-18z' },
+    { name: 'Active (Paid)', value: String(k.paid), sub: `${pct(k.paid, k.totalBusinesses)} of total`, tone: '#64748B', color: COLORS.green, spark: data.growth.map((g) => g.paid), icon: 'M5 13l4 4L19 7' },
+    { name: 'Converted from Trial', value: String(k.converted), sub: data.funnel.trial ? `${pct(k.converted, data.funnel.trial)} trial → paid rate` : 'no trials yet', tone: COLORS.green, color: COLORS.purple, spark: data.weekly.map((w) => w.converted), icon: 'M8 7V3m8 4V3M4 11h16M5 5h14a1 1 0 011 1v14a1 1 0 01-1 1H5a1 1 0 01-1-1V6a1 1 0 011-1z' },
+    { name: 'Inactive', value: String(k.inactive), sub: `${pct(k.inactive, k.totalBusinesses)} of total`, tone: k.inactive ? COLORS.red : '#64748B', color: COLORS.red, spark: [], icon: 'M12 8v5m0 4h.01M10.3 3.9L2.4 18a2 2 0 001.7 3h15.8a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z' },
+    { name: 'Revenue (collected)', value: revenueText, sub: mrrText ? `plan value ${mrrText}/mo` : change(Object.values(k.revenue)[0] ?? 0, k.revenuePrevious) || 'no payments in period', tone: '#64748B', color: COLORS.blue, spark: data.revenueSeries.map((r) => r.cumulative), icon: 'M12 8c-1.7 0-3 .9-3 2s1.3 2 3 2 3 .9 3 2-1.3 2-3 2m0-8V6m0 12v-2' },
+  ] : [];
 
   return (
     <div className="flex-1 overflow-y-auto scrollbar-hide p-4 sm:p-5 animate-in fade-in duration-500">
-      <header className="mb-4 pb-3 border-b border-[#E2E8F0] flex justify-between items-center">
+      <header className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-lg font-bold text-[#0F172A] tracking-tight leading-tight">Analytics</h1>
-          <p className="text-xs text-[#475569] mt-0.5 font-normal">
-            Revenue, sales, usage limits, and profit intelligence for the platform.
-          </p>
+          <h1 className="text-xl font-bold leading-tight tracking-tight text-[#0F172A]">Analytics</h1>
+          <p className="mt-0.5 text-xs text-[#475569]">Growth, usage, revenue and AI performance across the platform, counted live from the database.</p>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 border border-[#E2E8F0] rounded-lg py-1.5 px-2.5 text-xs font-medium text-[#475569] bg-white shadow-2xs">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-              <line x1="16" y1="2" x2="16" y2="6"></line>
-              <line x1="8" y1="2" x2="8" y2="6"></line>
-              <line x1="3" y1="10" x2="21" y2="10"></line>
-            </svg>
-            {fromLabel} - {toLabel}
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+          {data && <span className="rounded-lg border border-[#E2E8F0] bg-white px-2.5 py-1.5 text-xs font-medium text-[#475569] shadow-2xs">{shortDate(data.range.from)} – {shortDate(data.range.to)}</span>}
+          <div role="tablist" aria-label="Period" className="inline-flex gap-1 rounded-lg bg-[#F1F5F9] p-1">
+            {RANGES.map((r) => (
+              <button key={r.days} role="tab" aria-selected={days === r.days} onClick={() => setDays(r.days)} className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${days === r.days ? 'bg-white text-[#2563EB] shadow-2xs' : 'text-[#475569] hover:text-[#0F172A]'}`}>
+                {r.label}
+              </button>
+            ))}
           </div>
-          <button className="flex items-center justify-center border border-[#E2E8F0] rounded-full w-7 h-7 text-[#475569] bg-white shadow-2xs hover:bg-gray-50 transition-colors">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
-              <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={sample}
+            onClick={() => setSample((v) => !v)}
+            className={`inline-flex h-8 items-center gap-2 rounded-lg border px-3 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB] ${sample ? 'border-[#F59E0B] bg-[#FEF3C7] text-[#92400E]' : 'border-[#E2E8F0] bg-white text-[#475569] hover:bg-[#F8FAFC]'}`}
+          >
+            <span className={`h-2 w-2 rounded-full ${sample ? 'bg-[#F59E0B]' : 'bg-[#CBD5E1]'}`} />
+            Sample data {sample ? 'on' : 'off'}
+          </button>
+          <button onClick={exportCsv} disabled={!data} className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#2563EB] px-3 text-xs font-semibold text-white transition-colors hover:bg-[#1D4ED8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB] focus-visible:ring-offset-2 disabled:opacity-50">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16" />
             </svg>
+            Export report
           </button>
         </div>
       </header>
 
-      <div className="flex flex-wrap items-center gap-2 mb-1.5">
-        <div className="inline-flex items-center gap-1 bg-[#F1F5F9] rounded-lg p-1">
-          {rangeOptions.map((range) => (
-            <button
-              key={range.id}
-              onClick={() => setActiveRange(range.id)}
-              className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${
-                activeRange === range.id ? 'bg-white text-[#2563EB] shadow-2xs' : 'text-[#475569] hover:text-[#0F172A]'
-              }`}
-            >
-              {range.label}
-            </button>
-          ))}
-        </div>
+      {showError && <p role="alert" className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">{error}</p>}
+      {!data && !showError && <p className="text-sm text-[#94A3B8]">Loading analytics...</p>}
 
-        {activeRange === 'Custom' && (
-          <div className="flex items-center gap-1.5">
-            <input
-              type="date"
-              value={customFrom}
-              onChange={(e) => setCustomFrom(e.target.value)}
-              className="px-2 py-1 bg-[#F8FAFC] border border-[#E2E8F0] rounded-md text-xs font-semibold text-[#475569] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20"
-              aria-label="Start date"
-            />
-            <span className="text-xs text-[#94A3B8]">to</span>
-            <input
-              type="date"
-              value={customTo}
-              onChange={(e) => setCustomTo(e.target.value)}
-              className="px-2 py-1 bg-[#F8FAFC] border border-[#E2E8F0] rounded-md text-xs font-semibold text-[#475569] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20"
-              aria-label="End date"
-            />
+      {data && k && derived && (
+        <div className="space-y-3.5">
+          <dl className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
+            {kpiCards.map((c) => (
+              <div key={c.name} className="flex min-w-0 items-stretch justify-between gap-2 overflow-hidden rounded-xl border border-[#E2E8F0] bg-white p-3.5 shadow-2xs">
+                <div className="flex min-w-0 items-start gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl" style={{ backgroundColor: `${c.color}1A`, color: c.color }}>
+                    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d={c.icon} />
+                    </svg>
+                  </span>
+                  <div className="min-w-0">
+                    <dt className="text-[11px] font-medium leading-tight text-[#64748B]">{c.name}</dt>
+                    <dd className="mt-0.5 text-[22px] font-bold leading-tight tabular-nums tracking-tight text-[#0F172A]">{c.value}</dd>
+                    <p className="mt-0.5 text-[11px] font-medium leading-tight" style={{ color: c.tone }}>{c.sub}</p>
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-end">
+                  <Sparkline values={c.spark} color={c.color} />
+                </div>
+              </div>
+            ))}
+          </dl>
+
+          <div className="grid gap-3.5 lg:grid-cols-2 xl:grid-cols-[1.5fr_1fr_1fr]">
+            <Card title="Business Growth" className="lg:col-span-2 xl:col-span-1">
+              <Legend items={[{ name: 'Paid', color: COLORS.green }, { name: 'Trial', color: COLORS.lightBlue }, { name: 'Other', color: COLORS.blue }]} />
+              <StackedBars
+                labels={derived.growth.map((g) => shortDate(g.date))}
+                data={[
+                  { name: 'Paid', color: COLORS.green, values: derived.growth.map((g) => g.paid) },
+                  { name: 'Trial', color: COLORS.lightBlue, values: derived.growth.map((g) => g.trial) },
+                  { name: 'Other', color: COLORS.blue, values: derived.growth.map((g) => g.total - g.paid - g.trial) },
+                ]}
+              />
+              <p className="mt-1 text-[10px] text-[#94A3B8]">Cumulative businesses by sign-up date, split by their status today.</p>
+            </Card>
+
+            <Card title="Plan Distribution">
+              {k.totalBusinesses === 0 ? (
+                <Empty text="No businesses yet." />
+              ) : (
+                <div className="flex flex-wrap items-center justify-center gap-4 sm:justify-start">
+                  <Donut data={planData} total={k.totalBusinesses} centerLabel="Businesses" />
+                  <ul className="min-w-[140px] flex-1 space-y-2">
+                    {planData.map((p) => (
+                      <li key={p.name} className="flex items-center justify-between gap-2 text-xs">
+                        <span className="inline-flex items-center gap-1.5 text-[#475569]">
+                          <span className="h-2 w-2 rounded-sm" style={{ backgroundColor: p.color }} />
+                          {p.name}
+                        </span>
+                        <span className="font-semibold tabular-nums text-[#0F172A]">
+                          {p.value} <span className="font-normal text-[#94A3B8]">{pct(p.value, k.totalBusinesses)}</span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </Card>
+
+            <Card title="Business Conversion Funnel">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                <Funnel
+                  steps={[
+                    { label: 'Total signups', value: data.funnel.signups, color: COLORS.lightBlue },
+                    { label: 'Started trial', value: data.funnel.trial, color: COLORS.blue },
+                    { label: 'Converted to paid', value: data.funnel.converted, color: COLORS.purple },
+                    { label: 'Active paid', value: data.funnel.paid, color: COLORS.green },
+                  ]}
+                />
+                <ul className="min-w-[150px] flex-1 text-xs">
+                  {[
+                    ['Total signups', data.funnel.signups],
+                    ['Started trial', data.funnel.trial],
+                    ['Converted to paid', data.funnel.converted],
+                    ['Active paid', data.funnel.paid],
+                  ].map(([label, value]) => (
+                    <li key={label as string} className="flex h-12 items-center justify-between gap-2">
+                      <span className="leading-tight text-[#64748B]">{label}</span>
+                      <span className="whitespace-nowrap font-bold tabular-nums text-[#0F172A]">
+                        {value} <span className="ml-1 font-normal text-[#94A3B8]">{pct(value as number, data.funnel.signups)}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </Card>
           </div>
-        )}
-      </div>
 
-      <p className="text-xs text-[#94A3B8] mb-3.5">
-        Showing <span className="font-semibold text-[#475569]">{series.label}</span> ({dayCount} {dayCount === 1 ? 'day' : 'days'}): {fromLabel} - {toLabel} · compared {series.compare}
-      </p>
+          <div className="grid gap-3.5 md:grid-cols-2 xl:grid-cols-3">
+            <Card title="Revenue Trend" className="md:col-span-2 xl:col-span-1">
+              <Legend items={[{ name: `Revenue collected (${data.currency})`, color: COLORS.blue }, { name: 'Cumulative', color: COLORS.green, line: true }]} />
+              <BarsWithLines
+                labels={derived.revenue.map((r) => shortDate(r.date))}
+                bars={derived.revenue.map((r) => r.revenue)}
+                barColor={COLORS.blue}
+                barName={data.currency}
+                lineScale="own"
+                barFmt={(v) => money(v, data.currency)}
+                lines={[{ name: 'Cumulative', color: COLORS.green, values: derived.revenue.map((r) => r.cumulative) }]}
+              />
+              <p className="mt-1 text-[10px] text-[#94A3B8]">
+                {Object.values(k.revenue).every((v) => v === 0) ? 'No payments were recorded in this period. ' : ''}
+                {mrrText ? `Plan value of active paying businesses: ${mrrText} / month (list price, not collected).` : ''}
+              </p>
+            </Card>
 
-      {invalidCustom && (
-        <div className="mb-3.5 rounded-lg border border-[#F59E0B] bg-[#FEF3C7] px-3 py-1.5 text-xs font-semibold text-[#92400E]">
-          Start date is after end date. Adjust the range to see accurate figures.
+            <Card title="Retention & Churn">
+              <Legend items={[{ name: 'Active', color: COLORS.green }, { name: 'Churned / inactive', color: COLORS.red }]} />
+              <AreaLines
+                labels={derived.growth.map((g) => shortDate(g.date))}
+                series={[
+                  { name: 'Active', color: COLORS.green, values: derived.growth.map((g) => g.total - g.inactive) },
+                  { name: 'Churned / inactive', color: COLORS.red, values: derived.growth.map((g) => g.inactive) },
+                ]}
+              />
+              <p className="mt-1 text-[10px] text-[#94A3B8]">
+                {Object.entries(data.byStatus).map(([st, n]) => `${cap(st)} ${n}`).join(' · ')}. Plotted by sign-up date and today&apos;s status: the platform keeps no status history.
+              </p>
+            </Card>
+
+            <Card title="Trial vs Paid Businesses">
+              <Legend items={[{ name: 'Trial started', color: COLORS.lightBlue }, { name: 'Converted to paid', color: COLORS.green }]} />
+              <GroupedBars labels={data.weekly.map((w) => w.label)} data={[{ name: 'Trial started', color: COLORS.lightBlue, values: data.weekly.map((w) => w.trials) }, { name: 'Converted', color: COLORS.green, values: data.weekly.map((w) => w.converted) }]} />
+              {data.weekly.every((w) => w.trials === 0 && w.converted === 0) && <p className="mt-1 text-[10px] text-[#94A3B8]">No trials started or converted in this period.</p>}
+            </Card>
+          </div>
+
+          <div className="grid gap-3.5 lg:grid-cols-2 xl:grid-cols-[1.6fr_1fr_1.2fr]">
+            <Card title="Call Volume & AI Performance" className="lg:col-span-2 xl:col-span-1">
+              {(
+                <>
+                  <Legend items={[{ name: 'Total calls', color: COLORS.lightBlue }, { name: 'AI answer rate', color: COLORS.blue, line: true }, { name: 'Human transfer rate', color: COLORS.orange, line: true }]} />
+                  <BarsWithLines
+                    labels={derived.calls.map((c) => shortDate(c.date))}
+                    bars={derived.calls.map((c) => c.calls)}
+                    barColor={COLORS.blue}
+                    barName="calls"
+                    lines={[
+                      { name: 'AI answer rate', color: COLORS.blue, values: derived.calls.map((c) => c.aiRate) },
+                      { name: 'Transfer rate', color: COLORS.orange, values: derived.calls.map((c) => c.transferRate) },
+                    ]}
+                  />
+                  <p className="mt-1 text-[10px] text-[#94A3B8]">
+                    {data.calls.total} calls · AI resolved or booked {data.calls.aiRate ?? '–'}% · handed to a human {data.calls.transferRate ?? '–'}% (finished calls)
+                  </p>
+                </>
+              )}
+            </Card>
+
+            <Card title="Calls by Vertical">
+              {verticals.length === 0 ? (
+                <Empty text="No calls in this period." />
+              ) : (
+                <ul className="space-y-2.5">
+                  {verticals.map(([name, n], i) => (
+                    <li key={name}>
+                      <div className="mb-1 flex justify-between text-xs">
+                        <span className="text-[#475569]">{name}</span>
+                        <span className="font-semibold tabular-nums text-[#0F172A]">
+                          {n.toLocaleString()} <span className="font-normal text-[#94A3B8]">{pct(n, verticalTotal)}</span>
+                        </span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded bg-[#F1F5F9]">
+                        <div className="h-full rounded" style={{ width: `${(n / verticalTotal) * 100}%`, backgroundColor: PLAN_COLORS[i % PLAN_COLORS.length] }} />
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+
+            <Card title="Top Performing Businesses" action={<a href="/businesses" className="text-xs font-medium text-[#2563EB] hover:underline">View all</a>}>
+              <MiniTable
+                head={['Business', 'Calls', 'AI bookings', 'Conversion']}
+                empty="No calls in this period."
+                rows={data.topBusinesses.map((b) => [<span key="n" className="inline-flex items-center gap-2"><span className="flex h-5 w-5 items-center justify-center rounded-md bg-[#EFF6FF] text-[9px] font-bold text-[#2563EB]">{b.name.slice(0, 1).toUpperCase()}</span>{b.name}</span>, b.calls.toLocaleString(), b.appointments, `${b.conversion}%`])}
+              />
+            </Card>
+          </div>
+
+          <div className="grid gap-3.5 md:grid-cols-2 xl:grid-cols-3">
+            <Card title="Recent Signups" action={<a href="/businesses" className="text-xs font-medium text-[#2563EB] hover:underline">View all</a>}>
+              <MiniTable
+                head={['Business', 'Vertical', 'Plan', 'Signed up', 'Status']}
+                empty="No businesses yet."
+                rows={data.recentSignups.map((b) => [b.name, b.vertical || '–', b.plan, b.createdAt ? shortDate(b.createdAt) : '–', <Pill key="s" status={b.status} />])}
+              />
+            </Card>
+            <Card title="Trial Expiring Soon">
+              <MiniTable
+                head={['Business', 'Days left', 'Calls', 'Plan']}
+                empty="No businesses are on a trial right now."
+                rows={data.trialExpiring.map((b) => [b.name, b.daysLeft ?? '–', b.calls, b.plan])}
+              />
+              <p className="mt-2 text-[10px] text-[#94A3B8]">Trials last {data.trialDays} days from the free-trial activation.</p>
+            </Card>
+            <Card title="Recently Converted to Paid">
+              <MiniTable
+                head={['Business', 'To plan', 'Converted on']}
+                empty="No trial has converted to a paid plan yet."
+                rows={data.recentlyConverted.map((b) => [b.name, b.toPlan, shortDate(b.convertedAt)])}
+              />
+            </Card>
+          </div>
+
+          {sample && <p role="note" className="rounded-lg border border-[#FDE68A] bg-[#FFFBEB] px-3 py-1.5 text-[11px] font-medium text-[#92400E]">Showing invented sample numbers for preview. Switch Sample data off to see the live platform.</p>}
+          <p className="text-[10px] text-[#94A3B8]">Updated {new Date(data.generatedAt).toLocaleTimeString()} · refreshes every minute. Revenue is the sum of recorded payment amounts; it stays zero until a payment is recorded.</p>
         </div>
       )}
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-2.5 mb-3.5">
-        {kpiCards.map((card) => (
-          <div key={card.label} className="bg-white border border-[#E2E8F0] rounded-lg p-2.5 sm:p-3 shadow-2xs flex flex-col gap-1.5 min-h-[96px]">
-            <div className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider">{card.label}</div>
-            <div>
-              <div className="text-lg font-bold text-[#0F172A] leading-none">{card.value}</div>
-              <div className={`text-[11px] font-semibold mt-1 ${toneClass(card.tone)}`}>{card.change}</div>
-            </div>
-            <div className="text-[10px] text-[#64748B] mt-auto">{card.subtext}</div>
-          </div>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-3.5 mb-3.5">
-        <section className="xl:col-span-2 bg-white border border-[#E2E8F0] rounded-lg p-3.5 shadow-2xs">
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <h2 className="text-xs font-bold text-[#0F172A]">Revenue, Profit & Usage Trend</h2>
-              <p className="text-[11px] text-[#64748B] mt-0.5">Solid lines are the selected range, dashed line is the previous period.</p>
-            </div>
-            <div className="flex items-center gap-2.5 text-[11px] font-semibold">
-              <span className="text-[#2563EB]">Revenue</span>
-              <span className="text-[#10B981]">Profit</span>
-              <span className="text-[#F59E0B]">Usage</span>
-              <span className="text-[#94A3B8]">Previous</span>
-            </div>
-          </div>
-          <svg viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} className="w-full h-[160px]" preserveAspectRatio="none" role="img" aria-label="Revenue, profit and usage trend versus the previous period">
-            {[0, 0.25, 0.5, 0.75, 1].map((ratio) => (
-              <line key={ratio} x1="0" x2={CHART_WIDTH} y1={CHART_HEIGHT * ratio} y2={CHART_HEIGHT * ratio} stroke="#E2E8F0" strokeWidth="1" />
-            ))}
-            <path d={previousPath} fill="none" stroke="#94A3B8" strokeWidth="1.5" strokeDasharray="5 5" vectorEffect="non-scaling-stroke" />
-            <path d={revenuePath} fill="none" stroke="#2563EB" strokeWidth="2.5" vectorEffect="non-scaling-stroke" />
-            <path d={profitPath} fill="none" stroke="#10B981" strokeWidth="2.5" vectorEffect="non-scaling-stroke" />
-            <path d={usagePath} fill="none" stroke="#F59E0B" strokeWidth="2.5" vectorEffect="non-scaling-stroke" />
-          </svg>
-          <div className="flex justify-between mt-1.5 text-[10px] text-[#94A3B8]">
-            {series.points.map((point) => (
-              <span key={point}>{point}</span>
-            ))}
-          </div>
-        </section>
-
-        <section className="bg-white border border-[#E2E8F0] rounded-lg p-3.5 shadow-2xs">
-          <h2 className="text-xs font-bold text-[#0F172A] mb-0.5">Revenue by Period</h2>
-          <p className="text-[11px] text-[#64748B] mb-3.5">Bar view of the same range for period-on-period reading.</p>
-          <div className="flex items-end justify-between gap-1.5 h-[140px]">
-            {series.revenue.map((value, index) => (
-              <div key={series.points[index]} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end">
-                <span className="text-[10px] font-semibold text-[#475569]">{value.toFixed(1)}</span>
-                <div className="w-full bg-[#2563EB] rounded-t-md min-h-[4px]" style={{ height: `${(value / barMax) * 100}%` }} />
-                <span className="text-[10px] text-[#94A3B8]">{series.points[index]}</span>
-              </div>
-            ))}
-          </div>
-        </section>
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-3.5 mb-3.5">
-        <section className="bg-white border border-[#E2E8F0] rounded-lg p-3.5 shadow-2xs">
-          <h2 className="text-xs font-bold text-[#0F172A] mb-0.5">Revenue to Profit Flow</h2>
-          <p className="text-[11px] text-[#64748B] mb-3.5">Waterfall of what remains after provider spend.</p>
-          <div className="space-y-2">
-            {providerCosts.map((line) => (
-              <div key={line.label} className="grid grid-cols-[76px_1fr_80px] items-center gap-2">
-                <span className="text-xs font-semibold text-[#475569]">{line.label}</span>
-                <div className="h-6 bg-[#F8FAFC] rounded overflow-hidden flex items-center">
-                  <div
-                    className="h-full rounded"
-                    style={{
-                      width: `${Math.max((Math.abs(line.value) / waterfallMax) * 100, 4)}%`,
-                      backgroundColor: line.color,
-                    }}
-                  />
-                </div>
-                <span className={`text-xs font-bold text-right ${line.value < 0 ? 'text-[#EF4444]' : 'text-[#0F172A]'}`}>
-                  {money(line.value)}
-                </span>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="bg-white border border-[#E2E8F0] rounded-lg p-3.5 shadow-2xs">
-          <h2 className="text-xs font-bold text-[#0F172A] mb-0.5">Usage &amp; Limit Pressure</h2>
-          <p className="text-[11px] text-[#64748B] mb-3.5">Capacity rows are live ceilings; burn row follows the selected range.</p>
-          <div className="space-y-3">
-            {usageLimits.map((limit) => {
-              const percent = Math.round((limit.used / limit.limit) * 100);
-              return (
-                <div key={limit.label} className="space-y-1">
-                  <div className="flex justify-between text-xs">
-                    <span className="font-medium text-[#475569]">{limit.label}</span>
-                    <span className="font-semibold text-[#0F172A]">{percent}%</span>
-                  </div>
-                  <div className="h-1.5 bg-[#F1F5F9] rounded-full overflow-hidden">
-                    <div className={`h-full rounded-full ${limitTone(percent)}`} style={{ width: `${Math.min(percent, 100)}%` }} />
-                  </div>
-                  <div className="text-[10px] text-[#94A3B8]">
-                    {limit.used.toLocaleString('en-US')} / {limit.limit.toLocaleString('en-US')}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-
-        <section className="bg-white border border-[#E2E8F0] rounded-lg p-3.5 shadow-2xs">
-          <h2 className="text-xs font-bold text-[#0F172A] mb-0.5">Sales Funnel Flow</h2>
-          <p className="text-[11px] text-[#64748B] mb-3.5">Lead to paid conversion in the selected range.</p>
-          <div className="space-y-2.5">
-            {series.funnel.map((step, index) => {
-              const width = (step.value / series.funnel[0].value) * 100;
-              const next = series.funnel[index + 1];
-              const conversion = next ? Math.round((next.value / step.value) * 100) : null;
-              return (
-                <div key={step.label}>
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-6 h-6 rounded-full bg-[#EFF6FF] text-[#2563EB] text-[11px] font-bold flex items-center justify-center flex-shrink-0">
-                      {index + 1}
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex justify-between text-xs mb-1">
-                        <span className="font-semibold text-[#0F172A]">{step.label}</span>
-                        <span className="font-bold text-[#475569]">{step.value.toLocaleString('en-US')}</span>
-                      </div>
-                      <div className="h-1.5 bg-[#F1F5F9] rounded-full overflow-hidden">
-                        <div className="h-full bg-[#2563EB] rounded-full" style={{ width: `${width}%` }} />
-                      </div>
-                    </div>
-                  </div>
-                  {conversion !== null && (
-                    <div className="ml-3 my-1 pl-6 border-l border-dashed border-[#CBD5E1] text-[10px] text-[#94A3B8]">
-                      {conversion}% conversion
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      </div>
-
-      <section className="bg-white border border-[#E2E8F0] rounded-lg p-3.5 shadow-2xs mb-3.5">
-        <h2 className="text-xs font-bold text-[#0F172A] mb-0.5">Sales by Vertical</h2>
-        <p className="text-[11px] text-[#64748B] mb-3.5">New paid tenants by business category in the selected range.</p>
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-          {series.verticalSales.map((item) => {
-            const top = Math.max(...series.verticalSales.map((v) => v.value)) || 1;
-            return (
-              <div key={item.label} className="space-y-1">
-                <div className="flex justify-between text-xs">
-                  <span className="font-medium text-[#475569]">{item.label}</span>
-                  <span className="font-semibold text-[#0F172A]">{item.value}</span>
-                </div>
-                <div className="h-1.5 bg-[#F1F5F9] rounded-full overflow-hidden">
-                  <div className="h-full rounded-full" style={{ width: `${(item.value / top) * 100}%`, backgroundColor: item.color }} />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
-      <section className="bg-white border border-[#E2E8F0] rounded-lg shadow-2xs overflow-hidden">
-        <div className="p-3 border-b border-[#E2E8F0]">
-          <h2 className="text-xs font-bold text-[#0F172A]">Executive Summary</h2>
-          <p className="text-[11px] text-[#64748B] mt-0.5">Operator read for {series.label.toLowerCase()}.</p>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-[#E2E8F0]">
-          <div className="p-3">
-            <div className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider mb-1.5">Revenue</div>
-            <p className="text-xs text-[#475569] leading-relaxed">
-              {money(m.revenue)} billed, {signed(m.revenueDelta)} {series.compare}. Expansion should target high-usage clinics where ROI is already proven.
-            </p>
-          </div>
-          <div className="p-3">
-            <div className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider mb-1.5">Usage</div>
-            <p className="text-xs text-[#475569] leading-relaxed">
-              {burnPercent}% of sold minutes consumed. Channel capacity is the tightest technical constraint, not the sold quota.
-            </p>
-          </div>
-          <div className="p-3">
-            <div className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider mb-1.5">Profit</div>
-            <p className="text-xs text-[#475569] leading-relaxed">
-              {money(m.grossProfit)} gross profit at {m.grossMargin}% margin ({signed(m.marginDelta)}). Watch telephony and TTS spend before adding cheaper plans.
-            </p>
-          </div>
-        </div>
-      </section>
     </div>
   );
 }

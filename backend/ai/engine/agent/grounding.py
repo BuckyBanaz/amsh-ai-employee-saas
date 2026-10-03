@@ -4,6 +4,12 @@ Anything else is an invented slot, and the reply is rewritten before the caller 
 
 import re
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
+from backend.ai.prompts import load_prompts
+
+
+def _engine_note(key):
+    return load_prompts("engine_notes")[key]
+
 
 _NUM = re.compile(r"\b(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)(?![a-z])", re.IGNORECASE)
 _HOURS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12}
@@ -101,11 +107,7 @@ def unbacked_claim(sentence: str, succeeded: Set[str]) -> Optional[str]:
     return None
 
 
-CLAIM_NOTE = (
-    "Your draft said the appointment was {kinds}, but no tool has confirmed that. Never claim an action is done before the "
-    "tool result says so. If the caller has already said yes to the read-back, call the tool now (book_appointment with "
-    "confirmed_by_caller=true); otherwise read the details back and ask for their confirmation."
-)
+CLAIM_NOTE = _engine_note("claim_note")
 
 # ---- model reasoning that leaked into the reply ---------------------------------------------------------------------
 _LEAK = re.compile(
@@ -122,8 +124,4 @@ def is_reasoning_leak(sentence: str) -> bool:
     return bool(_LEAK.search(sentence))
 
 
-GUARD_NOTE = (
-    "Your draft mentioned the time(s) {times}, but the caller did not say them and no tool returned them. "
-    "Never state or offer a time that did not come from check_availability or the caller. "
-    "Call check_availability first, or ask the caller what time suits them."
-)
+GUARD_NOTE = _engine_note("guard_note")

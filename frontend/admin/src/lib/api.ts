@@ -1,6 +1,6 @@
 /** Admin portal API client. The token lives in localStorage; 401 signs the admin out. */
 
-export const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010/api';
+export const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8010/api';
 
 const TOKEN_KEY = 'amsh_admin_token';
 const USER_KEY = 'amsh_admin_user';
@@ -201,6 +201,29 @@ export const fetchTenant = (id: string) => adminFetch<TenantDetail>(`/admin/tena
 export const fetchTenantSection = <T>(id: string, section: string) =>
   adminFetch<{ items: T[] }>(`/admin/tenants/${encodeURIComponent(id)}/${section}`);
 
+// ---- Services ----------------------------------------------------------------------------------------------------------
+
+export interface AdminServiceItem {
+  id: string;
+  name: string;
+  category: string;
+  businessId: string;
+  businessName: string;
+  businessType: string;
+  duration: string;
+  price: string;
+  currency: string;
+  status: 'Active' | 'Inactive';
+  restriction: string;
+  country: string;
+  toolCallMapping: string;
+  depositRequired: boolean;
+}
+
+export function fetchAdminServices(): Promise<{ items: AdminServiceItem[] }> {
+  return adminFetch<{ items: AdminServiceItem[] }>('/admin/services');
+}
+
 // ---- Dashboard overview ------------------------------------------------------------------------------------------------
 
 export interface Overview {
@@ -291,3 +314,196 @@ export function fetchAdminCalls(params?: {
   if (params?.limit) query.set('limit', String(params.limit));
   return adminFetch<AdminCallsResponse>(`/admin/calls?${query.toString()}`);
 }
+
+// ---- Business Users --------------------------------------------------------------------------------------------------
+
+export interface BusinessUserItem {
+  id: string;
+  name: string;
+  email: string;
+  business: string;
+  businessId: string | null;
+  businessType: string;
+  role: string;
+  status: 'Active' | 'Suspended';
+  lastActive: string;
+  emailVerified: boolean;
+  createdAt: string | null;
+}
+
+export interface BusinessUsersKpis {
+  totalUsers: number;
+  activeUsers: number;
+  suspendedUsers: number;
+  ownersCount: number;
+  businessesCount: number;
+}
+
+export interface BusinessUsersResponse {
+  items: BusinessUserItem[];
+  total: number;
+  kpis: BusinessUsersKpis;
+  facets: {
+    businesses: string[];
+    roles: string[];
+    types: string[];
+    statuses: string[];
+  };
+}
+
+export function fetchBusinessUsers(params?: {
+  search?: string;
+  role?: string;
+  status?: string;
+  business_id?: string;
+}): Promise<BusinessUsersResponse> {
+  const query = new URLSearchParams();
+  if (params?.search) query.set('search', params.search);
+  if (params?.role && params.role !== 'All') query.set('role', params.role);
+  if (params?.status && params.status !== 'All') query.set('status', params.status);
+  if (params?.business_id && params.business_id !== 'All') query.set('business_id', params.business_id);
+  return adminFetch<BusinessUsersResponse>(`/admin/business-users?${query.toString()}`);
+}
+
+export interface BusinessUserDetail {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  status: 'Active' | 'Suspended';
+  is_active: boolean;
+  emailVerified: boolean;
+  createdAt: string | null;
+  lastActive: string;
+  associatedBusinesses: {
+    id: string;
+    name: string;
+    type: string;
+    country: string;
+    aiReceptionist: string;
+    plan: string;
+    status: string;
+    roleInBusiness: string;
+    appointmentsToday: number;
+    callsToday: number;
+  }[];
+  activityLogs: {
+    id: string;
+    action: string;
+    target: string;
+    time: string;
+    ip: string;
+    outcome: string;
+  }[];
+}
+
+export function fetchBusinessUser(userId: string): Promise<BusinessUserDetail> {
+  return adminFetch<BusinessUserDetail>(`/admin/business-users/${encodeURIComponent(userId)}`);
+}
+
+export function updateBusinessUser(
+  userId: string,
+  body: { is_active?: boolean; role?: string }
+): Promise<{ id: string; status: string; is_active: boolean; role: string }> {
+  return adminFetch(`/admin/business-users/${encodeURIComponent(userId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+}
+
+export function inviteBusinessUser(body: { business_id: string; name: string; email: string; role: string; password?: string }) {
+  return adminFetch('/admin/business-users/invite', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+// ---- Receptionists ---------------------------------------------------------------------------------------------------
+
+export interface AdminReceptionistItem {
+  id: string;
+  name: string;
+  status: 'Active' | 'Paused' | 'Testing';
+  businessId: string;
+  businessName: string;
+  businessType: string;
+  voiceProvider: string;
+  voiceModel: string;
+  primaryLanguage: string;
+  languages: string[];
+  engine?: string;
+  greeting: string;
+  aiNumber: string;
+  forwardedFrom: string;
+  callsHandled: number;
+  resolutionRate: number | null;
+  lastCallAt: string | null;
+  createdAt: string | null;
+}
+
+export interface ReceptionistsKpis {
+  totalAgents: number;
+  activeAgents: number;
+  pausedAgents: number;
+  liveCalls: number;
+  callsToday: number;
+  avgResolutionRate: number;
+}
+
+export interface ReceptionistsResponse {
+  items: AdminReceptionistItem[];
+  total: number;
+  kpis: ReceptionistsKpis;
+  facets: {
+    businesses: string[];
+    types: string[];
+    providers: string[];
+    statuses: string[];
+  };
+}
+
+export function fetchAdminReceptionists(search?: string): Promise<ReceptionistsResponse> {
+  const query = search ? `?search=${encodeURIComponent(search)}` : '';
+  return adminFetch<ReceptionistsResponse>(`/admin/receptionists${query}`);
+}
+
+export function updateAdminReceptionist(
+  agentId: string,
+  body: {
+    status?: 'active' | 'paused' | 'testing';
+    name?: string;
+    greeting?: string;
+    voice_provider?: string;
+    voice_model?: string;
+    primary_language?: string;
+    languages?: string[];
+  }
+) {
+  return adminFetch(`/admin/receptionists/${encodeURIComponent(agentId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+}
+
+export function createAdminReceptionist(body: {
+  business_id: string;
+  name: string;
+  voice_provider?: string;
+  voice_model?: string;
+  primary_language?: string;
+  languages?: string[];
+  greeting?: string;
+  status?: string;
+}) {
+  return adminFetch('/admin/receptionists', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteAdminReceptionist(agentId: string) {
+  return adminFetch(`/admin/receptionists/${encodeURIComponent(agentId)}`, {
+    method: 'DELETE',
+  });
+}
+

@@ -1,5 +1,6 @@
 "use client";
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { adminFetch } from '@/lib/api';
 import Link from 'next/link';
 
 interface ConversationItem {
@@ -13,105 +14,72 @@ interface ConversationItem {
   topic: string;
   turns: number;
   duration: string;
-  sentiment: 'Positive' | 'Neutral' | 'Frustrated';
+  sentiment: 'Positive' | 'Neutral' | 'Frustrated' | 'Not analysed';
   sentimentColor: { bg: string; text: string };
   date: string;
 }
 
-const conversationsData: ConversationItem[] = [
-  {
-    id: 'cnv-8912',
-    businessId: 'b-1',
-    businessName: 'Smile Dental Clinic',
-    businessType: 'Dental Clinic',
-    channel: 'Voice Call',
-    user: 'Sarah Wilson',
-    userPhone: '+31 6 1234 5678',
-    topic: 'Teeth Cleaning Booking',
-    turns: 6,
-    duration: '2m 45s',
-    sentiment: 'Positive',
-    sentimentColor: { bg: 'bg-[#D1FAE5]', text: 'text-[#065F46]' },
-    date: 'Today, 10:24 AM',
-  },
-  {
-    id: 'cnv-8913',
-    businessId: 'b-2',
-    businessName: 'Amsterdam Dental Care',
-    businessType: 'Dental Clinic',
-    channel: 'WhatsApp',
-    user: 'Mark de Jong',
-    userPhone: '+31 8 9876 5432',
-    topic: 'Reschedule Check-up',
-    turns: 4,
-    duration: '1m 20s',
-    sentiment: 'Positive',
-    sentimentColor: { bg: 'bg-[#D1FAE5]', text: 'text-[#065F46]' },
-    date: 'Today, 10:18 AM',
-  },
-  {
-    id: 'cnv-8914',
-    businessId: 'b-3',
-    businessName: 'Berlin Health Center',
-    businessType: 'Medical Center',
-    channel: 'Voice Call',
-    user: 'Klaus Schmidt',
-    userPhone: '+49 170 998877',
-    topic: 'Emergency Dental Pain',
-    turns: 3,
-    duration: '1m 30s',
-    sentiment: 'Frustrated',
-    sentimentColor: { bg: 'bg-[#FEE2E2]', text: 'text-[#991B1B]' },
-    date: 'Today, 10:05 AM',
-  },
-  {
-    id: 'cnv-8915',
-    businessId: 'b-4',
-    businessName: 'Bella Rosa Ristorante',
-    businessType: 'Restaurant',
-    channel: 'Web Chat',
-    user: 'Marco Rossi',
-    userPhone: '+49 172 112233',
-    topic: 'Tasting Menu & Dietary Qs',
-    turns: 8,
-    duration: '3m 10s',
-    sentiment: 'Positive',
-    sentimentColor: { bg: 'bg-[#D1FAE5]', text: 'text-[#065F46]' },
-    date: 'Today, 09:50 AM',
-  },
-  {
-    id: 'cnv-8916',
-    businessId: 'b-5',
-    businessName: 'Glow & Shine Salon',
-    businessType: 'Beauty Salon',
-    channel: 'SMS',
-    user: 'Marie Dubois',
-    userPhone: '+33 6 554433',
-    topic: 'Cancellation Policy Inquiry',
-    turns: 5,
-    duration: '2m 05s',
-    sentiment: 'Neutral',
-    sentimentColor: { bg: 'bg-gray-100', text: 'text-gray-700' },
-    date: 'Today, 09:42 AM',
-  },
-  {
-    id: 'cnv-8917',
-    businessId: 'b-6',
-    businessName: 'FitLife Studio',
-    businessType: 'Fitness Studio',
-    channel: 'Voice Call',
-    user: 'James Smith',
-    userPhone: '+44 7700 900077',
-    topic: 'Corporate Gym Pass Pricing',
-    turns: 7,
-    duration: '5m 20s',
-    sentiment: 'Positive',
-    sentimentColor: { bg: 'bg-[#D1FAE5]', text: 'text-[#065F46]' },
-    date: 'Today, 09:15 AM',
-  },
-];
+
+
+const cap = (v: string | null | undefined) => (v ? v.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase()) : '');
+const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '–');
+const ago = (iso: string | null) => {
+  if (!iso) return 'No calls yet';
+  const s = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
+  if (s < 60) return 'Just now';
+  if (s < 3600) return `${Math.floor(s / 60)} min ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)} hr ago`;
+  return `${Math.floor(s / 86400)} d ago`;
+};
+const SENTIMENT_VIEW: Record<string, { label: ConversationItem['sentiment']; color: { bg: string; text: string } }> = {
+  positive: { label: 'Positive', color: { bg: 'bg-[#D1FAE5]', text: 'text-[#065F46]' } },
+  neutral: { label: 'Neutral', color: { bg: 'bg-gray-100', text: 'text-gray-700' } },
+  negative: { label: 'Frustrated', color: { bg: 'bg-[#FEE2E2]', text: 'text-[#991B1B]' } },
+};
+const CHANNEL_VIEW: Record<string, ConversationItem['channel']> = { phone: 'Voice Call', whatsapp: 'WhatsApp', playground: 'Web Chat' };
+const length = (sec: number) => (sec >= 60 ? `${Math.floor(sec / 60)}m ${sec % 60}s` : `${sec}s`);
 
 export default function ConversationsPage() {
+  const [conversationsData, setConversationsData] = useState<ConversationItem[]>([]);
+  const [loadError, setLoadError] = useState('');
+
+  useEffect(() => {
+    let alive = true;
+    const load = () =>
+      adminFetch<{ items: any[] }>('/admin/conversations')
+        .then((r) => {
+          if (!alive) return;
+          setLoadError('');
+          setConversationsData(
+            r.items.map((c) => {
+              const sent = SENTIMENT_VIEW[c.sentiment] || { label: 'Not analysed' as const, color: { bg: 'bg-gray-50', text: 'text-gray-500' } };
+              return {
+                id: c.id,
+                businessId: c.businessId,
+                businessName: c.businessName,
+                businessType: c.businessType || 'Business',
+                channel: CHANNEL_VIEW[c.channel] || 'Voice Call',
+                user: c.callerName || c.callerNumber || 'Unknown',
+                userPhone: c.callerNumber || '–',
+                topic: c.topic ? cap(c.topic) : c.summary ? String(c.summary).slice(0, 48) : '–',
+                turns: c.messages,
+                duration: length(c.durationSeconds),
+                sentiment: sent.label,
+                sentimentColor: sent.color,
+                date: when(c.startedAt),
+              };
+            })
+          );
+        })
+        .catch(() => alive && setLoadError('Could not load conversations from the API.'));
+    load();
+    const t = window.setInterval(() => document.visibilityState === 'visible' && load(), 30000);
+    return () => {
+      alive = false;
+      window.clearInterval(t);
+    };
+  }, []);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedBusiness, setSelectedBusiness] = useState<string>('All');
   const [selectedChannel, setSelectedChannel] = useState<string>('All');
