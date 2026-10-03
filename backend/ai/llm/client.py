@@ -14,16 +14,46 @@ from backend.server.common.config import get_settings
 logger = logging.getLogger(__name__)
 
 
+def pooled_http_client(timeout: float) -> httpx.AsyncClient:
+    """A long-lived client for a voice provider. httpx closes idle pooled connections after 5 s by default, which is
+    shorter than one caller utterance, so each turn re-did TCP+TLS (one or two extra round trips, worst from India to
+    US-hosted APIs). Keeping them open (PROVIDER_KEEPALIVE_SECONDS) lets the next turn reuse the warm connection."""
+    keepalive = float(getattr(get_settings(), "PROVIDER_KEEPALIVE_SECONDS", 120.0) or 5.0)
+    return httpx.AsyncClient(
+        timeout=timeout,
+        limits=httpx.Limits(max_connections=100, max_keepalive_connections=20, keepalive_expiry=keepalive),
+    )
+
+
+def reasoning_params(model: str) -> Dict[str, Any]:
+    """Extra payload for Groq models: gpt-oss is a reasoning model (keep its thinking short); other models reject it."""
+    return {"reasoning_effort": "low"} if "gpt-oss" in (model or "").lower() else {}
+
+
 class GroqLLMClient:
     """Client for Groq fast inference API (<300ms time-to-first-token)."""
 
     def __init__(self) -> None:
         self.settings = get_settings()
         self.api_key = getattr(self.settings, "GROQ_API_KEY", "")
-        self.model = "openai/gpt-oss-20b"
+        self.model = getattr(self.settings, "GROQ_MODEL", None) or "openai/gpt-oss-20b"
         self.api_url = "https://api.groq.com/openai/v1/chat/completions"
-        # Reused across calls: skips a TLS handshake (~100-200ms) per turn.
-        self._client = httpx.AsyncClient(timeout=4.0)
+        # Reused across calls: skips a TLS handshake (~100-200ms) per turn, as long as the connection stays pooled.
+        self._client = pooled_http_client(timeout=4.0)
+
+    async def warm(self) -> None:
+        """Open (or keep open) the pooled HTTPS connection to Groq so the next turn's completion skips TCP+TLS setup.
+        A GET on the model list costs no tokens. Never raises: warming is an optimisation, not a dependency."""
+        if not self.api_key:
+            return
+        try:
+            await self._client.get(
+                self.api_url.rsplit("/chat/completions", 1)[0] + "/models",
+                headers={"Authorization": f"Bearer {self.api_key}"},
+                timeout=3.0,
+            )
+        except Exception as e:
+            logger.debug("Groq warm-up failed: %s", e)
 
     async def extract_intent_and_slots(
         self,
@@ -81,7 +111,7 @@ Respond ONLY with valid JSON in this exact structure:
                     "temperature": 0.1,
                     "response_format": {"type": "json_object"},
                     # gpt-oss is a reasoning model; extraction needs no deep thinking.
-                    "reasoning_effort": "low",
+                    **reasoning_params(self.model),
                 },
             )
             if resp.status_code == 200:

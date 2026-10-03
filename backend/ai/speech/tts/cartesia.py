@@ -13,6 +13,8 @@ import httpx
 import websockets
 from websockets.exceptions import ConnectionClosed
 
+from backend.ai.llm.client import pooled_http_client
+from backend.ai.realtime import latency
 from backend.server.common.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -34,8 +36,9 @@ class CartesiaTTS:
         # voice. (The old default, "Skylar - Friendly Guide", is an American voice and sounded off for Indian callers.)
         self.voice_id = "f8f5f1b2-f02d-4d8e-a40d-fd850a487b3d"
         self.api_version = "2024-11-13"
-        # Reused across calls: skips TCP+TLS setup (~100-200ms) per utterance.
-        self._client = httpx.AsyncClient(timeout=10.0)
+        # Reused across calls: skips TCP+TLS setup (~100-200ms) per utterance. Long keep-alive so the connection is
+        # still open when the next turn starts (httpx's 5 s default expired it while the caller was speaking).
+        self._client = pooled_http_client(timeout=10.0)
         # Full-audio cache for the scripted prompts (greeting, slot questions) that
         # repeat across calls: a hit skips the Cartesia round trip entirely.
         self._audio_cache: dict[tuple, bytes] = {}
@@ -84,9 +87,11 @@ class CartesiaTTS:
         if not self.api_key:
             return
 
+        latency.mark("tts_request_start", chars=len(text))
         cache_key = (text, voice_id or self.voice_id, encoding, sample_rate, language, speed, emotion)
         cached = self._audio_cache.get(cache_key)
         if cached is not None:
+            latency.mark("tts_first_audio", cached=True)
             yield cached
             return
 
@@ -245,7 +250,13 @@ class CartesiaTTS:
         try:
             async with self._client.stream("POST", url, headers=headers, json=payload) as response:
                 if response.status_code == 200:
+                    collected = bytearray()
+                    # Each network chunk is yielded the moment it arrives: playback starts on the first bytes, never
+                    # after the whole sentence is synthesised.
                     async for chunk in response.aiter_bytes():
+                        if not collected:
+                            latency.mark("tts_first_audio", cached=False)
+                        collected.extend(chunk)
                         yield chunk
                 else:
                     error_text = (await response.aread()).decode("utf-8", errors="ignore")
@@ -254,6 +265,16 @@ class CartesiaTTS:
                     logger.log(level, f"[CARTESIA TTS] Error ({response.status_code}){' OUT OF CREDITS' if response.status_code == 402 else ''}: {error_text}")
         except Exception as e:
             logger.error(f"[CARTESIA TTS] Stream failed: {e}")
+
+    async def warm(self) -> None:
+        """Open (or keep open) the pooled HTTPS connection to Cartesia so the next sentence skips TCP+TLS setup.
+        Any response warms the connection; no audio is synthesised and no credits are spent. Never raises."""
+        if not self.api_key:
+            return
+        try:
+            await self._client.get("https://api.cartesia.ai/", timeout=3.0)  # tiny status response; same host/connection
+        except Exception as e:
+            logger.debug("[CARTESIA TTS] warm-up failed: %s", e)
 
     async def get_voices(self) -> list[dict]:
         """Fetch all available voices from Cartesia."""

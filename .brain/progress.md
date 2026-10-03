@@ -31,6 +31,8 @@ the evidence is unit tests (`backend/ai/evals/test_agent_core.py` 250/256, same 
   `operations/clinic`); Hindi/Hinglish conversation layer with a regional policy (India only, English untouched), per `issue.md`
   (`DOCS/21`); one `BusinessContext` (vertical + region + language + timezone + emergency numbers) now drives the engine and three
   hardcoded India values are gone; a booking guard makes "change my appointment" reschedule instead of creating a duplicate. Offline tests only, not tried on a real chat.
+- **2026-10-03 (merge):** branch `v1.1` (voice latency + barge-in) merged into `v1.5`; 328 offline tests (1 old failure). A real phone call is still the
+  only way to confirm the latency and barge-in changes.
 - **2026-10-03 (later):** five independent dimensions (vertical, language, accent, region from country, timezone) with a RUNTIME CONTEXT
   in the prompt; language packs for en / hi / es / fr / de / nl / ar (native fillers, fixed lines, TTS/STT, RTL flag) and a generic path for any
   other language; `GET /api/languages` for the dashboard; billing hardened (secure verify restored, auth, no free upgrades, real invoices).

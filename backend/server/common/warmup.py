@@ -57,20 +57,12 @@ async def _warmup_groq() -> None:
             logger.warning("[WARMUP] GROQ_API_KEY not set -- skipping Groq warmup")
             return
 
-        import httpx
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            await client.post(
-                "https://api.groq.com/openai/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {settings.GROQ_API_KEY}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": "openai/gpt-oss-20b",
-                    "messages": [{"role": "user", "content": "hi"}],
-                    "max_tokens": 1,
-                },
-            )
+        # Warm the pooled clients the call path actually uses. A throwaway `async with httpx.AsyncClient()` here opened
+        # and closed its own connection, so it never helped the first call.
+        from backend.ai.llm.client import llm_client
+        from backend.ai.speech.tts.cartesia import cartesia_tts
+
+        await asyncio.gather(llm_client.warm(), cartesia_tts.warm())
         state.groq_ready = True
         logger.info("[WARMUP] Groq connection pool ready")
     except Exception as e:

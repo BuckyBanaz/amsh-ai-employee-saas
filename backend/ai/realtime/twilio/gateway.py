@@ -29,6 +29,7 @@ from backend.ai.engine.conversation.nlu import ConversationalNLU
 from backend.ai.engine.agent.runtime import AgentRuntime, get_sim_runtime, store_sim_runtime
 from backend.ai.llm.client import llm_client
 from backend.ai.memory.session_memory import session_memory
+from backend.ai.realtime import latency
 from backend.ai.realtime.audio.mulaw import FRAME_BYTES, FRAME_DURATION_S, PCM_FRAME_BYTES, frame_stream
 from backend.ai.realtime.barge_in.coordinator import BargeInCoordinator
 from backend.ai.realtime.twilio.call_control import redirect_call
@@ -50,6 +51,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["voice"])
 vad = SimpleVAD()
+# Energy-VAD barge-in needs this many consecutive voiced 20 ms frames (60 ms). The AI is now interruptible for its whole
+# playback (not only while frames are being sent), so a single click or line-noise spike must not cut it off.
+BARGE_IN_MIN_VOICED_FRAMES = 3
 
 _WATCHDOG_LINES = {
     "en": {
@@ -101,6 +105,9 @@ class CallSession:
         self._silence_prompted = False
         self._busy = False
         self._watchdog_task: Optional[asyncio.Task] = None
+        self._voiced_frames = 0  # consecutive loud inbound frames while the AI is audible (VAD barge-in debounce)
+        self._turn_no = 0  # numbering for the per-turn [LATENCY] log
+        self._last_warm = 0.0  # monotonic time provider connections were last warmed (see _warm_providers)
 
     async def start(self, stream_sid: str, call_id: str, caller_number: str) -> None:
         self.stream_sid = stream_sid
@@ -164,11 +171,14 @@ class CallSession:
         )
         self._stt_connect_task = asyncio.create_task(self._connect_stt(call_id))
         self._watchdog_task = asyncio.create_task(self._watchdog())
+        self._warm_providers(force=True)  # LLM connection opens while the greeting plays, not on the first turn
 
         await self._speak_turn(greeting)
 
     async def _connect_stt(self, call_id: str) -> None:
         assert self.stt is not None
+        # Speech-started is handled from Deepgram's reader, so it still interrupts while a turn is being answered.
+        self.stt.on_speech_started = self._on_caller_speech_started
         if await self.stt.connect():
             self._stt_task = asyncio.create_task(self._consume_stt_events())
         else:
@@ -180,20 +190,69 @@ class CallSession:
         # Fast energy-based VAD as a low-latency barge-in trigger, ahead of
         # Deepgram's SpeechStarted event which carries ~endpointing delay.
         if self.barge_in.is_speaking and vad.is_speech(payload_b64, pcm=self.pcm):
-            await self.barge_in.handle_caller_speech(self.websocket, self.stream_sid)
+            self._voiced_frames += 1
+            if self._voiced_frames >= BARGE_IN_MIN_VOICED_FRAMES:
+                self._voiced_frames = 0
+                await self.barge_in.handle_caller_speech(self.websocket, self.stream_sid)
+        else:
+            self._voiced_frames = 0
+
+    async def _on_caller_speech_started(self) -> None:
+        await self.barge_in.handle_caller_speech(self.websocket, self.stream_sid)
+        # LATENCY: the caller is talking, so the LLM/TTS requests are a second or two away. Make sure their
+        # pooled HTTPS connections are open now instead of paying TCP+TLS after the caller stops.
+        self._warm_providers()
 
     async def _consume_stt_events(self) -> None:
         assert self.stt is not None
         async for event in self.stt.events():
-            if event["type"] == "speech_started":
-                await self.barge_in.handle_caller_speech(self.websocket, self.stream_sid)
+            if event["type"] == "speech_started":  # only queued when no on_speech_started hook is set
+                await self._on_caller_speech_started()
             elif event["type"] == "transcript" and event.get("is_final") and event.get("text", "").strip():
                 self._busy = True  # we are thinking/answering: the watchdog must not call this silence
+                tracker = self._new_turn_tracker(event)
+                token = latency.start_turn(tracker)
                 try:
                     await self._handle_transcript(event["text"])
                 finally:
+                    latency.end_turn(token)
+                    try:
+                        tracker.report()
+                    except Exception as e:  # measurement must never break a call
+                        logger.debug("latency report failed: %s", e)
                     self._busy = False
                     self.last_activity = time.monotonic()
+
+    def _new_turn_tracker(self, event: Dict[str, Any]) -> latency.TurnLatency:
+        """Per-utterance latency tracker. Origin = the caller's estimated end of speech (Deepgram word timing), clamped to
+        the moment the final transcript arrived; without word timings the origin is the transcript arrival itself."""
+        self._turn_no += 1
+        received = event.get("received_at") or time.monotonic()
+        speech_end = event.get("speech_end_at")
+        if speech_end is not None:
+            speech_end = min(speech_end, received)
+        tracker = latency.TurnLatency(self.call_id, self._turn_no, origin=speech_end if speech_end is not None else received)
+        if speech_end is not None:
+            tracker.mark("speech_end", at=speech_end)
+        tracker.mark("deepgram_final", at=received)
+        tracker.info.update({
+            "engine": self.agent_rt.mode if self.agent_rt else "state_machine",
+            "transcript_words": len(event.get("text", "").split()),
+            "speech_final": event.get("speech_final"),
+        })
+        return tracker
+
+    def _warm_providers(self, force: bool = False) -> None:
+        """Fire-and-forget keep-warm requests to Groq and Cartesia, at most every 20 s. Each provider client keeps its
+        connection pooled for PROVIDER_KEEPALIVE_SECONDS; this covers servers that close idle connections sooner."""
+        now = time.monotonic()
+        if not force and now - self._last_warm < 20.0:
+            return
+        self._last_warm = now
+        for coro in (llm_client.warm(), cartesia_tts.warm()):
+            task = latency.create_detached_task(coro)
+            self._bg_tasks.add(task)
+            task.add_done_callback(self._bg_tasks.discard)
 
     async def _handle_transcript(self, transcript: str) -> None:
         if not self.state_machine:
@@ -220,6 +279,7 @@ class CallSession:
             for t in self.state_machine.turns[-3:]
         ]
 
+        latency.mark("nlu_start")  # legacy engine: one NLU LLM call before the state machine replies
         nlu_result = await ConversationalNLU.analyze_turn(
             user_utterance=transcript,
             available_intents=available_intents,
@@ -231,6 +291,7 @@ class CallSession:
             missing_slot=last_asked_slot,
             recent_turns=recent_turns,
         )
+        latency.mark("nlu_end")
         print(f"🧠 NLU CATEGORY: {nlu_result.category.value} | INTENT: {nlu_result.intent} | CONF: {nlu_result.confidence} | SLOTS: {nlu_result.slots}", flush=True)
 
         result = await self.state_machine.process_user_turn(
@@ -249,7 +310,8 @@ class CallSession:
         print(f"=====================================================\n", flush=True)
 
         if self.agent_rt and self.agent_rt.mode == "shadow":  # silent comparison; never spoken, never writes
-            task = asyncio.create_task(self.agent_rt.shadow(self.call_id or "", transcript, bot_text))
+            # Detached context: the silent agent's LLM calls must not show up in this live turn's latency numbers.
+            task = latency.create_detached_task(self.agent_rt.shadow(self.call_id or "", transcript, bot_text))
             self._bg_tasks.add(task)
             task.add_done_callback(self._bg_tasks.discard)
 
@@ -279,12 +341,25 @@ class CallSession:
         answer (LLM down), so the caller falls back to the legacy state machine for this turn."""
         rt = self.agent_rt
         assert rt is not None and self.state_machine is not None
+        generation = self.barge_in.generation
+
+        async def speak(text: str, **extra: Any) -> bool:
+            # A barge-in anywhere in this turn (even between sentences, while earlier audio was still playing) stops
+            # every later sentence of the turn, not just the one being sent at that moment.
+            if self.barge_in.generation != generation:
+                return False
+            played = await self._speak_turn(text, **extra)
+            return played is not False and self.barge_in.generation == generation
+
         try:
-            run = await rt.run_turn(transcript, self._speak_turn)
+            run = await rt.run_turn(transcript, speak)
         except Exception as e:
             logger.warning(f"[AGENT] turn failed, falling back to state machine: {e}")
             return False
         turn = run.turn
+        tracker = latency.current()
+        if tracker is not None:
+            tracker.info.update({"interrupted": run.interrupted, "llm": turn.provider})
         if turn.degraded and not run.spoken_any:
             logger.warning(f"[AGENT] LLM unavailable ({turn.error}); using state machine for this turn")
             return False
@@ -319,12 +394,13 @@ class CallSession:
     async def _speak_turn(self, text: str, emotion: Optional[str] = None) -> bool:
         """Runs TTS playback as its own task so a barge-in can cancel just the
         playback without killing the STT consumer loop awaiting it.
-        Returns False if the caller interrupted (barge-in), True if it played to the end."""
+        Returns False if the caller interrupted (barge-in), True if every frame was handed to telephony."""
+        start = self.barge_in.generation
         speak_task = asyncio.create_task(self._stream_tts(text, emotion))
         self.barge_in.mark_speaking(speak_task)
         try:
             await speak_task
-            return True
+            return self.barge_in.generation == start
         except asyncio.CancelledError:
             logger.info(f"[TWILIO WS] Playback interrupted (barge-in) for call {self.call_id}")
             return False
@@ -347,11 +423,13 @@ class CallSession:
                 if self.barge_in.is_speaking or self._busy:
                     continue
                 now = time.monotonic()
+                # Silence starts when our audio finishes playing at the caller's end, not when we finished sending it.
+                quiet_since = max(self.last_activity, self.barge_in.playback_until)
                 if limit and now - self.call_started > limit:
                     await self._speak_turn(say["limit"])
                     self.should_close = True
                     return
-                if silence and now - self.last_activity > silence:
+                if silence and now - quiet_since > silence:
                     if not self._silence_prompted:
                         self._silence_prompted = True
                         await self._speak_turn(say["still_there"])
@@ -384,6 +462,7 @@ class CallSession:
         sent = 0
         async for frame_b64 in frames:
             sent += 1
+            # LATENCY: frames go out as soon as TTS bytes arrive (no whole-sentence buffering). Mark the first one.
             await self.websocket.send_text(
                 json.dumps(
                     {
@@ -394,6 +473,9 @@ class CallSession:
                     }
                 )
             )
+            self.barge_in.audio_sent(FRAME_DURATION_S)  # keeps the AI interruptible until this frame has played
+            if sent == 1:
+                latency.mark("first_audio_sent_to_telephony", chars=len(text))
             # Yield to event loop without sleeping 20ms to keep telephony jitter buffer full
             await asyncio.sleep(0.005)
         logger.info(f"[TTS OUT] call={self.call_id} frames={sent} text={text[:40]!r}")
@@ -402,7 +484,7 @@ class CallSession:
                 "event": "mark",
                 "streamSid": self.stream_sid,
                 "stream_sid": self.stream_sid,
-                "mark": {"name": "turn_end"}
+                "mark": {"name": self.barge_in.next_mark()}  # echoed by Twilio once played (see on_mark)
             })
         )
 
@@ -479,6 +561,9 @@ async def twilio_media_stream(websocket: WebSocket, business_id: str) -> None:
                     await session.handle_media(media_payload)
                 if session.should_close:
                     break
+
+            elif event_type == "mark":  # Twilio/Exotel: the audio before this mark has finished playing
+                session.barge_in.on_mark((data.get("mark") or {}).get("name"))
 
             elif event_type in ("stop", "closed", "hangup"):
                 logger.info(f"[WS GATEWAY] Call ended {session.call_id}")

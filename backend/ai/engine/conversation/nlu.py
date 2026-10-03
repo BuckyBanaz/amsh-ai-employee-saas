@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 from backend.ai.engine.conversation.spoken_numbers import normalize_phone, spoken_to_digits
-from backend.ai.llm.client import llm_client
+from backend.ai.llm.client import llm_client, reasoning_params
 
 logger = logging.getLogger(__name__)
 
@@ -222,7 +222,7 @@ RESPOND ONLY IN VALID JSON FORMAT MATCHING THIS STRUCTURE:
             ],
             "temperature": 0.1,
             "response_format": {"type": "json_object"},
-            "reasoning_effort": "low",
+            **reasoning_params(llm_client.model),
         }
 
         resp = await llm_client._client.post(

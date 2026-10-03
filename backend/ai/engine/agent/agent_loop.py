@@ -5,6 +5,7 @@
 The LLM writes every reply and decides when to call tools; the toolbox/validator decide what actually happens.
 `stream=True` yields complete sentences as soon as they exist so TTS can start before the model finishes."""
 
+import asyncio
 import json
 import logging
 import re
@@ -33,11 +34,16 @@ from backend.ai.engine.agent.datetime_utils import local_now
 from backend.ai.engine.conversation.i18n import language_code
 from backend.ai.engine.conversation.i18n import t
 from backend.ai.engine.guardrails.safety import SafetyGuardrails
+from backend.ai.realtime import latency
 from backend.ai.verticals.schemas import VerticalConfig
 
 logger = logging.getLogger(__name__)
 
 MAX_TOOL_ROUNDS = 3
+# Tools safe to run side by side when the model asks for several in one round ("tomorrow or Friday?"). Only pure reads
+# qualify: lookup_appointment assigns A1/A2 refs on the gate and search_knowledge may (re)build the index, so they stay
+# sequential.
+PARALLEL_SAFE_TOOLS = frozenset({"check_availability"})
 MAX_HISTORY_TURNS = 8
 
 _FALLBACK = {
@@ -137,12 +143,35 @@ class AgentTurn:
 
 
 class SentenceSplitter:
-    """Cuts streamed text into speakable sentences (handles 'Dr.' and Hindi danda)."""
+    """Cuts streamed text into speakable sentences (handles 'Dr.' and Hindi danda).
+
+    LATENCY: with `early=True` the *first* piece of a reply may be released at a clause boundary (", " / "; " / ": " /
+    " - ") instead of waiting for the sentence's full stop, so TTS starts while the model is still writing the rest:
+    "Sure, I can help you with that appointment, | what's your name?" speaks the first clause ~one clause sooner.
+    Only one early cut per splitter (one per LLM round): after that, audio is already playing and whole sentences sound
+    more natural. An early cut is refused when it would weaken a guard or sound wrong:
+      - fewer than `min_words` words (no choppy "Sure," / "Okay," TTS calls);
+      - any digit or time word: invented-time grounding must see the whole sentence ("at 10, 11 or 2 PM");
+      - the piece opens like a question: OneQuestion must still be able to hold / replace a question."""
 
     _END = re.compile(r"([.!?।])(\s+|(?=[A-Z]))")  # also splits glued sentences like "book?Sure thing!"
+    _CLAUSE = re.compile(r"(?:[,;:]|\s[-–—])\s+")
+    _NUMERIC = re.compile(
+        r"\d|\b(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|noon|midnight|o'?clock|am|pm|a\.m|p\.m|"
+        r"half|quarter|baje|dedh|dhai|saade|sava|paune)\b|बजे",
+        re.IGNORECASE,
+    )
+    _QUESTION_START = re.compile(
+        r"^\W*(?:\[[^\]]*\]\s*)*(?:what|which|when|where|who|whom|whose|why|how|would|could|can|shall|should|may|do|does|did|"
+        r"is|are|was|were|will|have|has|kya|kab|kaun|kis|kahan|kaise|kitn)\b",
+        re.IGNORECASE,
+    )
 
-    def __init__(self) -> None:
+    def __init__(self, early: bool = False, min_words: int = 4) -> None:
         self.buf = ""
+        self.early = early
+        self.min_words = min_words
+        self._emitted = False  # early cuts only apply before anything was emitted by this splitter
 
     def feed(self, delta: str) -> List[str]:
         self.buf += delta
@@ -156,7 +185,29 @@ class SentenceSplitter:
             out.append(head.strip())
             pos = m.end()
         self.buf = self.buf[pos:]
-        return [s for s in out if s]
+        if self.early and not self._emitted and not out:
+            out.extend(self._early_clause())
+        out = [s for s in out if s]
+        if out:
+            self._emitted = True
+        return out
+
+    def _early_clause(self) -> List[str]:
+        """The first clause at the head of the buffer that is long enough and safe, or nothing (keep waiting)."""
+        cut = None
+        for m in self._CLAUSE.finditer(self.buf):
+            head = self.buf[: m.start() + 1].strip() if self.buf[m.start()] in ",;:" else self.buf[: m.start()].strip()
+            if len(head.split()) < self.min_words:
+                continue
+            if self._NUMERIC.search(head) or self._QUESTION_START.search(head):
+                return []  # the sentence carries a time/number or is a question: wait for the full sentence
+            cut = (head, m.end())
+            break  # the first clause that is long enough: speak as early as possible
+        if not cut:
+            return []
+        head, end = cut
+        self.buf = self.buf[end:]
+        return [head]
 
     def flush(self) -> List[str]:
         rest, self.buf = self.buf.strip(), ""
@@ -229,7 +280,9 @@ class AgentEngine:
         channel: str = "voice",
         fillers: bool = False,
         accent: Optional[str] = None,
+        early_chunking: bool = False,
     ) -> None:
+        self.early_chunking = early_chunking  # streamed turns may release a safe first clause to TTS (SentenceSplitter)
         self.triggers = {**DEFAULT_TRIGGERS, **(triggers or {})}  # Escalation tab checklist
         self.frustrated_turns = 0
         self.language_pref: Optional[str] = None  # set when the caller asks to switch language
@@ -411,7 +464,7 @@ class AgentEngine:
                     return self._messages(group)
 
                 one_q = OneQuestion()
-                splitter = SentenceSplitter()
+                splitter = SentenceSplitter(early=self.early_chunking and stream)
 
                 if stream:
                     event_stream = self.backend.chat_stream(messages, tools)
@@ -517,8 +570,7 @@ class AgentEngine:
                             ],
                         }
                     )
-                    for c in calls:
-                        result = await self.toolbox.execute(c["name"], c["arguments"])
+                    for c, result in zip(calls, await self._run_tools(calls)):
                         group.append({"role": "tool", "tool_call_id": c["id"], "content": json.dumps(result, default=str)})
                     round_no += 1
                     continue
@@ -539,6 +591,22 @@ class AgentEngine:
         yield {"type": "done", "turn": self._result(reply, started, tools=list(self.toolbox.calls), first_ms=first_ms, degraded=degraded, error=error)}
 
     # ------------------------------------------------------------------ internals
+    async def _run_tools(self, calls: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Execute one round's tool calls. LATENCY: when every call in the round is a pure availability read they run
+        concurrently (each uses its own DB session in a worker thread), so checking two days costs one DB round trip
+        of wall time. Anything that writes or changes call state (booking, cancel, transfer, end_call) keeps the
+        original strict order, because the confirmation gate and idempotency checks depend on it."""
+        async def one(c: Dict[str, Any]) -> Dict[str, Any]:
+            latency.mark("tool_start", tool=c["name"])
+            try:
+                return await self.toolbox.execute(c["name"], c["arguments"])
+            finally:
+                latency.mark("tool_end", tool=c["name"])
+
+        if len(calls) > 1 and all(c["name"] in PARALLEL_SAFE_TOOLS for c in calls):
+            return list(await asyncio.gather(*(one(c) for c in calls)))
+        return [await one(c) for c in calls]
+
     def _offered_calling_number(self) -> bool:
         """Did our last reply propose using the number the caller is calling from?"""
         last = self.toolbox.last_assistant or ""
