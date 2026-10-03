@@ -66,7 +66,7 @@ export default function BusinessUsersPage() {
     business_id: '',
     name: '',
     email: '',
-    role: 'owner',
+    role: 'staff',
     password: '',
   });
   const [inviting, setInviting] = useState(false);
@@ -202,7 +202,7 @@ export default function BusinessUsersPage() {
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-xl font-bold text-[#0F172A] tracking-tight leading-tight">
-              Business Owners
+              Business Users
             </h1>
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -210,7 +210,7 @@ export default function BusinessUsersPage() {
             </span>
           </div>
           <p className="text-xs text-[#475569] mt-0.5 font-normal">
-            Primary clinic and business owners across active platform tenants.
+            Real staff, clinic owners, and operators across all active platform tenants.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -232,7 +232,7 @@ export default function BusinessUsersPage() {
               <line x1="12" y1="5" x2="12" y2="19"></line>
               <line x1="5" y1="12" x2="19" y2="12"></line>
             </svg>
-            Provision Owner
+            Provision User
           </button>
         </div>
       </header>
@@ -268,7 +268,7 @@ export default function BusinessUsersPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
         <div className="bg-white border border-[#E2E8F0] rounded-xl p-3.5 shadow-2xs hover:shadow-xs transition-shadow">
           <div className="flex items-center justify-between text-[11px] font-semibold text-[#94A3B8] uppercase tracking-wider mb-1">
-            <span>Total Business Owners</span>
+            <span>Total Business Users</span>
             <span className="w-2 h-2 rounded-full bg-blue-500"></span>
           </div>
           <div className="flex items-baseline justify-between">
@@ -283,7 +283,7 @@ export default function BusinessUsersPage() {
 
         <div className="bg-white border border-[#E2E8F0] rounded-xl p-3.5 shadow-2xs hover:shadow-xs transition-shadow">
           <div className="flex items-center justify-between text-[11px] font-semibold text-[#94A3B8] uppercase tracking-wider mb-1">
-            <span>Active Owners</span>
+            <span>Active Accounts</span>
             <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
           </div>
           <div className="flex items-baseline justify-between">
@@ -298,7 +298,7 @@ export default function BusinessUsersPage() {
 
         <div className="bg-white border border-[#E2E8F0] rounded-xl p-3.5 shadow-2xs hover:shadow-xs transition-shadow">
           <div className="flex items-center justify-between text-[11px] font-semibold text-[#94A3B8] uppercase tracking-wider mb-1">
-            <span>Suspended Owners</span>
+            <span>Suspended / Inactive</span>
             <span className="w-2 h-2 rounded-full bg-rose-500"></span>
           </div>
           <div className="flex items-baseline justify-between">
@@ -313,7 +313,7 @@ export default function BusinessUsersPage() {
 
         <div className="bg-white border border-[#E2E8F0] rounded-xl p-3.5 shadow-2xs hover:shadow-xs transition-shadow">
           <div className="flex items-center justify-between text-[11px] font-semibold text-[#94A3B8] uppercase tracking-wider mb-1">
-            <span>Verified Owners</span>
+            <span>Primary Clinic Owners</span>
             <span className="w-2 h-2 rounded-full bg-purple-500"></span>
           </div>
           <div className="flex items-baseline justify-between">
@@ -600,10 +600,10 @@ export default function BusinessUsersPage() {
             <div className="flex items-start justify-between mb-4">
               <div>
                 <h3 className="text-lg font-bold text-[#0F172A] leading-tight">
-                  Provision Business Owner
+                  Provision Business User
                 </h3>
                 <p className="text-xs text-[#64748B] mt-0.5">
-                  Directly provision and assign a business owner to a tenant clinic.
+                  Directly provision and assign a staff member to a tenant clinic.
                 </p>
               </div>
               <button
@@ -708,7 +708,7 @@ export default function BusinessUsersPage() {
                   disabled={inviting}
                   className="px-4 py-2 bg-[#2563EB] hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-sm disabled:opacity-50"
                 >
-                  {inviting ? 'Provisioning...' : 'Provision Owner'}
+                  {inviting ? 'Provisioning...' : 'Provision User'}
                 </button>
               </div>
             </form>

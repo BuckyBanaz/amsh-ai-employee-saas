@@ -887,9 +887,12 @@ def list_business_users(
     db: Session = Depends(get_db),
     admin: User = Depends(require_platform_admin),
 ):
-    """Returns all business staff/users across all tenants from real Database with KPIs and facets."""
+    """Returns business owners across all tenants from real Database with KPIs and facets."""
+
+    # Restrict strictly to owners as requested by user
     query = select(User, Business).outerjoin(Business, User.business_id == Business.id).where(
-        User.scope != "platform"
+        User.scope != "platform",
+        func.lower(User.role) == "owner",
     )
     if search and search.strip():
         like = f"%{search.strip()}%"
@@ -904,10 +907,11 @@ def list_business_users(
         
     results = db.execute(query.order_by(User.created_at.desc())).all()
     
-    # Also fetch all business users without search/filter for global KPIs & facets
+    # Also fetch all business owners without search/filter for global KPIs & facets
     all_users = db.execute(
         select(User, Business).outerjoin(Business, User.business_id == Business.id).where(
-            User.scope != "platform"
+            User.scope != "platform",
+            func.lower(User.role) == "owner",
         )
     ).all()
     
@@ -930,10 +934,10 @@ def list_business_users(
     total_users = len(all_users)
     active_users = sum(1 for u, _ in all_users if u.is_active)
     suspended_users = total_users - active_users
-    owners_count = sum(1 for u, _ in all_users if (u.role or "").lower() == "owner")
+    owners_count = total_users
     
     biz_names = sorted(list({b.name for _, b in all_users if b and b.name}))
-    roles = sorted(list({(u.role.title() if u.role else "Owner") for u, _ in all_users}))
+    roles = ["Owner"]
     types = sorted(list({((b.business_subtype or b.vertical or "clinic").replace("_", " ").title()) for _, b in all_users if b}))
     
     return {
