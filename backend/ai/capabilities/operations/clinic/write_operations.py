@@ -9,6 +9,7 @@ import uuid
 from typing import Any, Dict, Optional
 from sqlalchemy.orm import Session
 
+from backend.server.common.channels import channel_of
 from backend.server.database.models.transaction import Transaction
 from backend.server.database.models.service import Service
 
@@ -55,6 +56,7 @@ class ClinicWriteOperations:
             "doctor_name": doctor_name or "Duty Doctor",
             "notes": notes or "",
             "source": source,
+            "channel": channel_of({"source": source}, call_id),
             "price_amount": price_amount,
             "booked_at": datetime.now(timezone.utc).isoformat(),
         }

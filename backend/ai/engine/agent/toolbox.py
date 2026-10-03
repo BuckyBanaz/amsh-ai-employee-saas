@@ -12,6 +12,8 @@ from typing import Any, Callable, Dict, List, Optional, Set
 
 from sqlalchemy.orm import Session
 
+from backend.ai.capabilities.operations.clinic.booking_guard import existing_appointment_conflict
+from backend.ai.capabilities.operations.clinic.slot_availability import BLOCKING_STATUSES
 from backend.ai.capabilities.operations.clinic import ClinicReadOperations, ClinicWriteOperations
 from backend.ai.engine.agent.availability import Booked, booked_from_appointments, day_ranges, open_slots
 from backend.ai.engine.agent.datetime_utils import dates_in, format_time, parse_date, parse_time, speak_date
@@ -193,7 +195,7 @@ class AgentToolbox:
 
     # ------------------------------------------------------------------ helpers
     def _booked(self, db: Session, d: date) -> List[Booked]:
-        rows = ClinicReadOperations.get_appointments(db, self.business_id, date=d.isoformat(), status="confirmed")
+        rows = ClinicReadOperations.get_appointments(db, self.business_id, date=d.isoformat(), statuses=BLOCKING_STATUSES)
         return booked_from_appointments(rows)
 
     def _fk_call_id(self, db: Session) -> Optional[str]:
@@ -254,10 +256,22 @@ class AgentToolbox:
             return error
         # Idempotency first: a repeated confirm (or an STT double-fire) must not create a duplicate row, and the
         # caller's own existing appointment must not make its slot look "taken".
-        existing = ClinicReadOperations.get_appointments(db, self.business_id, date=fields["date"].isoformat(), status="confirmed")
+        existing = ClinicReadOperations.get_appointments(db, self.business_id, date=fields["date"].isoformat(), statuses=BLOCKING_STATUSES)
         for row in existing:
             if same_phone(row.get("phone_number"), fields["phone_number"]) and parse_time(row.get("preferred_time")) == fields["time"]:
                 return {"ok": True, "code": "already_booked", "message": "This appointment already exists. Confirm it to the caller.", "when": describe(fields, now.date())}
+
+        # A patient who already has an upcoming appointment and wants a change must reschedule it, never get a second booking.
+        upcoming = ClinicReadOperations.get_appointments(db, self.business_id, statuses=BLOCKING_STATUSES)
+        clash = existing_appointment_conflict(upcoming, fields["phone_number"], fields["service_name"], self.effective_said(), now.date())
+        if clash:
+            when_existing = f"{clash.get('preferred_date')} at {clash.get('preferred_time')}"
+            return err(
+                "existing_appointment",
+                f"This number already has an upcoming {clash.get('service_name')} on {when_existing}. Do NOT create another booking. If the caller "
+                "wants to change it, call lookup_appointment and then reschedule_appointment. Only if they clearly want an additional appointment, "
+                "ask them to confirm that and say so in their own words.",
+            )
 
         booked = booked_from_appointments(existing)
         problem = validate_slot(fields["date"], fields["time"], fields["doctor_name"] or None, self.facts, booked, now)
@@ -281,7 +295,7 @@ class AgentToolbox:
             preferred_date=fields["date"].isoformat(),
             preferred_time=format_time(fields["time"]),
             doctor_name=fields["doctor_name"] or None,
-            source="ai_voice_receptionist",
+            source="ai_whatsapp_chat" if getattr(self, "channel", "voice") == "chat" else "ai_voice_receptionist",  # chat gets no SMS: the reply itself confirms
             call_id=self._fk_call_id(db),
             status="confirmed",
         )
@@ -289,6 +303,9 @@ class AgentToolbox:
         return {"ok": True, "code": "booked", "message": "Booked. Tell the caller it is confirmed. Do not promise an SMS or email.", "appointment_id": row["id"], "when": describe(fields, now.date())}
 
     def _tool_lookup_appointment(self, args: Dict[str, Any], db: Session) -> Dict[str, Any]:
+        asked = args.get("phone_number")
+        if getattr(self, "channel", "voice") == "chat" and asked and not same_phone(asked, self.caller_number):
+            return err("not_yours", "In chat you can only look up appointments for the number you are messaging from. Politely say you cannot check another number's appointments.")
         phone = normalize_phone(args.get("phone_number") or self.caller_number)
         if len(phone) < 10:
             return err("bad_phone", "Need a full phone number to look up appointments.")

@@ -4,6 +4,8 @@ import { AppointmentItem } from '../../controllers/dashboard.controller';
 
 import { TableSkeleton } from '../common/ShimmerSkeleton';
 
+import { ChannelBadge } from './ChannelBadge';
+import { channelOfAppointment } from '../../utils/channels';
 interface AppointmentsListViewProps {
   appointments: AppointmentItem[];
   selectedAppointmentId?: string;
@@ -80,21 +82,9 @@ export function AppointmentsListView({
     );
   };
 
-  const getSourceBadge = (item: AppointmentItem) => {
-    const source = item.details?.source || (item.call_id ? 'ai_voice' : 'manual');
-    if (source.includes('ai') || source.includes('voice')) {
-      return (
-        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-[#F0F7FF] text-[#0066FF]">
-          AI Booked
-        </span>
-      );
-    }
-    return (
-      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-gray-100 text-gray-600">
-        Dashboard
-      </span>
-    );
-  };
+  const getSourceBadge = (item: AppointmentItem) => (
+    <ChannelBadge channel={channelOfAppointment(item)} label={item.channel_label} />
+  );
 
   const getInitials = (name: string) => {
     if (!name) return 'PT';

@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from backend.server.api.routes._shared import get_business_or_404, require_membership
 from backend.server.auth.security import get_current_user
+from backend.server.common.channels import channel_color, channel_label, channel_of
 from backend.server.database.models.call import Call
 from backend.server.database.models.transaction import Transaction
 from backend.server.database.models.user import User
@@ -111,14 +112,24 @@ def get_dashboard_stats(
         {"time": "8 PM", "calls": 14},
     ]
 
-    # 9. Appointment Sources breakdown
+    # 9. Appointment Sources breakdown: real counts per channel (phone, WhatsApp, email, website...), see server/common/channels.py
+    by_channel: Dict[str, int] = {}
+    for tx in all_txs:
+        if tx.type == "appointment":
+            key = channel_of(tx.details, tx.call_id)
+            by_channel[key] = by_channel.get(key, 0) + 1
+    channel_total = sum(by_channel.values())
     appointment_sources = {
-        "total": display_appointments,
+        "total": channel_total,
         "breakdown": [
-            {"source": "AI Calls", "label": "AI Calls", "percentage": 42, "count": 12, "color": "#0066FF"},
-            {"source": "WhatsApp", "label": "WhatsApp", "percentage": 32, "count": 9, "color": "#10B981"},
-            {"source": "Website", "label": "Website", "percentage": 18, "count": 5, "color": "#8B5CF6"},
-            {"source": "Walk-in", "label": "Walk-in", "percentage": 7, "count": 2, "color": "#F59E0B"},
+            {
+                "source": key,
+                "label": channel_label(key),
+                "percentage": round(count / channel_total * 100) if channel_total else 0,
+                "count": count,
+                "color": channel_color(key),
+            }
+            for key, count in sorted(by_channel.items(), key=lambda kv: -kv[1])
         ],
     }
 

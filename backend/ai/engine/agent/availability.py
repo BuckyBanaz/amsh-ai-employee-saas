@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, time
 from typing import Any, Dict, List, Optional, Tuple
 
+from backend.ai.capabilities.operations.clinic.slot_availability import slot_is_free
 from backend.ai.engine.agent.datetime_utils import parse_clock, parse_time, to_minutes
 
 DEFAULT_SLOT_MINUTES = 30
@@ -67,16 +68,13 @@ def is_free(
     slot_minutes: int,
     ignore_id: Optional[str] = None,
 ) -> bool:
-    """A named doctor is free if they have no overlapping appointment. Without a named doctor, the slot is
-    free while overlapping appointments are fewer than the number of doctors (min 1)."""
+    """Delegates to capabilities/operations/clinic/slot_availability.py (the rules live there, in one place)."""
     overlapping = [
-        b
+        b.doctor
         for b in booked
         if b.appointment_id != ignore_id and abs(to_minutes(b.start) - to_minutes(start)) < slot_minutes
     ]
-    if doctor:
-        return not any(b.doctor.lower() == doctor.lower() for b in overlapping)
-    return len(overlapping) < max(1, doctor_count)
+    return slot_is_free(overlapping, doctor, doctor_count)
 
 
 def open_slots(

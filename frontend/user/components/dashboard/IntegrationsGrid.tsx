@@ -116,7 +116,11 @@ const baseCatalog = [
     iconColor: 'text-[#25D366]',
     category: 'Communication',
     badgeText: 'Clinic Branded',
-    isWhatsappSpecial: true,
+    fields: [
+      { key: 'phone_number_id', label: 'Phone Number ID', placeholder: '1400432583145565' },
+      { key: 'waba_id', label: 'WhatsApp Business Account ID', placeholder: '1129742056242779' },
+      { key: 'access_token', label: 'Meta System User Token (EAA...)', placeholder: 'EAA...' },
+    ],
   },
   {
     id: 'custom-smtp',

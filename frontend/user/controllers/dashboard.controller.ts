@@ -92,6 +92,9 @@ export interface AppointmentItem {
   preferred_time: string;
   notes?: string;
   created_at?: string;
+  /** Where it came from: phone | whatsapp | web_chat | email | social | walk_in | dashboard | other (see utils/channels.ts). */
+  channel?: string;
+  channel_label?: string;
   details?: Record<string, any>;
 }
 

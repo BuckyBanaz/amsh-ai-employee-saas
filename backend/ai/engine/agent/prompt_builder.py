@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from backend.ai.capabilities.rules.business_hours import BusinessHoursRule
+from backend.ai.capabilities.rules.patient_privacy import PRIVACY_RULE
 from backend.ai.engine.agent.emotion import EMOTION_RULE
 from backend.ai.engine.agent.validator import BusinessFacts
 
@@ -159,10 +160,20 @@ def build_system_prompt(
         small_talk=_SMALL_TALK_ON if small_talk else _SMALL_TALK_OFF,
         confirm_flow=_CONFIRM_ON if require_confirmation else _CONFIRM_OFF,
     )
+    rules = rules + "\n" + PRIVACY_RULE
     if channel == "chat":
-        rules = rules.replace("on a live phone call", "in a WhatsApp text chat") + (
-            "\nCHANNEL: this is a WhatsApp text chat, not a call. Keep replies short (one to three short lines), plain text, no "
-            "emojis, times like 5:30 PM. You cannot transfer or hang up: if the caller needs a person, give the clinic's phone number."
+        for voice, chat in (
+            ("on a live phone call", "in a WhatsApp text chat"),
+            ("Shall I use the number you're calling from, or another one?", "Shall I use this WhatsApp number, or another one?"),
+            ("sound like a real person on the phone", "sound like a real person texting on WhatsApp"),
+        ):
+            rules = rules.replace(voice, chat)
+        rules = rules + (
+            "\nCHANNEL: this is a WhatsApp text chat, not a call. Never say \"call\", \"calling\" or \"phone call\" about this conversation: "
+            "the patient is messaging you on WhatsApp (say \"message\" or \"chat\"). Keep replies short (one to three short lines), plain text, no "
+            "emojis, times like 5:30 PM. You cannot transfer or hang up: if the caller needs a person, give the clinic's phone number. "
+            "PHONE: the number in \"Caller's number\" is the patient's WhatsApp number. Ask \"Shall I use this WhatsApp number, or another one?\"; "
+            "if they say yes or this number, use exactly that number as phone_number and never ask for it again."
         )
     location = ", ".join(p for p in (facts.address, facts.city) if p) or "not on file"
     prompt = (

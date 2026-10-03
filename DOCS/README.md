@@ -6,17 +6,17 @@ Last verified against the code: 2026-09-28 (branch `v0.6`). Every status below s
 Detailed change log: [`17_AMSh_Claude_Change_Tracker.md`](17_AMSh_Claude_Change_Tracker.md). Older specs are listed at the
 bottom (some are stale, see "Doc index").
 
-## Progress at a glance (estimate, 2026-09-28)
+## Progress at a glance (estimate, 2026-10-03)
 
 | Part | Done | Main pending |
 |---|---|---|
-| User frontend | ~73% | billing and integrations pages, onboarding plans / review / Twilio, conversations and analytics polish (in progress) |
-| Admin frontend | ~19% | 21 mock pages (5 of 26 are real) |
-| AI / voice | ~50% | real phone-call test, outbound, returning-patient recognition, regional languages, live take-over |
-| Server | ~61% | admin APIs, payments and invoices, quotas, Twilio / Exotel signatures, CI |
-| **Overall** | **~51%** | little of it has been verified in a real browser or on a real call |
+| User frontend | ~80% | onboarding plans / review / Twilio, conversations and analytics polish, dashboard still shows invented numbers when data is thin; billing invoices are fake |
+| Admin frontend | ~23% | 20 mock pages (6 of 26 are real) |
+| AI / voice | ~55% | real phone-call test (also confirms the latency work), outbound, live take-over; WhatsApp works on the Meta test number; Hindi/Hinglish layer tested offline only |
+| Server | ~66% | **auth on the new billing endpoints**, payment records, admin APIs, quotas, Twilio / Exotel signatures, CI |
+| **Overall** | **~56%** | little of it has been verified in a real browser or on a real call |
 
-Method and lists: [`../.brain/progress.md`](../.brain/progress.md).
+Method and lists: [`../.brain/progress.md`](../.brain/progress.md). What changed since 2026-09-28: tracker entries for 2026-09-30, 2026-10-01 (branch `v1.1`) and 2026-10-02/03 in `17_...`; new docs `19`, `20`, `21` (index in section 11).
 
 ---
 
@@ -184,8 +184,11 @@ sequenceDiagram
 Code: `backend/server/services/whatsapp_agent.py`, webhook in `routes/integrations.py`. Connect (embedded signup) and the test
 message existed before. Covered by 6 unit tests with a fake sender and fake model.
 
-**Not verified live** (needs a connected WhatsApp number and `META_APP_SECRET` in `.env`): a real message end to end, Meta's
-retry behaviour, and the 24 h rule (free-form replies only work within 24 h of the patient's message; reminders later need
+**Live on the Meta test number since 2026-10-02** (patient messaged, the agent replied and booked; see `20_...` section 4 for the
+go-live checklist: WABA subscription, real App Secret, `docker compose up -d --force-recreate api` after `.env` changes, template for the
+first message). Added the same day: returning-patient memory and a privacy rule, no SMS for WhatsApp bookings, every booking carries its
+channel (phone / WhatsApp / website chat / email / social / front desk / dashboard), WhatsApp-specific wording. Still **not verified**:
+Meta's retry behaviour on a long outage, a second-day conversation, and the 24 h rule (free-form replies only work within 24 h of the patient's message; reminders later need
 approved templates). Not built: images / voice notes (the patient gets a polite "please type"), template messages,
 human takeover from the dashboard, a per-business on/off switch for the WhatsApp agent.
 
@@ -364,7 +367,7 @@ Still to do: blocking a suspended clinic's dashboard login, admin password reset
 10. **[V]** Also from the market comparison, still to build: returning-patient recognition and intake, website widget, analytics with revenue estimate, outbound campaigns, compliance basics (recording disclosure, retention), agent versions and simulations, more Indian languages.
 
 ### WhatsApp
-1. **[W]** Try the agent with a real connected number (needs `META_APP_SECRET`).
+1. **[W]** Done on the Meta test number (2026-10-02). To do: a real clinic number (not the test number), rotate the App Secret that was pasted in a chat, check Meta's delivery statuses.
 2. **[W]** Template messages (needed after 24 h and for reminders), media / voice notes, human takeover, per-business switch.
 3. **[W]** Reminders exist (SMS; WhatsApp needs an approved template). To do: real-provider test, reply handling (a reply on WhatsApp starts a fresh conversation that does not know about the reminder), dashboard switch.
 
@@ -423,7 +426,10 @@ Still to do: blocking a suspended clinic's dashboard login, admin password reset
 | Doc | About | State |
 |---|---|---|
 | `README.md` (this file) | overview, pipelines, status | current |
-| `17_AMSh_Claude_Change_Tracker.md` | every change with evidence and limits | current (entries 1-64) |
+| `17_AMSh_Claude_Change_Tracker.md` | every change with evidence and limits | current (to 2026-10-03; the 2026-10-01 latency entries are on branch `v1.1`) |
+| `19_AMSh_Summit_Pitch.md` | summit talking points, competitors, ask checklist | current |
+| `20_AMSh_Returning_Patient_Memory_and_Privacy.md` | patient memory, privacy rules, booking channels, WhatsApp go-live checklist | current |
+| `21_AMSh_Language_Layer_and_Slot_Rules.md` | BusinessContext (vertical + region + language config), Hindi/Hinglish layer, slot rules, booking guard | current |
 | `18_AMSh_Completion_Plan_User_and_Admin.md` | phased plan for the user app, admin portal and server APIs (done / pending) | current |
 | `../.brain/progress.md` | overall progress percentage per part | current |
 | `features_list.md` | what the AI can do, with honest status tags, target features from docs 01-03, landing-page copy and claims to avoid | current |

@@ -19,6 +19,8 @@ from backend.ai.engine.agent.grounding import CLAIM_NOTE, GUARD_NOTE, is_reasoni
 from backend.ai.capabilities.rules.safety_emergency import EmergencyRule
 from backend.ai.engine.agent.emotion import EmotionState, parse_cues, tts_text
 from backend.ai.engine.agent.fillers import choose_backchannel, wait_text
+from backend.ai.engine.agent.language_layer import LanguageLayer
+from backend.ai.verticals.context import resolve_business_context
 from backend.ai.engine.agent.progress import booking_note
 from backend.ai.engine.agent.hindi import has_devanagari, hindi_escalation, looks_english, match_speaker_gender, normalize as normalize_hindi, requested_language
 from backend.ai.engine.agent.validator import is_affirmative
@@ -50,11 +52,11 @@ _DEVANAGARI_NOTE = (
     "keeping names and everyday English words (appointment, doctor, clinic) as they are. Do not switch to English."
 )
 _NUMBER_OFFER = re.compile(
-    r"\b(?:same|this|current|calling\s+from)\s+(?:phone\s+)?number\b|\bcalling\s+from\b|\bisi\s+number\b|\bis\s+number\s+(?:pe|par)\b|इसी\s+नंबर|इस\s+नंबर",
+    r"\b(?:same|this|current|calling\s+from)\s+(?:phone\s+|whatsapp\s+)?number\b|\b(?:calling|messaging|chatting)\s+from\b|\bisi\s+number\b|\bis\s+number\s+(?:pe|par)\b|इसी\s+नंबर|इस\s+नंबर",
     re.IGNORECASE,
 )
 _SAME_NUMBER = re.compile(
-    r"\b(?:same|this|yahi|isi|is)\s+number\b|\bcalling\s+from\b|इसी\s+नंबर|यही\s+नंबर|\bsame\s+wala\b", re.IGNORECASE
+    r"\b(?:same|this|yahi|isi|is)\s+(?:whatsapp\s+)?number\b|\bcalling\s+from\b|इसी\s+नंबर|यही\s+नंबर|\bsame\s+wala\b", re.IGNORECASE
 )
 _ENGLISH_FILLER = re.compile(
     r"\s*(?:sure|great|okay|ok|alright|perfect|awesome|absolutely|got it|of course|no problem|right|cool|nice)[!.,\s]*", re.IGNORECASE
@@ -108,6 +110,7 @@ class AgentTurn:
     degraded: bool = False  # LLM unavailable this turn; the caller can fall back to another engine
     error: Optional[str] = None
     provider: Optional[str] = None  # which LLM answered this turn (groq / gemini)
+    language_mode: str = "english"  # english | hindi | hinglish (the session's mode after this turn)
 
 
 class SentenceSplitter:
@@ -157,8 +160,17 @@ class OneQuestion:
         return out
 
 
+_ZERO_WIDTH = re.compile("[​‌‍⁠﻿]")
+
+
 def clean_for_speech(text: str) -> str:
     text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
+    if _ZERO_WIDTH.search(text):
+        # A model glitch (seen on gpt-oss after a rate-limit fallback): "Your <zero-width burst> … … Your appointment…".
+        # `\s` does not match zero-width spaces, so strip them, then the stray ellipses and the restarted first word.
+        text = _ZERO_WIDTH.sub("", text)
+        text = re.sub(r"(?:\s*(?:…|\.{3}))+(?=\s|$)", "", text)
+        text = re.sub(r"\b(\w+)(?:\s+\1\b)+", r"\1", text, flags=re.IGNORECASE)
     text = _EMOJI.sub("", text)  # a voice would read them out or stumble
     text = re.sub(r"[*#`_~]+", "", text)
     text = re.sub(r"\s+", " ", text).strip()
@@ -197,6 +209,10 @@ class AgentEngine:
         self.triggers = {**DEFAULT_TRIGGERS, **(triggers or {})}  # Escalation tab checklist
         self.frustrated_turns = 0
         self.language_pref: Optional[str] = None  # set when the caller asks to switch language
+        # Hindi/Hinglish conversation layer (engine/agent/language_layer.py): on only where the tenant's regional policy says so, and
+        # inert for English callers. Booking, tools and state below never depend on it.
+        self.context = resolve_business_context(facts, vertical_config, language)  # vertical + region + language + timezone + policies
+        self.lang = LanguageLayer(enabled=self.context.policies.hindi_hinglish_layer)
         self.gender = gender
         self.fillers_on = fillers  # natural fillers ("hmm...", "one moment..."): spoken calls only, see agent/fillers.py
         self._last_filler_turn = -99
@@ -225,6 +241,7 @@ class AgentEngine:
             business_id, caller_number, call_id, facts, db_factory, self.gate, self.now_fn, dry_run,
             require_confirmation=require_confirmation, disabled_tools=disabled_tools, transfer_phone=transfer_phone,
         )
+        self.toolbox.channel = channel
         self._system = build_system_prompt(
             facts, agent_name, self.now_fn(), caller_number, tone, gender,
             instructions=instructions, small_talk=small_talk, require_confirmation=require_confirmation, disabled=disabled_notes,
@@ -243,6 +260,11 @@ class AgentEngine:
         self._turns.append([{"role": "assistant", "content": text}])
         return text
 
+    def set_patient_context(self, text: str) -> None:
+        """Add what the clinic's own records say about THIS caller (see rules/patient_privacy.py) to the system prompt."""
+        if text:
+            self._system = self._system + "\n" + text
+
     def restore(self, turns: List[Tuple[str, str]]) -> None:
         """Rebuild the conversation from (caller, agent) pairs saved earlier, after the server restarted mid-call (a code
         reload drops in-memory sessions). Brings back what the model remembers, the language the caller asked for and the
@@ -258,6 +280,7 @@ class AgentEngine:
             asked = requested_language(said) or requested_language(roman)
             if asked:
                 self.language_pref = asked
+            self.lang.observe(said, roman, asked, self.auto_detect_language)
 
     async def turn(self, utterance: str) -> AgentTurn:
         final: Optional[AgentTurn] = None
@@ -280,6 +303,7 @@ class AgentEngine:
             self.language_pref = asked  # remembered for the rest of the call, until they ask for another language
         roman = normalize_hindi(utterance)  # Devanagari -> Roman approximation, used by the code-side guards only
         self._devanagari_turn = has_devanagari(utterance)
+        self.lang.observe(utterance, roman, asked, self.auto_detect_language)
         # The calling number may be used only once the caller agrees: they say "same number", or say yes to our offer.
         if _SAME_NUMBER.search(roman) or (is_affirmative(roman) and self._offered_calling_number()):
             self.toolbox.caller_number_ok = True
@@ -299,7 +323,7 @@ class AgentEngine:
         if not escalated and (hindi := hindi_escalation(utterance)):  # Hindi / Devanagari cues the English rules miss
             escalated, target = True, hindi
             esc_msg = _HINDI_EMERGENCY_MSG[self.language == "hi"] if hindi == "emergency" else None
-        if not escalated and (emergency := EmergencyRule.evaluate(utterance))[0]:  # capabilities/rules: English + Hindi, whole phrases
+        if not escalated and (emergency := EmergencyRule.evaluate(utterance, self.context.emergency_numbers))[0]:  # capabilities/rules: English + Hindi, whole phrases
             escalated, target = True, "emergency"
             esc_msg = _HINDI_EMERGENCY_MSG[self.language == "hi"] if has_devanagari(utterance) else emergency[1]
         transfers_on = "transfer_to_human" not in self.toolbox.disabled_tools
@@ -451,7 +475,7 @@ class AgentEngine:
                 if calls and use_tools:
                     if self.fillers_on and not spoken and not any(c["name"] in ("end_call", "transfer_to_human") for c in calls):
                         # Say something now: the next model call takes a moment and silence sounds like a dropped call.
-                        wait = wait_text(self._devanagari_turn or self.language_pref == "hi")
+                        wait = wait_text(self._devanagari_turn or self.language_pref == "hi" or self.lang.active)
                         first_ms = first_ms if first_ms is not None else elapsed()
                         spoken.append(wait)
                         self._wait_spoken = True
@@ -559,6 +583,8 @@ class AgentEngine:
         history = [m for g in self._turns[-MAX_HISTORY_TURNS:] for m in g]
         messages = [{"role": "system", "content": self._system}, *history, *group]
         # Notes go last so the static prompt prefix stays identical between turns (better for provider prompt caching).
+        if layer_note := self.lang.note(str(group[0].get("content") or ""), self.toolbox.last_assistant):
+            messages.append({"role": "system", "content": layer_note})
         if self.language_pref:
             messages.append({"role": "system", "content": _LANGUAGE_NOTE[self.language_pref]})
         elif self._devanagari_turn and self.auto_detect_language:
@@ -590,4 +616,5 @@ class AgentEngine:
             degraded=degraded,
             error=error,
             provider=getattr(self.backend, "last_provider", None) or getattr(self.backend, "provider", None),
+            language_mode=self.lang.mode.value,
         )

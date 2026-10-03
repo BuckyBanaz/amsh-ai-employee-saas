@@ -25,6 +25,9 @@ Each block: **headline**, one line of copy you can paste, status, and where a vi
    playful or apologetic. See: AI Studio playground.
 2. **Hindi, Hinglish and English, switching mid-call** ✅
    *"Speaks the way your patients speak. Ask it to switch language and it stays in that language for the rest of the call."*
+   2026-10-03: a dedicated Hindi/Hinglish conversation layer (India clinics only, English callers unchanged) keeps replies in
+   Hindi/Hinglish, handles "हेलो / जी / हाँ जी" as interruptions that continue the booking, and speaks dates the Hindi way.
+   Tested offline only; try it on a real call before claiming it (`21_...`).
 3. **You can interrupt it** ✅ (thresholds still to be tuned on real hardware)
    *"Talk over it like you would with a person. It stops and listens."*
 4. **Remembers the conversation** ✅
@@ -79,8 +82,11 @@ Each block: **headline**, one line of copy you can paste, status, and where a vi
     *"Never miss a patient call, nights and Sundays included."* Phone pipeline (Exotel for India, Twilio for global numbers) is
     built; make one real call before claiming it publicly.
 14. **WhatsApp assistant** 🟡
-    *"Patients message on WhatsApp and get the same helpful receptionist: questions answered, appointments booked."* Built
-    and tested with fakes; needs one real connected WhatsApp number and the Meta app secret.
+    *"Patients message on WhatsApp and get the same helpful receptionist: questions answered, appointments booked."* Worked end
+    to end on the Meta **test number** on 2026-10-02 (booked a real appointment). Needs a real clinic number before claiming it.
+    Recognises a returning patient by name and last visits (from the clinic's own records), offers the WhatsApp number for the
+    booking, and never discusses another patient's data (`20_...`). Every booking shows its channel on the dashboard.
+    Not built: images / voice notes, human takeover, templates for reminders.
 
 ### Gives the owner control
 

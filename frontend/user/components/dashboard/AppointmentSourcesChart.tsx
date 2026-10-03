@@ -8,15 +8,8 @@ interface AppointmentSourcesChartProps {
 }
 
 export function AppointmentSourcesChart({ sources, loading = false }: AppointmentSourcesChartProps) {
-  const defaultBreakdown = [
-    { source: 'ai_call', label: 'AI Phone Calls', percentage: 42, count: 12, color: '#0066FF' },
-    { source: 'whatsapp', label: 'WhatsApp Bot', percentage: 32, count: 9, color: '#10B981' },
-    { source: 'website', label: 'Web Widget', percentage: 18, count: 5, color: '#8B5CF6' },
-    { source: 'walk_in', label: 'Front Desk / Walk-in', percentage: 8, count: 2, color: '#F59E0B' },
-  ];
-
-  const breakdown = sources?.breakdown && sources.breakdown.length > 0 ? sources.breakdown : defaultBreakdown;
-  const total = sources?.total || breakdown.reduce((acc, b) => acc + b.count, 0) || 28;
+  const breakdown = sources?.breakdown ?? [];
+  const total = sources?.total ?? breakdown.reduce((acc, b) => acc + b.count, 0);
 
   // Donut SVG parameters (compact)
   const radius = 46;
@@ -100,6 +93,9 @@ export function AppointmentSourcesChart({ sources, loading = false }: Appointmen
 
       {/* Channel Breakdown List */}
       <div className="space-y-1.5 pt-2 border-t border-gray-100 mt-1">
+        {!loading && breakdown.length === 0 && (
+          <p className="text-[11px] text-gray-400 font-medium py-1">No bookings yet. Calls, WhatsApp, email and website bookings will show here.</p>
+        )}
         {breakdown.map((item, idx) => (
           <div key={idx} className="flex items-center justify-between text-[11px] py-0.5">
             <div className="flex items-center gap-1.5">

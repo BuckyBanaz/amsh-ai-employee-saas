@@ -8,29 +8,36 @@ Enforces Section 1 of the platform guidelines (Generic & Config-Driven).
 from typing import Dict, Any
 
 
+def region_flags(country: str = "", timezone: str = "", currency: str = "") -> tuple:
+    """(is_india, is_us, is_uk_eu) from the tenant's country, timezone and currency. The one place regions are detected: the
+    compliance resolver below and `language_policy.py` both use it."""
+    c = (country or "").strip().lower()
+    tz = (timezone or "").strip().lower()
+    curr = (currency or "").strip().upper()
+    is_india = "india" in c or c == "in" or "kolkata" in tz or "calcutta" in tz or curr == "INR"
+    is_us = "united states" in c or "usa" in c or c == "us" or "america" in tz or "pacific" in tz or "eastern" in tz
+    is_uk_eu = (
+        "uk" in c or "united kingdom" in c or "great britain" in c or c == "gb" or
+        "europe" in tz or "london" in tz or "amsterdam" in tz or "berlin" in tz or
+        curr in ("EUR", "GBP") or "germany" in c or "netherlands" in c or "france" in c
+    )
+    return is_india, is_us, is_uk_eu
+
+
+def detect_region(country: str = "", timezone: str = "", currency: str = "") -> str:
+    """'IN' | 'UK_EU' | 'US' | 'OTHER' (same precedence as the compliance chain below: India, then UK/EU, then US)."""
+    is_india, is_us, is_uk_eu = region_flags(country, timezone, currency)
+    return "IN" if is_india else "UK_EU" if is_uk_eu else "US" if is_us else "OTHER"
+
+
 def get_regional_compliance(
     vertical: str = "clinic",
     country: str = "",
     timezone: str = "",
     currency: str = "USD"
 ) -> Dict[str, Any]:
-    c = (country or "").strip().lower()
-    tz = (timezone or "").strip().lower()
-    curr = (currency or "").strip().upper()
     vert = (vertical or "clinic").strip().lower()
-
-    # Regional detection
-    is_india = (
-        "india" in c or c == "in" or "kolkata" in tz or "calcutta" in tz or curr == "INR"
-    )
-    is_us = (
-        "united states" in c or "usa" in c or c == "us" or "america" in tz or "pacific" in tz or "eastern" in tz
-    )
-    is_uk_eu = (
-        "uk" in c or "united kingdom" in c or "great britain" in c or c == "gb" or
-        "europe" in tz or "london" in tz or "amsterdam" in tz or "berlin" in tz or
-        curr in ("EUR", "GBP") or "germany" in c or "netherlands" in c or "france" in c
-    )
+    is_india, is_us, is_uk_eu = region_flags(country, timezone, currency)
 
     if vert in ("clinic", "healthcare", "dental", "medical"):
         if is_india:

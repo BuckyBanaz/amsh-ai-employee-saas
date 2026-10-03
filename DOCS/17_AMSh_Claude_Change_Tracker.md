@@ -8,6 +8,35 @@ Status legend: `DONE` / `IN PROGRESS` / `PLANNED` / `BLOCKED`
 
 ---
 
+## 2026-10-02
+
+### Entries
+
+| # | Item | Status | Files |
+|---|---|---|---|
+| 1 | **WhatsApp live on the Meta test number.** Amsh app subscribed to the WABA with a callback override, real App Secret loaded, webhook 403s gone, chat answered by the agent. Go-live checklist in `DOCS/20` section 4 | DONE (test number only) | Meta config, `.env` (not in git) |
+| 2 | **Returning-patient memory** on WhatsApp: name and latest 1 to 2 bookings from this clinic's records, matched on the sender's own number; profile name for new patients; the agent offers the WhatsApp number as the booking phone | DONE, **not tried on a real second-day chat** | `rules/patient_privacy.py` (new), `clinic/read_operations.py`, `agent/agent_loop.py`, `agent/prompt_builder.py`, `services/whatsapp_agent.py` |
+| 3 | **Privacy rule** in every prompt (no other patients' data, no business internals) and **chat lookup guard**: `lookup_appointment` refuses any number but the sender's own (before, a chat user could read or cancel anyone's appointment by naming their number) | DONE | `rules/patient_privacy.py`, `agent/toolbox.py` |
+| 4 | WhatsApp bookings no longer send the confirmation SMS (source `ai_whatsapp_chat`); replies sent inside the per-patient lock | DONE | `agent/toolbox.py`, `services/whatsapp_agent.py` |
+| 5 | `clean_for_speech` strips zero-width spaces, stray ellipses and the repeated first word (seen after a Groq 429 fallback) | DONE | `agent/agent_loop.py` |
+| 6 | Tests: `test_agent_core` 261 run, 6 failures, the same 6 as before (5 BillingSecurity, 1 owner-instructions prompt length); 6 new tests pass | DONE | `evals/test_agent_core.py` |
+| 7 | Logo upload saved files outside the `/static` mount (404 in sidebar and settings); upload dir now `backend/server/static/uploads/logos` | DONE, not re-tested in a browser | `server/api/routes/businesses.py` |
+| 8 | **Booking channels.** One list in `server/common/channels.py` (phone, whatsapp, web_chat, email, social, walk_in, dashboard, other); every appointment row carries `channel` and `channel_label`; old rows are derived (WhatsApp chats by `wa_` call id); new bookings store `details.channel`; dashboard shows the real channel instead of "AI Call"; Appointment Sources chart now real counts. Adding email / website / social later is one line | DONE, not checked in a browser | `server/common/channels.py` (new), `clinic/read_operations.py`, `clinic/write_operations.py`, `routes/dashboard_stats.py`, `frontend/user/utils/channels.ts` (new), `components/dashboard/ChannelBadge.tsx` (new), `AppointmentsTable.tsx`, `AppointmentsListView.tsx`, `AppointmentSourcesChart.tsx`, `controllers/dashboard.controller.ts` |
+| 9 | WhatsApp chat prompt no longer says "the number you're calling from" or "phone call"; it offers "this WhatsApp number" | DONE | `agent/prompt_builder.py`, `agent/agent_loop.py` |
+| 10 | **Slot rules fixed and moved into `operations/clinic/slot_availability.py`**: pending bookings now hold their slot; an unassigned ("Duty Doctor") booking now counts against a named doctor (capacity-aware). `get_appointments(statuses=...)` added | DONE, tests added | `operations/clinic/slot_availability.py` (new), `operations/clinic/read_operations.py`, `agent/availability.py`, `agent/toolbox.py` |
+| 11 | **Hindi/Hinglish language layer** per `issue.md`: session `LanguageMode` (english / hindi / hinglish), explicit switch sticky both ways, interruption handling ("हेलो", "जी"... continue, never restart), Hindi filler only in Hindi, `AgentTurn.language_mode`. English prompt unchanged | DONE, offline tests only | `agent/language_layer.py` (new), `agent/agent_loop.py` |
+| 12 | **Regional behaviour policy**: layer is allowed only where `verticals/language_policy.py` says so (India); region detection shared with the compliance resolver (`region_flags`, `detect_region`); no scattered country checks | DONE | `verticals/language_policy.py` (new), `verticals/compliance.py`, `agent/agent_loop.py` |
+| 13 | Tests: `test_agent_core` 269 run, same 6 failures; 8 new tests (slot rules, language layer, region policy) | DONE | `evals/test_agent_core.py` |
+| 14 | **BusinessContext**: one resolved context (vertical, region, language, timezone, emergency numbers, terminology, capabilities, policies) built from the business + vertical config and used by the engine; region data in `verticals/regions.py`. Vertical config trees (`verticals/configs`, `frontend/user/verticals`) untouched | DONE | `verticals/context.py` (new), `verticals/regions.py` (new), `agent/agent_loop.py` |
+| 15 | Hardcoded India values removed: emergency number now from the context, per-language emergency patterns table, `is_open` default timezone no longer Asia/Kolkata | DONE (compliance prompt text still has its own strings) | `rules/safety_emergency.py`, `rules/business_hours.py` |
+| 16 | **Booking guard**: an upcoming appointment plus change words (or same service) makes `book_appointment` refuse and point to `reschedule_appointment`; "another / for my wife" allowed; Hinglish change words covered | DONE | `operations/clinic/booking_guard.py` (new), `agent/toolbox.py` |
+| 17 | Tests: 273 run, same 6 failures; 4 new tests (context, emergency numbers, guard unit, guard in the booking tool) | DONE | `evals/test_agent_core.py` |
+| 18 | Found, **not fixed**: new billing endpoints have no auth; invoices and the card are hardcoded; Groq 429 rate limits; SMS providers inactive (Exotel balance, Twilio account). See `.brain/progress.md` Security | OPEN | `server/api/routes/billing.py` |
+
+Details: `DOCS/20_AMSh_Returning_Patient_Memory_and_Privacy.md`, `DOCS/21_AMSh_Language_Layer_and_Slot_Rules.md`.
+
+---
+
 ## 2026-09-28
 
 ### Entries

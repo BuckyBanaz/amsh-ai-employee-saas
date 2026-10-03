@@ -51,8 +51,8 @@ customers, services, receptionists, usage, analytics, health, integrations, secu
 detail pages). Sidebar links `/notifications` and `/settings` point to pages that do not exist.
 
 ### Phase 5: voice and channels
-Done: WhatsApp AI chat (built, not tried with a real number), reminders, missed-call text-back, staff alerts, calendar feed, natural fillers.
-Pending: Deepgram in the playgrounds (relay done, browser adapter missing), WhatsApp template messages / media / human takeover,
+Done: WhatsApp AI chat (live on the Meta test number since 2026-10-02, with returning-patient memory, privacy rule and booking channels, see doc 20), Hindi/Hinglish conversation layer (offline tests, doc 21), reminders, missed-call text-back, staff alerts, calendar feed, natural fillers.
+Pending: Deepgram in the playgrounds (relay done, browser adapter missing), WhatsApp on a real clinic number, WhatsApp template messages / media / human takeover,
 a real phone-call test, listening tests (laughter, fillers, interrupt thresholds), live take-over from the tenant dashboard.
 
 ### Phase 6: quality gate: not started

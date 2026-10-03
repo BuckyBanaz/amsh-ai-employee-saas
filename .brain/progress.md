@@ -27,7 +27,13 @@ the evidence is unit tests (`backend/ai/evals/test_agent_core.py` 250/256, same 
 - **2026-10-01 (branch `v1.1`):** voice latency pass (provider keep-alive 120 s, warm-ups at call start, early first-clause TTS,
   parallel availability checks, per-turn `[LATENCY]` log, `GROQ_MODEL` setting, simulated benchmark) and barge-in fixed for the whole
   playback. Done in code and tests, **not measured on a live call**.
-- **2026-10-02:** logo upload bug fixed (files were saved outside the `/static` mount, so the sidebar and settings logo gave 404);
+- **2026-10-03:** slot rules fixed (pending bookings and "Duty Doctor" bookings now block slots; rules in one file under
+  `operations/clinic`); Hindi/Hinglish conversation layer with a regional policy (India only, English untouched), per `issue.md`
+  (`DOCS/21`); one `BusinessContext` (vertical + region + language + timezone + emergency numbers) now drives the engine and three
+  hardcoded India values are gone; a booking guard makes "change my appointment" reschedule instead of creating a duplicate. Offline tests only, not tried on a real chat.
+- **2026-10-02:** WhatsApp connected end to end (Meta subscription, real App Secret); returning-patient memory + privacy rule + chat
+  lookup guard (`DOCS/20`); every booking now has a channel (phone / WhatsApp / website chat / email / social / front desk /
+  dashboard) and the dashboard shows it (`DOCS/20` 3b); WhatsApp chat wording fixed; WhatsApp bookings skip the SMS; zero-width-space reply glitch cleaned; logo upload bug fixed (files were saved outside the `/static` mount, so the sidebar and settings logo gave 404);
   Cartesia TTS and warm-up changes pushed to `v1.0`; summit pitch doc `DOCS/19_AMSh_Summit_Pitch.md`.
 
 ## User frontend (~80%, Antigravity works here)
@@ -35,7 +41,8 @@ Done: login / register / forgot / reset / verify-email, dashboard, AI Studio and
 appointments, doctors, knowledge, patients, services, onboarding (business, hours, services, staff, knowledge, AI, checkout,
 success), Automations settings tab, **billing page (plan and usage real, invoices and card are fake placeholders, see Security),
 integrations page, shimmer loaders**.
-Pending: onboarding plans / review / Twilio step, accept-invite page not wired, patients edit / delete,
+Pending: dashboard still shows invented numbers when data is thin (100 calls, % from yesterday, hourly call volume, performance ring),
+onboarding plans / review / Twilio step, accept-invite page not wired, patients edit / delete,
 conversations / analytics / notifications / team / settings polish (in progress), landing-page false claims,
 `tsc` errors (Conversations types, AI defaults settings, duplicate `getBusinessInfo`). Re-check the logo fix in a browser.
 
@@ -50,9 +57,10 @@ analytics, health, security, audit, tickets, announcements, verticals and their 
 Done: tool-calling agent with guards, booking / cancel / reschedule, Groq + Gemini chain, Hindi / Hinglish and gender fixes,
 emotion and laughter, natural fillers, Cartesia voice, Deepgram STT relay, barge-in in the browser, call recording, post-call
 analysis, WhatsApp chat agent, reminders / missed-call / staff alerts, safety rules, **latency instrumentation and keep-alive
-fixes, early-clause TTS, barge-in during playback, compliance resolver by region**.
+fixes, early-clause TTS, barge-in during playback, compliance resolver by region, WhatsApp live on the Meta test number, returning-patient
+memory (name and latest bookings from the clinic's own records) and a privacy rule so the agent never sees other patients' or business data**.
 Pending: **real phone-call test (also the only way to confirm the latency and barge-in changes; live calls were 3-4 s before)**,
-Deepgram in the playgrounds, outbound calls, returning-patient recognition, regional languages, live human take-over (UI
+Deepgram in the playgrounds, outbound calls, regional languages beyond Hindi/Hinglish, live human take-over (UI
 exists, backend not confirmed), agent versions, RAG (Qdrant is down), cost metrics, retiring the old engine, listening tests.
 Open question: whether to switch `GROQ_MODEL` to `llama-3.3-70b-versatile` (removes reasoning delay; tool calling must be re-checked first).
 Known small issue: after a barge-in the full reply, including unspoken sentences, is still saved to history.
@@ -75,5 +83,6 @@ global trial settings). `change_business_plan` is also defined twice in the file
 database. Do not show the invoice list or card to a real clinic until payments are stored and read from the database.
 
 ## Owner actions
+Rotate the Meta App Secret (it was pasted in a chat on 2026-10-02) and re-create the api container; add a real clinic (not "Demo clinic") on WhatsApp.
 Groq paid tier, Cartesia credits, keys in `.env` (`META_APP_SECRET`, `RESEND_API_KEY`), rotate keys once printed, delete 8 empty
 "Demo clinic" businesses, restart the backend and re-test logo upload, click through everything in a browser and on a real call.

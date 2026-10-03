@@ -41,7 +41,7 @@ class BusinessHoursRule:
         return "CLOSED NOW; no opening hours in the coming week."
 
     @staticmethod
-    def is_open(working_hours: Optional[Dict[str, Any]], timezone_str: str = "Asia/Kolkata") -> Tuple[bool, str]:
+    def is_open(working_hours: Optional[Dict[str, Any]], timezone_str: str = "UTC") -> Tuple[bool, str]:
         """(is_open_now, description). Open by default when no hours are configured."""
         text = BusinessHoursRule.describe(working_hours, local_now(timezone_str))
         return (not text.startswith("CLOSED"), text or "Open now")
