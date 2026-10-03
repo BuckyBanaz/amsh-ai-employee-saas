@@ -58,7 +58,7 @@ def call(name, **args):
     return {"content": None, "tool_calls": [{"id": f"c_{name}", "name": name, "arguments": json.dumps(args)}]}
 
 
-def make_engine(backend, caller="+919876543210", **facts_override):
+def make_engine(backend, caller="+919876543210", language=None, languages=None, accent=None, auto_detect_language=True, real_clock=False, **facts_override):
     factory, biz = make_db_factory()
     facts, profile = load_all(factory, biz)
     if facts_override:
@@ -75,7 +75,11 @@ def make_engine(backend, caller="+919876543210", **facts_override):
         db_factory=factory,
         agent_name=profile.name,
         gender=profile.gender,
-        now_fn=lambda: FIXED_NOW,
+        language=language or profile.language or "en",
+        languages=languages,
+        accent=accent,
+        auto_detect_language=auto_detect_language,
+        now_fn=None if real_clock else (lambda: FIXED_NOW),
     )
     return engine, factory
 
@@ -2132,21 +2136,23 @@ class HindiHinglishLayer(unittest.TestCase):
         self.assertIn("Do NOT start over", note)
         self.assertIn("आप किस तारीख को आना चाहेंगे?", note)  # the pending question is handed back to the model
 
-    def test_the_layer_follows_the_regional_policy_not_a_country_check(self):
+    def test_the_layer_follows_the_language_settings_not_the_region(self):
         from backend.ai.verticals.language_policy import resolve_language_policy
 
-        self.assertTrue(resolve_language_policy("India", "Asia/Kolkata").hindi_hinglish_layer)
-        self.assertTrue(resolve_language_policy("IN", "", "INR").hindi_hinglish_layer)
-        self.assertFalse(resolve_language_policy("Netherlands", "Europe/Amsterdam").hindi_hinglish_layer)
-        self.assertFalse(resolve_language_policy("United States", "America/New_York").hindi_hinglish_layer)
-        self.assertFalse(resolve_language_policy("", "").hindi_hinglish_layer)
-        # India business + Hindi caller: ON.  Netherlands business + the same Hindi caller: OFF.  Booking tools identical.
-        india, _ = make_engine(ScriptedBackend(reply("जी")), country="India", timezone="Asia/Kolkata")
-        nl, _ = make_engine(ScriptedBackend(reply("Sure.")), country="Netherlands", timezone="Europe/Amsterdam")
+        self.assertTrue(resolve_language_policy("hi", ["hi", "en"]).hindi_hinglish_layer)
+        self.assertTrue(resolve_language_policy("en", ["en", "hi"]).hindi_hinglish_layer)
+        self.assertFalse(resolve_language_policy("en", ["en", "es"]).hindi_hinglish_layer)  # Hindi not offered by this tenant
+        self.assertFalse(resolve_language_policy("nl", ["nl"]).hindi_hinglish_layer)
+        self.assertTrue(resolve_language_policy("en", None, auto_detect=True).hindi_hinglish_layer)  # nothing restricted: follow the caller
+        self.assertFalse(resolve_language_policy("en", None, auto_detect=False).hindi_hinglish_layer)
+        # Same Hindi caller, same language settings: ON in India AND in the Netherlands (it is a language feature)
+        india, _ = make_engine(ScriptedBackend(reply("जी")), country="India", timezone="Asia/Kolkata", language="hi", languages=["hi", "en"])
+        nl, _ = make_engine(ScriptedBackend(reply("जी")), country="Netherlands", timezone="Europe/Amsterdam", language="hi", languages=["hi", "en"])
         self.assertEqual(run(india.turn("आप हिंदी में बात कीजिए")).language_mode, "hindi")
-        self.assertEqual(run(nl.turn("आप हिंदी में बात कीजिए")).language_mode, "english")
-        self.assertFalse(any(self.MARK in m["content"] for m in nl.backend.seen[0]["messages"] if m["role"] == "system"))
-        self.assertEqual([t["function"]["name"] for t in india.tools], [t["function"]["name"] for t in nl.tools])
+        self.assertEqual(run(nl.turn("आप हिंदी में बात कीजिए")).language_mode, "hindi")
+        # An English-only tenant gets no Hindi layer, whatever its region
+        english_in_india, _ = make_engine(ScriptedBackend(reply("Sure.")), country="India", timezone="Asia/Kolkata", language="en", languages=["en"])
+        self.assertEqual(run(english_in_india.turn("आप हिंदी में बात कीजिए")).language_mode, "english")
 
     def test_the_layer_does_not_touch_the_tools(self):
         engine_en, _ = make_engine(ScriptedBackend(reply("ok")))
@@ -2163,13 +2169,11 @@ class BusinessContextAndGuards(unittest.TestCase):
         nl, _ = make_engine(ScriptedBackend(reply("ok")), country="Netherlands", timezone="Europe/Amsterdam")
         unknown, _ = make_engine(ScriptedBackend(reply("ok")), country="", timezone="UTC")
         self.assertEqual((india.context.region, india.context.emergency_numbers), ("IN", ("112", "108")))
-        self.assertEqual((nl.context.region, nl.context.timezone), ("UK_EU", "Europe/Amsterdam"))
-        self.assertEqual((unknown.context.region, unknown.context.emergency_numbers), ("OTHER", ()))
+        self.assertEqual((nl.context.region, nl.context.timezone, nl.context.emergency_numbers), ("NL", "Europe/Amsterdam", ("112",)))
+        self.assertEqual((unknown.context.region, unknown.context.emergency_numbers), ("UNKNOWN", ()))  # no country: nothing guessed
         self.assertEqual(india.context.vertical, "clinic")
         self.assertEqual(india.context.terminology["customer_label"], "Patient")  # from the clinic vertical config
         self.assertIn("book_appointment", india.context.enabled_capabilities)
-        self.assertTrue(india.context.policies.hindi_hinglish_layer)
-        self.assertFalse(nl.context.policies.hindi_hinglish_layer)
 
     def test_the_emergency_number_comes_from_the_region_not_the_rule(self):
         from backend.ai.capabilities.rules.safety_emergency import EmergencyRule, emergency_message
@@ -2220,6 +2224,300 @@ class BusinessContextAndGuards(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertEqual(result["code"], "existing_appointment")
         self.assertIn("reschedule_appointment", result["message"])
+
+
+class RuntimeContextDimensions(unittest.TestCase):
+    """Language, accent, region, timezone and vertical are independent runtime settings; nothing infers one from another."""
+
+    COMBOS = [
+        # (name, country, timezone, language, languages, accent, region, emergency numbers, hindi layer)
+        ("India + Hindi", "India", "Asia/Kolkata", "hi", ["hi", "en"], "hi-IN", "IN", ("112", "108"), True),
+        ("India + English", "India", "Asia/Kolkata", "en", ["en"], "en-IN", "IN", ("112", "108"), False),
+        ("Netherlands + Hindi", "Netherlands", "Europe/Amsterdam", "hi", ["hi"], "hi-IN", "NL", ("112",), True),
+        ("Netherlands + Dutch", "Netherlands", "Europe/Amsterdam", "nl", ["nl"], "nl-NL", "NL", ("112",), False),
+        ("US + English", "United States", "America/New_York", "en", ["en"], "en-US", "US", ("911",), False),
+    ]
+
+    def _engine(self, country, tz, language, languages, accent, **kw):
+        return make_engine(ScriptedBackend(reply("ok")), country=country, timezone=tz, language=language, languages=languages, accent=accent, **kw)[0]
+
+    def test_every_combination_is_valid_and_resolves_each_dimension_on_its_own(self):
+        for name, country, tz, language, languages, accent, region, numbers, hindi_layer in self.COMBOS:
+            engine = self._engine(country, tz, language, languages, accent)
+            c = engine.context
+            self.assertEqual((c.region, c.emergency_numbers, c.timezone, c.language, c.accent, c.vertical), (region, numbers, tz, language, accent, "clinic"), name)
+            self.assertEqual(c.policies.hindi_hinglish_layer, hindi_layer, name)
+            system = engine._system
+            self.assertIn("RUNTIME CONTEXT", system, name)
+            self.assertIn(f"Region: {c.region_name} ({region})", system, name)
+            self.assertIn(f"Timezone: {tz}", system, name)
+            self.assertIn(f"({language})", system, name)
+            self.assertIn(f"Accent/voice: {accent}", system, name)
+            self.assertIn("NEVER infer one value from another", system, name)
+
+    def test_emergency_numbers_come_from_the_region_only(self):
+        from backend.ai.verticals.regions import region_profile
+
+        self.assertEqual(region_profile("India").emergency_numbers, ("112", "108"))
+        self.assertEqual(region_profile("The Netherlands").emergency_numbers, ("112",))
+        self.assertEqual(region_profile("USA").emergency_numbers, ("911",))
+        self.assertEqual(region_profile("UK").emergency_numbers, ("999", "112"))
+        self.assertEqual(region_profile("").emergency_numbers, ())
+        self.assertEqual(region_profile("Atlantis").code, "UNKNOWN")
+        # NL is not the UK: the old grouping gave Dutch clinics "999 / 112" and "A&E"
+        from backend.ai.verticals.compliance import get_regional_compliance
+
+        nl = get_regional_compliance("clinic", "Netherlands")
+        self.assertIn("112", nl["compliance_clause"])
+        self.assertNotIn("999", nl["compliance_clause"])
+        self.assertNotIn("A&E", nl["compliance_clause"])
+        self.assertNotIn("NHS", nl["framework"])
+
+    def test_region_is_never_inferred_from_timezone_currency_language_accent_or_phone(self):
+        from backend.ai.verticals.compliance import get_regional_compliance
+        from backend.ai.verticals.regions import region_profile
+
+        self.assertEqual(region_profile("").code, "UNKNOWN")  # an Indian timezone alone does not make a business Indian
+        self.assertNotIn("DPDP", get_regional_compliance("clinic", "", "Asia/Kolkata", "INR")["compliance_clause"])
+        self.assertNotIn("GDPR", get_regional_compliance("clinic", "", "Europe/Amsterdam", "EUR")["compliance_clause"])
+        # Same business, three different accents (and a +91 caller): the region does not move
+        regions = {
+            accent: self._engine("Netherlands", "Europe/Amsterdam", "hi", ["hi"], accent).context.region
+            for accent in ("hi-IN", "nl-NL", "en-US")
+        }
+        self.assertEqual(set(regions.values()), {"NL"})
+        india_caller, _ = make_engine(ScriptedBackend(reply("ok")), caller="+919876543210", country="Netherlands", timezone="Europe/Amsterdam")
+        self.assertEqual((india_caller.context.region, india_caller.context.emergency_numbers), ("NL", ("112",)))
+
+    def test_hindi_in_the_netherlands_has_the_hindi_layer_but_nothing_india_specific(self):
+        nl = self._engine("Netherlands", "Europe/Amsterdam", "hi", ["hi"], "hi-IN")
+        system = nl._system
+        self.assertTrue(nl.context.policies.hindi_hinglish_layer)  # language behaviour follows the language
+        self.assertNotIn("DPDP", system)
+        self.assertNotIn("DISHA", system)
+        self.assertNotIn("108", system)
+        self.assertNotIn("Region: India", system)  # (the context block itself says "Hindi does not mean India")
+        self.assertIn("Region: Netherlands (NL)", system)
+        self.assertIn("GDPR", system)
+        self.assertIn("Europe/Amsterdam", system)
+
+    def test_english_in_india_has_no_us_behaviour_and_no_hindi_layer(self):
+        india = self._engine("India", "Asia/Kolkata", "en", ["en"], "en-IN")
+        system = india._system
+        self.assertFalse(india.context.policies.hindi_hinglish_layer)
+        self.assertNotIn("HIPAA", system)
+        self.assertNotIn("911", system)
+        self.assertIn("DPDP", system)  # the region's own privacy text, from the region and not the language
+
+    def test_language_wording_comes_from_the_language_not_the_region(self):
+        from backend.ai.engine.conversation.i18n import t
+
+        self.assertNotEqual(t("hi", "greeting", business_name="X"), t("nl", "greeting", business_name="X"))
+        hindi_in_nl = self._engine("Netherlands", "Europe/Amsterdam", "hi", ["hi"], "hi-IN")
+        dutch_in_india = self._engine("India", "Asia/Kolkata", "nl", ["nl"], "nl-NL")
+        self.assertEqual(hindi_in_nl.greeting(), t("hi", "greeting", business_name=hindi_in_nl.facts.name))
+        self.assertEqual(dutch_in_india.greeting(), t("nl", "greeting", business_name=dutch_in_india.facts.name))
+
+    def test_the_stt_language_comes_from_settings_never_from_the_phone_number(self):
+        from backend.ai.speech.stt.language import resolve_stt_language
+
+        self.assertEqual(resolve_stt_language({"stt_language": "nl-NL", "accent": "hi-IN", "language": "hi"}), "nl-NL")
+        self.assertEqual(resolve_stt_language({"accent": "en-IN", "language": "en"}), "en-IN")  # an accent of the primary language refines it
+        self.assertEqual(resolve_stt_language({"accent": "hi-IN", "language": "nl"}), "nl")  # a stale accent of another language is ignored
+        self.assertEqual(resolve_stt_language({"language": "nl-NL"}), "nl")
+        self.assertEqual(resolve_stt_language({}), "en")  # no +91 -> en-IN guess
+
+    def test_the_timezone_comes_from_the_context_and_dates_follow_it(self):
+        from datetime import datetime, timezone
+        from unittest.mock import patch
+        from zoneinfo import ZoneInfo
+
+        from backend.ai.engine.agent.datetime_utils import parse_date
+
+        instant = datetime(2026, 10, 2, 22, 30, tzinfo=timezone.utc)  # the same moment everywhere
+        with patch("backend.ai.engine.agent.agent_loop.local_now", lambda tz: instant.astimezone(ZoneInfo(tz))):
+            kolkata = self._engine("India", "Asia/Kolkata", "en", ["en"], "en-IN", real_clock=True)
+            amsterdam = self._engine("Netherlands", "Europe/Amsterdam", "nl", ["nl"], "nl-NL", real_clock=True)
+            new_york = self._engine("United States", "America/New_York", "en", ["en"], "en-US", real_clock=True)
+            stamps = [e.now_fn().strftime("%Y-%m-%d %H:%M") for e in (kolkata, amsterdam, new_york)]
+            tomorrow = [parse_date("tomorrow", e.now_fn().date()).isoformat() for e in (kolkata, amsterdam, new_york)]
+        self.assertEqual(stamps, ["2026-10-03 04:00", "2026-10-03 00:30", "2026-10-02 18:30"])
+        self.assertEqual(tomorrow, ["2026-10-04", "2026-10-04", "2026-10-03"])  # "tomorrow" is relative to the business's own day
+
+    def test_one_engine_class_serves_every_combination(self):
+        import pathlib
+
+        names = {type(self._engine(c[1], c[2], c[3], c[4], c[5])).__name__ for c in self.COMBOS}
+        self.assertEqual(names, {"AgentEngine"})
+        files = [f.name.lower() for f in pathlib.Path(__file__).resolve().parents[1].rglob("*engine*.py")]
+        for banned in ("india", "hindi", "netherlands", "dutch", "clinic", "us_engine", "nl_engine"):
+            self.assertFalse([f for f in files if banned in f], banned)  # no country-, language- or vertical-specific engines
+
+    def test_missing_context_fails_explicitly_instead_of_defaulting(self):
+        import dataclasses
+
+        from backend.ai.capabilities.operations.registry import get_operations
+        from backend.ai.engine.agent.facts import load_facts
+        from backend.ai.verticals.context import resolve_business_context
+        from backend.ai.verticals.errors import MissingContextError, UnknownVerticalError
+
+        factory, biz = make_db_factory()
+        facts, _ = load_all(factory, biz)
+        config = vertical_registry.get_vertical("clinic")
+        with self.assertRaises(MissingContextError):
+            resolve_business_context(dataclasses.replace(facts, vertical=""), config)  # no silent "clinic"
+        with self.assertRaises(MissingContextError):
+            resolve_business_context(dataclasses.replace(facts, timezone=""), config)  # no silent UTC
+        with self.assertRaises(MissingContextError):
+            resolve_business_context(dataclasses.replace(facts, vertical="restaurant"), config)  # a clinic config is not a restaurant's
+        with factory() as db, self.assertRaises(MissingContextError):
+            load_facts(db, "no-such-business")  # no BusinessFacts(name="our clinic")
+        with self.assertRaises(UnknownVerticalError):
+            vertical_registry.get_vertical("no-such-vertical")  # no silent fallback to the clinic config
+        with self.assertRaises(MissingContextError):
+            get_operations(None)
+        with self.assertRaises(UnknownVerticalError):
+            get_operations("restaurant")
+        self.assertEqual(get_operations("clinic").read.__name__, "ClinicReadOperations")
+
+
+class LanguagePacks(unittest.TestCase):
+    """Whatever primary language /ai saves, the agent speaks it natively; a new language is data, not code."""
+
+    # every language the dashboard offers (Languages tab + accents): code, English name used in the prompt
+    UI_LANGUAGES = [("en", "English"), ("en-IN", "English"), ("hi", "Hindi (Hinglish is fine)"), ("es", "Spanish"), ("fr", "French"),
+                    ("de", "German"), ("ar", "Arabic"), ("nl", "Dutch")]
+
+    def _engine(self, language, languages=None, **kw):
+        return make_engine(ScriptedBackend(reply("ok")), language=language, languages=languages or [language], **kw)[0]
+
+    def test_every_language_the_dashboard_offers_is_spoken_natively(self):
+        from backend.ai.engine.agent.fillers import wait_text
+        from backend.ai.engine.conversation.i18n import language_code, t
+        from backend.ai.lexicon import language_pack
+
+        english_greeting = t("en", "greeting", business_name="X")
+        for code, name in self.UI_LANGUAGES:
+            base = language_code(code)
+            engine = self._engine(code)
+            self.assertEqual(engine.language, base, code)  # never collapsed to English
+            self.assertEqual(engine.context.language, base, code)
+            if base != "en":
+                self.assertNotEqual(t(base, "greeting", business_name="X"), english_greeting, code)  # greeting in its own language
+                self.assertIn(f"SPEAKING {name.upper()}", engine._system, code)  # native-speaker guidance in the prompt
+                self.assertTrue(language_pack(base).get("fillers"), code)  # native fillers exist as data
+                self.assertTrue(language_pack(base).get("strings") or base in ("hi", "es", "nl"), code)
+            else:
+                self.assertNotIn("SPEAKING", engine._system)  # English prompt is unchanged
+            self.assertTrue(wait_text(base == "hi", base if base not in ("hi", "en") else None), code)
+
+    def test_fixed_lines_are_spoken_in_the_active_language(self):
+        from backend.ai.engine.agent.agent_loop import _BILLING_MSG, _FALLBACK, _FRUSTRATED_MSG, _NO_TRANSFER, _UNSURE_CLAIM, _UNSURE_TIMES, _scripted
+
+        for table, key in ((_FALLBACK, "fallback"), (_NO_TRANSFER, "no_transfer"), (_BILLING_MSG, "billing"),
+                           (_FRUSTRATED_MSG, "frustrated"), (_UNSURE_CLAIM, "unsure_claim"), (_UNSURE_TIMES, "unsure_times")):
+            english = _scripted(table, key, "en")
+            for code in ("hi", "es", "fr", "de", "ar", "nl"):
+                self.assertNotEqual(_scripted(table, key, code), english, (key, code))
+            self.assertEqual(_scripted(table, key, "ta"), english)  # no pack yet: English, never an error
+
+    def test_native_fillers_come_from_each_languages_pack(self):
+        from backend.ai.engine.agent.fillers import choose_backchannel
+        from backend.ai.lexicon import language_pack
+
+        samples = {"es": ("¿Cuánto cuesta?", "El tratamiento cuesta cincuenta euros."), "nl": ("Hoeveel kost het?", "De behandeling kost vijftig euro."),
+                   "de": ("Wie viel kostet das?", "Die Behandlung kostet fünfzig Euro."), "fr": ("Combien ça coûte ?", "Le traitement coûte cinquante euros."),
+                   "ar": ("كم السعر؟", "العلاج يكلف خمسين يورو.")}
+        for code, (caller, sentence) in samples.items():
+            options = language_pack(code)["fillers"]["think"]
+            got = choose_backchannel(caller, sentence, None, 5, 0, 0, language=code)
+            self.assertIn(got, options, code)  # a native filler, not an English one
+            self.assertIsNone(choose_backchannel(caller, "Sure, the treatment costs fifty euros.", None, 5, 0, 0, language=code), code)  # English reply: none
+            self.assertIsNone(choose_backchannel(caller, sentence, "worried", 5, 0, 0, language=code), code)  # never for a worried caller
+
+    def test_the_caller_can_switch_to_any_language_that_has_a_pack(self):
+        from backend.ai.engine.agent.hindi import requested_language
+
+        asks = {"nl": "kunnen we in het Nederlands praten", "es": "hablemos en español", "de": "können wir auf Deutsch sprechen",
+                "fr": "pouvez-vous parler en français", "ar": "ممكن بالعربي", "hi": "can we talk in Hindi", "en": "can we talk in English"}
+        for code, text in asks.items():
+            self.assertEqual(requested_language(text), code, text)
+        self.assertIsNone(requested_language("I need an appointment tomorrow"))
+        backend = ScriptedBackend(reply("Natuurlijk."))
+        engine, _ = make_engine(backend, language="en", languages=["en", "nl"])
+        run(engine.turn("kunnen we in het Nederlands praten"))
+        self.assertEqual(engine.active_language, "nl")
+        note = " ".join(m["content"] for m in backend.seen[0]["messages"] if m["role"] == "system")
+        self.assertIn("speak Dutch", note)
+        self.assertIn("\"u\"", note)  # the pack's native-speaker style reached the model
+
+    def test_a_language_without_a_pack_still_works(self):
+        from backend.ai.engine.agent.fillers import choose_backchannel, wait_text
+
+        engine = self._engine("ta")  # Tamil: no pack and no locale file yet
+        self.assertEqual((engine.language, engine.context.language), ("ta", "ta"))
+        self.assertIn("SPEAKING TAMIL", engine._system)
+        self.assertIn("native speaker", engine._system)  # the generic instruction: real native fillers, no translated English ones
+        self.assertEqual(wait_text(False, "ta"), "One moment…")  # no code-chosen native filler without a pack
+        self.assertIsNone(choose_backchannel("¿?", "Tres palabras aquí", None, 5, 0, 0, language="ta"))
+
+    def test_tts_speaks_the_active_language(self):
+        from backend.ai.speech.tts.voice_profile import resolve_tts_language
+
+        self.assertEqual(resolve_tts_language("nl", "Een momentje"), "nl")  # was guessed as English before
+        self.assertEqual(resolve_tts_language("ar", "لحظة"), "ar")
+        self.assertEqual(resolve_tts_language("de-DE", "Guten Tag"), "de")
+        self.assertEqual(resolve_tts_language("es", "Hola"), "es")
+        self.assertEqual(resolve_tts_language("hi", "aap kaise hain kya hai"), "hi")  # Hindi/English calls still mix per sentence
+        self.assertEqual(resolve_tts_language("en", "hello there"), "en")
+
+    def test_right_to_left_languages_are_ready_for_the_frontend(self):
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from backend.ai.lexicon import language_directory, text_direction
+        from backend.server.api.routes import languages as languages_route
+
+        self.assertEqual((text_direction("ar"), text_direction("ar-SA"), text_direction("en"), text_direction("hi"), text_direction("ta")),
+                         ("rtl", "rtl", "ltr", "ltr", "ltr"))
+        app = FastAPI()
+        app.include_router(languages_route.router)
+        body = TestClient(app).get("/api/languages").json()["languages"]
+        by_code = {row["code"]: row for row in body}
+        self.assertTrue({"en", "hi", "es", "fr", "de", "nl", "ar"} <= set(by_code))
+        self.assertEqual((by_code["ar"]["direction"], by_code["ar"]["native_name"]), ("rtl", "العربية"))
+        self.assertTrue(all(row["direction"] == "ltr" for code, row in by_code.items() if code != "ar"))
+        self.assertTrue(all(row["name"] and row["native_name"] and row["native_fillers"] for row in language_directory()))
+        arabic = self._engine("ar")
+        self.assertEqual(arabic.context.direction, "rtl")  # the engine knows; the prompt tells the model to write right to left
+        self.assertIn("written right to left", arabic._system)
+        self.assertEqual(self._engine("en").context.direction, "ltr")
+        self.assertNotIn("right to left", self._engine("nl")._system)
+
+    def test_adding_a_language_needs_only_data(self):
+        import json
+        import tempfile
+        from unittest.mock import patch
+
+        from backend.ai import lexicon
+
+        with tempfile.TemporaryDirectory() as tmp:
+            pathlib_tmp = __import__("pathlib").Path(tmp)
+            (pathlib_tmp / "xx.json").write_text(json.dumps({"name": "Testish", "fillers": {"think": ["Hmmx…"], "wait": "Momentx…"},
+                                                                "strings": {"greeting": "Hellx {business_name}"}, "ask_patterns": ["\\bin\\s+testish\\b"]}), encoding="utf-8")
+            with patch.object(lexicon, "LEXICON_DIR", pathlib_tmp):
+                lexicon.load_lexicon.cache_clear()
+                try:
+                    from backend.ai.engine.agent.fillers import wait_text
+                    from backend.ai.engine.agent.hindi import requested_language
+                    from backend.ai.engine.conversation.i18n import normalize_language, t
+
+                    self.assertEqual(normalize_language("xx"), "xx")
+                    self.assertEqual(t("xx", "greeting", business_name="Z"), "Hellx Z")
+                    self.assertEqual(wait_text(False, "xx"), "Momentx…")
+                    self.assertEqual(requested_language("can we talk in testish"), "xx")
+                finally:
+                    lexicon.load_lexicon.cache_clear()
 
 
 class HindiVoiceConsistency(unittest.TestCase):
@@ -3691,7 +3989,11 @@ class BillingSecurity(unittest.TestCase):
             with self.factory() as db:
                 yield db
 
+        from backend.server.auth.security import get_current_user
+
+        self.user = SimpleNamespace(scope="tenant", business_id=self.biz, role="owner")  # the logged-in clinic owner
         app.dependency_overrides[get_db] = override
+        app.dependency_overrides[get_current_user] = lambda: self.user
         self.client = TestClient(app)
         patches = [
             patch.object(billing, "get_settings", lambda: SimpleNamespace(
@@ -3734,7 +4036,7 @@ class BillingSecurity(unittest.TestCase):
 
     def test_yearly_and_yearly_only_plans_are_priced_from_the_catalog(self):
         self._order(cycle="yearly")
-        self._order(plan_id="annual", cycle="yearly")
+        self._order(plan_id="annual", cycle="yearly", business_id=None)  # no business: no proration, the plain catalog price
         self.assertEqual([c["amount"] for c in self.created], [990.0, 1200.0])
 
     def test_plans_that_cannot_be_bought_online_are_refused(self):
@@ -3754,6 +4056,79 @@ class BillingSecurity(unittest.TestCase):
         self.assertEqual(self._verify().status_code, 503)
         self.dev_fallbacks = True
         self.assertEqual(self._order().status_code, 200)  # local development still works with test orders
+
+    # ---- auth and money rules on the tenant endpoints
+    def _set_plan(self, key, status="active"):
+        from backend.server.database.models.business import Business
+
+        with self.factory() as db:
+            b = db.get(Business, self.biz)
+            b.plan, b.status = key, status
+            db.commit()
+
+    def test_billing_routes_need_a_member_of_that_business(self):
+        from types import SimpleNamespace
+
+        self.user = SimpleNamespace(scope="tenant", business_id="some-other-business", role="owner")
+        base = f"/api/billing/businesses/{self.biz}"
+        self.assertEqual(self.client.get(base).status_code, 403)
+        self.assertEqual(self.client.get(base + "/invoices").status_code, 403)
+        self.assertEqual(self.client.post(base + "/change-plan", json={"plan_id": "starter"}).status_code, 403)
+        self.assertEqual(self.client.post(base + "/start-trial", json={"plan_id": "starter"}).status_code, 403)
+        self.assertEqual(self._order().status_code, 403)  # an order for someone else's business
+        self.assertEqual(self._verify().status_code, 403)
+        self.user = SimpleNamespace(scope="tenant", business_id=self.biz, role="staff")  # a member, but not the owner or admin
+        self.assertEqual(self.client.post(base + "/change-plan", json={"plan_id": "starter"}).status_code, 403)
+
+    def test_trial_settings_can_only_be_changed_by_the_platform(self):
+        self.assertEqual(self.client.post("/api/billing/trial-config", json={"enabled": False}).status_code, 403)
+        self.assertEqual(self.client.put("/api/billing/trial-config", json={"enabled": False}).status_code, 403)
+        self.assertEqual(self.client.get("/api/billing/trial-config").status_code, 200)  # reading stays public
+
+    def test_a_plan_upgrade_is_never_free_but_a_downgrade_is(self):
+        base = f"/api/billing/businesses/{self.biz}"
+        self._set_plan("starter")
+        r = self.client.post(base + "/change-plan", json={"plan_id": "annual"})  # costs more than starter
+        self.assertEqual(r.status_code, 402)
+        self.assertEqual(self._biz()[0], "starter")
+        self._set_plan("annual")
+        self.assertEqual(self.client.post(base + "/change-plan", json={"plan_id": "starter"}).status_code, 200)
+        self.assertEqual(self._biz()[0], "starter")
+        self.assertEqual(self.client.post(base + "/change-plan", json={"plan_id": "nope"}).status_code, 400)
+        self.assertEqual(self.client.post(base + "/change-plan", json={"plan_id": "acme"}).status_code, 400)  # enterprise plans are not self-serve
+
+    def test_the_free_trial_can_be_started_once(self):
+        base = f"/api/billing/businesses/{self.biz}/start-trial"
+        self.assertEqual(self.client.post(base, json={"plan_id": "starter"}).status_code, 200)
+        self.assertEqual(self._biz()[1], "trial")
+        self.assertEqual(self.client.post(base, json={"plan_id": "starter"}).status_code, 400)  # no resetting the trial
+
+    def test_invoices_and_payment_method_come_from_real_payments_only(self):
+        base = f"/api/billing/businesses/{self.biz}"
+        self._set_plan("lite")
+        empty = self.client.get(base + "/invoices").json()
+        self.assertEqual((empty["total_invoices"], empty["invoices"]), (0, []))  # nothing invented
+        self.assertIsNone(self.client.get(base).json()["payment_method"])  # no fake "Visa 4242"
+        self._set_plan("starter")
+        self._paid_order()
+        self.assertEqual(self._verify().status_code, 200)
+        invoices = self.client.get(base + "/invoices").json()
+        self.assertEqual(invoices["total_invoices"], 1)
+        self.assertEqual(invoices["invoices"][0]["amount_raw"], 99.0)
+        self.assertEqual(self.client.get(base).json()["payment_method"]["label"], "Razorpay Online")
+        self.assertEqual(self._verify().status_code, 200)  # the same payment verified again is not recorded twice
+        self.assertEqual(self.client.get(base + "/invoices").json()["total_invoices"], 1)
+
+    def test_an_upgrade_order_is_prorated_and_verify_expects_the_same_amount(self):
+        self._set_plan("starter")
+        r = self._order(plan_id="annual", cycle="yearly")  # starter yearly 990 -> annual 1200
+        self.assertEqual((r.json()["charge_amount"], r.json()["proration_applied"]), (210.0, True))
+        self._paid_order(notes={"plan_id": "annual", "cycle": "yearly", "business_id": self.biz}, amount=21000)
+        self.assertEqual(self._verify(plan_id="annual").status_code, 200)
+        self.assertEqual(self._biz()[0], "annual")
+        self._set_plan("starter")
+        self._paid_order(notes={"plan_id": "annual", "cycle": "yearly", "business_id": self.biz}, amount=100)  # paid far less than due
+        self.assertEqual(self._verify(plan_id="annual", razorpay_payment_id="pay_2").status_code, 400)
 
     # ---- verify: only what Razorpay says about the order counts
     def test_a_genuine_payment_activates_the_plan_for_the_business(self):

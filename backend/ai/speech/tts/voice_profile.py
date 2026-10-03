@@ -4,15 +4,13 @@ so both the legacy loader and the LLM agent can use them without an import cycle
 import re
 from typing import Any, Optional
 
+from backend.ai.lexicon import load_lexicon
+
 _DEVANAGARI = re.compile(r"[ऀ-ॿ]")
-# Roman-script Hindi words that are not also common English words (so plain English never trips it).
-_HINGLISH_WORDS = frozenset(
-    "aap aapka aapko aapki kya hai hain nahi nahin haan kijiye kijiyega maaf mujhe mera meri main hoon karo kar karna "
-    "bataiye batao bolo kaise kaun kaunsa naam theek thik acha accha achha dobara sakte sakti sakta madad chahiye kal aaj "
-    "abhi toh aur mein ko ka ki ke se pe liye apna apka dhanyavad shukriya namaste ji bilkul zaroor samay din baje "
-    "kripya swagat clinic doctor appointment".split()
-)
-_CORE_HINGLISH = _HINGLISH_WORDS - {"clinic", "doctor", "appointment"}  # shared with English: never count on their own
+# Roman-script Hindi words that are not also common English words (so plain English never trips it): lexicon data.
+_HINDI_LEXICON = load_lexicon("hi")
+_HINGLISH_WORDS = frozenset(_HINDI_LEXICON.get("tts_words", []))
+_CORE_HINGLISH = _HINGLISH_WORDS - frozenset(_HINDI_LEXICON.get("tts_shared_with_english", []))  # shared with English: never count alone
 
 
 def detect_tts_language(text: str) -> str:
@@ -23,6 +21,15 @@ def detect_tts_language(text: str) -> str:
     words = re.findall(r"[a-z']+", (text or "").lower())
     hits = sum(1 for w in words if w in _CORE_HINGLISH)
     return "hi" if hits >= 2 and hits / max(len(words), 1) >= 0.25 else "en"
+
+def resolve_tts_language(active_language: Optional[str], text: str) -> str:
+    """The language code to synthesise `text` in. Hindi and English calls mix both, so the text decides (as before);
+    any other language (Dutch, Spanish, German...) is spoken in the language the agent is speaking, not guessed as English."""
+    code = str(active_language or "en").split("-")[0].lower()
+    if code in ("hi", "en"):
+        return detect_tts_language(text)
+    return str(load_lexicon(code).get("tts_language") or code)
+
 
 # Dashboard personalities (AIStudioWorkbench) -> default speaking speed when the owner did not set one.
 PERSONALITY_SPEED = {

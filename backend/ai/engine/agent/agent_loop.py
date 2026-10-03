@@ -20,6 +20,7 @@ from backend.ai.capabilities.rules.safety_emergency import EmergencyRule
 from backend.ai.engine.agent.emotion import EmotionState, parse_cues, tts_text
 from backend.ai.engine.agent.fillers import choose_backchannel, wait_text
 from backend.ai.engine.agent.language_layer import LanguageLayer
+from backend.ai.lexicon import language_pack
 from backend.ai.verticals.context import resolve_business_context
 from backend.ai.engine.agent.progress import booking_note
 from backend.ai.engine.agent.hindi import has_devanagari, hindi_escalation, looks_english, match_speaker_gender, normalize as normalize_hindi, requested_language
@@ -29,6 +30,7 @@ from backend.ai.engine.agent.prompt_builder import build_system_prompt
 from backend.ai.engine.agent.toolbox import TOOL_SCHEMAS, AgentToolbox
 from backend.ai.engine.agent.validator import ActionGate, BusinessFacts
 from backend.ai.engine.agent.datetime_utils import local_now
+from backend.ai.engine.conversation.i18n import language_code
 from backend.ai.engine.conversation.i18n import t
 from backend.ai.engine.guardrails.safety import SafetyGuardrails
 from backend.ai.verticals.schemas import VerticalConfig
@@ -74,6 +76,27 @@ _LANGUAGE_NOTE = {
     "hi": "The caller asked you to speak Hindi. Reply in Hindi for the rest of the call, even when their next message contains English words or names, until they ask for another language. Use Devanagari if they write Devanagari, otherwise Roman Hinglish.",
     "en": "The caller asked you to speak English. Reply in English for the rest of the call, even when their next message is transcribed in another script, until they ask for another language.",
 }
+def _scripted(table: Dict[str, str], key: str, language: str) -> str:
+    """A fixed line the engine speaks itself (apology, transfer...). The base table has English and Hindi; every other language
+    reads it from its pack (`strings.<key>`), so a new language needs no code; with neither, English."""
+    code = (language or "en").split("-")[0].lower()
+    return table.get(code) or (language_pack(code).get("strings") or {}).get(key) or table["en"]
+
+
+def _language_note(code: str) -> str:
+    """The system note for a language the caller asked for. Hindi and English keep their tuned notes; any other language is
+    built from its pack (name + style guidance), or just its name when it has no pack."""
+    if code in _LANGUAGE_NOTE:
+        return _LANGUAGE_NOTE[code]
+    pack = language_pack(code)
+    name = pack.get("name") or code
+    note = (f"The caller asked you to speak {name}. Reply in {name} for the rest of the call, even when their next message is transcribed "
+            "in another script or contains words from another language, until they ask for another language.")
+    style = pack.get("style") or (f"Speak {name} the way a native speaker does on the phone: real everyday filler words, acknowledgements and "
+                                 "politeness forms of that language (never translate English fillers word for word).")
+    return f"{note} {style}"
+
+
 _HINDI_EMERGENCY_MSG = {
     True: "Yeh emergency lag rahi hai. Main aapko turant emergency coordinator se connect kar rahi hoon. Agar aap khatre mein hain toh abhi emergency services ko call kijiye.",
     False: "This sounds like an emergency. I am transferring you to an emergency care coordinator immediately. If you are in immediate danger, please dial emergency services right now.",
@@ -205,13 +228,16 @@ class AgentEngine:
         auto_detect_language: bool = True,
         channel: str = "voice",
         fillers: bool = False,
+        accent: Optional[str] = None,
     ) -> None:
         self.triggers = {**DEFAULT_TRIGGERS, **(triggers or {})}  # Escalation tab checklist
         self.frustrated_turns = 0
         self.language_pref: Optional[str] = None  # set when the caller asks to switch language
-        # Hindi/Hinglish conversation layer (engine/agent/language_layer.py): on only where the tenant's regional policy says so, and
-        # inert for English callers. Booking, tools and state below never depend on it.
-        self.context = resolve_business_context(facts, vertical_config, language)  # vertical + region + language + timezone + policies
+        # The authoritative runtime context: vertical, language, accent, region (from the country), timezone. Five independent
+        # dimensions; raises MissingContextError rather than defaulting. Everything regional below reads it.
+        self.context = resolve_business_context(facts, vertical_config, language, languages, auto_detect_language, accent)
+        # Language conversation layer (engine/agent/language_layer.py): on by the tenant's LANGUAGE settings, never by region, and
+        # inert for callers speaking another language. Booking, tools and state never depend on it.
         self.lang = LanguageLayer(enabled=self.context.policies.hindi_hinglish_layer)
         self.gender = gender
         self.fillers_on = fillers  # natural fillers ("hmm...", "one moment..."): spoken calls only, see agent/fillers.py
@@ -231,7 +257,7 @@ class AgentEngine:
         self.vertical_config = vertical_config
         self.backend = backend
         self.agent_name = agent_name
-        self.language = language
+        self.language = language_code(language)
         self.dry_run = dry_run
         self.now_fn = now_fn or (lambda: local_now(facts.timezone))
         self.gate = ActionGate()
@@ -246,7 +272,7 @@ class AgentEngine:
             facts, agent_name, self.now_fn(), caller_number, tone, gender,
             instructions=instructions, small_talk=small_talk, require_confirmation=require_confirmation, disabled=disabled_notes,
             primary_language=language, languages=languages, auto_detect_language=auto_detect_language, triggers=self.triggers,
-            channel=channel,
+            channel=channel, context=self.context,
         )
         if channel == "chat":  # a text chat has no call to transfer or hang up
             self.toolbox.disabled_tools |= {"transfer_to_human", "end_call"}
@@ -331,12 +357,12 @@ class AgentEngine:
             escalated = False  # trigger off or transfers off: a human request goes to the LLM, which will decline
         if not escalated and transfers_on and self.triggers["complex_billing"] and _BILLING.search(utterance):
             escalated, target = True, "front_desk"
-            esc_msg = _BILLING_MSG.get(self.language, _BILLING_MSG["en"])
+            esc_msg = _scripted(_BILLING_MSG, "billing", self.active_language)
         if not escalated and transfers_on and self.triggers["frustration"]:
             self.frustrated_turns = self.frustrated_turns + 1 if detect_sentiment(utterance) == Sentiment.FRUSTRATED else 0
             if self.frustrated_turns >= 2:  # same rule as the legacy engine: two upset turns in a row
                 escalated, target = True, "front_desk"
-                esc_msg = _FRUSTRATED_MSG.get(self.language, _FRUSTRATED_MSG["en"])
+                esc_msg = _scripted(_FRUSTRATED_MSG, "frustrated", self.active_language)
         if escalated:
             department = target or "front_desk"
             if self.dry_run or self.channel == "chat":  # chat: reply with the message, nothing to redirect
@@ -344,9 +370,9 @@ class AgentEngine:
                 result: Dict[str, Any] = {"ok": True}
             else:
                 result = await self.toolbox.transfer(department, f"Safety escalation: {utterance}")
-            reply = esc_msg or t(self.language, "transfer_generic")
+            reply = esc_msg or t(self.active_language, "transfer_generic")
             if not result.get("ok") and department != "emergency":
-                reply = _NO_TRANSFER.get(self.language, _NO_TRANSFER["en"])
+                reply = _scripted(_NO_TRANSFER, "no_transfer", self.active_language)
             group.append({"role": "assistant", "content": reply})
             self._commit(group)
             yield {"type": "sentence", "text": reply}
@@ -456,7 +482,7 @@ class AgentEngine:
                     logger.warning("Guard blocked a reply: invented time(s)=%s unbacked claim(s)=%s", times, claimed)
                     if guard_notes:  # the model repeated the mistake after a correction: say something safe instead
                         table = _UNSURE_CLAIM if claimed else _UNSURE_TIMES
-                        safe = table.get(self.language, table["en"])
+                        safe = _scripted(table, "unsure_claim" if claimed else "unsure_times", self.active_language)
                         first_ms = first_ms if first_ms is not None else elapsed()
                         spoken.append(safe)
                         yield {"type": "sentence", "text": safe}
@@ -475,7 +501,7 @@ class AgentEngine:
                 if calls and use_tools:
                     if self.fillers_on and not spoken and not any(c["name"] in ("end_call", "transfer_to_human") for c in calls):
                         # Say something now: the next model call takes a moment and silence sounds like a dropped call.
-                        wait = wait_text(self._devanagari_turn or self.language_pref == "hi" or self.lang.active)
+                        wait = wait_text(self._devanagari_turn or self.language_pref == "hi" or self.lang.active, language=self._pack_language())
                         first_ms = first_ms if first_ms is not None else elapsed()
                         spoken.append(wait)
                         self._wait_spoken = True
@@ -504,7 +530,7 @@ class AgentEngine:
             degraded, error = True, str(e)[:160]
 
         if not reply.strip():
-            reply = _FALLBACK.get(self.language, _FALLBACK["en"])
+            reply = _scripted(_FALLBACK, "fallback", self.active_language)
             first_ms = first_ms if first_ms is not None else elapsed()
             if not spoken and not degraded:  # when degraded the caller decides (e.g. fall back to another engine)
                 yield {"type": "sentence", "text": reply}
@@ -563,7 +589,8 @@ class AgentEngine:
         self._reply_started = True
         if self.fillers_on and not self._reply_started_before and not self._wait_spoken:
             sound = choose_backchannel(
-                self._raw_said[-1] if self._raw_said else "", sentence, self.emotion.mood, self.emotion.turn, self._last_filler_turn, self.emotion.turn
+                self._raw_said[-1] if self._raw_said else "", sentence, self.emotion.mood, self.emotion.turn, self._last_filler_turn, self.emotion.turn,
+                language=self._pack_language(),
             )
             if sound:
                 sentence = f"{sound} {sentence}"
@@ -574,6 +601,16 @@ class AgentEngine:
         if laugh:
             event["tts_text"] = tts_text(sentence, True)
         return event
+
+    @property
+    def active_language(self) -> str:
+        """The language the agent speaks right now: what the caller asked for, else the tenant's primary language (/ai settings)."""
+        return (self.language_pref or self.language or "en").split("-")[0].lower()
+
+    def _pack_language(self) -> Optional[str]:
+        """The active language when it is something other than Hindi/English (those keep their sentence-based handling)."""
+        active = self.active_language
+        return None if active in ("hi", "en") else active
 
     def _expects_hindi(self) -> bool:
         """The caller asked for Hindi, or is speaking Devanagari (speech-to-text output) and has not asked for English."""
@@ -586,7 +623,7 @@ class AgentEngine:
         if layer_note := self.lang.note(str(group[0].get("content") or ""), self.toolbox.last_assistant):
             messages.append({"role": "system", "content": layer_note})
         if self.language_pref:
-            messages.append({"role": "system", "content": _LANGUAGE_NOTE[self.language_pref]})
+            messages.append({"role": "system", "content": _language_note(self.language_pref)})
         elif self._devanagari_turn and self.auto_detect_language:
             messages.append({"role": "system", "content": _DEVANAGARI_NOTE})
         if self._mood_note:

@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from backend.ai.capabilities.operations.clinic.booking_guard import existing_appointment_conflict
 from backend.ai.capabilities.operations.clinic.slot_availability import BLOCKING_STATUSES
-from backend.ai.capabilities.operations.clinic import ClinicReadOperations, ClinicWriteOperations
+from backend.ai.capabilities.operations.registry import get_operations
 from backend.ai.engine.agent.availability import Booked, booked_from_appointments, day_ranges, open_slots
 from backend.ai.engine.agent.datetime_utils import dates_in, format_time, parse_date, parse_time, speak_date
 from backend.ai.engine.agent.grounding import SUCCESS_CODES, times_in
@@ -135,6 +135,7 @@ class AgentToolbox:
         self.said: List[str] = []  # every caller utterance this call: what booking values are checked against
         self.last_assistant: str = ""  # our previous reply; a caller "yes" accepts what it proposed
         self.succeeded: Set[str] = set()  # actions a tool has really completed this call: "book" / "cancel" / "reschedule"
+        self.ops = get_operations(getattr(facts, "vertical", None))  # the vertical's read/write operations (operations/registry.py)
         self.caller_number_ok = False  # the caller agreed to use the number they are calling from
         self.pending: Optional[Dict[str, Any]] = None  # {"type": "transfer"|"hangup", ...} consumed by the gateway
         self.calls: List[Dict[str, Any]] = []  # audit trail for evals and shadow logs
@@ -195,7 +196,7 @@ class AgentToolbox:
 
     # ------------------------------------------------------------------ helpers
     def _booked(self, db: Session, d: date) -> List[Booked]:
-        rows = ClinicReadOperations.get_appointments(db, self.business_id, date=d.isoformat(), statuses=BLOCKING_STATUSES)
+        rows = self.ops.read.get_appointments(db, self.business_id, date=d.isoformat(), statuses=BLOCKING_STATUSES)
         return booked_from_appointments(rows)
 
     def _fk_call_id(self, db: Session) -> Optional[str]:
@@ -256,13 +257,13 @@ class AgentToolbox:
             return error
         # Idempotency first: a repeated confirm (or an STT double-fire) must not create a duplicate row, and the
         # caller's own existing appointment must not make its slot look "taken".
-        existing = ClinicReadOperations.get_appointments(db, self.business_id, date=fields["date"].isoformat(), statuses=BLOCKING_STATUSES)
+        existing = self.ops.read.get_appointments(db, self.business_id, date=fields["date"].isoformat(), statuses=BLOCKING_STATUSES)
         for row in existing:
             if same_phone(row.get("phone_number"), fields["phone_number"]) and parse_time(row.get("preferred_time")) == fields["time"]:
                 return {"ok": True, "code": "already_booked", "message": "This appointment already exists. Confirm it to the caller.", "when": describe(fields, now.date())}
 
         # A patient who already has an upcoming appointment and wants a change must reschedule it, never get a second booking.
-        upcoming = ClinicReadOperations.get_appointments(db, self.business_id, statuses=BLOCKING_STATUSES)
+        upcoming = self.ops.read.get_appointments(db, self.business_id, statuses=BLOCKING_STATUSES)
         clash = existing_appointment_conflict(upcoming, fields["phone_number"], fields["service_name"], self.effective_said(), now.date())
         if clash:
             when_existing = f"{clash.get('preferred_date')} at {clash.get('preferred_time')}"
@@ -286,7 +287,7 @@ class AgentToolbox:
 
         if self.dry_run:
             return {"ok": True, "code": "dry_run", "message": "Booked (shadow mode, nothing saved).", "when": describe(fields, now.date())}
-        row = ClinicWriteOperations.store_appointment(
+        row = self.ops.write.store_appointment(
             db=db,
             business_id=self.business_id,
             patient_name=fields["patient_name"],
@@ -310,7 +311,7 @@ class AgentToolbox:
         if len(phone) < 10:
             return err("bad_phone", "Need a full phone number to look up appointments.")
         today = self.now_fn().date()
-        rows = ClinicReadOperations.get_appointments(db, self.business_id, status="confirmed")
+        rows = self.ops.read.get_appointments(db, self.business_id, status="confirmed")
         mine = []
         for row in rows:
             d = parse_date(row.get("preferred_date"), today)
@@ -331,7 +332,7 @@ class AgentToolbox:
         appt_id = self.gate.refs.get(str(ref or ""))
         if not appt_id:
             return None, err("lookup_first", "Look up the caller's appointments with lookup_appointment first, then use the ref it returns.")
-        row = ClinicReadOperations.get_appointment_by_id(db, self.business_id, appt_id)
+        row = self.ops.read.get_appointment_by_id(db, self.business_id, appt_id)
         if not row or not same_phone(row.get("phone_number"), self.gate.ref_phone.get(str(ref))):
             return None, err("not_found", "That appointment could not be found.")
         return row, None
@@ -349,7 +350,7 @@ class AgentToolbox:
             return gate_result
         if self.dry_run:
             return {"ok": True, "code": "dry_run", "message": "Cancelled (shadow mode, nothing saved)."}
-        ClinicWriteOperations.cancel_appointment(db, self.business_id, row["id"])
+        self.ops.write.cancel_appointment(db, self.business_id, row["id"])
         self.gate.refs.pop(str(args["ref"]), None)
         return {"ok": True, "code": "cancelled", "message": "The appointment is cancelled. Confirm to the caller and offer to rebook."}
 
@@ -380,7 +381,7 @@ class AgentToolbox:
             return gate_result
         if self.dry_run:
             return {"ok": True, "code": "dry_run", "message": "Rescheduled (shadow mode, nothing saved)."}
-        ClinicWriteOperations.reschedule_appointment(db, self.business_id, row["id"], when.isoformat(), format_time(start))
+        self.ops.write.reschedule_appointment(db, self.business_id, row["id"], when.isoformat(), format_time(start))
         return {"ok": True, "code": "rescheduled", "message": "Rescheduled. Confirm the new time to the caller.", "when": f"{speak_date(when, now.date())} at {format_time(start)}"}
 
     def _tool_search_knowledge(self, args: Dict[str, Any], db: Session) -> Dict[str, Any]:

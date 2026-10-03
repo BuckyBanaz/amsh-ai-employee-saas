@@ -1,7 +1,7 @@
 "use client";
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { createPlan, fetchOverview, fetchPlans, fetchTenants, updatePlan, Overview, PlanApi, PlanBody, TenantItem } from '../../../lib/api';
+import { adminAuth, createPlan, fetchOverview, fetchPlans, fetchTenants, updatePlan, Overview, PlanApi, PlanBody, TenantItem } from '../../../lib/api';
 
 type PlanStatus = 'Active' | 'Draft' | 'Archived';
 type BillingCycle = 'Monthly' | 'Yearly';
@@ -607,9 +607,10 @@ export default function BillingPage() {
     setTrialSaving(true);
     setTrialSavedMsg('');
     try {
+      const token = adminAuth.getToken();
       const res = await fetch('http://localhost:8010/api/billing/trial-config', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify(trialConfig),
       });
       if (res.ok) {

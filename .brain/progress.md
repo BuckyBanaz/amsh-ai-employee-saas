@@ -31,6 +31,10 @@ the evidence is unit tests (`backend/ai/evals/test_agent_core.py` 250/256, same 
   `operations/clinic`); Hindi/Hinglish conversation layer with a regional policy (India only, English untouched), per `issue.md`
   (`DOCS/21`); one `BusinessContext` (vertical + region + language + timezone + emergency numbers) now drives the engine and three
   hardcoded India values are gone; a booking guard makes "change my appointment" reschedule instead of creating a duplicate. Offline tests only, not tried on a real chat.
+- **2026-10-03 (later):** five independent dimensions (vertical, language, accent, region from country, timezone) with a RUNTIME CONTEXT
+  in the prompt; language packs for en / hi / es / fr / de / nl / ar (native fillers, fixed lines, TTS/STT, RTL flag) and a generic path for any
+  other language; `GET /api/languages` for the dashboard; billing hardened (secure verify restored, auth, no free upgrades, real invoices).
+  `DOCS/22`. Offline tests only.
 - **2026-10-02:** WhatsApp connected end to end (Meta subscription, real App Secret); returning-patient memory + privacy rule + chat
   lookup guard (`DOCS/20`); every booking now has a channel (phone / WhatsApp / website chat / email / social / front desk /
   dashboard) and the dashboard shows it (`DOCS/20` 3b); WhatsApp chat wording fixed; WhatsApp bookings skip the SMS; zero-width-space reply glitch cleaned; logo upload bug fixed (files were saved outside the `/static` mount, so the sidebar and settings logo gave 404);

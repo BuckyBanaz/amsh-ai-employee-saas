@@ -19,6 +19,9 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from backend.ai.engine.agent.facts import load_vertical_name
+from backend.ai.speech.stt.language import resolve_stt_language
+from backend.ai.verticals.errors import MissingContextError
 from backend.ai.engine.conversation.state_machine import ConversationStateMachine, load_agent_settings, load_business_context, load_tone
 from backend.ai.engine.conversation.i18n import normalize_language
 from backend.ai.engine.conversation.states import CallState
@@ -38,7 +41,7 @@ from backend.server.services.call_recorder import (
 from backend.ai.realtime.vad.detector import SimpleVAD
 from backend.ai.speech.stt.deepgram import DeepgramLiveConnection
 from backend.ai.speech.tts.cartesia import cartesia_tts
-from backend.ai.speech.tts.voice_profile import detect_tts_language
+from backend.ai.speech.tts.voice_profile import detect_tts_language, resolve_tts_language
 from backend.ai.verticals.registry import registry as vertical_registry
 from backend.server.database.models.business import Business
 from backend.server.database.session import get_db
@@ -105,7 +108,8 @@ class CallSession:
         if caller_number:
             self.caller_number = caller_number
 
-        vertical_cfg = vertical_registry.get_vertical("clinic")
+        # The business's own vertical: a missing one raises MissingContextError instead of quietly becoming a clinic.
+        vertical_cfg = vertical_registry.get_vertical(await asyncio.to_thread(load_vertical_name, self.business_id))
         try:
             business_name, services = await asyncio.to_thread(load_business_context, self.business_id)
             self.agent_settings = await asyncio.to_thread(load_agent_settings, self.business_id)
@@ -151,10 +155,8 @@ class CallSession:
             greeting=greeting,
         )
 
-        # Connect STT in the background with country-aware accent recognition
-        stt_lang = self.agent_settings.get("stt_language") or (
-            "en-IN" if (self.pcm or self.caller_number.startswith("+91")) else ("en-US" if self.caller_number.startswith("+1") else "en-IN")
-        )
+        # Connect STT in the background (language/accent from the Voice and Languages settings)
+        stt_lang = resolve_stt_language(self.agent_settings)  # from the business's settings, never the caller's phone number
         logger.info("[CALL INIT] Initializing Deepgram STT with dialect/accent: %s", stt_lang)
         self.stt = DeepgramLiveConnection(
             encoding="linear16" if self.pcm else "mulaw",
@@ -362,8 +364,10 @@ class CallSession:
 
     async def _stream_tts(self, text: str, emotion: Optional[str] = None) -> None:
         voice_id = self.agent_settings.get("voice_id")
-        # The owner's explicit TTS language wins; otherwise pick per sentence so Hindi words are pronounced as Hindi.
-        language = self.agent_settings.get("tts_language") or detect_tts_language(text)
+        # The owner's explicit TTS language wins; otherwise the language the agent is speaking (primary language from /ai, or the one the
+        # caller switched to). Hindi/English calls still pick per sentence so Hindi words are pronounced as Hindi.
+        active = getattr(getattr(self, "agent_rt", None) and self.agent_rt.engine, "active_language", None) or self.agent_settings.get("language")
+        language = self.agent_settings.get("tts_language") or resolve_tts_language(active, text)
         speed = self.agent_settings.get("tts_speed")  # Voice tab speed / personality default
         emotion = emotion or self.agent_settings.get("tts_emotion")  # the sentence's own emotion wins over the Voice-tab default
         if self.pcm:
@@ -495,7 +499,9 @@ async def _ensure_sim_session(payload: VoiceSimulateRequest, db: Session) -> Tup
     if not state_machine:
         # Load business & vertical
         business = db.get(Business, payload.business_id)
-        vertical_name = business.vertical if business else "clinic"
+        if not business:
+            raise MissingContextError(f"Business {payload.business_id!r} not found: refusing to guess its vertical.")
+        vertical_name = business.vertical
         vertical_cfg = vertical_registry.get_vertical(vertical_name)
         agent_settings = load_agent_settings(payload.business_id)
         business_info = {
@@ -544,14 +550,14 @@ _STT_LANGUAGE = {"hi": "hi-IN", "en": "en-IN"}
 _prefetch_tasks: set = set()
 
 
-def _prefetch_tts(text: str, voice_id: Optional[str], emotion: Optional[str] = None, tts_text: Optional[str] = None) -> None:
+def _prefetch_tts(text: str, voice_id: Optional[str], emotion: Optional[str] = None, tts_text: Optional[str] = None, active_language: Optional[str] = None) -> None:
     """Start synthesising a sentence the moment it exists. The browser asks for the same audio a moment later and joins
     this request (see CartesiaTTS.generate_preview_audio), so speech can start while the model is still writing."""
     if not (voice_id and text.strip() and cartesia_tts.is_configured()):
         return
     snippet = (tts_text or text)[:250]  # the playground requests text.slice(0, 250); the cache key must match exactly
     task = asyncio.create_task(
-        cartesia_tts.generate_preview_audio(snippet, voice_id, emotion=emotion, language=detect_tts_language(snippet))
+        cartesia_tts.generate_preview_audio(snippet, voice_id, emotion=emotion, language=resolve_tts_language(active_language, snippet))
     )
     _prefetch_tasks.add(task)  # keep a reference so the task is not garbage collected mid-flight
     task.add_done_callback(_prefetch_tasks.discard)
@@ -735,7 +741,7 @@ async def simulate_voice_turn_stream(
                             sent_any = True
                             emotion = ev.get("emotion")
                             spoken = f"[laughter] {piece}" if ev.get("tts_text") and n == 0 else None  # a laugh opens the sentence
-                            _prefetch_tts(piece, voice, emotion, spoken)
+                            _prefetch_tts(piece, voice, emotion, spoken, getattr(sim_rt.engine, "active_language", None))
                             out = {"type": "sentence", "text": piece}
                             if emotion:
                                 out["emotion"] = emotion

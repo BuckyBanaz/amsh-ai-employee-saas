@@ -3,6 +3,7 @@ validators, date/time parsers and safety gate work on Roman text. `normalize` tu
 approximation *for checking only*; the LLM still sees and answers the caller's original words."""
 
 import re
+from backend.ai.lexicon import language_pack, pack_languages
 from difflib import SequenceMatcher
 from typing import Iterable, Optional
 
@@ -130,10 +131,19 @@ def requested_language(text: Optional[str]) -> Optional[str]:
     """'hi' / 'en' when the caller asks to switch language ("can we talk in Hindi", "english mein baat karo"),
     else None. Models forget such a request after a turn or two, so the engine remembers it in code."""
     s = text or ""
-    hindi, english = _ASK_HINDI.search(s), _ASK_ENGLISH.search(s)
-    if hindi and english:  # both mentioned: the later mention wins
-        return "hi" if hindi.start() > english.start() else "en"
-    return "hi" if hindi else "en" if english else None
+    found = []  # (position, code): the latest mention wins when the caller names two languages
+    for code, pattern in (("hi", _ASK_HINDI), ("en", _ASK_ENGLISH)):
+        match = pattern.search(s)
+        if match:
+            found.append((match.start(), code))
+    for code in pack_languages():  # every other language: its own "speak <language>" phrases, from its pack
+        if code in ("hi", "en"):
+            continue
+        for phrase in language_pack(code).get("ask_patterns", []):
+            match = re.search(phrase, s, re.IGNORECASE)
+            if match:
+                found.append((match.start(), code))
+    return max(found)[1] if found else None
 
 
 def hindi_escalation(text: str) -> Optional[str]:

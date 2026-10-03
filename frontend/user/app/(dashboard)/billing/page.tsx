@@ -28,7 +28,11 @@ export default function BillingPage() {
       calls_count: number;
       calls_limit: number;
     };
+    is_trial?: boolean;
+    trial_days_left?: number;
+    trial_config?: any;
     payment_method?: {
+      label?: string;
       brand: string;
       last4: string;
       exp_month: number;
@@ -222,13 +226,23 @@ export default function BillingPage() {
 
         {/* Default Payment Method Card */}
         <div id="payment-method-section">
-          <PaymentMethodCard
-            brand={paymentMethod?.brand || 'Visa'}
-            last4={paymentMethod?.last4 || '4242'}
-            expMonth={paymentMethod?.exp_month || 12}
-            expYear={paymentMethod?.exp_year || 2028}
-            isLoading={isLoading}
-          />
+          {paymentMethod?.last4 ? (
+            <PaymentMethodCard
+              brand={paymentMethod.brand}
+              last4={paymentMethod.last4}
+              expMonth={paymentMethod.exp_month || 0}
+              expYear={paymentMethod.exp_year || 0}
+              isLoading={isLoading}
+            />
+          ) : (
+            <div className="rounded-xl border border-gray-100 bg-white p-4 text-xs text-gray-500">
+              {isLoading
+                ? 'Loading payment details...'
+                : paymentMethod
+                  ? `Payments are processed by ${paymentMethod.label || 'Razorpay'}. Card details are held by the payment provider.`
+                  : 'No payment on file yet. Your card is entered at checkout when you upgrade.'}
+            </div>
+          )}
         </div>
 
         {/* Real Invoices & Receipts with Print/Download Modal */}

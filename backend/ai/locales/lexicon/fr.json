@@ -1,0 +1,64 @@
+{
+ "name": "French",
+ "tts_language": "fr",
+ "stt_language": "fr",
+ "fillers": {
+  "think": [
+   "Hmm…",
+   "Voyons…",
+   "Alors…"
+  ],
+  "ack": [
+   "D'accord…",
+   "Très bien…",
+   "Je vois…"
+  ],
+  "delight": [
+   "Ah, super !",
+   "Très bien !"
+  ],
+  "wait": "Un instant…"
+ },
+ "leading_sounds": [
+  "hm+",
+  "voyons",
+  "alors",
+  "d'accord",
+  "très bien",
+  "je vois",
+  "bien sûr",
+  "super",
+  "ah",
+  "oh"
+ ],
+ "question_words": [
+  "quoi",
+  "comment",
+  "quand",
+  "quel",
+  "quelle",
+  "combien",
+  "pourquoi",
+  "où",
+  "qui"
+ ],
+ "ask_patterns": [
+  "\\ben\\s+fran[cç]ais\\b",
+  "\\bparl\\w*\\s+(?:en\\s+)?fran[cç]ais\\b",
+  "\\bin\\s+french\\b",
+  "\\bspeak\\s+french\\b"
+ ],
+ "style": "Natural spoken French, polite and warm. Use the formal \"vous\" by default and \"tu\" only if the caller does. Everyday fillers: \"d'accord\", \"très bien\", \"bien sûr\", \"un instant\", \"alors\". Say times the French way (\"dix heures et demie\").",
+ "strings": {
+  "greeting": "Bonjour, merci d'avoir appelé {business_name}. Comment puis-je vous aider ?",
+  "fallback": "Désolé, j'ai un petit problème en ce moment. Pouvez-vous répéter, ou souhaitez-vous que je vous passe l'accueil ?",
+  "no_transfer": "Désolé, je ne peux pas vous mettre en relation pour le moment. Puis-je prendre un message pour l'accueil ?",
+  "billing": "La facturation et les remboursements sont gérés par notre équipe d'accueil. Je vous mets en relation tout de suite.",
+  "frustrated": "Je suis vraiment désolé pour le désagrément. Je vous mets tout de suite en relation avec quelqu'un à l'accueil.",
+  "unsure_claim": "Laissez-moi d'abord vérifier cela avec vous. Pouvez-vous confirmer les informations une fois de plus ?",
+  "unsure_times": "Je veux m'assurer de vous donner la bonne heure. Quel jour vous conviendrait ?",
+  "transfer_generic": "Votre appel est en cours de transfert."
+ },
+ "native_name": "Français",
+ "direction": "ltr"
+}

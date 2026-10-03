@@ -429,6 +429,7 @@ Still to do: blocking a suspended clinic's dashboard login, admin password reset
 | `17_AMSh_Claude_Change_Tracker.md` | every change with evidence and limits | current (to 2026-10-03; the 2026-10-01 latency entries are on branch `v1.1`) |
 | `19_AMSh_Summit_Pitch.md` | summit talking points, competitors, ask checklist | current |
 | `20_AMSh_Returning_Patient_Memory_and_Privacy.md` | patient memory, privacy rules, booking channels, WhatsApp go-live checklist | current |
+| `22_AMSh_Language_Packs_and_Runtime_Context.md` | five independent dimensions (vertical, language, accent, region, timezone), language packs, RTL readiness, languages endpoint | current |
 | `21_AMSh_Language_Layer_and_Slot_Rules.md` | BusinessContext (vertical + region + language config), Hindi/Hinglish layer, slot rules, booking guard | current |
 | `18_AMSh_Completion_Plan_User_and_Admin.md` | phased plan for the user app, admin portal and server APIs (done / pending) | current |
 | `../.brain/progress.md` | overall progress percentage per part | current |

@@ -6,6 +6,7 @@ with fallback and dynamic resolution.
 
 from typing import Dict, Optional
 from backend.ai.verticals.loader import VerticalLoader
+from backend.ai.verticals.errors import UnknownVerticalError
 from backend.ai.verticals.schemas import VerticalConfig
 
 
@@ -27,7 +28,7 @@ class VerticalRegistry:
     def get_vertical(self, name: str, language: str = "en") -> VerticalConfig:
         """
         Get vertical config by name (e.g. 'clinic', 'restaurant') and language ('en', 'hi', 'es', 'nl').
-        Falls back to 'clinic' (MVP default) if not found.
+        Raises UnknownVerticalError when the vertical has no configuration (no silent fallback to 'clinic').
         """
         normalized = name.lower().strip()
         lang = (language or "en").lower().strip()
@@ -44,16 +45,12 @@ class VerticalRegistry:
             self._configs[f"{normalized}:{loaded.language}"] = loaded
             return loaded
 
-        # Fallback to base vertical name or clinic default
+        # Same vertical in another language already loaded: fine (wording differs, the vertical does not).
         if normalized in self._configs:
             return self._configs[normalized]
 
-        fallback_clinic = VerticalLoader.load_by_name("clinic", language="en")
-        if fallback_clinic:
-            self._configs["clinic:en"] = fallback_clinic
-            return fallback_clinic
-
-        raise ValueError(f"Vertical '{name}' not found and default 'clinic' could not be loaded.")
+        # No configuration for this vertical: say so. It is never quietly treated as a clinic.
+        raise UnknownVerticalError(f"No vertical configuration found for {name!r}.")
 
     def list_verticals(self) -> Dict[str, str]:
         """Return dict of {vertical_name: display_name}."""

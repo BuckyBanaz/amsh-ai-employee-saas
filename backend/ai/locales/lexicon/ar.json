@@ -1,0 +1,61 @@
+{
+ "name": "Arabic",
+ "tts_language": "ar",
+ "stt_language": "ar",
+ "direction": "rtl",
+ "fillers": {
+  "think": [
+   "همم…",
+   "دعني أرى…",
+   "لحظة…"
+  ],
+  "ack": [
+   "حسناً…",
+   "تمام…",
+   "أفهم…"
+  ],
+  "delight": [
+   "رائع!",
+   "جميل!"
+  ],
+  "wait": "لحظة من فضلك…"
+ },
+ "leading_sounds": [
+  "همم",
+  "حسناً",
+  "تمام",
+  "طيب",
+  "أفهم",
+  "رائع",
+  "جميل",
+  "آه"
+ ],
+ "question_words": [
+  "ماذا",
+  "كيف",
+  "متى",
+  "أي",
+  "كم",
+  "لماذا",
+  "أين",
+  "من",
+  "هل"
+ ],
+ "ask_patterns": [
+  "بالعربي\\w*",
+  "\\bin\\s+arabic\\b",
+  "\\bspeak\\s+arabic\\b"
+ ],
+ "style": "Natural spoken Arabic, polite and warm. Write right-to-left Arabic script. Use courteous phone register (\"أهلاً وسهلاً\", \"تفضل\", \"حاضر\", \"تمام\", \"لحظة من فضلك\") and a respectful form of address; keep the clinic's and doctors' names as given.",
+ "strings": {
+  "greeting": "السلام عليكم، شكراً لاتصالكم بـ {business_name}. كيف يمكنني مساعدتكم؟",
+  "transfer_generic": "جارٍ تحويل مكالمتك.",
+  "fallback": "عذراً، أواجه مشكلة في الوقت الحالي. هل يمكنك إعادة ما قلته، أم تفضل أن أحوّلك إلى مكتب الاستقبال؟",
+  "no_transfer": "عذراً، لا أستطيع تحويلك الآن. هل تريد أن أترك رسالة لمكتب الاستقبال؟",
+  "billing": "الفواتير والمبالغ المستردة يتولاها فريق الاستقبال لدينا. سأحوّلك إليهم فوراً.",
+  "frustrated": "أعتذر بشدة عن هذا الإزعاج. سأحوّلك فوراً إلى أحد موظفي الاستقبال.",
+  "unsure_claim": "دعني أتأكد من هذا معك أولاً. هل يمكنك تأكيد التفاصيل مرة أخرى؟",
+  "unsure_times": "أريد أن أتأكد من إعطائك الوقت الصحيح. أي يوم يناسبك؟"
+ },
+ "native_name": "العربية"
+}

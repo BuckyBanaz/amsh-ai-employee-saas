@@ -1,0 +1,62 @@
+{
+ "name": "Dutch",
+ "tts_language": "nl",
+ "stt_language": "nl",
+ "fillers": {
+  "think": [
+   "Hmm…",
+   "Even kijken…",
+   "Nou…"
+  ],
+  "ack": [
+   "Oké…",
+   "Prima…",
+   "Ik begrijp het…"
+  ],
+  "delight": [
+   "Oh, fijn!",
+   "Mooi!"
+  ],
+  "wait": "Een momentje…"
+ },
+ "leading_sounds": [
+  "hm+",
+  "even kijken",
+  "nou",
+  "oké",
+  "ok",
+  "prima",
+  "ik begrijp het",
+  "fijn",
+  "mooi",
+  "ah",
+  "oh"
+ ],
+ "question_words": [
+  "wat",
+  "hoe",
+  "wanneer",
+  "welke",
+  "hoeveel",
+  "waarom",
+  "waar",
+  "wie"
+ ],
+ "ask_patterns": [
+  "\\b(?:in|op)\\s+(?:het\\s+)?nederlands\\b",
+  "\\bnederlands\\s+(?:praten|spreken)\\b",
+  "\\bin\\s+dutch\\b",
+  "\\bspeak\\s+dutch\\b"
+ ],
+ "style": "Natural spoken Dutch, friendly and direct. Use the formal \"u\" by default and switch to \"je\" only if the caller does. Everyday fillers: \"even kijken\", \"prima\", \"oké\", \"dat is goed\", \"een momentje\". Say times the Dutch way (\"half elf\", \"kwart over tien\").",
+ "strings": {
+  "fallback": "Het spijt me, ik heb op dit moment een storing. Kunt u dat nog eens zeggen, of zal ik u doorverbinden met de balie?",
+  "no_transfer": "Het spijt me, ik kan u nu niet doorverbinden. Zal ik een bericht voor de balie opnemen?",
+  "billing": "Facturatie en terugbetalingen worden door onze balie afgehandeld. Ik verbind u meteen door.",
+  "frustrated": "Het spijt me echt van het ongemak. Ik verbind u meteen door met iemand van onze balie.",
+  "unsure_claim": "Laat me dit even met u controleren. Kunt u de gegevens nog een keer bevestigen?",
+  "unsure_times": "Ik wil zeker zijn dat ik de juiste tijd noem. Welke dag komt u het beste uit?"
+ },
+ "native_name": "Nederlands",
+ "direction": "ltr"
+}

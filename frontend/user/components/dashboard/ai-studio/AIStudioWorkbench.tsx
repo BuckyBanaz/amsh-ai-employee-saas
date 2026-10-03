@@ -47,6 +47,15 @@ const ACCENT_GROUPS = [
       { code: 'es-ES', label: 'Spanish (Castilian)', speechLang: 'es-ES' },
       { code: 'de-DE', label: 'German (Standard)', speechLang: 'de-DE' },
       { code: 'nl-NL', label: 'Dutch (Netherlands)', speechLang: 'nl-NL' },
+      { code: 'fr-FR', label: 'French (France)', speechLang: 'fr-FR' },
+    ],
+  },
+  {
+    region: 'Middle East & North Africa',
+    accents: [
+      { code: 'ar-SA', label: 'Arabic (Gulf / Saudi)', speechLang: 'ar-SA' },
+      { code: 'ar-AE', label: 'Arabic (UAE)', speechLang: 'ar-AE' },
+      { code: 'ar-EG', label: 'Arabic (Egyptian)', speechLang: 'ar-EG' },
     ],
   },
 ];
@@ -179,6 +188,8 @@ export function AIStudioWorkbench({ onBack, onSave }: AIStudioWorkbenchProps) {
             else if (lang.includes('es')) setSelectedAccentCode('es-ES');
             else if (lang.includes('de')) setSelectedAccentCode('de-DE');
             else if (lang.includes('nl')) setSelectedAccentCode('nl-NL');
+            else if (lang.includes('fr')) setSelectedAccentCode('fr-FR');
+            else if (lang.includes('ar')) setSelectedAccentCode('ar-SA');
             else setSelectedAccentCode('en-IN');
           }
         }

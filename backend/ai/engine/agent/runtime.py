@@ -11,7 +11,7 @@ from typing import Any, Awaitable, Callable, Dict, Optional
 from backend.ai.engine.agent.agent_loop import AgentEngine, AgentTurn
 from backend.ai.engine.agent.facts import AgentProfile, load_all
 from backend.ai.engine.agent.llm_backend import build_chat_backend
-from backend.ai.engine.conversation.i18n import normalize_language
+from backend.ai.engine.conversation.i18n import language_code
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +74,7 @@ class AgentRuntime:
             backend=build_chat_backend(temperature=profile.temperature, preferred=profile.llm_model),
             db_factory=SessionLocal,
             agent_name=profile.name,
-            language=normalize_language(language or profile.language),
+            language=language_code(language or profile.language),
             tone=profile.tone,
             gender=profile.gender,
             dry_run=(mode == "shadow"),  # shadow must never write bookings or place transfers
@@ -88,6 +88,7 @@ class AgentRuntime:
             auto_detect_language=profile.auto_detect_language,
             channel=channel,
             fillers=profile.natural_fillers and channel != "chat",  # a text chat has no voice to fill
+            accent=profile.accent,
         )
         if greeting:
             engine.greeting(greeting)  # seeds history with exactly what the caller heard

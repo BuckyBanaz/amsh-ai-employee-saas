@@ -31,7 +31,8 @@ class TrialService:
     def get_config() -> Dict[str, Any]:
         """Returns the current trial configuration, merged with defaults."""
         if not CONFIG_FILE.exists():
-            TrialService.save_config(DEFAULT_TRIAL_CONFIG)
+            # No file yet (fresh install): serve the defaults. Writing them here by calling save_config() looped forever
+            # (save_config reads the config first), so the file is only created when an admin saves.
             return dict(DEFAULT_TRIAL_CONFIG)
         try:
             with open(CONFIG_FILE, "r", encoding="utf-8") as f:

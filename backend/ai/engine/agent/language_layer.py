@@ -24,6 +24,7 @@ from enum import Enum
 from typing import Optional
 
 from backend.ai.engine.agent.hindi import has_devanagari
+from backend.ai.lexicon import load_lexicon
 
 
 class LanguageMode(str, Enum):
@@ -32,21 +33,11 @@ class LanguageMode(str, Enum):
     HINGLISH = "hinglish"
 
 
-# Unambiguous Roman-script Hindi words. Words that are also English ("so", "me", "to", "par") are left out on purpose.
-_HINGLISH_WORDS = frozenset(
-    "haan han ji nahi nahin nhi kya hai hain hoon hun mujhe mera meri mere aap aapka aapki aapko aapke kal aaj parso karna karni "
-    "karo karen karani karana karte karti kijiye kijiyega chahiye chahta chahti batao bataiye bhai theek thik accha acha achha kaise kab kitne baje subah "
-    "shaam dopahar raat baat wala wali abhi phir fir lekin kyun kyunki toh sunai suno sun rahe rahi samajh hoga hogi kaun kaisa "
-    "kaisi bolo boliye dijiye lijiye lena dena batana bataye milega milegi chahunga chahungi thi tha".split()
-)
-
-# A bare acknowledgement or nudge that is NOT a new request ("hello", "ji", "haan ji", "accha", "phir?", "sun rahe ho?").
-_INTERJECTION = re.compile(
-    r"(?:he+l+o+|hallo|hello\s+ji|ji|haan(?:\s+ji)?|han(?:\s+ji)?|a(?:cc|ch)h?a(?:\s+ji)?|theek\s+hai(?:\s+ji)?|thik\s+hai(?:\s+ji)?"
-    r"|ya\s+phir|phir|fir|kya|sun\s+(?:rahe|rahi)\s+ho|suniye|हेलो|हैलो|जी|हाँ\s*जी|हां\s*जी|हाँ|हां|अच्छा|ठीक\s*है(?:\s*जी)?"
-    r"|या\s*फिर|फिर|क्या|सुन\s*रहे\s*हो|सुन\s*रही\s*हो)",
-    re.IGNORECASE,
-)
+# Hindi lexical data lives in ai/locales/lexicon/hi.json: unambiguous Roman-script Hindi words (words that are also English,
+# like "so" or "to", are left out on purpose) and the bare acknowledgements ("hello", "ji", "haan ji", "accha", "phir?"...).
+_LEXICON = load_lexicon("hi")
+_HINGLISH_WORDS = frozenset(_LEXICON.get("hinglish_words", []))
+_INTERJECTION = re.compile(_LEXICON.get("interjections_pattern", "(?!)"), re.IGNORECASE)
 
 _LAYER_NOTE = (
     "HINDI/HINGLISH MODE (affects only how you talk; booking, availability, tools and safety rules are exactly the same as in "

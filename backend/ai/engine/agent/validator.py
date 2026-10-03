@@ -27,7 +27,7 @@ class BusinessFacts:
     """Tenant facts loaded from Postgres once per call and reused by the prompt and the validator."""
 
     name: str
-    timezone: str = "UTC"
+    timezone: str = ""  # required: resolve_business_context raises when it is empty (no silent UTC)
     working_hours: Dict[str, Any] = field(default_factory=dict)
     services: List[str] = field(default_factory=list)
     doctors: List[str] = field(default_factory=list)
@@ -35,7 +35,7 @@ class BusinessFacts:
     phone: str = ""
     city: str = ""
     country: str = ""
-    vertical: str = "clinic"
+    vertical: str = ""  # required: no silent "clinic" (resolve_business_context raises when it is empty)
     slot_minutes: int = DEFAULT_SLOT_MINUTES  # visit length + the owner's buffer between visits
     notice_hours: float = 0.0  # minimum lead time before an appointment can start
 

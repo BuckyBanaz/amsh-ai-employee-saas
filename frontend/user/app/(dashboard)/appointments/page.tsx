@@ -6,6 +6,7 @@ import { WeeklyCalendar, DayInfo } from '../../../components/dashboard/WeeklyCal
 import { AppointmentsListView } from '../../../components/dashboard/AppointmentsListView';
 import { AppointmentDetailPanel } from '../../../components/dashboard/AppointmentDetailPanel';
 import { NewAppointmentModal } from '../../../components/dashboard/NewAppointmentModal';
+import { useAutoRefresh } from '../../../hooks/useAutoRefresh';
 import {
   DashboardController,
   AppointmentItem,
@@ -104,9 +105,9 @@ export default function AppointmentsPage() {
   }, [weekOffset]);
 
   // Load appointments, doctors, and services
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (silent: boolean = false) => {
     try {
-      setIsLoading(true);
+      if (!silent) setIsLoading(true);
       const [apps, docs, srvs] = await Promise.all([
         DashboardController.getAppointments().catch(() => []),
         DashboardController.getStaff().catch(() => []),
@@ -137,6 +138,9 @@ export default function AppointmentsPage() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // The AI books, moves and cancels appointments from calls and WhatsApp while this page is open: refresh in the background.
+  useAutoRefresh(() => loadData(true));
 
   // Synchronize dynamic doctors and services from DB + real appointments (eliminates any mock data)
   const dynamicDoctors = useMemo(() => {

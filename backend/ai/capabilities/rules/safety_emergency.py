@@ -4,7 +4,7 @@ Deterministic detection of life-threatening situations so they are escalated wit
 Whole-phrase matching only: bare "emergency", "accident", "severe pain" or numbers such as "108" are NOT triggers, because
 callers say them in ordinary sentences ("do you take emergency appointments?", "my number ends in 108").
 
-Localised and table-driven: detection patterns are listed per language in EMERGENCY_PATTERNS (add a language = add an entry),
+Localised and data-driven: detection phrases are listed per language in `ai/locales/lexicon/<language>.json` (add a language = add a file),
 and the number spoken to the caller comes from the business's region (`BusinessContext.emergency_numbers`), not from this file.
 Detection stays on for EVERY listed language whatever the clinic's region: a missed emergency is worse than a false alarm, and
 a caller may speak a language the clinic's region does not predict.
@@ -14,20 +14,15 @@ import logging
 import re
 from typing import Dict, Optional, Sequence, Tuple
 
+from backend.ai.lexicon import lexicon_languages, load_lexicon
+
 logger = logging.getLogger(__name__)
 
+# language -> compiled emergency phrases, loaded from ai/locales/lexicon/<language>.json (data, not code)
 EMERGENCY_PATTERNS: Dict[str, "re.Pattern[str]"] = {
-    "en": re.compile(
-        r"\b(?:chest\s+pain|heart\s+attack|stroke|(?:can(?:'|no)?t|cannot|unable\s+to)\s+breathe|difficulty\s+breathing|"
-        r"(?:heavy|severe)\s+bleeding|bleeding\s+(?:heavily|a\s+lot|badly)|unconscious|passed\s+out|seizure|overdose|"
-        r"suicid\w*|want\s+to\s+die|kill\s+myself)\b",
-        re.IGNORECASE,
-    ),
-    "hi": re.compile(
-        r"सीने\s*में\s*दर्द|सांस\s*(?:नहीं|लेने\s*में)|साँस\s*(?:नहीं|लेने\s*में)|दिल\s*का\s*दौरा|हार्ट\s*अटैक|बेहोश|बहुत\s*खून|खून\s*बह|आत्महत्या|"
-        r"\b(?:seene\s+mein\s+dard|saans\s+nahi|sans\s+nahi|behosh|dil\s+ka\s+daura|khoon\s+beh\w*)\b",
-        re.IGNORECASE,
-    ),
+    language: re.compile("|".join(f"(?:{p})" for p in load_lexicon(language)["emergency_patterns"]), re.IGNORECASE)
+    for language in lexicon_languages()
+    if load_lexicon(language).get("emergency_patterns")
 }
 
 

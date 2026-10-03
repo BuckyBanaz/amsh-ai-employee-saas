@@ -1,37 +1,43 @@
-"""Language / region behaviour policy: which conversation enhancements a tenant gets, resolved from its region.
+"""Language behaviour policy: which language conversation layers a tenant gets. THE LANGUAGE DIMENSION ONLY.
 
-One global conversation engine serves everyone. Region-specific behaviour is NOT a separate engine and NOT scattered
-`if country == "IN"` checks: it is a flag in the table below, resolved once per call from the tenant's country / timezone /
-currency (the same detection the compliance resolver uses) and handed to the engine.
+A language layer (today Hindi/Hinglish, `engine/agent/language_layer.py`, spec `issue.md`) is about how the agent TALKS in that
+language: response language, phrasing, fillers, interruptions. It is switched on by the tenant's language settings, never by
+region: a Hindi-speaking clinic in the Netherlands gets the Hindi layer and the Dutch emergency number (region), while an English
+clinic in India gets neither the Hindi layer nor any India-only wording from the language side.
 
-Today: the Hindi/Hinglish conversation layer (`engine/agent/language_layer.py`, spec `issue.md`) is switched on for India
-businesses only. It then still activates per caller: only when the caller actually speaks Hindi/Hinglish (or asks for it).
+Which languages have a layer is data: a language whose `ai/locales/lexicon/<language>.json` sets `"conversation_layer": true`.
 
-    region IN    + caller speaks Hindi/Hinglish -> layer ON
-    region IN    + caller speaks English        -> layer OFF (English flow untouched)
-    region other + caller speaks Hindi          -> layer OFF (the generic language handling still applies)
+    allowed languages = primary language + the Languages tab list
+    layer ON for a language when it is allowed; when the tenant restricted nothing (no list) and auto-detect is on, the agent
+    follows the caller, so every language that has a layer is available
 
-Booking, rescheduling, state, tools and safety rules never read this policy: they are global and language-independent.
-To add a behaviour or a region: add a field to LanguagePolicy and an entry to REGION_POLICIES.
+Region, accent, timezone and vertical are not read here.
 """
 
 from dataclasses import dataclass
+from typing import FrozenSet, Iterable, Optional
 
-from backend.ai.verticals.compliance import detect_region
+from backend.ai.lexicon import lexicon_languages, load_lexicon
 
 
 @dataclass(frozen=True)
 class LanguagePolicy:
-    hindi_hinglish_layer: bool = False
+    layers: FrozenSet[str] = frozenset()  # language codes whose conversation layer is on for this tenant
+
+    @property
+    def hindi_hinglish_layer(self) -> bool:
+        return "hi" in self.layers
 
 
-DEFAULT_POLICY = LanguagePolicy()
-
-REGION_POLICIES = {
-    "IN": LanguagePolicy(hindi_hinglish_layer=True),
-}
+def layer_languages() -> FrozenSet[str]:
+    return frozenset(lang for lang in lexicon_languages() if load_lexicon(lang).get("conversation_layer"))
 
 
-def resolve_language_policy(country: str = "", timezone: str = "", currency: str = "") -> LanguagePolicy:
-    """The behaviour policy for a business, from its region."""
-    return REGION_POLICIES.get(detect_region(country, timezone, currency), DEFAULT_POLICY)
+def resolve_language_policy(primary_language: Optional[str] = "en", languages: Optional[Iterable[str]] = None, auto_detect: bool = True) -> LanguagePolicy:
+    available = layer_languages()
+    allowed = {str(code).split("-")[0].lower() for code in (languages or [])}
+    if primary_language:
+        allowed.add(str(primary_language).split("-")[0].lower())
+    if not languages and auto_detect:
+        return LanguagePolicy(available)
+    return LanguagePolicy(frozenset(code for code in available if code in allowed))

@@ -40,6 +40,10 @@ const SUPPORTED_ACCENTS = [
   { code: 'es-ES', label: 'Spanish' },
   { code: 'de-DE', label: 'German' },
   { code: 'nl-NL', label: 'Dutch' },
+  { code: 'fr-FR', label: 'French' },
+  { code: 'ar-SA', label: 'Arabic (Gulf / Saudi)' },
+  { code: 'ar-AE', label: 'Arabic (UAE)' },
+  { code: 'ar-EG', label: 'Arabic (Egyptian)' },
 ];
 
 // Fallback canned reply in case backend is offline

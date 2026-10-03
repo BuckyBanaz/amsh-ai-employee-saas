@@ -1,0 +1,29 @@
+{
+ "_about": "English lexical data (emergency phrases).",
+ "emergency_patterns": [
+  "\\b(?:chest\\s+pain|heart\\s+attack|stroke|(?:can(?:'|no)?t|cannot|unable\\s+to)\\s+breathe|difficulty\\s+breathing|(?:heavy|severe)\\s+bleeding|bleeding\\s+(?:heavily|a\\s+lot|badly)|unconscious|passed\\s+out|seizure|overdose|suicid\\w*|want\\s+to\\s+die|kill\\s+myself)\\b"
+ ],
+ "name": "English",
+ "tts_language": "en",
+ "stt_language": "en",
+ "fillers": {
+  "think": [
+   "Hmm…",
+   "Let me see…",
+   "Okay…"
+  ],
+  "ack": [
+   "Right…",
+   "Okay…",
+   "I see…"
+  ],
+  "delight": [
+   "Oh nice!",
+   "Oh, great!"
+  ],
+  "wait": "One moment…"
+ },
+ "style": "Natural, warm spoken English. Short sentences, contractions, everyday acknowledgements (\"sure\", \"of course\", \"got it\"), the way a friendly front-desk person talks.",
+ "native_name": "English",
+ "direction": "ltr"
+}

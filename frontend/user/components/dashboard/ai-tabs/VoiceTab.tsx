@@ -29,6 +29,15 @@ const ACCENT_GROUPS = [
       { code: 'es-ES', label: 'Spanish (Castilian)', flag: '🇪🇸', speechLang: 'es-ES' },
       { code: 'de-DE', label: 'German (Standard)', flag: '🇩🇪', speechLang: 'de-DE' },
       { code: 'nl-NL', label: 'Dutch (Netherlands)', flag: '🇳🇱', speechLang: 'nl-NL' },
+      { code: 'fr-FR', label: 'French (France)', flag: '🇫🇷', speechLang: 'fr-FR' },
+    ],
+  },
+  {
+    region: 'Middle East & North Africa',
+    accents: [
+      { code: 'ar-SA', label: 'Arabic (Gulf / Saudi)', flag: '🇸🇦', speechLang: 'ar-SA' },
+      { code: 'ar-AE', label: 'Arabic (UAE)', flag: '🇦🇪', speechLang: 'ar-AE' },
+      { code: 'ar-EG', label: 'Arabic (Egyptian)', flag: '🇪🇬', speechLang: 'ar-EG' },
     ],
   },
 ];

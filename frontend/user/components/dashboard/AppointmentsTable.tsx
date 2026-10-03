@@ -1,11 +1,12 @@
 "use client";
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { STRINGS } from '../../utils/strings/en';
 import { DashboardController, AppointmentItem } from '../../controllers/dashboard.controller';
 
 import { ChannelBadge } from './ChannelBadge';
 import { channelOfAppointment } from '../../utils/channels';
+import { useAutoRefresh } from '../../hooks/useAutoRefresh';
 const appointmentStrings = STRINGS.DASHBOARD.COMPONENTS.APPOINTMENTS_TABLE;
 
 interface AppointmentsTableProps {
@@ -17,13 +18,7 @@ export function AppointmentsTable({ items, loading: propLoading }: AppointmentsT
   const [appointments, setAppointments] = useState<AppointmentItem[]>(items || []);
   const [loading, setLoading] = useState<boolean>(propLoading ?? !items);
 
-  useEffect(() => {
-    if (items) {
-      setAppointments(items);
-      setLoading(false);
-      return;
-    }
-
+  const refresh = useCallback(() => {
     DashboardController.getAppointments()
       .then((data) => {
         setAppointments(data || []);
@@ -34,7 +29,22 @@ export function AppointmentsTable({ items, loading: propLoading }: AppointmentsT
       .finally(() => {
         setLoading(false);
       });
-  }, [items]);
+  }, []);
+
+  useEffect(() => {
+    if (items) {
+      setAppointments(items);
+      setLoading(false);
+      return;
+    }
+
+    refresh();
+  }, [items, refresh]);
+
+  // The AI moves and books appointments from WhatsApp and calls while the dashboard is open: keep the table current.
+  useAutoRefresh(() => {
+    if (!items) refresh();
+  });
 
   const defaultAppointments: AppointmentItem[] = [
     {

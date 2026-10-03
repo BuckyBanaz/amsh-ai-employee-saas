@@ -1,0 +1,66 @@
+{
+ "name": "German",
+ "tts_language": "de",
+ "stt_language": "de",
+ "fillers": {
+  "think": [
+   "Hmm…",
+   "Mal sehen…",
+   "Also…"
+  ],
+  "ack": [
+   "Okay…",
+   "Verstehe…",
+   "Alles klar…"
+  ],
+  "delight": [
+   "Oh, schön!",
+   "Wunderbar!"
+  ],
+  "wait": "Einen Moment…"
+ },
+ "leading_sounds": [
+  "hm+",
+  "mal sehen",
+  "also",
+  "okay",
+  "ok",
+  "verstehe",
+  "alles klar",
+  "genau",
+  "schön",
+  "wunderbar",
+  "ah",
+  "oh"
+ ],
+ "question_words": [
+  "was",
+  "wie",
+  "wann",
+  "welche",
+  "welcher",
+  "wie viel",
+  "warum",
+  "wo",
+  "wer"
+ ],
+ "ask_patterns": [
+  "\\bauf\\s+deutsch\\b",
+  "\\bdeutsch\\s+(?:sprechen|reden)\\b",
+  "\\bin\\s+german\\b",
+  "\\bspeak\\s+german\\b"
+ ],
+ "style": "Natural spoken German, polite and clear. Use \"Sie\" by default and \"du\" only if the caller does. Everyday fillers: \"genau\", \"alles klar\", \"einen Moment bitte\", \"also\". Say times the German way (\"halb elf\", \"Viertel nach zehn\").",
+ "strings": {
+  "greeting": "Guten Tag, vielen Dank für Ihren Anruf bei {business_name}. Wie kann ich Ihnen helfen?",
+  "fallback": "Entschuldigung, ich habe gerade ein Problem. Könnten Sie das bitte wiederholen, oder soll ich Sie mit der Rezeption verbinden?",
+  "no_transfer": "Es tut mir leid, ich kann Sie gerade nicht verbinden. Soll ich eine Nachricht für die Rezeption aufnehmen?",
+  "billing": "Abrechnung und Rückerstattungen übernimmt unser Rezeptionsteam. Ich verbinde Sie sofort.",
+  "frustrated": "Es tut mir wirklich leid für die Unannehmlichkeiten. Ich verbinde Sie sofort mit jemandem an der Rezeption.",
+  "unsure_claim": "Ich möchte das kurz mit Ihnen bestätigen. Könnten Sie die Angaben bitte noch einmal bestätigen?",
+  "unsure_times": "Ich möchte sichergehen, dass ich die richtige Uhrzeit nenne. Welcher Tag passt Ihnen?",
+  "transfer_generic": "Ihr Anruf wird weitergeleitet."
+ },
+ "native_name": "Deutsch",
+ "direction": "ltr"
+}

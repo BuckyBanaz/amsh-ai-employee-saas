@@ -8,8 +8,10 @@ confirmation toggle and disabled capabilities."""
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from backend.ai.lexicon import language_pack
 from backend.ai.capabilities.rules.business_hours import BusinessHoursRule
 from backend.ai.capabilities.rules.patient_privacy import PRIVACY_RULE
+from backend.ai.verticals.context import BusinessContext
 from backend.ai.engine.agent.emotion import EMOTION_RULE
 from backend.ai.engine.agent.validator import BusinessFacts
 
@@ -76,14 +78,39 @@ _LANGUAGE_NAMES = {
 
 
 def _lang_name(code: str) -> str:
-    return _LANGUAGE_NAMES.get((code or "en").lower()[:2], code)
+    key = (code or "en").lower().split("-")[0]
+    return language_pack(key).get("name") or _LANGUAGE_NAMES.get(key[:2], code)
+
+
+def _native_style(code: str) -> str:
+    """How to sound native in `code`: its pack's style guidance and filler words, or a generic native-speaker instruction."""
+    pack = language_pack(code)
+    name = _lang_name(code)
+    if pack.get("style"):
+        fillers = pack.get("fillers") or {}
+        sample = ", ".join(dict.fromkeys(w.strip("…!. ") for k in ("think", "ack") for w in fillers.get(k, [])))
+        return f" SPEAKING {name.upper()}: {pack['style']}" + (f" Natural fillers: {sample}." if sample else "")
+    return (f" SPEAKING {name.upper()}: speak it the way a native speaker does on the phone: the real everyday filler words, "
+            "acknowledgements and politeness forms of that language, never English fillers translated word for word.")
 
 
 def language_rule(primary: Optional[str], languages: Optional[List[str]], auto_detect: bool) -> str:
     """Languages tab: the primary language, the ones the clinic supports, and whether to follow the caller."""
     p = _lang_name(primary or "en")
+    primary_code = (primary or "en").lower().split("-")[0]
+    native = _native_style(primary_code) if primary_code != "en" else ""
     if not auto_detect:
-        return f"LANGUAGE: always reply in {p}, even if the caller uses another language. Keep names like the clinic's in Latin letters."
+        return f"LANGUAGE: always reply in {p}, even if the caller uses another language. Keep names like the clinic's in Latin letters.{native}"
+    allowed = {c.lower().split("-")[0] for c in (languages or [])} | {primary_code}
+    if languages and "hi" not in allowed:  # no Hindi here: no Devanagari / Hinglish guidance
+        rule = (
+            f"LANGUAGE: reply in the language of the caller's latest message; if unclear use {p}. If the caller asks to switch language, "
+            "switch at once and stay in it until they ask otherwise. Keep names like the clinic's in Latin letters."
+        )
+        supported = [_lang_name(c) for c in languages]
+        if supported and set(supported) != {p}:
+            rule += f" Languages you support: {', '.join(supported)}. If the caller speaks another language, say kindly in {p} that you can only help in those."
+        return rule + native
     rule = (
         f"LANGUAGE: reply in the language of the caller's latest message; if unclear use {p}. Speech-to-text often writes "
         "English words in Devanagari, so judge the language by meaning, not script. If the caller asks to switch language "
@@ -94,7 +121,7 @@ def language_rule(primary: Optional[str], languages: Optional[List[str]], auto_d
     supported = [_lang_name(c) for c in (languages or [])]
     if supported and set(supported) != {p}:
         rule += f" Languages you support: {', '.join(supported)}. If the caller speaks another language, say kindly in {p} that you can only help in those."
-    return rule
+    return rule + native
 
 
 def trigger_lines(triggers: Optional[Dict[str, bool]]) -> str:
@@ -119,6 +146,29 @@ def personality_line(personality: Optional[str]) -> str:
     return _PERSONALITIES[_DEFAULT_PERSONALITY]
 
 
+def runtime_context_block(context: Optional[BusinessContext]) -> str:
+    """The authoritative runtime context for the model: vertical, language, accent, region, timezone. The five are independent;
+    the model uses them as given and never derives one from another (Hindi is not India, an accent is not a region)."""
+    if context is None:
+        return ""
+    language = f"{_lang_name(context.language)} ({context.language})" + (", written right to left" if context.direction == "rtl" else "")
+    accent = context.accent or "not specified"
+    if context.region == "UNKNOWN":
+        region = "not configured. No emergency number is configured: say \"your local emergency number\" and never quote a number"
+    else:
+        numbers = " or ".join(context.emergency_numbers) or "not configured"
+        region = f"{context.region_name} ({context.region}). Medical emergency number(s): {numbers}"
+    return (
+        "RUNTIME CONTEXT (authoritative; use exactly as given and NEVER infer one value from another or from the caller's language, "
+        "accent, name or phone number):\n"
+        f"- Vertical: {context.vertical}\n"
+        f"- Language: {language}\n"
+        f"- Accent/voice: {accent} (how you sound; says nothing about region)\n"
+        f"- Region: {region}\n"
+        f"- Timezone: {context.timezone} (every date and time you say is in it)\n\n"
+    )
+
+
 def build_system_prompt(
     facts: BusinessFacts,
     agent_name: str,
@@ -135,6 +185,7 @@ def build_system_prompt(
     auto_detect_language: bool = True,
     triggers: Optional[Dict[str, bool]] = None,
     channel: str = "voice",
+    context: Optional[BusinessContext] = None,
 ) -> str:
     if gender == "female":
         gender_rule = (
@@ -178,6 +229,7 @@ def build_system_prompt(
     location = ", ".join(p for p in (facts.address, facts.city) if p) or "not on file"
     prompt = (
         f"{rules}\n\n"
+        f"{runtime_context_block(context)}"
         f"CLINIC: {facts.name}. Address: {location}. Phone: {facts.phone or 'not on file'}.\n"
         f"Hours: {_hours_text(facts.working_hours)}.\n"
         f"Services: {', '.join(facts.services) or 'not listed'}. Doctors: {', '.join(facts.doctors) or 'not listed'}.\n"
@@ -191,7 +243,7 @@ def build_system_prompt(
         prompt += f"\nTURNED OFF by the clinic (politely decline and offer the front desk instead): {'; '.join(disabled)}."
     from backend.ai.verticals.compliance import get_regional_compliance
     compliance = get_regional_compliance(
-        vertical=getattr(facts, "vertical", "clinic"),
+        vertical=facts.vertical,  # required: BusinessFacts has no default vertical
         country=getattr(facts, "country", ""),
         timezone=facts.timezone,
     )

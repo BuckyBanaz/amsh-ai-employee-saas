@@ -83,6 +83,7 @@ def load_agent_settings(business_id: str) -> Dict[str, Any]:
             "language": agent.primary_language,
             "greeting": agent.greeting_message or None,
             "stt_language": (cfg.get("stt") or {}).get("language"),
+            "accent": cfg.get("accent"),  # how the agent sounds (e.g. "hi-IN"); used for the STT dialect, never for region
             "voice_id": tts.get("voice_id"),
             "tts_language": tts.get("language"),
             # Voice tab speed/emotion (Cartesia generation_config); speed falls back to the personality's default.

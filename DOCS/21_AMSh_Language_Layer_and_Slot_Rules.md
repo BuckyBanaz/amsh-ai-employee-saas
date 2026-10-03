@@ -1,5 +1,6 @@
 # Amsh: BusinessContext, Hindi/Hinglish layer, slot rules and booking guard
 
+> **Update 2026-10-03 (later): the layer is switched on by the language settings, not by region; see `22_...` section 3.** Sections 1 and 2 below describe the first version (region-gated).
 > Added 2026-10-03. Spec for the language layer: `issue.md` (repo root). Code: `backend/ai/engine/agent/language_layer.py`,
 > `backend/ai/verticals/language_policy.py`, `backend/ai/capabilities/operations/clinic/slot_availability.py`.
 > Tests: `test_agent_core.py` (`HindiHinglishLayer`, slot-rule tests).

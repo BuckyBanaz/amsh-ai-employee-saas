@@ -6,6 +6,7 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from sqlalchemy.orm import Session
 
+from backend.ai.verticals.errors import MissingContextError
 from backend.ai.engine.agent.availability import DEFAULT_SLOT_MINUTES
 from backend.ai.engine.agent.validator import BusinessFacts
 from backend.ai.speech.tts.voice_meta import voice_gender
@@ -42,6 +43,8 @@ class AgentProfile:
     # "Languages" tab: Agent.languages (allowed) + config.auto_detect_language; primary is `language` above
     languages: List[str] = field(default_factory=list)
     auto_detect_language: bool = True
+    # Voice tab accent (Agent.config["accent"], e.g. "hi-IN"): how the agent sounds. Never decides region or language.
+    accent: str = ""
     # "Appointments" tab: config.limits.buffer_minutes / notice_hours; allow_cancel/allow_reschedule become capabilities
     buffer_minutes: int = 0
     notice_hours: float = 0.0
@@ -110,14 +113,14 @@ def _positive_int(raw: Any) -> Optional[int]:
 def load_facts(db: Session, business_id: str) -> BusinessFacts:
     business = db.get(Business, business_id)
     if not business:
-        return BusinessFacts(name="our clinic")
+        raise MissingContextError(f"Business {business_id!r} was not found: refusing to guess a vertical, region or timezone.")
     staff = db.query(Staff).filter(Staff.business_id == business_id).all()
     clinical = [s.name for s in staff if _CLINICAL_ROLE.search(s.role or "")] or [s.name for s in staff]
     services = db.query(Service).filter(Service.business_id == business_id).all()
     durations = [s.duration_minutes for s in services if s.duration_minutes]
     return BusinessFacts(
         name=business.name,
-        timezone=business.timezone or "UTC",
+        timezone=(business.timezone or "").strip(),
         working_hours=business.working_hours or {},
         services=[s.title for s in services],
         doctors=clinical,
@@ -125,9 +128,21 @@ def load_facts(db: Session, business_id: str) -> BusinessFacts:
         phone=business.business_phone or "",
         city=business.city or "",
         country=business.country or "",
-        vertical=business.vertical or "clinic",
+        vertical=(business.vertical or "").strip(),
         slot_minutes=min(max(min(durations), 15), 60) if durations else DEFAULT_SLOT_MINUTES,
     )
+
+
+def load_vertical_name(business_id: str) -> str:
+    """The business's configured vertical. Blocking; raises MissingContextError when the business or its vertical is missing."""
+    from backend.server.database.session import SessionLocal
+
+    with SessionLocal() as db:
+        business = db.get(Business, business_id)
+    vertical = (business.vertical or "").strip() if business else ""
+    if not vertical:
+        raise MissingContextError(f"Business {business_id!r} has no vertical configured: refusing to treat it as a clinic.")
+    return vertical
 
 
 def load_profile(db: Session, business_id: str) -> AgentProfile:
@@ -175,6 +190,7 @@ def load_profile(db: Session, business_id: str) -> AgentProfile:
         name=agent.name or "Aura",
         tone=cfg.get("personality"),
         language=agent.primary_language,
+        accent=str(cfg.get("accent") or ""),
         greeting=agent.greeting_message or None,
         gender=gender if gender in ("female", "male") else None,
         engine=str(cfg.get("engine") or "").lower() or None,

@@ -30,6 +30,7 @@ from backend.server.api.routes import (
 )
 from backend.ai.realtime.twilio.gateway import router as voice_stream_router
 from backend.server.api.routes import plans as plans_public
+from backend.server.api.routes import languages
 
 api_router = APIRouter()
 api_router.include_router(auth.router)
@@ -60,6 +61,7 @@ api_router.include_router(voice_stream_router)
 api_router.include_router(voice.router)
 api_router.include_router(stt.router)
 api_router.include_router(plans_public.router)
+api_router.include_router(languages.router)
 api_router.include_router(admin_plans.router)
 api_router.include_router(admin_tenant_data.router)
 api_router.include_router(admin_overview.router)

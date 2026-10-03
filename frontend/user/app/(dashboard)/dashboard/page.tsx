@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { TopBar } from '../../../components/dashboard/TopBar';
 import { AIBanner } from '../../../components/dashboard/AIBanner';
 import { MetricCard } from '../../../components/dashboard/MetricCard';
@@ -13,13 +13,14 @@ import {
   DashboardController,
   DashboardStatsResponse,
 } from '../../../controllers/dashboard.controller';
+import { useAutoRefresh } from '../../../hooks/useAutoRefresh';
 
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardStatsResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [isPlaygroundOpen, setIsPlaygroundOpen] = useState<boolean>(false);
 
-  useEffect(() => {
+  const loadStats = useCallback(() => {
     DashboardController.getStats()
       .then((res) => {
         if (res) {
@@ -33,6 +34,12 @@ export default function DashboardPage() {
         setLoading(false);
       });
   }, []);
+
+  useEffect(() => {
+    loadStats();
+  }, [loadStats]);
+
+  useAutoRefresh(loadStats);  // calls and bookings change while the dashboard is open
 
   const metrics = data?.metrics;
   const totalCalls = metrics?.total_calls ?? 42;
