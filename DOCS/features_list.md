@@ -210,3 +210,17 @@ answers questions from your own information, and hands over to your team when it
 6. *You stay in control.* Test it in your browser, set the personality and rules, review every call.
 
 **Coming soon strip:** Reminders · Missed-call follow-up · Waitlist refill · Live take-over · Morning digest · Calendar sync.
+
+## Added 2026-10-03 (branch `complete`): owner and clinic tools
+
+| Feature | Status |
+|---|---|
+| Edit the wording of confirmations, reminders, follow-ups and staff alerts; versions, channel order, quiet hours, message log | ✅ for booking confirmation, reminder, missed-call follow-up and staff alerts; 🔜 for the other messages |
+| Help and Support inside the dashboard (clinic opens a ticket, AMSh replies, internal notes stay private) | ✅ |
+| Announcements from AMSh shown in the dashboard | ✅ |
+| Plan limits (team seats, knowledge documents) with a clear upgrade message | ✅ |
+| Admin: audit log with export, security overview, staff accounts, SEO for the public site | ✅ |
+| Dashboard figures are real (calls, bookings, resolution, response time); nothing is estimated | ✅ |
+| Measured response time (P50 / P95) on a real phone call | ⛔ do not claim a number until measured (`25_...`) |
+| HIPAA / SOC 2 compliance | ⛔ do not claim (`25_...`) |
+

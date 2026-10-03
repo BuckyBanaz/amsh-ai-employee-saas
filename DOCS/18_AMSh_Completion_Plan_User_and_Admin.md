@@ -36,7 +36,7 @@ Pending: **billing page** (still static: show the plan from `GET /api/plans`, th
 patients edit / delete and history, landing-page claims that are not true yet (see `features_list.md`), and the `tsc` errors currently
 left by unfinished edits (Conversations, AI defaults settings, a duplicate `getBusinessInfo` in `dashboard.controller.ts`).
 
-### Phase 3: admin backend
+### Phase 3: admin backend (updated 2026-10-03: nearly all done, see the end of this phase)
 Done (`/api/admin/...`): auth, tenants (list, detail, suspend / reactivate / plan), per-business data (users, agents, appointments,
 calls, services, knowledge, integrations, activity), plan catalog (create / edit / archive / delete), overview for the dashboard.
 Pending: business-users and admin-users management, cross-tenant lists (appointments, calls, conversations, customers, services,
@@ -44,7 +44,7 @@ receptionists), usage and quotas, analytics, health detail page, integrations ov
 announcements, verticals. Also: enforce a plan's quotas per business, record payments and invoices, block a suspended clinic's
 dashboard login.
 
-### Phase 4: admin frontend
+### Phase 4: admin frontend (updated 2026-10-03: 24 of 25 pages are real; only a cross-tenant Customers list is missing)
 Real: login and guard, **Dashboard**, **Businesses** (list and detail), **Billing** (plan catalog, distribution, business subscriptions).
 20 pages are still design mocks and show an amber "Sample data" banner: business-users, admin-users, appointments, calls, conversations,
 customers, services, receptionists, usage, analytics, health, integrations, security, audit, tickets, announcements, verticals (plus their
@@ -55,7 +55,7 @@ Done: WhatsApp AI chat (live on the Meta test number since 2026-10-02, with retu
 Pending: Deepgram in the playgrounds (relay done, browser adapter missing), WhatsApp on a real clinic number, WhatsApp template messages / media / human takeover,
 a real phone-call test, listening tests (laughter, fillers, interrupt thresholds), live take-over from the tenant dashboard.
 
-### Phase 6: quality gate: not started
+### Phase 6: quality gate: started (CI and 416 offline tests exist; the manual passes below are still owner tests, see `26_...` C)
 Tenant-isolation tests for every endpoint, an end-to-end manual pass in a real browser and on a real call (register, onboarding, first call,
 booking, invite a teammate, reset password, admin login, suspend a tenant), README and status refresh.
 
@@ -68,3 +68,11 @@ through it with loading, empty and error states; `tsc` and the server suite pass
 Most work so far is unit-tested but has not been clicked through in a browser or tried on a real phone call. Tenant isolation is the
 highest-impact bug class in a multi-tenant product. Antigravity and Claude edit the same repository at the same time: pull, check
 `git status` and keep commits small.
+
+## Update 2026-10-03 (branch `complete`)
+
+Done since this plan was written: admin APIs and pages for audit, security, staff accounts, support tickets, announcements, verticals, SEO and
+message templates; quotas (seats, knowledge documents; minutes and messages reported); a block on suspended clinics; clinic Help and Support and the
+announcement banner; message sending through templates; real dashboard numbers; CI. Still pending: cross-tenant Customers list, payment records and
+invoices, overage billing, per-role permissions beyond staff management, Meta template submission, delivery webhooks, patient entity and a real
+appointments table, outbound campaigns, live take-over, and everything in `26_AMSh_Owner_Actions.md`.

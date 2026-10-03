@@ -1,22 +1,27 @@
-# Amsh: Progress (2026-10-03, evening)
+# Amsh: Progress (2026-10-03, branch `complete`)
 
 Old day-by-day history: `archive_progress_history.md`. Plan: `DOCS/18_AMSh_Completion_Plan_User_and_Admin.md`. Change log: `DOCS/17_...`.
 Architecture and status: `DOCS/README.md`. Latency work: `DOCS/07_AMSh_Latency_Optimization_Strategy.md` section 6 (branch `v1.1`).
 
-## Overall: about 63% (estimate)
+## Overall: about 72% (estimate, branch `complete`)
 
 | Part | Done | Pending |
 |---|---|---|
-| User frontend | **~80%** | ~20% |
-| Admin frontend | **~44%** | ~56% |
-| AI / voice | **~56%** | ~44% |
-| Server | **~72%** | ~28% |
-| **Overall (equal weight)** | **~63%** | ~37% |
+| User frontend | **~90%** | ~10% |
+| Admin frontend | **~92%** | ~8% |
+| AI / voice | **~60%** | ~40% |
+| Server | **~85%** | ~15% |
+| **Overall (equal weight)** | **~72%** | ~28% |
 
 Method: each part is a checklist of items (pages or capabilities), equal weight; done = 1, partial = 0.4 to 0.9, pending = 0.
 These are estimates, not measurements. Almost nothing has been checked by a person in a real browser or on a real phone call:
-the evidence is unit tests (`backend/ai/evals/test_agent_core.py` 250/256, same 6 known failures: 5 BillingSecurity + 1 prompt length;
-`test_voice_latency.py` 31/31) plus some live API and database checks.
+the evidence is 416 offline tests (all green on branch `complete`: `backend/ai/evals/*`), both apps type-check and build, plus checks of the
+new screens against a local seeded API. Owner-only items: `DOCS/26_AMSh_Owner_Actions.md`.
+
+## Branch `complete` (2026-10-03): see `DOCS/17_...` rows 64 to 72
+
+Security hardening, message templates with real sending, admin SEO / audit / security / staff / tickets / announcements / verticals, real dashboard numbers, quotas,
+suspended-clinic block, frontend cleanup (zero TypeScript errors), CI, competitor analysis (`DOCS/25`).
 
 ## Changes since the 2026-09-28 version
 

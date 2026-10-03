@@ -219,3 +219,27 @@ Non-voice channels (WhatsApp/SMS/Web chat) — PRD calls these out separately fr
 6. Live-call WS + `POST /api/calls/{id}/takeover` — turns **Live Call Take Over** from mockup into real
 7. `knowledge.py` + RAG pipeline
 8. Everything else (`billing`, `usage`, `analytics`, `integrations`, admin gap-fill modules) — lower urgency, each is a straightforward CRUD layer once the DB models exist
+
+---
+
+## Added 2026-10-03 (branch `complete`)
+
+All routes below require a login unless marked public. Platform admin = AMSh staff (`scope = platform`); member = a user of that business.
+
+| Area | Endpoints | Who |
+|---|---|---|
+| Voice (paid) | `POST /api/voice/media-token`, `GET /api/voice/voices`, `/llm-models`, `/preview` (header or `?token=`), `POST /transcribe`, `/call-me`, `POST /api/voice/simulate[/stream]` | any signed-in user of that business (rate limited) |
+| Telephony webhooks | `POST /api/voice/incoming`, `/status`, `/recording-status`, `/transfer-status` (Twilio signature); `/api/voice/exotel/incoming`, `/status` (`?key=`) | provider |
+| Message templates (admin) | `GET /api/admin/message-templates[/meta]`, `GET/PUT/DELETE /api/admin/message-templates/{event}/{channel}`, `POST .../preview`, `POST .../restore`, `GET /api/admin/message-log` | platform admin |
+| Message templates (clinic) | `GET /api/businesses/{id}/message-templates`, `GET/PUT/DELETE .../{event}/{channel}`, `POST .../preview`, `POST .../restore`, `GET/PUT .../message-preferences`, `GET .../message-log` | member (write: owner or admin) |
+| SEO | `GET /api/admin/seo`, `PUT /api/admin/seo/global`, `PUT/DELETE /api/admin/seo/pages`; public `GET /api/seo/public`, `/robots.txt`, `/sitemap.xml` | platform admin; public |
+| Audit and security | `GET /api/admin/audit`, `/audit/export.csv`, `/security` | platform admin |
+| Staff accounts | `GET/POST /api/admin/admin-users`, `PATCH /api/admin/admin-users/{id}`, `POST .../{id}/setup-link` | super admin |
+| Support | `POST/GET /api/businesses/{id}/tickets`, `GET .../{ticket}`, `POST .../{ticket}/messages`; `GET /api/admin/tickets`, `GET/PATCH /api/admin/tickets/{id}`, `POST .../messages` | member; platform admin |
+| Announcements | `GET /api/announcements` (member); `GET/POST /api/admin/announcements`, `PATCH/DELETE .../{id}` | member; platform admin |
+| Verticals | `GET /api/admin/verticals`, `GET /api/admin/verticals/{name}?language=` (read-only) | platform admin |
+| Usage | `GET /api/businesses/{id}/usage` | member |
+| Dashboard | `GET /api/businesses/{id}/dashboard[/stats]` now returns real numbers only (null when there is nothing to compute) | member |
+
+Errors worth knowing: `402` a plan limit was reached (seats, knowledge documents); `403 ... suspended` the clinic is suspended; `429` rate limit.
+

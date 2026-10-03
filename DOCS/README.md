@@ -6,10 +6,24 @@ Last verified against the code: 2026-09-28 (branch `v0.6`). Every status below s
 Detailed change log: [`17_AMSh_Claude_Change_Tracker.md`](17_AMSh_Claude_Change_Tracker.md). Older specs are listed at the
 bottom (some are stale, see "Doc index").
 
-## Progress at a glance (estimate, 2026-10-03)
+## Progress at a glance (estimate, 2026-10-03, branch `complete`)
 
 | Part | Done | Main pending |
 |---|---|---|
+| User frontend | ~90% | billing invoices are still static, plan-usage card, Marketing-site pages other than the landing page, Conversations polish; zero TypeScript errors, builds in production mode |
+| Admin frontend | ~92% | a cross-tenant Customers list (the sidebar link goes to the dashboard); every other page runs on a real API (audit, security, staff, tickets, announcements, SEO, templates, verticals are new) |
+| AI / voice | ~60% | **real phone-call test**, measured response time and cost per minute, outbound, live take-over; Hindi/Hinglish layer tested offline only |
+| Server | ~85% | the in-app channel has no sender, Meta template submission, delivery webhooks, per-role permissions beyond staff management, overage billing; migrations 0006 to 0008 not yet run on Postgres |
+| **Overall** | **~72%** | still little verified in a real browser or on a real call: see `26_AMSh_Owner_Actions.md` |
+
+**What changed on branch `complete` (2026-10-03):** security hardening (webhook verification, authenticated and rate-limited voice endpoints, production
+guard), message templates with real sending for booking confirmations, reminders, missed-call follow-up and staff alerts, admin SEO, audit, security,
+staff, tickets, announcements and verticals on real APIs, real dashboard numbers (no invented figures), clinic Help and Support, quotas, suspended
+clinics blocked, CI. Details: tracker entries 64 to 72 in `17_...`. What only the owner can do: `26_AMSh_Owner_Actions.md`.
+
+Method and lists: [`../.brain/progress.md`](../.brain/progress.md).
+
+---|---|---|
 | User frontend | ~80% | onboarding plans / review / Twilio, conversations and analytics polish, dashboard still shows invented numbers when data is thin; billing invoices are fake |
 | Admin frontend | ~44% | 14 mock pages (11 of 25 are real, incl. analytics, health, integrations, receptionists, appointments, conversations) |
 | AI / voice | ~55% | real phone-call test (also confirms the latency work), outbound, live take-over; WhatsApp works on the Meta test number; Hindi/Hinglish layer tested offline only |
@@ -303,7 +317,7 @@ run, **Stub** = placeholder, **Missing** = does not exist.
 
 ---
 
-## 9. What is pending (full list, 2026-09-28)
+## 9. What is pending (full list, 2026-09-28; **partly out of date: see the progress box above, `23_...` section 5 and `26_...`**)
 
 Plan and order for the big items: [`18_AMSh_Completion_Plan_User_and_Admin.md`](18_AMSh_Completion_Plan_User_and_Admin.md).
 Legend: **[A]** admin portal, **[U]** user app, **[V]** voice/AI, **[W]** WhatsApp, **[P]** platform/infra, **[O]** owner action.
@@ -430,7 +444,9 @@ Still to do: blocking a suspended clinic's dashboard login, admin password reset
 | `19_AMSh_Summit_Pitch.md` | summit talking points, competitors, ask checklist | current |
 | `20_AMSh_Returning_Patient_Memory_and_Privacy.md` | patient memory, privacy rules, booking channels, WhatsApp go-live checklist | current |
 | `23_AMSh_System_Audit_2026-10-03.md` | full system audit: what works, P0 / P1 problems, unused code, order of work | current |
-| `24_AMSh_Message_Templates_and_Channels_Plan.md` | plan: editable templates for email, SMS, WhatsApp and in-app messages in the admin and user portals, channel order, logs, compliance | planned |
+| `24_AMSh_Message_Templates_and_Channels_Plan.md` | editable templates for email, SMS, WhatsApp and in-app messages, channel order, quiet hours, logs, compliance; section 11 is the built API and sending | partly built |
+| `25_AMSh_Competitive_Analysis_and_Roadmap.md` | Vapi, Retell and Bland compared with AMSh, gaps and the order to close them, sources | current |
+| `26_AMSh_Owner_Actions.md` | everything only the owner can do: secrets, accounts, tests, decisions | current |
 | `22_AMSh_Language_Packs_and_Runtime_Context.md` | five independent dimensions (vertical, language, accent, region, timezone), language packs, RTL readiness, languages endpoint | current |
 | `21_AMSh_Language_Layer_and_Slot_Rules.md` | BusinessContext (vertical + region + language config), Hindi/Hinglish layer, slot rules, booking guard | current |
 | `18_AMSh_Completion_Plan_User_and_Admin.md` | phased plan for the user app, admin portal and server APIs (done / pending) | current |

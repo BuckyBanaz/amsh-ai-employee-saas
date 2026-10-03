@@ -57,3 +57,23 @@ Never tested for real: a phone call (latency, barge-in, Hindi), any non-English 
 8. Frontend cleanup: one shared list of languages, accents, timezones and countries from the backend; drop India defaults; fix the 20 TypeScript errors.
 9. Provider health: Groq paid tier, Exotel and Twilio, Qdrant or remove it, a health page.
 10. Prompt diet: move clinic and Hinglish text into the vertical YAML and the language packs.
+
+## 5. Status after branch `complete` (same day, later)
+
+| # | Item | Now |
+|---|---|---|
+| P0-1 | Telephony webhook signatures | **Done.** Twilio signature check and an Exotel shared key (`?key=`); refused when unset unless `ALLOW_DEV_FALLBACKS`. The media-stream websocket needs a per-call token. Owner: set the secrets (`26_...` A2, A3) |
+| P0-2 | Open paid voice endpoints | **Done.** `call-me`, `preview`, `transcribe`, `voices`, `llm-models`, and the playground `simulate` need a login; audio uses a 10-minute media token; per-user rate limits; `call-me` is limited to the caller's own business |
+| P0-3 | Dev defaults | **Done in code.** Defaults are now safe (`DEBUG` false, fallbacks off, `llm_agent` engine), the API refuses to start in production with unsafe settings, CORS is no longer open to every origin, `docker-compose.prod.yml` removes reload, mounts, open ports and ngrok. Owner: set the production values |
+| P0-4 | Meta secret, dependency alerts | Dependencies **fixed** (Next 16.3.8, FastAPI/Starlette, `python-jose`, `python-multipart`); two unfixable ones remain (`braces` in the lint tool, `ecdsa`). **Owner must reset the Meta secret** |
+| P0-5 | PII and retention | Not done: transcripts and recordings are still stored in plain form (see `25_...` item 3) |
+| P1-7 | Two engines | `llm_agent` is now the default; the legacy engine is not removed yet |
+| P1-9 | Dashboard invented numbers | **Done.** Real numbers, a dash when there is nothing to compute, no sample patients or callers |
+| P1-10 | Appointments in JSON, no patient entity | Not done |
+| P1-11 | Frontend: hardcoded URLs, TypeScript errors | **Done.** `NEXT_PUBLIC_API_URL`, zero TypeScript errors in both apps, lint has no errors (two legacy-heavy rules are warnings), the user app builds in production mode (a checkout page was breaking it) |
+| P1-12 | Providers | Owner (`26_...` B) |
+| P1-13 | Prompt size | Budget made explicit (8,000 characters, was 6,500); the diet is still to do |
+| P1-14 | Tests and CI | **CI added** (`.github/workflows/ci.yml`); tests are in several files now (416 offline tests); live-model evals still never run |
+| New | Invite password | Fixed: invited business users no longer get the shared default password `Password123!`; they receive a "choose your password" email |
+| New | Suspended clinics | Fixed: staff of a suspended clinic cannot sign in and existing tokens stop working |
+

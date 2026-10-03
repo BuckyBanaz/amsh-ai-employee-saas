@@ -2,7 +2,7 @@
 
 Status: **PARTLY BUILT** (written 2026-10-03). Owner of the decision: Parikshit.
 Built: admin Templates and clinic Settings > Messages screens (design previews with sample data, not yet connected), and the backend API
-(section 11). Not built: moving the hardcoded senders onto it, the single `dispatcher.send()`, Meta template sync, delivery webhooks, plan caps.
+(section 11). Sending: `server/notifications/messenger.py` (see section 12). Not built: the in-app channel sender, Meta template submission and sync, delivery webhooks, message caps.
 Why: today every outgoing message is a string inside Python code. The admin cannot change a wording, a clinic cannot make a reminder sound
 like itself, and there is no record of what was sent. This plan gives both portals one template system over four channels.
 
@@ -157,3 +157,21 @@ Still to do on the backend: `NotificationDispatcher.send(event, recipient, conte
 the channel order and quiet hours from `message_preferences`, and writes `message_log`; move each hardcoded string over (with a golden check);
 Meta template submission (the screens' "Submit for approval" has no endpoint yet); "send test to me"; provider status webhooks; plan caps;
 `html_body` for email. Open: message-log retention (question 3 below).
+
+## 12. Sending (built 2026-10-03)
+
+`server/notifications/messenger.py`: `send_event(db, event, business_id, context, phone, email, ...)` and `send_event_sync(...)`.
+
+* Picks the template (clinic, platform, built-in; the patient's language then English), renders it, and tries the channels in the clinic's order, stopping at
+  the first that sends (`fanout=True` sends on every channel, used for staff alerts).
+* Honors the clinic's switch per event and **quiet hours**, but only for messages AMSh starts (reminders, follow-ups), never for the answer to something the
+  patient just did.
+* WhatsApp text that AMSh starts needs a Meta-approved template (`meta_status = approved` and a recorded name; `{{1}}`, `{{2}}` follow the order the
+  variables appear); inside the 24-hour window free text is allowed. A channel that cannot be used is skipped.
+* Every attempt is written to `message_log` (sent or failed, provider, error, template version).
+* **Live today:** `booking.confirmed`, `booking.reminder`, `call.missed_followup`, `alert.escalation`, `alert.booking`, `alert.missed_call` (SMS, email, WhatsApp).
+  The screens mark these cells "Live". Still sent from code: sign-in and billing emails, reschedule and cancel messages, feedback requests, in-app notices.
+* The built-in wording of the live events equals what the app sent before (checked by tests), with one change: a reminder for an unassigned doctor says
+  "with our team" instead of leaving the doctor out.
+* The reminder and missed-call features still also need their switch in the AI settings (Automations); the Messages switch is a second, clinic-visible one.
+
