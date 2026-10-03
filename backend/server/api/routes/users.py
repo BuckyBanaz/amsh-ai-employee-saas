@@ -9,6 +9,7 @@ from backend.server.api.routes._shared import get_business_or_404, require_membe
 from backend.server.auth.security import create_invite_token, get_current_user, hash_password
 from backend.server.database.models.user import User
 from backend.server.database.session import get_db
+from backend.server.services import quotas
 
 router = APIRouter(prefix="/api/businesses/{business_id}/users", tags=["users"])
 
@@ -57,6 +58,7 @@ def invite_team_member(
     existing = db.query(User).filter(User.email == payload.email).first()
     if existing:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
+    quotas.enforce_add(db, get_business_or_404(business_id, db), "seats")
 
     invitee = User(
         business_id=business_id,

@@ -63,6 +63,8 @@ class MessageTemplateApi(unittest.TestCase):
         grid = self.c.get(self.admin, headers=self.h["admin"]).json()
         self.assertEqual(cell(grid, "booking.reminder", "sms")["status"], "default")
         self.assertNotIn("push", next(i for i in grid["items"] if i["key"] == "booking.reminder")["cells"])  # not sent by that channel
+        self.assertTrue(cell(grid, "booking.reminder", "sms")["live"])  # the reminder SMS already goes through the template
+        self.assertFalse(cell(grid, "auth.password_reset", "email")["live"])  # sign-in emails still use the wording written in code
         self.assertEqual(self.put(f"{self.admin}{SMS}", "admin", status="draft").status_code, 200)
         grid = self.c.get(self.admin, headers=self.h["admin"]).json()
         self.assertEqual(cell(grid, "booking.reminder", "sms")["status"], "draft")
@@ -96,7 +98,7 @@ class MessageTemplateApi(unittest.TestCase):
         self.put(url, "admin", body="custom {{date}}")
         r = self.c.delete(url, headers=self.h["admin"]).json()
         self.assertEqual(r["removed"], 1)
-        self.assertIn("Reminder:", r["default"]["body"])
+        self.assertIn("a reminder of your appointment", r["default"]["body"])
         self.assertEqual(self.c.get(url, headers=self.h["admin"]).json()["own"], {})
 
     def test_preview_renders_a_sample_and_counts_sms_segments(self):
@@ -171,7 +173,8 @@ class MessageTemplateApi(unittest.TestCase):
         url = f"{self.mine}/message-preferences"
         prefs = self.c.get(url, headers=self.h["owner"]).json()
         self.assertEqual(prefs["events"]["booking.reminder"]["order"], ["whatsapp", "sms"])
-        self.assertFalse(prefs["events"]["call.missed_followup"]["enabled"])
+        self.assertTrue(prefs["events"]["call.missed_followup"]["enabled"])  # on by default; the AI settings toggle still has to be on too
+        self.assertFalse(prefs["events"]["feedback.request"]["enabled"])
         ok = self.c.put(url, json={"events": {"booking.reminder": {"order": ["sms", "whatsapp"], "enabled": False}}, "quiet_hours": {"enabled": True, "from": "22:00", "to": "07:30"}}, headers=self.h["owner"])
         self.assertEqual(ok.status_code, 200)
         again = self.c.get(url, headers=self.h["owner"]).json()

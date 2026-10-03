@@ -5,7 +5,8 @@ never closer than one hour) and messages the patient once. It is OFF unless both
   * the server setting REMINDERS_ENABLED is on (it messages real patients), and
   * the clinic switched it on: Agent.config["toggles"]["reminders"] is true.
 
-Channels: SMS always; WhatsApp only when the clinic configured an approved template
+Wording, channel order and quiet hours come from the message templates and the clinic's Messages settings (event `booking.reminder`).
+Channels: SMS by default; WhatsApp only when the clinic configured an approved template
 (Agent.config["reminders"] = {"lead_hours": 24, "whatsapp_template": "appointment_reminder", "whatsapp_language": "en"}),
 because WhatsApp only allows free-form messages inside 24 hours of the patient's last message.
 """
@@ -96,23 +97,38 @@ def _phone(details: Dict[str, Any]) -> str:
     return re.sub(r"[^\d+]", "", str(details.get("phone_number") or details.get("phone") or ""))
 
 
+def reminder_context(details: Dict[str, Any], business: Business, start: datetime) -> Dict[str, Any]:
+    """The values a reminder template can use. `doctor` and `clinic_phone` get plain-words stand-ins so the sentence still reads well."""
+    from backend.server.notifications.messenger import context_for
+
+    doctor = details.get("doctor_name")
+    return context_for(
+        "booking.reminder", patient_name=details.get("customer_name") or details.get("patient_name") or "there", service=details.get("service_name") or "appointment",
+        doctor=doctor if doctor and doctor != "Duty Doctor" else "our team", date=f"{start:%A, %d %B}".replace(" 0", " "), time=f"{start:%I:%M %p}".lstrip("0"),
+        clinic_name=business.name, clinic_phone=business.business_phone or "us",
+    )
+
+
 async def send_one(db: Session, t: Transaction, business: Business, start: datetime, cfg: Dict[str, Any]) -> Dict[str, Any]:
-    """Send the reminder over the channels available and mark it sent when at least one message went out."""
-    from backend.ai.tools.common.send_sms import send_sms_sync
+    """Send the reminder (template, clinic preferences, quiet hours) and mark it sent when at least one message went out.
+    A reminder held back by quiet hours is not marked, so the next cycle after the window tries again."""
+    from backend.server.notifications.messenger import send_event
     from backend.server.services.whatsapp_agent import send_template
 
     details = dict(t.details or {})
     phone = _phone(details)
     if len(re.sub(r"\D", "", phone)) < 10:
         return {"sent": False, "reason": "no usable phone number"}
-    text = reminder_text(details, business, start)
     result: Dict[str, Any] = {"sent": False}
 
-    sms = await asyncio.to_thread(send_sms_sync, phone, text)
-    if sms.get("queued"):
-        result["sms"], result["sent"] = True, True
+    sent = await send_event(db, "booking.reminder", business_id=business.id, context=reminder_context(details, business, start), phone=phone, language=cfg.get("language") or "en")
+    if sent.get("deferred"):
+        return {"sent": False, "deferred": True, "reason": sent["reason"]}
+    for attempt in sent["attempts"]:
+        if attempt["sent"]:
+            result[attempt["channel"]], result["sent"] = True, True
 
-    if cfg.get("template"):
+    if cfg.get("template") and not result.get("whatsapp"):
         integration = next(
             (i for i in db.scalars(select(Integration).where(Integration.business_id == business.id, Integration.provider == "whatsapp", Integration.status == "connected")).all()),
             None,

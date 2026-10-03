@@ -15,6 +15,7 @@ from backend.server.database.models.knowledge_base import KnowledgeDocument
 from backend.server.database.models.service import Service
 from backend.server.database.models.user import User
 from backend.server.database.session import get_db
+from backend.server.services import quotas
 from backend.ai.engine.rag.retriever import rag_retriever
 from backend.ai.engine.rag.vector_store import global_vector_store
 
@@ -188,6 +189,7 @@ def create_knowledge_entry(
 ):
     get_business_or_404(business_id, db)
     require_owner_or_admin(business_id, current_user)
+    quotas.enforce_add(db, get_business_or_404(business_id, db), "knowledge_docs")
     _validate_doc_type(payload)
     entry = KnowledgeDocument(
         business_id=business_id,
@@ -451,6 +453,7 @@ async def upload_knowledge_file(
     """Upload PDF, DOCX, or TXT document, extract text, chunk & index into vector store for RAG."""
     get_business_or_404(business_id, db)
     require_owner_or_admin(business_id, current_user)
+    quotas.enforce_add(db, get_business_or_404(business_id, db), "knowledge_docs")
 
     content_bytes = await file.read()
     extracted_text = _extract_file_text(file.filename or "document.txt", content_bytes)
@@ -483,6 +486,7 @@ def sync_knowledge_url(
     """Crawl website URL, clean HTML noise, chunk & index into vector store for RAG."""
     get_business_or_404(business_id, db)
     require_owner_or_admin(business_id, current_user)
+    quotas.enforce_add(db, get_business_or_404(business_id, db), "knowledge_docs")
 
     scraped_text = _scrape_website_text(payload.source_url)
 

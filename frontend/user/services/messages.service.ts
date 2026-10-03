@@ -11,6 +11,7 @@ export interface MessageChannelInfo {
   status: string;
   languages: string[];
   meta_status: string | null;
+  live: boolean;
 }
 
 export interface MessageEventItem {
@@ -22,6 +23,7 @@ export interface MessageEventItem {
   enabled: boolean;
   order: Channel[];
   customized: boolean;
+  live: boolean; // at least one channel of this message is sent through the template system today
   channels: MessageChannelInfo[];
 }
 
@@ -51,6 +53,7 @@ export interface TemplateCellDto {
   own: Record<string, TemplateRowDto>;
   inherited: Record<string, TemplateRowDto>;
   default: { subject: string | null; body: string } | null;
+  live: boolean;
 }
 
 export interface PreviewDto {

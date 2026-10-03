@@ -19,7 +19,7 @@ from backend.server.database.session import get_db
 
 def fake_settings(**over):
     base = dict(TWILIO_AUTH_TOKEN="12345", EXOTEL_WEBHOOK_SECRET="s3cret", ALLOW_DEV_FALLBACKS=False, PUBLIC_BASE_URL="https://mycompany.com",
-                JWT_SECRET="x" * 40, EXOTEL_ACCOUNT_SID=None, EXOTEL_API_KEY=None, EXOTEL_API_TOKEN=None, EXOTEL_PHONE_NUMBER=None)
+                JWT_SECRET="x" * 40, ENFORCE_VOICE_QUOTA=False, EXOTEL_ACCOUNT_SID=None, EXOTEL_API_KEY=None, EXOTEL_API_TOKEN=None, EXOTEL_PHONE_NUMBER=None)
     base.update(over)
     return SimpleNamespace(**base)
 

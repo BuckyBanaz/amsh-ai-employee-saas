@@ -32,8 +32,9 @@ _HHMM = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 PATIENT_VARS = ["patient_name", "service", "doctor", "date", "time", "clinic_name", "clinic_phone", "manage_link"]
 
 
-def _event(label: str, group: str, owner: str, to: str, variables: List[str], channels: List[str], order: List[str], enabled: bool = True) -> Dict[str, Any]:
-    return {"label": label, "group": group, "owner": owner, "to": to, "variables": variables, "channels": channels, "default_order": order, "default_enabled": enabled}
+def _event(label: str, group: str, owner: str, to: str, variables: List[str], channels: List[str], order: List[str], enabled: bool = True, proactive: bool = False) -> Dict[str, Any]:
+    # proactive: AMSh starts the conversation (a reminder, a follow-up), so clinic quiet hours apply. A confirmation answers something the patient just did.
+    return {"label": label, "group": group, "owner": owner, "to": to, "variables": variables, "channels": channels, "default_order": order, "default_enabled": enabled, "proactive": proactive}
 
 
 # owner "platform": only AMSh edits the wording. owner "business": the platform template is the default and a clinic may override it.
@@ -47,12 +48,12 @@ EVENTS: Dict[str, Dict[str, Any]] = {
     "booking.confirmed": _event("Booking confirmed", "Patient messages", "business", "Patient", PATIENT_VARS, ["whatsapp", "sms", "email"], ["whatsapp", "sms"]),
     "booking.rescheduled": _event("Booking rescheduled", "Patient messages", "business", "Patient", PATIENT_VARS, ["whatsapp", "sms", "email"], ["whatsapp", "sms"]),
     "booking.cancelled": _event("Booking cancelled", "Patient messages", "business", "Patient", ["patient_name", "service", "date", "time", "clinic_name", "clinic_phone"], ["whatsapp", "sms", "email"], ["sms"]),
-    "booking.reminder": _event("Appointment reminder", "Patient messages", "business", "Patient", PATIENT_VARS, ["whatsapp", "sms", "email"], ["whatsapp", "sms"]),
-    "call.missed_followup": _event("Missed-call follow-up", "Patient messages", "business", "Patient", ["patient_name", "clinic_name", "clinic_phone"], ["sms", "whatsapp"], ["sms"], enabled=False),
-    "feedback.request": _event("Feedback request", "Patient messages", "business", "Patient", ["patient_name", "service", "clinic_name", "manage_link"], ["whatsapp", "sms", "email"], ["whatsapp", "sms"], enabled=False),
+    "booking.reminder": _event("Appointment reminder", "Patient messages", "business", "Patient", PATIENT_VARS, ["whatsapp", "sms", "email"], ["whatsapp", "sms"], proactive=True),
+    "call.missed_followup": _event("Missed-call follow-up", "Patient messages", "business", "Patient", ["patient_name", "clinic_name", "clinic_phone"], ["sms", "whatsapp"], ["sms"], proactive=True),  # also needs the AI settings toggle "missed call follow-up"
+    "feedback.request": _event("Feedback request", "Patient messages", "business", "Patient", ["patient_name", "service", "clinic_name", "manage_link"], ["whatsapp", "sms", "email"], ["whatsapp", "sms"], enabled=False, proactive=True),
     "alert.escalation": _event("Escalation alert", "Staff alerts", "business", "Clinic staff", ["caller", "reason", "summary", "call_link"], ["sms", "email", "push"], ["sms", "email"]),
     "alert.booking": _event("New booking alert", "Staff alerts", "business", "Clinic staff", ["caller", "summary", "call_link"], ["sms", "email", "push"], ["email"], enabled=False),
-    "alert.missed_call": _event("Missed call alert", "Staff alerts", "business", "Clinic staff", ["caller", "call_link"], ["sms", "email", "push"], ["sms"], enabled=False),
+    "alert.missed_call": _event("Missed call alert", "Staff alerts", "business", "Clinic staff", ["caller", "clinic_name", "call_link"], ["sms", "email", "push"], ["sms"], enabled=False),
     "platform.provider_down": _event("Provider down", "Platform alerts", "platform", "Platform admins", ["provider", "message"], ["email", "push"], ["email", "push"]),
 }
 
@@ -68,34 +69,44 @@ _DEFAULTS: Dict[Tuple[str, str], Tuple[Optional[str], str]] = {
     ("billing.plan_limit_reached", "email"): ("You reached your {{plan}} plan limit", "Hi {{name}},\n\n{{business_name}} reached the limit of the {{plan}} plan. Upgrade to avoid missed calls."),
     ("billing.plan_limit_reached", "push"): (None, "Plan limit reached. Upgrade to keep every call answered."),
     ("booking.confirmed", "whatsapp"): (None, "Hi {{patient_name}}, your {{service}} with {{doctor}} is confirmed for {{date}} at {{time}}.\nNeed to change it? {{manage_link}}"),
-    ("booking.confirmed", "sms"): (None, "Hi {{patient_name}}, your {{service}} with {{doctor}} is confirmed for {{date}} at {{time}}. {{clinic_name}}, {{clinic_phone}}"),
+    ("booking.confirmed", "sms"): (None, "Hello! Your booking at {{clinic_name}} is confirmed: {{service}} on {{date}} at {{time}}. Thank you for calling!"),
     ("booking.confirmed", "email"): ("Appointment confirmed: {{date}} at {{time}}", "Hi {{patient_name}},\n\nYour {{service}} with {{doctor}} at {{clinic_name}} is confirmed for {{date}} at {{time}}.\nManage it: {{manage_link}}"),
     ("booking.rescheduled", "whatsapp"): (None, "Hi {{patient_name}}, your {{service}} with {{doctor}} has moved to {{date}} at {{time}}.\nNeed a different time? {{manage_link}}"),
     ("booking.rescheduled", "sms"): (None, "Hi {{patient_name}}, your {{service}} with {{doctor}} is now on {{date}} at {{time}}. {{clinic_name}}, {{clinic_phone}}"),
     ("booking.rescheduled", "email"): ("Appointment moved to {{date}} at {{time}}", "Hi {{patient_name}},\n\nYour {{service}} with {{doctor}} at {{clinic_name}} has moved to {{date}} at {{time}}.\nManage it: {{manage_link}}"),
     ("booking.reminder", "whatsapp"): (None, "Hi {{patient_name}}, a reminder of your {{service}} with {{doctor}} on {{date}} at {{time}} at {{clinic_name}}.\nReply 1 to confirm or 2 to reschedule."),
-    ("booking.reminder", "sms"): (None, "Reminder: {{service}} with {{doctor}} tomorrow, {{date}} at {{time}}. {{clinic_name}}, {{clinic_phone}}"),
+    ("booking.reminder", "sms"): (None, "Hi {{patient_name}}, a reminder of your appointment at {{clinic_name}} with {{doctor}} on {{date}} at {{time}}. To reschedule or cancel, call {{clinic_phone}}."),
     ("booking.reminder", "email"): ("Reminder: {{service}} on {{date}} at {{time}}", "Hi {{patient_name}},\n\nA reminder of your {{service}} with {{doctor}} at {{clinic_name}} on {{date}} at {{time}}.\nManage it: {{manage_link}}"),
     ("booking.cancelled", "whatsapp"): (None, "Hi {{patient_name}}, your {{service}} on {{date}} at {{time}} was cancelled. Call {{clinic_name}} on {{clinic_phone}} to rebook."),
     ("booking.cancelled", "email"): ("Appointment cancelled: {{date}} at {{time}}", "Hi {{patient_name}},\n\nYour {{service}} on {{date}} at {{time}} at {{clinic_name}} was cancelled. Call {{clinic_phone}} to book another time."),
     ("booking.cancelled", "sms"): (None, "Hi {{patient_name}}, your {{service}} on {{date}} at {{time}} was cancelled. Call {{clinic_name}} on {{clinic_phone}} to rebook."),
-    ("call.missed_followup", "sms"): (None, "Hi {{patient_name}}, sorry we missed your call. {{clinic_name}} will call you back soon, or call {{clinic_phone}}."),
+    ("call.missed_followup", "sms"): (None, "Sorry we missed your call to {{clinic_name}}. Call us back on {{clinic_phone}} any time: our assistant answers 24/7, or tell us what you need and we will help."),
     ("call.missed_followup", "whatsapp"): (None, "Hi {{patient_name}}, sorry we missed your call. {{clinic_name}} will call you back soon, or call {{clinic_phone}}."),
     ("feedback.request", "whatsapp"): (None, "Hi {{patient_name}}, thank you for visiting {{clinic_name}} for your {{service}}. How was your visit? Tell us here: {{manage_link}}"),
     ("feedback.request", "sms"): (None, "Hi {{patient_name}}, how was your {{service}} at {{clinic_name}}? Tell us: {{manage_link}}"),
     ("feedback.request", "email"): ("How was your visit to {{clinic_name}}?", "Hi {{patient_name}},\n\nThank you for visiting {{clinic_name}} for your {{service}}. We would love to hear how it went: {{manage_link}}"),
-    ("alert.booking", "sms"): (None, "AMSh: new booking from {{caller}}. {{summary}} {{call_link}}"),
-    ("alert.booking", "email"): ("New booking from {{caller}}", "{{caller}} booked an appointment.\n\n{{summary}}\nCall: {{call_link}}"),
+    ("alert.booking", "sms"): (None, "[AMSh] New booking: {{summary}}."),
+    ("alert.booking", "email"): ("AMSh alert: booking", "New booking: {{summary}}."),
     ("alert.booking", "push"): (None, "New booking from {{caller}}: {{summary}}"),
-    ("alert.missed_call", "sms"): (None, "AMSh: missed call from {{caller}}. {{call_link}}"),
-    ("alert.missed_call", "email"): ("Missed call from {{caller}}", "{{caller}} called and hung up without speaking.\nCall: {{call_link}}"),
+    ("alert.missed_call", "sms"): (None, "[AMSh] Missed call from {{caller}} at {{clinic_name}}."),
+    ("alert.missed_call", "email"): ("AMSh alert: missed call", "Missed call from {{caller}} at {{clinic_name}}."),
     ("alert.missed_call", "push"): (None, "Missed call from {{caller}}"),
-    ("alert.escalation", "sms"): (None, "AMSh alert: {{caller}} needs a person. Reason: {{reason}}. {{call_link}}"),
-    ("alert.escalation", "email"): ("Caller needs a person: {{reason}}", "{{caller}} asked for a person.\n\nReason: {{reason}}\nSummary: {{summary}}\nCall: {{call_link}}"),
+    ("alert.escalation", "sms"): (None, "[AMSh] {{reason}} from {{caller}}: {{summary}}"),
+    ("alert.escalation", "email"): ("AMSh alert: escalation", "{{reason}} from {{caller}}: {{summary}}"),
     ("alert.escalation", "push"): (None, "{{caller}} needs a person: {{reason}}"),
     ("platform.provider_down", "email"): ("Provider down: {{provider}}", "{{provider}} is failing.\n\n{{message}}"),
     ("platform.provider_down", "push"): (None, "{{provider}} is down. {{message}}"),
 }
+
+# Events whose real sending already goes through these templates (see server/notifications/messenger.py). The other events still send
+# the wording written in code, so editing their template changes nothing yet; the admin and clinic screens say which is which.
+LIVE_EVENTS = frozenset({"booking.confirmed", "booking.reminder", "call.missed_followup", "alert.escalation", "alert.booking", "alert.missed_call"})
+LIVE_CHANNELS = {"sms", "email", "whatsapp"}  # the in-app channel has no sender yet
+
+
+def is_live(event_key: str, channel: str) -> bool:
+    return event_key in LIVE_EVENTS and channel in LIVE_CHANNELS
+
 
 SAMPLE: Dict[str, str] = {
     "name": "Priya", "link": "https://app.amsh.ai/l/x7Kq", "business_name": "Sanjeevani Hospital", "days_left": "3", "plan": "Growth",

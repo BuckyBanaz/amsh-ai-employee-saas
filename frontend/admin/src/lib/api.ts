@@ -796,6 +796,7 @@ export interface TemplateGridCell {
   status: 'active' | 'draft' | 'default' | 'missing';
   languages: string[];
   meta_status: string | null;
+  live: boolean; // the app really sends this message through the template today
 }
 
 export interface TemplateGrid {
@@ -826,6 +827,7 @@ export interface TemplateCell {
   own: Record<string, TemplateRow>;
   inherited: Record<string, TemplateRow>;
   default: { subject: string | null; body: string; language: string } | null;
+  live: boolean;
   requires_approval: boolean;
 }
 

@@ -16,6 +16,7 @@ from backend.server.auth.webhook_signatures import create_stream_token, verify_e
 from backend.server.common.config import get_settings
 from backend.server.database.models.business import Business
 from backend.server.database.session import get_db
+from backend.server.services import quotas
 
 from backend.server.services.call_recorder import update_call_recording_webhook
 
@@ -87,6 +88,10 @@ async def handle_exotel_incoming_call(
             content='<?xml version="1.0" encoding="UTF-8"?><Response><Say>This service is temporarily unavailable. Goodbye.</Say><Hangup/></Response>',
             media_type="application/xml",
         )
+
+    if not quotas.voice_allowed(db, business, get_settings().ENFORCE_VOICE_QUOTA):
+        logger.info("[EXOTEL INCOMING] business %s used its plan's voice minutes: not answering call %s", business.id, call_sid)
+        return Response(content="<Response><Say>Sorry, we cannot take your call right now. Please try again later.</Say><Hangup/></Response>", media_type="application/xml")
 
     # 2. Build websocket stream URL
     base_url = build_base_url()

@@ -45,7 +45,7 @@ export default function TemplatesPage() {
 
       {tab === 'log' ? <DeliveryLog /> : (
         <>
-          <p className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">Templates are saved and versioned here. The app still sends its built-in wording for each event until that event is switched over to these templates, so edits do not change live messages yet.</p>
+          <p className="mb-3 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">Cells marked <strong>Live</strong> are what the app sends today: booking confirmations, appointment reminders, the missed-call follow-up and staff alerts. The other messages (sign-in and billing emails, in-app notices, rescheduled / cancelled / feedback) are saved and versioned here but the app still sends the wording written in code.</p>
           <div className={`grid gap-4 ${sel ? 'xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]' : ''}`}>
             <Card className="min-w-0 overflow-x-auto">
               <table className="w-full min-w-[560px] text-left text-sm">
@@ -79,7 +79,7 @@ function GroupRows({ group, items, channels, sel, onSelect }: { group: string; i
             return (
               <td key={c} className="px-3 py-2">
                 <button onClick={() => onSelect(e.key, c)} aria-pressed={active} className={`flex w-full min-w-[84px] flex-col items-start gap-0.5 rounded-md border px-2 py-1 text-left text-[11px] font-semibold transition-shadow hover:shadow-sm ${CELL_STYLE[cell.status]} ${active ? 'ring-2 ring-[#0066FF]' : ''}`}>
-                  <span>{CELL_TEXT[cell.status]}</span>
+                  <span className="flex w-full items-center justify-between gap-1"><span>{CELL_TEXT[cell.status]}</span>{cell.live && <span className="rounded bg-emerald-600 px-1 text-[9px] font-bold uppercase leading-4 text-white">Live</span>}</span>
                   <span className="font-normal text-[#64748B]">{cell.languages.map((l) => l.toUpperCase()).join(' / ')}{c === 'whatsapp' && cell.meta_status ? ` / ${cell.meta_status}` : ''}</span>
                 </button>
               </td>

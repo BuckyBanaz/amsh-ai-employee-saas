@@ -15,10 +15,11 @@ class NotificationDispatcher:
     """Dispatches notifications asynchronously across multiple configured channels."""
 
     @classmethod
-    async def notify_staff(cls, business_id: str, event: str, text: str) -> Dict[str, Any]:
+    async def notify_staff(cls, business_id: str, event: str, text: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Alert the clinic's own staff (SMS and/or email) about `event` ("escalation", "booking", "missed_call").
         Only when the owner configured a contact: Agent.config["alerts"] = {"phone", "email", "events"}; with no
-        "events" list every event is sent."""
+        "events" list every event is sent. The wording comes from the `alert.<event>` message template (editable by the clinic) when
+        `context` is given; `text` is the plain-text fallback."""
         from backend.server.database.models.agent import Agent
         from backend.server.database.session import SessionLocal
 
@@ -31,6 +32,14 @@ class NotificationDispatcher:
         phone, email = (alerts.get("phone") or "").strip(), (alerts.get("email") or "").strip()
         if not (phone or email) or event not in (alerts.get("events") or ["escalation", "booking", "missed_call"]):
             return {"sent": False, "reason": "no alert contact configured for this event"}
+        if context is not None:
+            from backend.server.notifications.messenger import context_for, send_event
+
+            event_key = f"alert.{event}"
+            with SessionLocal() as db:
+                sent = await send_event(db, event_key, business_id=business_id, context=context_for(event_key, **context), phone=phone or None, email=email or None,
+                                        fanout=True, respect_preferences=False)  # who gets alerts is configured in the AI settings, not in Messages
+            return {"sent": sent["sent"], **{a["channel"]: a["sent"] for a in sent["attempts"]}}
         results: Dict[str, Any] = {"sent": True}
         if phone:
             from backend.ai.tools.common.send_sms import send_sms_sync

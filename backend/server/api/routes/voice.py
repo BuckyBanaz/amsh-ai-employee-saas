@@ -18,6 +18,7 @@ from backend.ai.tools.framework.base import ToolContext
 from backend.server.auth.security import create_media_token, get_voice_user
 from backend.server.auth.webhook_signatures import create_stream_token, verify_twilio
 from backend.server.common import ratelimit
+from backend.server.services import quotas
 from backend.server.common.config import get_settings
 from backend.server.database.models.user import User
 from backend.server.database.models.business import Business
@@ -220,6 +221,13 @@ async def handle_incoming_call(
         logger.info("[%s] Business %s is suspended: refusing the call", "INCOMING", business.id)
         return Response(
             content='<?xml version="1.0" encoding="UTF-8"?><Response><Say>This service is temporarily unavailable. Goodbye.</Say><Hangup/></Response>',
+            media_type="application/xml",
+        )
+
+    if not quotas.voice_allowed(db, business, get_settings().ENFORCE_VOICE_QUOTA):
+        logger.info("[VOICE INCOMING] business %s used its plan's voice minutes: not answering call %s", business.id, CallSid)
+        return Response(
+            content='<?xml version="1.0" encoding="UTF-8"?><Response><Say>Sorry, we cannot take your call right now. Please try again later.</Say><Hangup/></Response>',
             media_type="application/xml",
         )
 

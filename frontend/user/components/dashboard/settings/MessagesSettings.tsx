@@ -61,8 +61,8 @@ export function MessagesSettings() {
 
   return (
     <div className="space-y-4 max-w-4xl">
-      <div role="note" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-        Your wording is saved here and kept with its history. AMSh still sends its built-in text for each message until that message is switched over to the template system, so changes do not reach patients yet.
+      <div role="note" className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
+        Messages marked <strong>Live</strong> are sent with the wording you save here. The others are saved and kept with their history, but AMSh still sends its built-in text for them until they are switched over.
       </div>
       {toast && <p role="status" className={`rounded-md px-3 py-2 text-xs font-semibold ${toast.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>{toast.text}</p>}
 
@@ -74,6 +74,7 @@ export function MessagesSettings() {
               <div className="min-w-0 flex-1 basis-48">
                 <p className="text-xs font-bold text-gray-900">{e.label} <span className="ml-1 font-medium text-gray-400">to {e.to.toLowerCase()}</span></p>
               </div>
+              {e.live && <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-white">Live</span>}
               <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${e.customized ? 'bg-blue-50 text-[#0066FF]' : 'bg-gray-100 text-gray-500'}`}>{e.customized ? 'Customized' : 'AMSh default'}</span>
               <span className="text-[11px] text-gray-500">{e.order.length ? e.order.map((c) => CHANNEL_LABEL[c]).join(' → ') : 'No channel'}</span>
               <button onClick={() => setSelected({ key: e.key, channel: (e.channels.find((c) => c.customized)?.channel ?? e.channels[0]?.channel) as Channel })} className={BTN}>{selected?.key === e.key ? 'Editing' : e.customized ? 'Edit' : 'Customize'}</button>

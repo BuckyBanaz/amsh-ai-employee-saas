@@ -142,7 +142,7 @@ export function TemplateEditor({ eventKey, channel, onClose, onChanged }: { even
         <button className={BTN} disabled={busy || !body.trim()} onClick={() => save('draft')}>Save draft</button>
         <button className={PRIMARY} disabled={busy || !body.trim()} onClick={() => save('active')}>Activate</button>
       </div>
-      <p className="px-4 pb-3 text-[11px] text-[#94A3B8]">{label(cell.event_key.split('.')[0])} messages use this text as soon as it is active. Sending itself is switched on event by event; until then these templates are saved but the app still sends its built-in wording.</p>
+      <p className={`px-4 pb-3 text-[11px] ${cell.live ? 'text-emerald-700' : 'text-[#94A3B8]'}`}>{cell.live ? 'Live: the app sends this message with this text as soon as it is active.' : `Not live yet: the app still sends the ${label(cell.event_key.split('.')[0]).toLowerCase()} wording written in code. This text is saved for when the event is switched over.`}</p>
     </aside>
   );
 }

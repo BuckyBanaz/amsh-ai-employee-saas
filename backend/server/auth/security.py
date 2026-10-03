@@ -8,6 +8,7 @@ from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
 from backend.server.common.config import get_settings
+from backend.server.database.models.business import Business
 from backend.server.database.models.user import User
 from backend.server.database.session import get_db
 
@@ -129,7 +130,19 @@ def get_current_user(
     user = db.get(User, user_id)
     if user is None or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive")
+    ensure_not_suspended(db, user)
     return user
+
+
+SUSPENDED_MESSAGE = "This clinic's account is suspended. Please contact AMSh support."
+
+
+def ensure_not_suspended(db: Session, user: User) -> None:
+    """A platform admin can suspend a clinic: its staff can no longer sign in or use a token they already hold (AMSh staff are unaffected)."""
+    if user.scope != "platform" and user.business_id:
+        business = db.get(Business, user.business_id)
+        if business is not None and business.status == "suspended":
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=SUSPENDED_MESSAGE)
 
 
 def require_platform_admin(current_user: User = Depends(get_current_user)) -> User:

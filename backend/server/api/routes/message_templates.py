@@ -141,6 +141,7 @@ def _cell_view(db: Session, event_key: str, channel: str, scope: str, business_i
     return {
         "event_key": event_key, "channel": channel, "label": event["label"], "to": event["to"], "variables": event["variables"],
         "languages": _languages(), "own": own, "inherited": inherited, "default": default,
+        "live": svc.is_live(event_key, channel),
         "requires_approval": channel == "whatsapp",  # business-started WhatsApp text must use a Meta-approved template
     }
 
@@ -184,7 +185,7 @@ def admin_grid(db: Session = Depends(get_db), admin: User = Depends(require_plat
             else:
                 state = "default" if svc.builtin(key, ch) else "missing"
             meta = next((r.meta_status for r in mine if r.meta_status), None) if ch == "whatsapp" else None
-            cells[ch] = {"status": state, "languages": sorted({r.language for r in mine} or ({"en"} if svc.builtin(key, ch) else set())), "meta_status": meta}
+            cells[ch] = {"status": state, "languages": sorted({r.language for r in mine} or ({"en"} if svc.builtin(key, ch) else set())), "meta_status": meta, "live": svc.is_live(key, ch)}
         items.append({"key": key, "label": event["label"], "group": event["group"], "owner": event["owner"], "to": event["to"], "cells": cells})
     return {"items": items}
 
@@ -257,10 +258,11 @@ def list_templates(business_id: str, db: Session = Depends(get_db), user: User =
             rows = mine or shared
             channels.append({"channel": ch, "source": source, "customized": bool(mine), "status": mine[0].status if mine else "active",
                              "languages": sorted({r.language for r in rows} or {"en"}),
-                             "meta_status": next((r.meta_status for r in rows if r.meta_status), None) if ch == "whatsapp" else None})
+                             "meta_status": next((r.meta_status for r in rows if r.meta_status), None) if ch == "whatsapp" else None,
+                             "live": svc.is_live(key, ch)})
         items.append({"key": key, "label": event["label"], "group": event["group"], "to": event["to"], "variables": event["variables"],
                       "enabled": prefs["events"][key]["enabled"], "order": prefs["events"][key]["order"],
-                      "customized": any(c["customized"] for c in channels), "channels": channels})
+                      "customized": any(c["customized"] for c in channels), "live": any(c["live"] for c in channels), "channels": channels})
     return {"items": items, "quiet_hours": prefs["quiet_hours"], "languages": _languages()}
 
 

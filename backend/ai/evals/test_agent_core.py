@@ -33,6 +33,10 @@ def _latest_revision() -> str:
     return max(p.name.split("_", 1)[0] for p in versions.glob("[0-9][0-9][0-9][0-9]_*.py"))
 
 
+# The agent prompt is sent on every turn (about 4 characters per token). It measured 7,755 characters when this was set; the budget leaves a
+# little room but not much, so a new prompt feature has to pay for itself by trimming something else.
+PROMPT_BUDGET = 8000
+
 _TEST_USER = SimpleNamespace(id="test-user", scope="platform", business_id=None)  # what the paid voice routes now require
 
 
@@ -752,7 +756,7 @@ class BehaviorSettings(unittest.TestCase):
         p = self.engine(instructions="Always mention our free parking. " + "x" * 5000)._system
         self.assertIn("free parking", p)
         self.assertIn("never override the safety", p)
-        self.assertLess(len(p), 6500)
+        self.assertLess(len(p), PROMPT_BUDGET)  # see PROMPT_BUDGET: the old 6,500 cap was passed long ago; the diet (DOCS/23 item 13) will lower it again
 
     def test_small_talk_toggle(self):
         self.assertIn("deserve a real, friendly answer", self.engine(small_talk=True)._system)

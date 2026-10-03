@@ -13,6 +13,7 @@ from backend.server.auth.security import (
     decode_invite_token,
     decode_reset_token,
     decode_verify_token,
+    ensure_not_suspended,
     password_matches_fingerprint,
     get_current_user,
     hash_password,
@@ -138,6 +139,12 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
     if not verify_password(payload.password, user.hashed_password):
         audit(db, "auth.login", user, outcome="failure", ip=ip)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
+
+    try:
+        ensure_not_suspended(db, user)
+    except HTTPException:
+        audit(db, "auth.login", user, outcome="failure", ip=ip, meta={"reason": "clinic suspended"})
+        raise
 
     user.last_active_at = datetime.now(timezone.utc)
     db.commit()

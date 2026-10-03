@@ -11,6 +11,7 @@ from backend.server.api.routes import (
     message_templates,
     seo,
     support,
+    usage as usage_routes,
     admin_tenant_data,
     admin_users,
     admin_verticals,
@@ -78,6 +79,7 @@ api_router.include_router(support.tenant_router)
 api_router.include_router(support.admin_router)
 api_router.include_router(support.announce_admin_router)
 api_router.include_router(support.announce_public_router)
+api_router.include_router(usage_routes.router)
 api_router.include_router(admin_tenant_data.router)
 api_router.include_router(admin_overview.router)
 api_router.include_router(admin_calls.router)

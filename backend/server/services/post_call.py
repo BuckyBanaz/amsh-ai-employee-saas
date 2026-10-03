@@ -150,14 +150,13 @@ async def _send_missed_call_sms(db: Any, call: Call, business: Business, config:
     number = call.caller_number or ""
     if len(_digits(number)) < 10 or _recent_followup(db, MISSED_CALL_ACTION, number):
         return False
-    from backend.ai.tools.common.send_sms import send_sms_sync
+    from backend.server.notifications.messenger import context_for, send_event
     from backend.server.services.audit import audit
 
-    phone = f" on {business.business_phone}" if business.business_phone else ""
-    body = f"Sorry we missed your call to {business.name}. Call us back{phone} any time: our assistant answers 24/7, or tell us what you need and we will help."
-    result = await asyncio.to_thread(send_sms_sync, number, body)
-    if not (result or {}).get("queued"):
-        return False  # SMS is switched off or there is no recipient: nothing was sent, so nothing is recorded
+    sent = await send_event(db, "call.missed_followup", business_id=business.id, phone=number,
+                            context=context_for("call.missed_followup", clinic_name=business.name, clinic_phone=business.business_phone or "this number"))
+    if not sent["sent"]:
+        return False  # SMS is switched off, the clinic turned the message off, or there is no recipient: nothing was sent, so nothing is recorded
     audit(db, MISSED_CALL_ACTION, business_id=business.id, target_type="phone", target_id=number)
     return True
 
@@ -205,12 +204,12 @@ async def process_call_end(call_id: str, backend: Any = None) -> Optional[Dict[s
             try:
                 if not user_turns:
                     await _send_missed_call_sms(db, call, business, config)
-                    await NotificationDispatcher.notify_staff(call.business_id, "missed_call", f"Missed call from {call.caller_number} at {business.name}.")
+                    await NotificationDispatcher.notify_staff(call.business_id, "missed_call", f"Missed call from {call.caller_number} at {business.name}.", {"caller": call.caller_number, "clinic_name": business.name})
                 for b in booked:
-                    await NotificationDispatcher.notify_staff(call.business_id, "booking", f"New booking: {_describe_booking(b)}.")
+                    await NotificationDispatcher.notify_staff(call.business_id, "booking", f"New booking: {_describe_booking(b)}.", {"caller": call.caller_number, "summary": _describe_booking(b)})
                 if call.outcome == "transferred" or analysis["intent"] == "emergency":
                     label = "EMERGENCY call" if analysis["intent"] == "emergency" else "Call transferred to staff"
-                    await NotificationDispatcher.notify_staff(call.business_id, "escalation", f"{label} from {call.caller_number}: {analysis['summary']}")
+                    await NotificationDispatcher.notify_staff(call.business_id, "escalation", f"{label} from {call.caller_number}: {analysis['summary']}", {"reason": label, "caller": call.caller_number, "summary": analysis["summary"]})
             except Exception as e:  # follow-ups must never undo the record
                 logger.warning("[POST-CALL] follow-up failed for %s: %s", call_id, e)
         return analysis

@@ -80,14 +80,13 @@ class ClinicWriteOperations:
             # Trigger Instant Confirmation SMS if phone provided and source is voice receptionist
             if phone_number and source == "ai_voice_receptionist":
                 try:
-                    from backend.ai.capabilities.operations.common.write_operations import CommonWriteOperations
                     from backend.server.database.models.business import Business
+                    from backend.server.notifications.messenger import context_for, send_event_sync
                     biz = db.get(Business, business_id)
-                    biz_name = biz.name if biz else "Clinic"
-                    CommonWriteOperations.send_confirmation_sms(
-                        to_phone=phone_number,
-                        business_name=biz_name,
-                        booking_details=f"{service_name} on {preferred_date} at {preferred_time}"
+                    send_event_sync(
+                        db, "booking.confirmed", business_id=business_id, phone=phone_number,
+                        context=context_for("booking.confirmed", patient_name=patient_name, service=service_name, doctor=details_dict.get("doctor_name"),
+                                            date=preferred_date, time=preferred_time, clinic_name=biz.name if biz else "Clinic", clinic_phone=(biz.business_phone if biz else None)),
                     )
                 except Exception as sms_err:
                     logger.warning("Optional confirmation SMS skipped: %s", sms_err)

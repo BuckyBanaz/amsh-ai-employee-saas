@@ -48,6 +48,9 @@ class Settings(BaseSettings):
     # Appointment reminders message real patients, so the background loop is off unless this is true AND the clinic enabled it.
     REMINDERS_ENABLED: bool = False
     REMINDER_INTERVAL_SECONDS: int = 300
+    # Stop answering a clinic's calls once its plan's monthly voice minutes are used up. Off: the minutes are reported but never cut off
+    # (overage billing does not exist yet, so this is the owner's business decision).
+    ENFORCE_VOICE_QUOTA: bool = False
 
     # Third-party providers — intentionally optional/unset until real keys
     # are supplied. Nothing in the realtime/engine layer should be built
