@@ -9,6 +9,7 @@ import { CallRecorder } from '../../../utils/call_recorder';
 import { isEchoOfAI, isRealInterruption } from '../../../utils/voice_echo';
 import { ChooseVoiceModal, VoiceOption, AVAILABLE_VOICES } from './ChooseVoiceModal';
 import { withPreviewToken } from '../../../services/voice_preview.service';
+import { TestModeBanner, TestAction } from '../TestModeBanner';
 
 const HeroOrb = dynamic(() => import('../../landing/HeroOrb'), {
   ssr: false,
@@ -113,6 +114,7 @@ export function AIStudioWorkbench({ onBack, onSave }: AIStudioWorkbenchProps) {
   const currentUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const speechSafetyWatchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recognitionRestartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [testActions, setTestActions] = useState<TestAction[]>([]);
   const callIdRef = useRef<string>('studio_' + Math.random().toString(36).slice(2, 8));
   const handleUserTurnRef = useRef<(text: string) => void>(() => {});
   const echoLockRef = useRef<boolean>(false);
@@ -668,6 +670,7 @@ export function AIStudioWorkbench({ onBack, onSave }: AIStudioWorkbenchProps) {
         if (activeTurnRef.current === turn) activeTurnRef.current = null;
         if (cancelled) return; // the caller took over; nothing more to say or resume
         if (!res) throw new Error('The stream ended without a result');
+        setTestActions(res.test_actions || []);
         // The caller asked to switch language ("talk in Hindi"): listen for that language from now on.
         if (res.stt_language) selectedAccentRef.current = res.stt_language;
         if (res.bot_response) {
@@ -744,6 +747,7 @@ export function AIStudioWorkbench({ onBack, onSave }: AIStudioWorkbenchProps) {
       if ((await detectorReady) && isLiveActiveRef.current) bargeDetectorRef.current = detector;
       else detector.close();
       setMessages([]);
+      setTestActions([]);
       setInterimTranscript('');
       const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       setMessages([{ speaker: 'AI', text: welcomeMessage, time: timeStr }]);
@@ -1383,6 +1387,7 @@ export function AIStudioWorkbench({ onBack, onSave }: AIStudioWorkbenchProps) {
               )}
             </div>
 
+            <div className="mb-2.5"><TestModeBanner actions={testActions} /></div>
             <div ref={chatScrollRef} className="flex-1 space-y-3 overflow-y-auto max-h-60 pr-1">
               {messages.length === 0 && !interimTranscript && (
                 <div className="h-full flex items-center justify-center text-xs text-slate-400 py-10 text-center flex-col gap-2">

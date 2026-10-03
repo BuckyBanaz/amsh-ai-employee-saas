@@ -54,6 +54,7 @@ class AgentRuntime:
         voice_id: Optional[str] = None,
         force_agent: bool = False,
         channel: str = "voice",
+        sandbox: Optional[Any] = None,
     ) -> Optional["AgentRuntime"]:
         """Returns None when this tenant runs the legacy engine (the common case: no extra cost or risk)."""
         from backend.server.common.config import get_settings
@@ -78,7 +79,7 @@ class AgentRuntime:
             language=language_code(language or profile.language),
             tone=profile.tone,
             gender=profile.gender,
-            dry_run=(mode == "shadow"),  # shadow must never write bookings or place transfers
+            dry_run=(mode == "shadow") and sandbox is None,  # shadow must never write bookings or place transfers (a sandbox already can not)
             instructions=profile.instructions,
             small_talk=profile.small_talk,
             require_confirmation=profile.require_confirmation,
@@ -92,6 +93,7 @@ class AgentRuntime:
             accent=profile.accent,
             # LATENCY: start TTS on the first safe clause instead of the first full sentence (voice only).
             early_chunking=bool(getattr(get_settings(), "VOICE_EARLY_CHUNKING", True)) and channel == "voice",
+            sandbox=sandbox,  # playground: the agent works on a throwaway ledger, never the clinic's calendar
         )
         if greeting:
             engine.greeting(greeting)  # seeds history with exactly what the caller heard

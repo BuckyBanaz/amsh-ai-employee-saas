@@ -258,7 +258,9 @@ class AgentEngine:
         fillers: bool = False,
         accent: Optional[str] = None,
         early_chunking: bool = False,
+        sandbox: Optional[Any] = None,
     ) -> None:
+        self.sandbox = sandbox  # playground test mode (engine/agent/sandbox.py)
         self.early_chunking = early_chunking  # streamed turns may release a safe first clause to TTS (SentenceSplitter)
         self.triggers = {**DEFAULT_TRIGGERS, **(triggers or {})}  # Escalation tab checklist
         self.frustrated_turns = 0
@@ -296,6 +298,7 @@ class AgentEngine:
         self.toolbox = AgentToolbox(
             business_id, caller_number, call_id, facts, db_factory, self.gate, self.now_fn, dry_run,
             require_confirmation=require_confirmation, disabled_tools=disabled_tools, transfer_phone=transfer_phone,
+            sandbox=sandbox,
         )
         self.toolbox.channel = channel
         self._system = build_system_prompt(
@@ -395,7 +398,7 @@ class AgentEngine:
                 esc_msg = _scripted(_FRUSTRATED_MSG, "frustrated", self.active_language)
         if escalated:
             department = target or "front_desk"
-            if self.dry_run or self.channel == "chat":  # chat: reply with the message, nothing to redirect
+            if self.dry_run or self.channel == "chat" or self.sandbox is not None:  # chat: reply with the message, nothing to redirect
                 self.toolbox.pending = {"type": "transfer", "department": department, "twiml": None, "dry_run": True}
                 result: Dict[str, Any] = {"ok": True}
             else:

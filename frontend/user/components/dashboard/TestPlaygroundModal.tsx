@@ -6,6 +6,7 @@ import { CallRecorder } from '../../utils/call_recorder';
 import { BargeInDetector } from '../../utils/barge_in';
 import { isEchoOfAI, isRealInterruption } from '../../utils/voice_echo';
 import { DashboardController, AgentItem } from '../../controllers/dashboard.controller';
+import { TestModeBanner, TestAction } from './TestModeBanner';
 import { API_ENDPOINTS } from '../../utils/api_endpoints';
 import { StorageService } from '../../services/storage.service';
 import { ChooseVoiceModal, VoiceOption, AVAILABLE_VOICES } from './ai-studio/ChooseVoiceModal';
@@ -86,6 +87,7 @@ export function TestPlaygroundModal({ isOpen, onClose }: TestPlaygroundModalProp
   const [liveMessages, setLiveMessages] = useState<Message[]>([]);
   const [chatDraft, setChatDraft] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [testActions, setTestActions] = useState<TestAction[]>([]);
   const [currentCallId, setCurrentCallId] = useState<string>(() => 'sim_' + Math.random().toString(36).slice(2, 9));
   const [playingMsgIndex, setPlayingMsgIndex] = useState<number | null>(null);
 
@@ -418,6 +420,7 @@ export function TestPlaygroundModal({ isOpen, onClose }: TestPlaygroundModalProp
       });
       streamEnded = true;
       if (!final) throw new Error('The stream ended without a result');
+      setTestActions(final.test_actions || []);
       if (activeTurnRef.current === turn) activeTurnRef.current = null;
       if (cancelled) return final; // the caller took over; nothing more to say or resume
       if (final?.bot_response) {
@@ -771,6 +774,7 @@ export function TestPlaygroundModal({ isOpen, onClose }: TestPlaygroundModalProp
     setChatDraft('');
     setIsTyping(false);
     setCurrentCallId('sim_' + Math.random().toString(36).slice(2, 9));
+    setTestActions([]);
   };
 
   // Send single chat turn
@@ -944,6 +948,7 @@ export function TestPlaygroundModal({ isOpen, onClose }: TestPlaygroundModalProp
         }
       `}</style>
       <div className="bg-white border border-gray-100 rounded-2xl w-full max-w-5xl shadow-2xl p-4 sm:p-5 animate-in zoom-in-95 duration-200 max-h-[96vh] overflow-y-auto">
+        <div className="mb-3"><TestModeBanner actions={testActions} /></div>
         {/* Header */}
         <div className="flex items-start justify-between mb-2.5">
           <div>

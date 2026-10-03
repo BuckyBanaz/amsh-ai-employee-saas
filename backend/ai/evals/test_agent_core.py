@@ -75,7 +75,7 @@ def call(name, **args):
     return {"content": None, "tool_calls": [{"id": f"c_{name}", "name": name, "arguments": json.dumps(args)}]}
 
 
-def make_engine(backend, caller="+919876543210", language=None, languages=None, accent=None, auto_detect_language=True, real_clock=False, **facts_override):
+def make_engine(backend, caller="+919876543210", language=None, languages=None, accent=None, auto_detect_language=True, real_clock=False, sandbox=None, **facts_override):
     factory, biz = make_db_factory()
     facts, profile = load_all(factory, biz)
     if facts_override:
@@ -97,6 +97,7 @@ def make_engine(backend, caller="+919876543210", language=None, languages=None, 
         accent=accent,
         auto_detect_language=auto_detect_language,
         now_fn=None if real_clock else (lambda: FIXED_NOW),
+        sandbox=sandbox,
     )
     return engine, factory
 
@@ -1681,7 +1682,6 @@ class StreamedPlayground(unittest.TestCase):
             patch.object(gw, "_prefetch_tts", lambda text, voice, *more: prefetched.append((text, voice))),
             patch.object(gw, "record_call_turn", lambda **kw: None),
             patch.object(gw, "record_call_end", lambda **kw: None),
-            patch.object(gw, "_legacy_turn", AsyncMock(return_value={"call_id": "c1", "state": "s", "bot_response": "legacy reply", "should_hangup": False})),
         ]
 
         async def go():
@@ -1707,12 +1707,13 @@ class StreamedPlayground(unittest.TestCase):
         self.assertEqual(out[-1]["llm_provider"], "groq")
         self.assertEqual(resp.media_type, "application/x-ndjson")
 
-    def test_legacy_or_unavailable_llm_uses_the_same_protocol(self):
+    def test_playground_never_falls_back_to_the_legacy_engine(self):
+        """The legacy state machine runs real tools, so with no agent runtime the playground answers with a plain notice."""
         out, prefetched, _ = self._stream([], has_runtime=False)
         self.assertEqual([e["type"] for e in out], ["sentence", "done"])
-        self.assertEqual((out[0]["text"], out[1]["bot_response"]), ("legacy reply", "legacy reply"))
-        out2, _, _ = self._stream([], has_runtime=True, degraded=True)  # LLM down before a single word: fall back, do not go silent
-        self.assertEqual(out2[0]["text"], "legacy reply")
+        self.assertIn("could not answer", out[0]["text"])
+        self.assertTrue(out[1]["test_mode"])
+        self.assertEqual(out[1]["test_actions"], [])
 
     def test_identical_audio_requests_share_one_synthesis(self):
         from backend.ai.speech.tts.cartesia import CartesiaTTS

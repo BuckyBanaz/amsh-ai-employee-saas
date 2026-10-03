@@ -27,6 +27,7 @@ from backend.ai.engine.conversation.i18n import normalize_language
 from backend.ai.engine.conversation.states import CallState
 from backend.ai.engine.conversation.nlu import ConversationalNLU
 from backend.ai.engine.agent.runtime import AgentRuntime, get_sim_runtime, store_sim_runtime
+from backend.ai.engine.agent.sandbox import SandboxLedger
 from backend.ai.llm.client import llm_client
 from backend.ai.memory.session_memory import session_memory
 from backend.ai.realtime import latency
@@ -586,10 +587,16 @@ async def twilio_media_stream(websocket: WebSocket, business_id: str) -> None:
         await session.stop()
 
 
+def as_test_call_id(call_id: str) -> str:
+    """A playground call is always a test call: kept out of call logs, analytics and follow-up messages."""
+    return call_id if call_id.startswith(_TEST_CALL_PREFIXES) else f"sim_{call_id}"
+
+
 async def _ensure_sim_session(payload: VoiceSimulateRequest, db: Session) -> Tuple[str, ConversationStateMachine]:
     """The playground's per-call state: the legacy state machine (always, it also records the call) and, when the tenant
     uses the LLM agent, an agent runtime."""
     call_id = payload.call_id or f"sim_{payload.business_id[:8]}"
+    call_id = as_test_call_id(call_id)
     state_machine = session_memory.get_session(call_id)
 
     if not state_machine:
@@ -626,22 +633,27 @@ async def _ensure_sim_session(payload: VoiceSimulateRequest, db: Session) -> Tup
             greeting=initial_greeting,
         )
         if business:
+            # TEST MODE: the agent talks and reads the real clinic data, but anything it books, moves or cancels goes to a
+            # throwaway ledger (engine/agent/sandbox.py), and transfers are not placed. The playground always runs the agent,
+            # because the legacy state machine would execute real tools.
             rt = await AgentRuntime.create(
                 payload.business_id, call_id, payload.caller_number, vertical_cfg, initial_greeting,
                 agent_settings.get("language"), voice_id=payload.voice_id,  # persona gender follows the voice being previewed
+                force_agent=True, sandbox=SandboxLedger(),
             )
             # A server restart (code reload) drops in-memory sessions mid-call: pick the conversation back up from what was saved.
             prior = load_call_turns(call_id)
             if prior:
                 state_machine.sequence = len(prior)
-                if rt and rt.mode == "llm_agent":
+                if rt:
                     rt.engine.restore(prior)
                 logger.info(f"[SIM] Resumed call {call_id} with {len(prior)} earlier turn(s)")
-            if rt and rt.mode == "llm_agent":  # the playground previews the agent; shadow only applies to live calls
+            if rt:
                 store_sim_runtime(call_id, rt)
     return call_id, state_machine
 
 
+_TEST_CALL_PREFIXES = ("studio_", "webcall_", "sim_", "test_call_")  # same set the call logs and analytics skip
 _STT_LANGUAGE = {"hi": "hi-IN", "en": "en-IN"}
 _prefetch_tasks: set = set()
 
@@ -680,8 +692,11 @@ def _finish_agent_turn(call_id: str, state_machine: ConversationStateMachine, pa
         )
     sim_rt = get_sim_runtime(call_id)
     pref = sim_rt.engine.language_pref if sim_rt else None
+    ledger = getattr(sim_rt.engine, "sandbox", None) if sim_rt else None
     return {
         "call_id": call_id,
+        "test_mode": True,  # nothing in this conversation was saved or sent
+        "test_actions": ledger.snapshot() if ledger else [],  # what the agent would have done for real
         "state": state_machine.current_state.value,
         "bot_response": agent_turn.reply,
         "collected_slots": state_machine.collected_slots,
@@ -697,75 +712,12 @@ def _finish_agent_turn(call_id: str, state_machine: ConversationStateMachine, pa
     }
 
 
-async def _legacy_turn(payload: VoiceSimulateRequest, call_id: str, state_machine: ConversationStateMachine) -> Dict[str, Any]:
-    """One turn through the legacy NLU + state machine (tenants not on the agent, or the LLM being unavailable)."""
-    # Extract intent, category & slots via Conversational NLU
-    available_intents = [
-        {"name": i.name, "description": i.description}
-        for i in state_machine.vertical_config.intents
-    ]
-    current_intent = state_machine.current_intent.name if state_machine.current_intent else None
-    last_asked_slot = getattr(state_machine, "last_asked_slot", None)
-
-    recent_turns = [
-        {"role": "user", "content": t.user_transcript}
-        for t in state_machine.turns[-3:]
-    ]
-
-    nlu_result = await ConversationalNLU.analyze_turn(
-        user_utterance=payload.user_transcript,
-        available_intents=available_intents,
-        available_services=state_machine.services,
-        agent_name=state_machine.agent_name,
-        business_name=state_machine.business_info.get("name", "our clinic"),
-        current_intent=current_intent,
-        collected_slots=state_machine.collected_slots,
-        missing_slot=last_asked_slot,
-        recent_turns=recent_turns,
-    )
-
-    # Process through deterministic state machine
-    result = await state_machine.process_user_turn(
-        user_transcript=payload.user_transcript,
-        extracted_intent=nlu_result.intent,
-        extracted_slots=nlu_result.slots,
-        nlu_category=nlu_result.category.value,
-        confidence=nlu_result.confidence,
-        is_correction=nlu_result.is_correction,
-        overridden_slot=nlu_result.overridden_slot,
-        is_ambiguous=nlu_result.is_ambiguous,
-    )
-
-    bot_resp = result.get("bot_response") or ""
-    record_call_turn(
-        call_id=call_id,
-        user_transcript=payload.user_transcript,
-        bot_response=bot_resp,
-        turn_sequence=state_machine.sequence,
-    )
-
-    if result.get("should_hangup") or result.get("should_transfer"):
-        intent_name = state_machine.current_intent.name if state_machine.current_intent else None
-        slots = state_machine.collected_slots or {}
-        caller_name = slots.get("patient_name") or slots.get("customer_name")
-        outcome = "transferred" if result.get("should_transfer") else "resolved"
-        record_call_end(
-            call_id=call_id,
-            outcome=outcome,
-            summary=f"Playground simulation: {intent_name or 'General Discussion'}",
-            intent=intent_name,
-            caller_name=caller_name,
-        )
-
+def _unavailable_turn(call_id: str, state_machine: ConversationStateMachine) -> Dict[str, Any]:
     return {
-        "call_id": call_id,
-        "state": result["state"],
-        "bot_response": result["bot_response"],
-        "collected_slots": state_machine.collected_slots,
-        "tool_result": result.get("tool_result"),
-        "should_hangup": result.get("should_hangup", False),
-        "should_transfer": result.get("should_transfer", False),
-        "transfer_target": result.get("transfer_target"),
+        "call_id": call_id, "test_mode": True, "test_actions": [], "state": state_machine.current_state.value,
+        "bot_response": "Sorry, the AI could not answer just now. Please try again in a moment.",
+        "collected_slots": state_machine.collected_slots, "tool_result": None, "should_hangup": False, "should_transfer": False,
+        "transfer_target": None,
     }
 
 
@@ -793,9 +745,8 @@ async def simulate_voice_turn(
     sim_rt = get_sim_runtime(call_id)
     if sim_rt:
         agent_turn = await sim_rt.engine.turn(payload.user_transcript)
-        if not agent_turn.degraded:
-            return _finish_agent_turn(call_id, state_machine, payload, agent_turn)
-    return await _legacy_turn(payload, call_id, state_machine)
+        return _finish_agent_turn(call_id, state_machine, payload, agent_turn)
+    return _unavailable_turn(call_id, state_machine)
 
 
 def _ndjson(obj: Dict[str, Any]) -> bytes:
@@ -861,11 +812,12 @@ async def simulate_voice_turn_stream(
                         final = ev["turn"]
             except Exception as e:  # never leave the browser waiting on a broken stream
                 logger.warning(f"[SIM STREAM] agent turn failed: {e}")
-            if final is not None and (not final.degraded or sent_any):
+            if final is not None:
                 yield _ndjson({"type": "done", **_finish_agent_turn(call_id, state_machine, payload, final)})
                 return
-        # Legacy engine tenants, or the LLM was unavailable before anything was said: one sentence, same protocol.
-        result = await _legacy_turn(payload, call_id, state_machine)
+        # The stream broke before a turn finished: one sentence, same protocol. The playground never runs the legacy
+        # state machine (it would execute real tools).
+        result = _unavailable_turn(call_id, state_machine)
         yield _ndjson({"type": "sentence", "text": result["bot_response"]})
         yield _ndjson({"type": "done", **result})
 

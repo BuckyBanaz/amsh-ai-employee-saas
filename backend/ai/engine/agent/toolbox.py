@@ -127,7 +127,9 @@ class AgentToolbox:
         require_confirmation: bool = True,
         disabled_tools: Optional[Set[str]] = None,
         transfer_phone: Optional[str] = None,
+        sandbox: Optional[Any] = None,
     ) -> None:
+        self.sandbox = sandbox  # SandboxLedger: playground test mode, nothing the agent does is saved or sent
         self.transfer_phone = transfer_phone  # Escalation tab "Fallback Phone Number": where transfers ring
         self.require_confirmation = require_confirmation  # Behavior tab toggle; applies to bookings only
         self.disabled_tools: Set[str] = set(disabled_tools or ())  # Behavior tab capability switches
@@ -144,6 +146,10 @@ class AgentToolbox:
         self.last_assistant: str = ""  # our previous reply; a caller "yes" accepts what it proposed
         self.succeeded: Set[str] = set()  # actions a tool has really completed this call: "book" / "cancel" / "reschedule"
         self.ops = get_operations(getattr(facts, "vertical", None))  # the vertical's read/write operations (operations/registry.py)
+        if sandbox is not None:
+            from backend.ai.engine.agent.sandbox import SandboxOperations
+
+            self.ops = SandboxOperations(self.ops, sandbox)  # same interface; writes land in the ledger, reads see the clinic's real data
         self.caller_number_ok = False  # the caller agreed to use the number they are calling from
         self.pending: Optional[Dict[str, Any]] = None  # {"type": "transfer"|"hangup", ...} consumed by the gateway
         self.calls: List[Dict[str, Any]] = []  # audit trail for evals and shadow logs
@@ -422,7 +428,9 @@ class AgentToolbox:
             )
             if gate_result:
                 return gate_result
-        if self.dry_run:  # counted as a transfer for scoring/logging, but no call is placed
+        if self.dry_run or self.sandbox is not None:  # counted as a transfer for scoring/logging, but no call is placed
+            if self.sandbox is not None:
+                self.sandbox.record("transfer", f"Would transfer the call to {department}", department=department)
             self.pending = {"type": "transfer", "department": department, "twiml": None, "dry_run": True}
             return {"ok": True, "code": "dry_run", "message": _msg("toolbox.transfer_to_human.dry_run")}
         return await self.transfer(department, reason)
