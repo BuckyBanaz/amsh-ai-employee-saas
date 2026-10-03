@@ -25,6 +25,14 @@ def run(coro):
 
 from types import SimpleNamespace
 
+def _latest_revision() -> str:
+    """The newest Alembic revision on disk, so this test does not need editing for every new migration."""
+    import pathlib
+
+    versions = pathlib.Path(__file__).resolve().parents[2] / "migrations" / "versions"
+    return max(p.name.split("_", 1)[0] for p in versions.glob("[0-9][0-9][0-9][0-9]_*.py"))
+
+
 _TEST_USER = SimpleNamespace(id="test-user", scope="platform", business_id=None)  # what the paid voice routes now require
 
 
@@ -3115,7 +3123,7 @@ class DatabaseMigrations(unittest.TestCase):
         self.assertIn("email_verified_at", {c["name"] for c in inspect(eng).get_columns("users")})
         self.assertTrue({"sentiment", "action_items", "analyzed_at"} <= {c["name"] for c in inspect(eng).get_columns("calls")})
         with eng.connect() as c:
-            self.assertEqual(c.execute(text("select version_num from alembic_version")).scalar(), "0006")
+            self.assertEqual(c.execute(text("select version_num from alembic_version")).scalar(), _latest_revision())
             self.assertEqual([r[0] for r in c.execute(text("select key from plans order by sort_order"))], ["starter", "professional", "business"])
         self.assertEqual(run_migrations(url), "upgraded")  # running twice is harmless
 
