@@ -11,10 +11,10 @@ bottom (some are stale, see "Doc index").
 | Part | Done | Main pending |
 |---|---|---|
 | User frontend | ~90% | billing invoices are still static, plan-usage card, Marketing-site pages other than the landing page, Conversations polish; zero TypeScript errors, builds in production mode |
-| Admin frontend | ~92% | a cross-tenant Customers list (the sidebar link goes to the dashboard); every other page runs on a real API (audit, security, staff, tickets, announcements, SEO, templates, verticals are new) |
-| AI / voice | ~60% | **real phone-call test**, measured response time and cost per minute, outbound, live take-over; Hindi/Hinglish layer tested offline only |
-| Server | ~85% | the in-app channel has no sender, Meta template submission, delivery webhooks, per-role permissions beyond staff management, overage billing; migrations 0006 to 0008 not yet run on Postgres |
-| **Overall** | **~72%** | still little verified in a real browser or on a real call: see `26_AMSh_Owner_Actions.md` |
+| Admin frontend | ~95% | a cross-tenant Customers list (the sidebar link goes to the dashboard); every other page runs on a real API (new: **Playground**, **Alerts**, **Usage & Limits** with spend and profit); mobile layouts of the new pages not checked |
+| AI / voice | ~62% | **real phone-call test**, measured response time and cost per minute, outbound, live take-over; Hindi/Hinglish layer tested offline only |
+| Server | ~88% | the in-app channel has no sender, Meta template submission, delivery webhooks, alerts by email or push, exact LLM token counts for streamed replies, overage billing; migrations 0006 to 0010 not yet run on Postgres |
+| **Overall** | **~84%** | average of the four rows (the earlier ~72% did not match them). 451 offline tests, a 35-check API smoke and an 18-check browser test pass (`testing/REPORT.md`); little is verified by a person in a browser or on a real call: see `26_AMSh_Owner_Actions.md` |
 
 **What changed on branch `complete` (2026-10-03):** security hardening (webhook verification, authenticated and rate-limited voice endpoints, production
 guard), message templates with real sending for booking confirmations, reminders, missed-call follow-up and staff alerts, admin SEO, audit, security,
@@ -255,6 +255,8 @@ flowchart LR
 
 Note: playground speech recognition is Chrome's, **not Deepgram**; Deepgram is used only on real phone calls.
 
+**Test mode.** Every playground conversation is a test: the AI reads the clinic's real settings and calendar, but anything it books, moves or cancels goes to a per-session ledger (`engine/agent/sandbox.py`) that its own later tool calls can see and nothing else can; transfers are recorded, not placed; no SMS or WhatsApp goes out; the call id is forced to a test prefix so it stays out of call logs and analytics. The responses carry `test_mode` and `test_actions`, and both playgrounds show a banner and the list of what the AI would have done. The admin portal has its own **Playground** (`/playground`) for testing any clinic's AI as a text chat. The playground always runs the LLM agent, even for a clinic set to the legacy engine, because the legacy state machine executes real tools.
+
 ### 6b. Calls page (`/calls`)
 
 List and detail from `GET /api/businesses/{id}/calls`; playground calls are labelled **Test call** (`is_test`) and can be
@@ -305,7 +307,7 @@ run, **Stub** = placeholder, **Missing** = does not exist.
 | SMS confirmations | Written | Guarded by `AMSH_DISABLE_SMS`; it will send real SMS when enabled |
 | Billing / Razorpay / plans | Written | Not re-tested |
 | Workers, calendar, CRM, e-commerce, payments integrations, analytics | Stub | Folders contain only `__init__.py` |
-| **Admin portal (`frontend/admin`)** | **4 areas real, 20 pages still mock (with a banner)** | Real: admin login and guard, **Dashboard** (live counts, calls, appointments, estimated revenue, AI resolution rate, busiest businesses, platform health, recent activity), Businesses list (search, filters, suspend / reactivate / change plan), **Business detail** (overview, users, AI receptionist, appointments, calls, services, knowledge base, integrations, activity), **Billing** (plan catalog create / edit / archive, plan distribution, business subscriptions). Backend tested; `tsc`, eslint and `next build` pass; read against live data; **not clicked through in a browser**. Every other admin page is a design mock and shows an amber "Sample data" banner: business-users, admin-users, appointments, calls, conversations, customers, services, receptionists, usage, analytics, health, integrations, security, audit, tickets, announcements, verticals. No payments or invoices are recorded anywhere, so revenue is an estimate from plan prices. Sidebar links `/notifications` and `/settings` point to pages that do not exist |
+| **Admin portal (`frontend/admin`)** | **Real on APIs except a few pages** | Real: login and guard, dashboard, businesses (list, detail, suspend / plan), billing and plan catalog, integrations, health, settings, analytics, receptionists, appointments, conversations, calls, audit, security, admin users, tickets, announcements, verticals, SEO, message templates, **Playground** (test any clinic's AI), **Alerts** (signups, sign-ins, trials, plan changes, tickets, security) and **Usage & Limits** (spend per tool, clinic and day, revenue, profit, margin, editable rate card). Still sample or thin: business-users, customers (no cross-clinic API), services. `tsc`, eslint (0 errors) and `next build` pass; 18 browser checks pass on desktop (`testing/`); **not clicked through by a person, mobile layouts not checked** |
 | Post-call record: real summary, intent, sentiment, action items (model + keyword fallback; booking and emergency decided by the database and rules) | Tested + model output checked live | Runs in the background when any call ends; shown in `/calls`; Postgres at migration 0003 |
 | Appointment reminders (SMS; WhatsApp template optional) | Tested with fakes | **Off by default** (`REMINDERS_ENABLED` and the clinic's `toggles.reminders`); no dashboard switch yet; not tried with a real SMS provider |
 | Missed-call text-back and staff alerts (SMS / email) | Tested with fakes | Opt-in per clinic through `Agent.config` (`toggles.missed_call_followup`, `alerts`); no dashboard UI yet |

@@ -73,7 +73,7 @@ Never tested for real: a phone call (latency, barge-in, Hindi), any non-English 
 | P1-11 | Frontend: hardcoded URLs, TypeScript errors | **Done.** `NEXT_PUBLIC_API_URL`, zero TypeScript errors in both apps, lint has no errors (two legacy-heavy rules are warnings), the user app builds in production mode (a checkout page was breaking it) |
 | P1-12 | Providers | Owner (`26_...` B) |
 | P1-13 | Prompt size | Budget made explicit (8,000 characters, was 6,500); the diet is still to do |
-| P1-14 | Tests and CI | **CI added** (`.github/workflows/ci.yml`); tests are in several files now (416 offline tests); live-model evals still never run |
+| P1-14 | Tests and CI | **CI added** (`.github/workflows/ci.yml`); tests are in several files now (451 offline tests, plus `testing/`: an API smoke and a browser test); live-model evals still never run |
 | New | Invite password | Fixed: invited business users no longer get the shared default password `Password123!`; they receive a "choose your password" email |
 | New | Suspended clinics | Fixed: staff of a suspended clinic cannot sign in and existing tokens stop working |
 

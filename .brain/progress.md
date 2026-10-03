@@ -3,25 +3,28 @@
 Old day-by-day history: `archive_progress_history.md`. Plan: `DOCS/18_AMSh_Completion_Plan_User_and_Admin.md`. Change log: `DOCS/17_...`.
 Architecture and status: `DOCS/README.md`. Latency work: `DOCS/07_AMSh_Latency_Optimization_Strategy.md` section 6 (branch `v1.1`).
 
-## Overall: about 72% (estimate, branch `complete`)
+## Overall: about 84% (estimate, branch `complete`)
 
 | Part | Done | Pending |
 |---|---|---|
 | User frontend | **~90%** | ~10% |
-| Admin frontend | **~92%** | ~8% |
-| AI / voice | **~60%** | ~40% |
-| Server | **~85%** | ~15% |
-| **Overall (equal weight)** | **~72%** | ~28% |
+| Admin frontend | **~95%** | ~5% |
+| AI / voice | **~62%** | ~38% |
+| Server | **~88%** | ~12% |
+| **Overall (equal weight)** | **~84%** | ~16% |
 
 Method: each part is a checklist of items (pages or capabilities), equal weight; done = 1, partial = 0.4 to 0.9, pending = 0.
 These are estimates, not measurements. Almost nothing has been checked by a person in a real browser or on a real phone call:
-the evidence is 416 offline tests (all green on branch `complete`: `backend/ai/evals/*`), both apps type-check and build, plus checks of the
-new screens against a local seeded API. Owner-only items: `DOCS/26_AMSh_Owner_Actions.md`.
+the evidence is 451 offline tests (all green: `backend/ai/evals/*`), both apps type-check, lint (0 errors) and build, a 35-check API smoke on the real app and an 18-check browser
+test of both apps (`testing/`, report in `testing/REPORT.md`). The earlier "~72%" did not match this table's own average (about 82%); the figures above are the average of the four parts. Owner-only items: `DOCS/26_AMSh_Owner_Actions.md`.
 
-## Branch `complete` (2026-10-03): see `DOCS/17_...` rows 64 to 72
+## Branch `complete` (2026-10-03): see `DOCS/17_...` rows 64 to 76
 
 Security hardening, message templates with real sending, admin SEO / audit / security / staff / tickets / announcements / verticals, real dashboard numbers, quotas,
 suspended-clinic block, frontend cleanup (zero TypeScript errors), CI, competitor analysis (`DOCS/25`).
+Latest: **playground test mode** (the AI works on a throwaway ledger; nothing is saved, sent or transferred) in the clinic's playgrounds and a new admin **Playground** for any clinic; admin **Alerts**
+(signups, sign-ins, trials, trial-to-plan, plan changes, suspensions, tickets, security; unread badge, muting); admin **Usage & Limits** rebuilt on real data (spend per tool, clinic and day,
+revenue, profit, margin, trial and testing burn, plans near limits, editable rate card; LLM tokens metered per clinic); `testing/` folder with smoke, browser test and report.
 
 ## Changes since the 2026-09-28 version
 
@@ -52,23 +55,23 @@ suspended-clinic block, frontend cleanup (zero TypeScript errors), CI, competito
   dashboard) and the dashboard shows it (`DOCS/20` 3b); WhatsApp chat wording fixed; WhatsApp bookings skip the SMS; zero-width-space reply glitch cleaned; logo upload bug fixed (files were saved outside the `/static` mount, so the sidebar and settings logo gave 404);
   Cartesia TTS and warm-up changes pushed to `v1.0`; summit pitch doc `DOCS/19_AMSh_Summit_Pitch.md`.
 
-## User frontend (~80%, Antigravity works here)
+## User frontend (~90%, Antigravity works here)
 Done: login / register / forgot / reset / verify-email, dashboard, AI Studio and playground, calls (with new inspection panel),
 appointments, doctors, knowledge, patients, services, onboarding (business, hours, services, staff, knowledge, AI, checkout,
 success), Automations settings tab, **billing page (plan and usage real, invoices and card are fake placeholders, see Security),
 integrations page, shimmer loaders**.
-Pending: dashboard still shows invented numbers when data is thin (100 calls, % from yesterday, hourly call volume, performance ring),
-onboarding plans / review / Twilio step, accept-invite page not wired, patients edit / delete,
-conversations / analytics / notifications / team / settings polish (in progress), landing-page false claims,
-`tsc` errors (Conversations types, AI defaults settings, duplicate `getBusinessInfo`). Re-check the logo fix in a browser.
+Pending: onboarding plans / review / Twilio step, accept-invite page not wired, patients edit / delete,
+conversations / analytics / notifications / team / settings polish (in progress), landing-page false claims, a plan-usage card in the clinic dashboard,
+the playground's "Live engine verification" panel still shows fixed claims (PostgreSQL, Groq NLU, <200ms). Re-check the logo fix in a browser.
 
-## Admin frontend (~44%, Claude)
-Done (real data): login + guard, dashboard, businesses list, business detail, billing / plan catalog and trial config, integrations (with
-credential editing and SMTP setup), health, settings, notifications, analytics, receptionists, appointments, conversations. 11 of 25 pages.
-Pending (mock): business-users (+ detail), admin-users, customers, services, usage, security, audit, tickets (+ detail), announcements, verticals, and the
-detail pages of appointments / conversations. Analytics revenue stays 0 until payments are recorded. Needs a real browser pass (layout, responsive, charts).
+## Admin frontend (~95%, Claude)
+Done (real data): login + guard, dashboard, businesses list and detail, billing / plan catalog and trial config, integrations (credential editing, SMTP), health, settings,
+analytics, receptionists, appointments, conversations, **audit, security, admin users, tickets (+ detail), announcements, verticals, SEO, message templates, playground,
+alerts (notifications page), usage & limits (spend and profit)**.
+Pending: business-users (+ detail) and customers are still sample or per-clinic only (no cross-clinic customers API), services, and the detail pages of appointments / conversations.
+Not checked: mobile layouts of the new pages (desktop screenshots only), a person's click-through. Analytics revenue now follows recorded payments.
 
-## AI / voice (~55%, Claude)
+## AI / voice (~62%, Claude)
 Done: tool-calling agent with guards, booking / cancel / reschedule, Groq + Gemini chain, Hindi / Hinglish and gender fixes,
 emotion and laughter, natural fillers, Cartesia voice, Deepgram STT relay, barge-in in the browser, call recording, post-call
 analysis, WhatsApp chat agent, reminders / missed-call / staff alerts, safety rules, **latency instrumentation and keep-alive
@@ -80,22 +83,20 @@ exists, backend not confirmed), agent versions, RAG (Qdrant is down), cost metri
 Open question: whether to switch `GROQ_MODEL` to `llama-3.3-70b-versatile` (removes reasoning delay; tool calling must be re-checked first).
 Known small issue: after a barge-in the full reply, including unspoken sentences, is still saved to history.
 
-## Server (~72%, Claude, except analytics / notifications / billing by Antigravity)
-Done: auth and hardening, businesses / onboarding CRUD, calls + recordings + analysis, Alembic migrations, audit log, admin auth /
-tenants / tenant data / plans / overview, secure Razorpay order and verify, **billing status with real usage, invoices,
-change-plan, start-trial, trial config, admin integrations API (live checks, encrypted credential overrides, SMTP settings), tenant integrations API, admin health / settings / notifications / analytics / receptionists / appointments / conversations endpoints**.
-Pending: **auth on the new billing endpoints (see Security)**, payment records stored in the database, plan quota enforcement,
-remaining admin APIs (users, usage, tickets, announcements, audit / security read, verticals); portal-saved provider keys are not used by live calls yet (checks only), customer edit /
-delete, team management beyond create / list, Twilio and Exotel signature checks, CI and `backend/tests`, blocking a suspended
-clinic's dashboard login.
+## Server (~88%, Claude, except analytics / notifications / billing by Antigravity)
+Done: auth and hardening, businesses / onboarding CRUD, calls + recordings + analysis, Alembic migrations (0001 to 0010), audit log, admin auth / tenants / tenant data / plans / overview,
+secure Razorpay order and verify, billing status with real usage, invoices, change-plan, start-trial, trial config, admin integrations API, tenant integrations API, admin health / settings,
+Twilio and Exotel signature checks, stream tokens, rate limits, production startup guard, message templates and messenger, quotas and suspended-clinic block, support tickets and announcements,
+admin users / audit / security / verticals / SEO APIs, **admin alerts feed (per-admin unread, muting), spend and profit report with rate card, LLM token metering, playground sandbox**.
+Pending: alerts by email or push, an alert when a trial expires, exact LLM token counts for streamed replies, tracking of post-call analysis / previews / WhatsApp fees / number rental in spend,
+overage billing, a cross-clinic customers API, delivery webhooks for messages, portal-saved provider keys used by live calls (checks only today), Postgres run of the new migrations.
 
-## Security (fix before any real pilot) - full list in `DOCS/23`
-Fixed 2026-10-03: billing routes have auth, upgrades cannot be switched on for free, the free trial is once per business, payment
-verification checks the order with Razorpay again, invoices and the payment method come from real payments only.
-Fixed 2026-10-03 (admin): `GET /api/admin/calls` was open to anonymous users and seeded demo data; now needs a platform admin.
-Open: no signature check on the Twilio / Exotel webhooks; `POST /api/voice/call-me` (places a real call), `/preview`, `/transcribe`,
-`/voices`, `/llm-models` need no login; dev defaults (`DEBUG`, `ALLOW_DEV_FALLBACKS`, reload, `amsh/amsh` DB password, ngrok in compose);
-the pasted Meta App Secret must be rotated; 14 GitHub dependency vulnerabilities not reviewed; PII not redacted outside shadow logs.
+## Security - full list in `DOCS/23`
+Fixed on branch `complete`: billing routes have auth, upgrades cannot be switched on for free, the free trial is once per business, payment verification checks the order with Razorpay,
+`GET /api/admin/calls` needs a platform admin, Twilio / Exotel webhooks are verified, `call-me` / `preview` / `transcribe` / `voices` / `llm-models` need a login (previews use short-lived media tokens),
+safe production defaults with a startup guard, a suspended clinic cannot sign in, the invite default password is gone.
+Open: the Meta App Secret pasted in a chat must still be rotated (owner action); dependency alerts are fixed except `braces` (lint tool) and `ecdsa`, which have no fix;
+PII is not redacted outside shadow logs; the rate limiter is in-process (one worker).
 
 ## Planned next: message templates and channels (`DOCS/24`)
 Editable templates for Email, SMS, WhatsApp and In-app in the admin portal (platform messages, channel setup, delivery log) and the user portal (each clinic's own

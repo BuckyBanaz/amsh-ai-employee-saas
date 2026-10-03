@@ -234,6 +234,9 @@ All routes below require a login unless marked public. Platform admin = AMSh sta
 | Message templates (clinic) | `GET /api/businesses/{id}/message-templates`, `GET/PUT/DELETE .../{event}/{channel}`, `POST .../preview`, `POST .../restore`, `GET/PUT .../message-preferences`, `GET .../message-log` | member (write: owner or admin) |
 | SEO | `GET /api/admin/seo`, `PUT /api/admin/seo/global`, `PUT/DELETE /api/admin/seo/pages`; public `GET /api/seo/public`, `/robots.txt`, `/sitemap.xml` | platform admin; public |
 | Audit and security | `GET /api/admin/audit`, `/audit/export.csv`, `/security` | platform admin |
+| Alerts | `GET /api/admin/alerts?category=`, `GET /alerts/unread-count`, `POST /alerts/mark-read`, `PUT /alerts/preferences` (`{"muted": [...]}`) | platform admin |
+| Spend and profit | `GET /api/admin/spend?days=30` (per tool, clinic, day; revenue, profit, margin; clinics near limits), `GET /api/admin/spend/rates`, `PUT /api/admin/spend/rates` (`{"prices": {"tts": 0.03}}`) | platform admin; editing needs super admin |
+| Playground | `POST /api/voice/simulate`, `/simulate/stream` now return `test_mode: true` and `test_actions: [{kind, summary}]`; the AI works on a throwaway ledger and call ids are forced to a test prefix | member of the business; platform admin for any clinic |
 | Staff accounts | `GET/POST /api/admin/admin-users`, `PATCH /api/admin/admin-users/{id}`, `POST .../{id}/setup-link` | super admin |
 | Support | `POST/GET /api/businesses/{id}/tickets`, `GET .../{ticket}`, `POST .../{ticket}/messages`; `GET /api/admin/tickets`, `GET/PATCH /api/admin/tickets/{id}`, `POST .../messages` | member; platform admin |
 | Announcements | `GET /api/announcements` (member); `GET/POST /api/admin/announcements`, `PATCH/DELETE .../{id}` | member; platform admin |
