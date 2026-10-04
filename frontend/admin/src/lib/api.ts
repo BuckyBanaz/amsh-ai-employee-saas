@@ -151,6 +151,31 @@ export function updateTenant(id: string, body: { status?: string; plan?: string 
   return adminFetch(`/admin/tenants/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(body) });
 }
 
+// ---- Add, edit and delete a business (admin sets up a clinic on its behalf) ---------------------------------------------
+
+export type WorkingHours = Record<string, { start: string; end: string }[]>;
+export interface BusinessFields {
+  name: string; vertical: string; business_type: string; business_subtype: string | null; country: string | null; website: string | null;
+  business_email: string | null; business_phone: string | null; city: string | null; address: string | null; postal_code: string | null;
+  timezone: string; currency: string; working_hours: WorkingHours; plan: string; status: string;
+}
+export type BusinessDetails = BusinessFields & { id: string; logo_url: string | null; created_at: string };
+export interface TenantCreateBody extends Partial<Omit<BusinessFields, 'plan'>> {
+  name: string; plan?: string | null; owner: { name: string; email: string; password: string };
+}
+export interface DeletePreview { id: string; name: string; status: string; plan: string; counts: Record<string, number>; total_rows: number; confirm_with: string; suggestion: string }
+
+export const createTenant = (body: TenantCreateBody) =>
+  adminFetch<{ id: string; name: string; plan: string; status: string; owner: { id: string; email: string } }>('/admin/tenants', { method: 'POST', body: JSON.stringify(body) });
+export const fetchBusinessDetails = (id: string) => adminFetch<BusinessDetails>(`/onboarding/businesses/${encodeURIComponent(id)}`);
+export const saveBusinessDetails = (id: string, body: Partial<Omit<BusinessFields, 'plan'>>) =>
+  adminFetch<BusinessDetails>(`/onboarding/businesses/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(body) });
+export const changeBusinessPlan = (id: string, plan: string) =>
+  adminFetch<{ plan: string }>(`/billing/businesses/${encodeURIComponent(id)}/change-plan`, { method: 'POST', body: JSON.stringify({ plan_id: plan }) });
+export const fetchDeletePreview = (id: string) => adminFetch<DeletePreview>(`/admin/tenants/${encodeURIComponent(id)}/delete-preview`);
+export const deleteTenant = (id: string, confirm: string) =>
+  adminFetch<{ deleted: boolean; name: string; rows_deleted: number }>(`/admin/tenants/${encodeURIComponent(id)}`, { method: 'DELETE', body: JSON.stringify({ confirm }) });
+
 // ---- Plans -------------------------------------------------------------------------------------------------------------
 
 export interface PlanApi {

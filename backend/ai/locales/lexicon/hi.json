@@ -1,7 +1,7 @@
 {
  "_about": "Hindi/Hinglish lexical data. Code reads this; it holds no Hindi words itself. See backend/ai/lexicon.py.",
  "emergency_patterns": [
-  "सीने\\s*में\\s*दर्द|सांस\\s*(?:नहीं|लेने\\s*में)|साँस\\s*(?:नहीं|लेने\\s*में)|दिल\\s*का\\s*दौरा|हार्ट\\s*अटैक|बेहोश|बहुत\\s*खून|खून\\s*बह|आत्महत्या|\\b(?:seene\\s+mein\\s+dard|saans\\s+nahi|sans\\s+nahi|behosh|dil\\s+ka\\s+daura|khoon\\s+beh\\w*)\\b"
+  "सीने\\s*में\\s*दर्द|सांस\\s*(?:नहीं|लेने\\s*में)|साँस\\s*(?:नहीं|लेने\\s*में)|दिल\\s*का\\s*दौरा|हार्ट\\s*अटैक|बेहोश|बहुत\\s*खून|खून\\s*बह|आत्महत्या|इमरजेंसी|एमरजेंसी|\\b(?:seene\\s+mein\\s+dard|saans\\s+nahi|sans\\s+nahi|behosh|dil\\s+ka\\s+daura|khoon\\s+beh)\\b"
  ],
  "hinglish_words": [
   "aaj",
@@ -198,6 +198,20 @@
   "billing": "Billing aur refund front desk team dekhti hai. Main abhi aapko connect karti hoon.",
   "frustrated": "Takleef ke liye mujhe bahut khed hai. Main abhi aapko front desk se connect karti hoon.",
   "unsure_claim": "Ek baar main aapse details dobara confirm kar loon. Kya aap phir se bata sakte hain?",
-  "unsure_times": "Main sahi samay bataungi. Aapko kaunsa din theek rahega?"
- }
+  "unsure_times": "Main sahi samay bataungi. Aapko kaunsa din theek rahega?",
+  "emergency": "Yeh emergency lag rahi hai. Main aapko turant emergency coordinator se connect kar rahi hoon. Agar aap khatre mein hain toh abhi emergency services ko call kijiye."
+ },
+ "human_request": {
+  "who": "(?:इंसान|इन्सान|असली\\s*(?:व्यक्ति|इंसान)|किसी\\s*(?:से|इंसान\\s*से)\\s*बात|मैनेजर|कर्मचारी|स्टाफ)|\\b(?:insaan|insan|kisi\\s+se\\s+baat|kisi\\s+insaan|asli\\s+insaan|manager\\s+se)\\b",
+  "ask": "बात|मिला|कनेक्ट|ट्रांसफर|चाहिए|चाहता|चाहती|baat|milao|connect|transfer|chahiye"
+ },
+ "ask_patterns": [
+  "\\b(?:in|mein|me)\\s+hindi\\b|\\bhindi\\s+(?:mein|me|main)\\b|\\bhindi\\s+bol|हिंदी\\s*में|हिन्दी\\s*में|हिंदी\\s*बोल|हिन्दी\\s*बोल|इन\\s*हिं?न?्?दी"
+ ],
+ "farewell_patterns": [
+  "\\b(?:alvida|phir\\s+milte|kal\\s+baat|baad\\s+mein\\s+baat|bas\\s+itna(?:\\s+hi)?|shukriya\\s+bye|theek\\s+hai\\s+bye)\\b|अलविदा|फिर\\s+मिलते|बाय|गुड\\s*नाइट|बस\\s+इतना|कल\\s+बात"
+ ],
+ "hangup_patterns": [
+  "\\b(?:call\\s+(?:cut|kaat)|phone\\s+rakh|cut\\s+kar\\s+(?:do|sakti|sakte))\\b|कॉल\\s+(?:कट|काट)|फोन\\s+रख"
+ ]
 }

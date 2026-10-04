@@ -6,7 +6,7 @@ import { AnimatePresence, motion, useInView, useReducedMotion, useScroll, useSpr
 import { Icon, type IconName } from "./icons";
 
 // Product tour: real screenshots of the AMSh clinic console
-// (public/landing/product, captured from the demo clinic account).
+// (public/landing/product, captured from a demo US dental clinic: Brooklyn Heights Family Dental).
 // The browser frame starts tilted back in 3D and lays flat as it scrolls in.
 
 type Tab = { id: string; label: string; icon: IconName; title: string; body: string; src: string; alt: string };
@@ -18,7 +18,7 @@ const TABS: Tab[] = [
     icon: "grid",
     title: "Your whole front desk, at a glance",
     body: "Today's appointments and every call AMSh handled — updated live as patients call and message.",
-    src: "/landing/product/dashboard.webp",
+    src: "/landing/product/dashboard-v2.webp",
     alt: "AMSh dashboard showing today's appointments and recent AI-handled calls",
   },
   {
@@ -27,7 +27,7 @@ const TABS: Tab[] = [
     icon: "calendar",
     title: "Bookings land straight in the schedule",
     body: "Every appointment AMSh books shows up with the patient, doctor, service and status — ready to confirm or reschedule.",
-    src: "/landing/product/appointments.webp",
+    src: "/landing/product/appointments-v2.webp",
     alt: "AMSh appointments list with patients, doctors, schedule and status",
   },
   {
@@ -35,9 +35,9 @@ const TABS: Tab[] = [
     label: "Call logs",
     icon: "phone",
     title: "Every call, recorded and summarised",
-    body: "Listen back, read the transcript in the language the patient spoke, and see exactly what was booked.",
-    src: "/landing/product/calls.webp",
-    alt: "AMSh call log with audio recording, summary and a Hindi-English transcript",
+    body: "Listen back, read the full transcript in the language the patient spoke, and see exactly what was booked.",
+    src: "/landing/product/calls-v2.webp",
+    alt: "AMSh call log for a Brooklyn dental clinic with an AI summary and full call transcript",
   },
   {
     id: "conversations",
@@ -45,7 +45,7 @@ const TABS: Tab[] = [
     icon: "message",
     title: "All patient conversations in one inbox",
     body: "Filter by resolved, transferred or unresolved and jump into any conversation with full context.",
-    src: "/landing/product/conversations.webp",
+    src: "/landing/product/conversations-v2.webp",
     alt: "AMSh conversations inbox with a booking conversation open",
   },
   {
@@ -54,7 +54,7 @@ const TABS: Tab[] = [
     icon: "chart",
     title: "Know when patients call — and what they want",
     body: "Busiest hours, call outcomes and bookings over time, so you can staff smarter.",
-    src: "/landing/product/analytics.webp",
+    src: "/landing/product/analytics-v2.webp",
     alt: "AMSh analytics with call volume heatmap and call outcomes",
   },
   {
@@ -63,7 +63,7 @@ const TABS: Tab[] = [
     icon: "users",
     title: "Doctors, schedules and services",
     body: "AMSh books against each doctor's real availability and the services they offer.",
-    src: "/landing/product/doctors.webp",
+    src: "/landing/product/doctors-v2.webp",
     alt: "AMSh doctors and staff directory",
   },
 ];
@@ -107,11 +107,11 @@ export default function ProductTour() {
                 setActive(i);
                 setPaused(true);
               }}
-              className={`relative flex min-h-11 shrink-0 cursor-pointer items-center gap-2 overflow-hidden rounded-full border px-4 text-sm font-semibold transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2 ${
+              className={`relative flex min-h-9 shrink-0 cursor-pointer items-center gap-1.5 overflow-hidden rounded-full border px-3 text-[13px] font-semibold transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2 ${
                 on ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900"
               }`}
             >
-              <Icon name={t.icon} className="h-4 w-4" />
+              <Icon name={t.icon} className="h-3.5 w-3.5" />
               {t.label}
               {on && !paused && !reduce && inView && (
                 <motion.span
@@ -129,7 +129,7 @@ export default function ProductTour() {
       </div>
 
       {/* caption */}
-      <div className="mx-auto mt-8 min-h-[5.5rem] max-w-2xl text-center" aria-live="polite">
+      <div className="mx-auto mt-5 min-h-[4.25rem] max-w-2xl text-center" aria-live="polite">
         <AnimatePresence mode="wait">
           <motion.div
             key={tab.id}
@@ -138,14 +138,14 @@ export default function ProductTour() {
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.25 }}
           >
-            <h3 className="font-[family-name:var(--font-display)] text-xl font-semibold text-slate-950 sm:text-2xl">{tab.title}</h3>
-            <p className="mt-2 text-pretty leading-relaxed text-slate-600">{tab.body}</p>
+            <h3 className="font-[family-name:var(--font-display)] text-lg font-semibold text-slate-950 sm:text-xl">{tab.title}</h3>
+            <p className="mt-1.5 text-pretty text-sm leading-relaxed text-slate-600 sm:text-[15px]">{tab.body}</p>
           </motion.div>
         </AnimatePresence>
       </div>
 
       {/* 3D browser frame */}
-      <div className="relative mt-8" style={{ perspective: 1600 }}>
+      <div className="relative mx-auto mt-5 max-w-4xl" style={{ perspective: 1600 }}>
         <div aria-hidden="true" className="absolute -inset-x-10 -bottom-10 top-10 rounded-[3rem] bg-gradient-to-br from-cyan-300/40 via-indigo-400/40 to-violet-400/40 blur-3xl" />
         <motion.div
           id="tour-panel"
@@ -166,7 +166,7 @@ export default function ProductTour() {
             </span>
             <span className="hidden w-[52px] sm:block" />
           </div>
-          <div className="relative aspect-[16/10] bg-[#f8fafc]">
+          <div className="relative aspect-[1600/1150] bg-[#f8fafc]">
             <AnimatePresence initial={false}>
               <motion.div
                 key={tab.id}
@@ -176,12 +176,12 @@ export default function ProductTour() {
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
               >
-                <Image src={tab.src} alt={tab.alt} fill sizes="(max-width: 1200px) 100vw, 1152px" className="object-cover object-left-top" />
+                <Image src={tab.src} alt={tab.alt} fill sizes="(max-width: 900px) 100vw, 896px" className="object-contain object-top" />
               </motion.div>
             </AnimatePresence>
           </div>
         </motion.div>
-        <p className="mt-4 text-center text-xs text-slate-500">Screens from the AMSh console with a demo clinic&apos;s data.</p>
+        <p className="mt-3 text-center text-xs text-slate-500">Screens from the AMSh console with a demo clinic&apos;s data.</p>
       </div>
     </div>
   );

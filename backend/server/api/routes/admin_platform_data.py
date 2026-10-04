@@ -259,6 +259,10 @@ def delete_receptionist(
     
     biz_id = agent.business_id
     name = agent.name
+
+    # Unlink any calls referencing this agent so the foreign key constraint is satisfied
+    db.query(Call).filter(Call.agent_id == agent_id).update({Call.agent_id: None}, synchronize_session=False)
+
     db.delete(agent)
     db.commit()
     

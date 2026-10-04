@@ -11,6 +11,9 @@ import { BrandIcon } from "@/components/landing/BrandIcon";
 import { Magnetic, Reveal, SpotlightCard, Stagger, StaggerItem } from "@/components/landing/Motion";
 import FeatureBento from "@/components/landing/FeatureBento";
 import ProductTour from "@/components/landing/ProductTour";
+import PartnersMarquee from "@/components/landing/PartnersMarquee";
+import Testimonials from "@/components/landing/Testimonials";
+import Footer3D from "@/components/landing/Footer3D";
 import { Icon, type IconName } from "@/components/landing/icons";
 import { Logo } from "@/components/landing/Logo";
 import SeoScripts from "@/components/landing/SeoScripts";
@@ -106,7 +109,7 @@ const PLANS = [
 
 const FAQS = [
   { q: "Does AMSh replace my front-desk staff?", a: "No. AMSh works alongside your team as an extra digital employee. It takes the repetitive calls and messages so your staff can focus on patients in the clinic — and anyone on your team can step into a conversation at any time." },
-  { q: "Which languages does AMSh speak?", a: "AMSh talks with patients in the language they use — Hindi, English and Hinglish, regional Indian languages and international languages — and can switch mid-conversation if the patient does." },
+  { q: "Which languages does AMSh speak?", a: "AMSh talks with patients in the language they use — English, Spanish, French, Arabic, Hindi and many more — and can switch mid-conversation if the patient does." },
   { q: "Will patients know they're talking to AI?", a: "AMSh introduces itself as your clinic's assistant. It speaks naturally, and patients can ask for a person at any time — the conversation is handed to your staff with a summary." },
   { q: "Can I keep my existing clinic phone number?", a: "Yes. Forward your current number to AMSh (all the time, after hours, or only when busy), or use a new dedicated number." },
   { q: "What about medical emergencies?", a: "AMSh is not a triage tool. When a caller describes an emergency it immediately advises them to contact emergency services and can transfer to your on-call staff." },
@@ -160,7 +163,7 @@ function Outcomes() {
         </Stagger>
 
         <p className="mt-16 text-center text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Built for clinics that are always busy</p>
-        <div className="lp-marquee mt-6 overflow-hidden">
+        <div className="lp-marquee mt-6 overflow-hidden w-full max-w-full" style={{ contain: "paint" }}>
           <ul className="lp-marquee-track flex w-max gap-3">
             {[...AUDIENCES, ...AUDIENCES].map((p, i) => (
               <li
@@ -180,7 +183,7 @@ function Outcomes() {
 
 function SeeIt() {
   return (
-    <section id="see-it" className="relative scroll-mt-20 overflow-hidden bg-[#050816] py-24 sm:py-32">
+    <section id="see-it" className="relative scroll-mt-20 overflow-hidden bg-[#050816] py-16 sm:py-20">
       <div aria-hidden="true" className="pointer-events-none absolute inset-0">
         <div className="absolute left-1/2 top-1/3 h-[600px] w-[900px] -translate-x-1/2 rounded-full bg-indigo-600/20 blur-[140px]" />
       </div>
@@ -191,7 +194,7 @@ function SeeIt() {
           title="Talk to your new front-desk employee."
           body="Ask what a patient would ask — in any language. Book an appointment, ask about after-hours, or ask whether it replaces your team."
         />
-        <Reveal className="mt-14" delay={0.1}>
+        <Reveal className="mt-8" delay={0.1}>
           <ChatDemo />
         </Reveal>
       </div>
@@ -201,7 +204,7 @@ function SeeIt() {
 
 function WhatsAppSection() {
   return (
-    <section id="whatsapp" className="relative scroll-mt-24 overflow-hidden bg-[#F6F8FC] py-24 sm:py-32">
+    <section id="whatsapp" className="relative scroll-mt-24 overflow-hidden bg-[#F6F8FC] py-16 sm:py-20">
       <div className="mx-auto grid max-w-6xl items-center gap-16 px-4 sm:px-6 lg:grid-cols-2">
         <div className="order-2 lg:order-1">
           <Reveal>
@@ -237,7 +240,7 @@ function WhatsAppSection() {
 
 function Features() {
   return (
-    <section id="features" className="scroll-mt-24 bg-[#F6F8FC] py-24 sm:py-32">
+    <section id="features" className="scroll-mt-24 bg-[#F6F8FC] py-16 sm:py-20">
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <SectionHeader
           eyebrow="What AMSh does"
@@ -252,14 +255,14 @@ function Features() {
 
 function Tour() {
   return (
-    <section id="product" className="scroll-mt-24 overflow-hidden bg-white py-24 sm:py-32">
+    <section id="product" className="scroll-mt-24 overflow-hidden bg-white py-16 sm:py-20">
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <SectionHeader
           eyebrow="The AMSh console"
           title="See everything AMSh does for your clinic."
           body="Appointments, calls, conversations and analytics — in one simple console your whole team can use."
         />
-        <div className="mt-12">
+        <div className="mt-8">
           <ProductTour />
         </div>
       </div>
@@ -269,7 +272,7 @@ function Tour() {
 
 function DayWithAmsh() {
   return (
-    <section className="relative overflow-hidden bg-[#050816] py-24 sm:py-32">
+    <section className="relative overflow-hidden bg-[#050816] py-16 sm:py-20">
       <div aria-hidden="true" className="pointer-events-none absolute inset-0">
         <div className="absolute left-1/2 top-1/2 h-[600px] w-[900px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-indigo-600/20 blur-[140px]" />
       </div>
@@ -296,7 +299,7 @@ function DayWithAmsh() {
 
 function HowItWorks() {
   return (
-    <section id="how-it-works" className="scroll-mt-24 bg-[#F6F8FC] py-24 sm:py-32">
+    <section id="how-it-works" className="scroll-mt-24 bg-[#F6F8FC] py-16 sm:py-20">
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <SectionHeader eyebrow="How it works" title="Your AI employee starts in three steps." body="No hardware, no IT team. If you can fill in a form, you can set up AMSh." />
         <Stagger as="div" className="relative mt-16 grid gap-10 lg:grid-cols-3 lg:gap-6">
@@ -320,7 +323,7 @@ function HowItWorks() {
 
 function Pricing() {
   return (
-    <section id="pricing" className="scroll-mt-24 bg-white py-24 sm:py-32">
+    <section id="pricing" className="scroll-mt-24 bg-white py-16 sm:py-20">
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <SectionHeader eyebrow="Pricing" title="A full-time employee for less than a part-time salary." body="Every plan starts with a 14-day free trial. Pay annually and get 2 months free." />
         <Stagger className="mt-16 grid items-stretch gap-6 lg:grid-cols-3">
@@ -374,7 +377,7 @@ function Pricing() {
 
 function Faq() {
   return (
-    <section id="faq" className="scroll-mt-24 bg-[#F6F8FC] py-24 sm:py-32">
+    <section id="faq" className="scroll-mt-24 bg-[#F6F8FC] py-16 sm:py-20">
       <div className="mx-auto max-w-3xl px-4 sm:px-6">
         <SectionHeader eyebrow="FAQ" title="Questions clinics ask us." />
         <Stagger as="div" className="mt-12 space-y-3">
@@ -429,60 +432,31 @@ function BookDemo() {
   );
 }
 
-function Footer() {
-  const cols = [
-    { title: "Product", links: [{ href: "#see-it", label: "See it in action" }, { href: "#features", label: "What it does" }, { href: "#pricing", label: "Pricing" }] },
-    { title: "Account", links: [{ href: "/login", label: "Log in" }, { href: "/register", label: "Start free trial" }] },
-    { title: "Help", links: [{ href: "#faq", label: "FAQ" }, { href: "#book-demo", label: "Book a Demo" }] },
-  ];
-  return (
-    <footer className="bg-[#050816] pb-[calc(env(safe-area-inset-bottom,0px)+2.5rem)] pt-16 text-slate-400">
-      <div className="mx-auto grid max-w-6xl gap-10 px-4 sm:px-6 md:grid-cols-[1.5fr_1fr_1fr_1fr]">
-        <div>
-          <Logo />
-          <p className="mt-4 max-w-xs text-[15px] leading-relaxed">Your clinic&apos;s AI employee that works 24/7 — alongside your team.</p>
-        </div>
-        {cols.map((c) => (
-          <div key={c.title}>
-            <h3 className="text-sm font-semibold text-white">{c.title}</h3>
-            <ul className="mt-4 space-y-2.5 text-[15px]">
-              {c.links.map((l) => (
-                <li key={l.label}>
-                  <a href={l.href} className={`rounded transition-colors hover:text-white ${FOCUS_DARK}`}>{l.label}</a>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
-      </div>
-      <p className="mx-auto mt-14 max-w-6xl border-t border-white/10 px-4 pt-8 text-sm sm:px-6">© {new Date().getFullYear()} AMSh. All rights reserved.</p>
-    </footer>
-  );
-}
-
 export default async function LandingPage() {
   const seo = await getSeo(); // structured data and analytics tags from the admin SEO settings
   return (
-    <div className={`${sora.variable} min-h-screen bg-[#050816]`}>
+    <div className={`${sora.variable} min-h-screen bg-[#050816] w-full max-w-full overflow-x-hidden`}>
       <SeoScripts seo={seo} />
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-lg focus:bg-white focus:px-4 focus:py-2 focus:shadow-lg">
         Skip to content
       </a>
       <Nav />
-      <main id="main">
+      <main id="main" className="w-full max-w-full overflow-x-hidden">
         <Hero />
         <Outcomes />
         <SeeIt />
         <WhatsAppSection />
         <Features />
+        <Testimonials />
         <Tour />
         <DayWithAmsh />
         <HowItWorks />
         <Pricing />
+        <PartnersMarquee />
         <Faq />
         <BookDemo />
       </main>
-      <Footer />
+      <Footer3D />
     </div>
   );
 }

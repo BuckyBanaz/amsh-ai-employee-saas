@@ -30,14 +30,18 @@ class Settings(BaseSettings):
     EMAIL_FROM: str = "AMSh <no-reply@amsh.ai>"
     FRONTEND_URL: str = "http://localhost:3000"  # base of the links inside emails
 
-    # CORS — the two Next.js frontends
+    # CORS — the two Next.js frontends (support both http and https for experimental-https dev server)
     CORS_ORIGINS: list[str] = [
         "http://localhost:3000",
         "http://localhost:3001",
         "http://127.0.0.1:3000",
         "http://127.0.0.1:3001",
+        "https://localhost:3000",
+        "https://localhost:3001",
+        "https://127.0.0.1:3000",
+        "https://127.0.0.1:3001",
     ]
-    CORS_ORIGIN_REGEX: str | None = None  # e.g. r"https://.*\.amsh\.ai"; empty = only CORS_ORIGINS
+    CORS_ORIGIN_REGEX: str | None = None  # e.g. r"https?://.*\.amsh\.ai"; empty = only CORS_ORIGINS
 
     # Conversation engine rollout (DOCS/16): llm_agent (default) | shadow (agent runs silently beside the legacy engine and is
     # only logged) | state_machine (legacy, to be retired). A tenant can override via Agent.config["engine"].

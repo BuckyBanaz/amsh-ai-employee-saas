@@ -54,8 +54,21 @@
   "billing": "Los pagos y reembolsos los gestiona nuestro equipo de recepción. Le paso con ellos ahora mismo.",
   "frustrated": "Lamento mucho las molestias. Le paso ahora mismo con alguien de recepción.",
   "unsure_claim": "Permítame confirmar esto con usted primero. ¿Podría confirmarme los datos una vez más?",
-  "unsure_times": "Quiero asegurarme de darle la hora correcta. ¿Qué día le vendría bien?"
+  "unsure_times": "Quiero asegurarme de darle la hora correcta. ¿Qué día le vendría bien?",
+  "emergency": "Esto parece una emergencia médica grave. Cuelgue y llame de inmediato a su número local de emergencias. Estoy avisando ahora mismo a nuestro equipo médico de guardia."
  },
  "native_name": "Español",
- "direction": "ltr"
+ "direction": "ltr",
+ "emergency_patterns": [
+  "\\b(?:dolor\\s+(?:de|en\\s+el)\\s+pecho|ataque\\s+(?:al\\s+coraz[oó]n|card[ií]aco)|infarto|derrame\\s+cerebral|no\\s+puedo\\s+respirar|me\\s+ahogo|(?:sangrado|hemorragia)\\s+(?:abundante|fuerte|grave)|sangra\\s+mucho|mucha\\s+sangre|inconsciente|se\\s+desmay\\w+|convulsion\\w*|sobredosis|suicid\\w*|quiero\\s+morir(?:me)?|matarme)\\b"
+ ],
+ "human_request": {
+  "who": "\\b(?:hablar|comunicar(?:me)?|pasar(?:me)?|conectar(?:me)?|transferir(?:me)?)\\s+con\\s+(?:una?\\s+)?(?:persona|humano|operador\\w*|recepcionista|gerente|alguien|agente)\\b|\\b(?:persona|humano)\\s+real\\b"
+ },
+ "farewell_patterns": [
+  "\\b(?:adi[oó]s|hasta\\s+(?:luego|pronto|ma[nñ]ana)|buenas\\s+noches|nada\\s+m[aá]s|eso\\s+es\\s+todo|cu[ií]dese)\\b"
+ ],
+ "hangup_patterns": [
+  "\\b(?:cuelg\\w+|termina\\w*\\s+la\\s+llamada|finaliza\\w*\\s+la\\s+llamada)\\b"
+ ]
 }

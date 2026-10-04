@@ -32,6 +32,16 @@
   "billing": "Billing and refunds are handled by our front desk team. Let me connect you right away.",
   "frustrated": "I'm really sorry about the trouble. Let me connect you to someone at our front desk right away.",
   "unsure_claim": "Let me just double-check that with you first. Could you confirm the details once more?",
-  "unsure_times": "Let me make sure I give you the right time. Which day would suit you?"
- }
+  "unsure_times": "Let me make sure I give you the right time. Which day would suit you?",
+  "emergency": "This sounds like an emergency. I am transferring you to an emergency care coordinator immediately. If you are in immediate danger, please dial emergency services right now."
+ },
+ "ask_patterns": [
+  "\\b(?:in|mein|me)\\s+english\\b|\\benglish\\s+(?:mein|me|main)\\b|\\benglish\\s+bol|अंग्रेज़ी\\s*में|अंग्रेजी\\s*में|इंग्लिश\\s*में|इंग्लिश\\s*बोल|इन\\s*इंग्लिश"
+ ],
+ "farewell_patterns": [
+  "\\b(?:good\\s*bye|bye(?:\\s*bye)?|good\\s*night|see\\s+you(?:\\s+(?:later|soon|tomorrow))?|talk\\s+(?:to\\s+you\\s+)?later|take\\s+care|that'?s\\s+all|that\\s+is\\s+all|nothing\\s+else)\\b"
+ ],
+ "hangup_patterns": [
+  "\\b(?:hang\\s*up|cut\\s+the\\s+call|end\\s+the\\s+call|disconnect\\s+the\\s+call)\\b"
+ ]
 }

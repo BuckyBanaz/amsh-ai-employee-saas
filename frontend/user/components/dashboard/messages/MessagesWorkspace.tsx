@@ -21,7 +21,7 @@ function Toggle({ checked, onChange, label }: { checked: boolean; onChange: () =
 
 function Card({ title, desc, children }: { title: string; desc: string; children: React.ReactNode }) {
   return (
-    <div className="bg-white border border-gray-100 rounded-xl p-4 shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
+    <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
       <h3 className="text-sm font-bold text-gray-900 tracking-tight mb-0.5">{title}</h3>
       <p className="text-xs text-gray-500 mb-3">{desc}</p>
       {children}
@@ -29,20 +29,31 @@ function Card({ title, desc, children }: { title: string; desc: string; children
   );
 }
 
-/** Settings > Messages: the clinic's own wording, channel order and quiet hours for patient and staff messages (saved on the server). */
-export function MessagesSettings() {
+type Tab = 'templates' | 'delivery' | 'activity';
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'templates', label: 'Templates' },
+  { id: 'delivery', label: 'Delivery' },
+  { id: 'activity', label: 'Activity' },
+];
+
+/** Messages: the clinic's own wording, channel order and quiet hours for patient and staff messages (saved on the server). Templates are a
+ *  list-and-editor workspace, so editing never means scrolling; delivery rules and the send log live on their own tabs. */
+export function MessagesWorkspace() {
   const [data, setData] = useState<MessageList | null>(null);
   const [error, setError] = useState('');
+  const [tab, setTab] = useState<Tab>('templates');
   const [selected, setSelected] = useState<{ key: string; channel: Channel } | null>(null);
   const [toast, setToast] = useState<{ ok: boolean; text: string } | null>(null);
   const [log, setLog] = useState<MessageLogDto[]>([]);
+  const pick = (e: MessageEventItem) => setSelected({ key: e.key, channel: (e.channels.find((c) => c.customized)?.channel ?? e.channels[0]?.channel) as Channel });
 
   const load = useCallback(async () => {
     try { const d = await MessagesService.list(); setData(d); setError(''); } catch (e) { setError(errText(e)); }
   }, []);
   useEffect(() => { void load(); MessagesService.log().then((d) => setLog(d.items)).catch(() => undefined); }, [load]);
+  useEffect(() => { if (data && !selected && data.items[0]) pick(data.items[0]); }, [data, selected]);
 
-  const flash = (ok: boolean, text: string) => { setToast({ ok, text }); window.setTimeout(() => setToast(null), 3500); };
+  const flash = useCallback((ok: boolean, text: string) => { setToast({ ok, text }); window.setTimeout(() => setToast(null), 3500); }, []);
   async function prefs(body: Parameters<typeof MessagesService.savePreferences>[0], ok = 'Saved') {
     try { await MessagesService.savePreferences(body); await load(); flash(true, ok); } catch (e) { flash(false, errText(e)); }
   }
@@ -58,69 +69,108 @@ export function MessagesSettings() {
   };
   const allChannels = (e: MessageEventItem) => e.channels.map((c) => c.channel);
   const q = data.quiet_hours;
+  const groups = Array.from(new Set(data.items.map((i) => i.group)));
+  const current = data.items.find((i) => i.key === selected?.key);
 
   return (
-    <div className="space-y-4 max-w-4xl">
-      <div role="note" className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
-        Messages marked <strong>Live</strong> are sent with the wording you save here. The others are saved and kept with their history, but AMSh still sends its built-in text for them until they are switched over.
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-2 border-b border-gray-200">
+        <div role="tablist" aria-label="Messages sections" className="flex gap-1">
+          {TABS.map((t) => (
+            <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
+              className={`-mb-px border-b-2 px-3 py-2 text-xs font-semibold transition-colors ${tab === t.id ? 'border-[#0066FF] text-[#0066FF]' : 'border-transparent text-gray-500 hover:text-gray-800'}`}>{t.label}</button>
+          ))}
+        </div>
+        <p className="pb-2 text-[11px] text-gray-500">{data.items.length} messages · {data.items.filter((i) => i.live).length} live · {data.items.filter((i) => i.customized).length} customized</p>
       </div>
       {toast && <p role="status" className={`rounded-md px-3 py-2 text-xs font-semibold ${toast.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>{toast.text}</p>}
 
-      <Card title="Messages AMSh sends for your clinic" desc="Each message starts as the AMSh default. Customize it to sound like your clinic; you can always go back to the default.">
-        <ul className="divide-y divide-gray-100 -my-1">
-          {data.items.map((e) => (
-            <li key={e.key} className={`flex flex-wrap items-center gap-x-3 gap-y-2 py-2.5 ${selected?.key === e.key ? 'bg-[#F7FAFF] -mx-2 px-2 rounded-md' : ''}`}>
-              <Toggle checked={e.enabled} onChange={() => void prefs({ events: { [e.key]: { enabled: !e.enabled } } }, e.enabled ? 'Turned off' : 'Turned on')} label={`Send: ${e.label}`} />
-              <div className="min-w-0 flex-1 basis-48">
-                <p className="text-xs font-bold text-gray-900">{e.label} <span className="ml-1 font-medium text-gray-400">to {e.to.toLowerCase()}</span></p>
+      {tab === 'templates' && (
+        <div className="grid items-start gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
+          <aside className="overflow-hidden rounded-xl border border-gray-200 bg-white lg:max-h-[calc(100vh-190px)] lg:overflow-y-auto">
+            {groups.map((g) => (
+              <div key={g}>
+                <p className="sticky top-0 z-10 border-b border-gray-100 bg-gray-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-500">{g}</p>
+                <ul className="divide-y divide-gray-100">
+                  {data.items.filter((e) => e.group === g).map((e) => {
+                    const active = selected?.key === e.key;
+                    return (
+                      <li key={e.key}>
+                        <div role="button" tabIndex={0} aria-pressed={active} onClick={() => pick(e)} onKeyDown={(ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); pick(e); } }}
+                          className={`flex cursor-pointer items-center gap-3 border-l-2 px-3 py-3 transition-colors hover:bg-[#F7FAFF] focus:outline-none focus-visible:bg-[#F7FAFF] ${active ? 'border-l-[#0066FF] bg-[#F0F7FF]' : 'border-l-transparent'}`}>
+                          <div className="min-w-0 flex-1">
+                            <p className={`flex items-center gap-1.5 text-xs font-bold ${e.enabled ? 'text-gray-900' : 'text-gray-400'}`}>
+                              <span title={e.live ? 'Live: sent with your wording' : 'AMSh still sends its built-in text'} className={`h-1.5 w-1.5 shrink-0 rounded-full ${e.live ? 'bg-emerald-500' : 'bg-gray-300'}`} />
+                              <span className="truncate">{e.label}</span>
+                            </p>
+                            <p className="mt-0.5 truncate pl-3 text-[11px] text-gray-500">
+                              To {e.to.toLowerCase()} · {e.order.length ? e.order.map((c) => CHANNEL_LABEL[c]).join(' → ') : 'No channel'}
+                              {e.customized && <span className="font-semibold text-[#0066FF]"> · Customized</span>}
+                            </p>
+                          </div>
+                          <span onClick={(ev) => ev.stopPropagation()} onKeyDown={(ev) => ev.stopPropagation()} className="flex">
+                            <Toggle checked={e.enabled} onChange={() => void prefs({ events: { [e.key]: { enabled: !e.enabled } } }, e.enabled ? 'Turned off' : 'Turned on')} label={`Send: ${e.label}`} />
+                          </span>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
               </div>
-              {e.live && <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-white">Live</span>}
-              <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${e.customized ? 'bg-blue-50 text-[#0066FF]' : 'bg-gray-100 text-gray-500'}`}>{e.customized ? 'Customized' : 'AMSh default'}</span>
-              <span className="text-[11px] text-gray-500">{e.order.length ? e.order.map((c) => CHANNEL_LABEL[c]).join(' → ') : 'No channel'}</span>
-              <button onClick={() => setSelected({ key: e.key, channel: (e.channels.find((c) => c.customized)?.channel ?? e.channels[0]?.channel) as Channel })} className={BTN}>{selected?.key === e.key ? 'Editing' : e.customized ? 'Edit' : 'Customize'}</button>
-            </li>
-          ))}
-        </ul>
-      </Card>
+            ))}
+            <p className="border-t border-gray-100 bg-gray-50 px-3 py-2 text-[10px] leading-relaxed text-gray-500"><span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 align-middle" /><strong>Live</strong> messages are sent with the wording you save. Others are saved, but AMSh still sends its built-in text until they are switched over.</p>
+          </aside>
 
-      {selected && <Editor key={`${selected.key}|${selected.channel}`} event={data.items.find((i) => i.key === selected.key)!} channel={selected.channel} languages={data.languages}
-        onChannel={(channel) => setSelected({ key: selected.key, channel })} onChanged={() => void load()} flash={flash} />}
-
-      <Card title="Channels and timing" desc="Choose which channel goes first. If it fails or is not allowed, the next one is tried.">
-        <div className="space-y-2">
-          {data.items.filter((e) => e.enabled).map((e) => (
-            <div key={e.key} className="flex flex-wrap items-center gap-2">
-              <span className="w-44 text-xs font-semibold text-gray-800">{e.label}</span>
-              {allChannels(e).map((c) => {
-                const on = e.order.includes(c); const i = e.order.indexOf(c);
-                return (
-                  <span key={c} className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold ${on ? 'border-[#0066FF] bg-[#F0F7FF] text-[#0066FF]' : 'border-gray-200 text-gray-400'}`}>
-                    <button onClick={() => void prefs({ events: { [e.key]: { order: on ? e.order.filter((x) => x !== c) : [...e.order, c] } } }, 'Channels saved')} aria-pressed={on} aria-label={`${on ? 'Remove' : 'Add'} ${CHANNEL_LABEL[c]} for ${e.label}`}>{on ? `${i + 1}. ` : '+ '}{CHANNEL_LABEL[c]}</button>
-                    {on && <>
-                      <button onClick={() => move(e, c, -1)} disabled={i === 0} aria-label={`Move ${CHANNEL_LABEL[c]} earlier`} className="px-0.5 disabled:opacity-30">&larr;</button>
-                      <button onClick={() => move(e, c, 1)} disabled={i === e.order.length - 1} aria-label={`Move ${CHANNEL_LABEL[c]} later`} className="px-0.5 disabled:opacity-30">&rarr;</button>
-                    </>}
-                  </span>
-                );
-              })}
-            </div>
-          ))}
-        </div>
-        <QuietHours key={`${q.enabled}${q.from}${q.to}`} initial={q} onSave={(v) => prefs({ quiet_hours: v }, 'Quiet hours saved')} />
-      </Card>
-
-      <Card title="Message log" desc="The last messages sent for your clinic. Phone numbers are partly hidden.">
-        {log.length === 0 ? <p className="text-xs text-gray-500">Nothing has been sent through the template system yet.</p> : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[480px] text-left text-xs">
-              <thead><tr className="border-b border-gray-100 text-[11px] font-semibold uppercase tracking-wide text-gray-400"><th className="py-1.5 pr-3">When</th><th className="pr-3">Message</th><th className="pr-3">To</th><th className="pr-3">Channel</th><th>Status</th></tr></thead>
-              <tbody>{log.map((r) => (
-                <tr key={r.id} className="border-b border-gray-50 last:border-0"><td className="py-2 pr-3 text-gray-500">{r.created_at ? new Date(r.created_at).toLocaleString() : ''}</td><td className="pr-3 font-semibold text-gray-800">{r.event}</td><td className="pr-3 font-mono text-gray-600">{r.recipient}</td><td className="pr-3 text-gray-600">{CHANNEL_LABEL[r.channel] ?? r.channel}</td><td className={`font-semibold capitalize ${STATUS_STYLE[r.status] ?? 'text-gray-500'}`}>{r.status}{r.error ? ` (${r.error})` : ''}</td></tr>
-              ))}</tbody>
-            </table>
+          <div className="min-w-0 lg:sticky lg:top-4">
+            {current && selected ? (
+              <Editor key={`${selected.key}|${selected.channel}`} event={current} channel={selected.channel} languages={data.languages}
+                onChannel={(channel) => setSelected({ key: selected.key, channel })} onChanged={() => void load()} flash={flash} />
+            ) : (
+              <div className="rounded-xl border border-dashed border-gray-300 bg-white p-10 text-center text-xs text-gray-500">Select a message on the left to edit its wording.</div>
+            )}
           </div>
-        )}
-      </Card>
+        </div>
+      )}
+
+      {tab === 'delivery' && (
+        <Card title="Channels and timing" desc="Choose which channel goes first. If it fails or is not allowed, the next one is tried.">
+          <div className="space-y-2">
+            {data.items.filter((e) => e.enabled).map((e) => (
+              <div key={e.key} className="flex flex-wrap items-center gap-2 border-b border-gray-50 pb-2 last:border-0">
+                <span className="w-48 text-xs font-semibold text-gray-800">{e.label}</span>
+                {allChannels(e).map((c) => {
+                  const on = e.order.includes(c); const i = e.order.indexOf(c);
+                  return (
+                    <span key={c} className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold ${on ? 'border-[#0066FF] bg-[#F0F7FF] text-[#0066FF]' : 'border-gray-200 text-gray-400'}`}>
+                      <button onClick={() => void prefs({ events: { [e.key]: { order: on ? e.order.filter((x) => x !== c) : [...e.order, c] } } }, 'Channels saved')} aria-pressed={on} aria-label={`${on ? 'Remove' : 'Add'} ${CHANNEL_LABEL[c]} for ${e.label}`}>{on ? `${i + 1}. ` : '+ '}{CHANNEL_LABEL[c]}</button>
+                      {on && <>
+                        <button onClick={() => move(e, c, -1)} disabled={i === 0} aria-label={`Move ${CHANNEL_LABEL[c]} earlier`} className="px-0.5 disabled:opacity-30">&larr;</button>
+                        <button onClick={() => move(e, c, 1)} disabled={i === e.order.length - 1} aria-label={`Move ${CHANNEL_LABEL[c]} later`} className="px-0.5 disabled:opacity-30">&rarr;</button>
+                      </>}
+                    </span>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+          <QuietHours key={`${q.enabled}${q.from}${q.to}`} initial={q} onSave={(v) => prefs({ quiet_hours: v }, 'Quiet hours saved')} />
+        </Card>
+      )}
+
+      {tab === 'activity' && (
+        <Card title="Message log" desc="The last messages sent for your clinic. Phone numbers are partly hidden.">
+          {log.length === 0 ? <p className="text-xs text-gray-500">Nothing has been sent through the template system yet.</p> : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[480px] text-left text-xs">
+                <thead><tr className="border-b border-gray-100 text-[11px] font-semibold uppercase tracking-wide text-gray-400"><th className="py-1.5 pr-3">When</th><th className="pr-3">Message</th><th className="pr-3">To</th><th className="pr-3">Channel</th><th>Status</th></tr></thead>
+                <tbody>{log.map((r) => (
+                  <tr key={r.id} className="border-b border-gray-50 last:border-0"><td className="py-2 pr-3 text-gray-500">{r.created_at ? new Date(r.created_at).toLocaleString() : ''}</td><td className="pr-3 font-semibold text-gray-800">{r.event}</td><td className="pr-3 font-mono text-gray-600">{r.recipient}</td><td className="pr-3 text-gray-600">{CHANNEL_LABEL[r.channel] ?? r.channel}</td><td className={`font-semibold capitalize ${STATUS_STYLE[r.status] ?? 'text-gray-500'}`}>{r.status}{r.error ? ` (${r.error})` : ''}</td></tr>
+                ))}</tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      )}
     </div>
   );
 }
@@ -190,14 +240,14 @@ function Editor({ event, channel, languages, onChannel, onChanged, flash }: {
   const metaStatus = own?.meta_status ?? cell?.inherited[lang]?.meta_status ?? null;
 
   return (
-    <Card title={`Edit: ${event.label}`} desc="Pick a channel and language. Only the variables listed for this message can be used.">
+    <Card title={event.label} desc="Pick a channel and language. Only the variables listed for this message can be used.">
       <div className="mb-3 flex flex-wrap items-center gap-2">
         {event.channels.map((c) => (
           <button key={c.channel} onClick={() => onChannel(c.channel)} aria-pressed={channel === c.channel}
-            className={`px-2.5 py-1 rounded-md border text-xs font-semibold ${channel === c.channel ? 'border-[#0066FF] bg-[#F0F7FF] text-[#0066FF]' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>{CHANNEL_LABEL[c.channel]}</button>
+            className={`h-7 px-2.5 rounded-md border text-xs font-semibold ${channel === c.channel ? 'border-[#0066FF] bg-[#F0F7FF] text-[#0066FF]' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>{CHANNEL_LABEL[c.channel]}</button>
         ))}
         <span className="mx-1 h-4 w-px bg-gray-200" />
-        <select aria-label="Language" className={`${INPUT} !w-auto`} value={lang} onChange={(e) => { setLang(e.target.value); if (cell) fill(cell, e.target.value); }}>
+        <select aria-label="Language" className={`${INPUT} !h-7 !w-auto !py-0`} value={lang} onChange={(e) => { setLang(e.target.value); if (cell) fill(cell, e.target.value); }}>
           {(cell?.languages ?? languages).map((l) => <option key={l} value={l}>{l.toUpperCase()}</option>)}
         </select>
         <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-500">{source}</span>
@@ -207,8 +257,8 @@ function Editor({ event, channel, languages, onChannel, onChanged, flash }: {
       <div className="grid gap-4 md:grid-cols-2">
         <div className="min-w-0">
           {channel === 'email' && <label className="mb-2 block"><span className="text-xs font-semibold text-gray-700">Subject</span><input className={`${INPUT} mt-1`} value={subject} onChange={(e) => setSubject(e.target.value)} /></label>}
-          <label htmlFor="msg-body" className="text-xs font-semibold text-gray-700">Message</label>
-          <textarea id="msg-body" ref={area} rows={7} value={body} onChange={(e) => setBody(e.target.value)} placeholder="Write the message in this language." className={`${INPUT} mt-1 resize-y font-mono leading-relaxed`} />
+          <label htmlFor="msg-body" className="mb-1.5 block text-xs font-semibold leading-4 text-gray-700">Message</label>
+          <textarea id="msg-body" ref={area} rows={7} value={body} onChange={(e) => setBody(e.target.value)} placeholder="Write the message in this language." className={`${INPUT} resize-y font-mono leading-relaxed`} />
           <p className="mt-1 text-[11px] text-gray-500">
             {channel === 'sms' && preview?.sms ? `${preview.sms.characters} characters, ${preview.sms.segments} SMS segment${preview.sms.segments > 1 ? 's' : ''}${preview.sms.unicode ? ' (Hindi uses shorter segments)' : ''}` : `${(preview?.body ?? body).length} characters`}
             {unknown.length > 0 && <span className="ml-2 font-semibold text-red-600">Unknown variable: {unknown.join(', ')}</span>}
@@ -216,8 +266,8 @@ function Editor({ event, channel, languages, onChannel, onChanged, flash }: {
           <div className="mt-2 flex flex-wrap gap-1.5">{(cell?.variables ?? event.variables).map((v) => <button key={v} onClick={() => insert(v)} className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 font-mono text-[11px] text-gray-700 hover:border-[#0066FF] hover:text-[#0066FF]">{`{{${v}}}`}</button>)}</div>
         </div>
         <div className="min-w-0">
-          <p className="text-xs font-semibold text-gray-700">Preview with a sample patient</p>
-          <div className={`mt-1 rounded-lg p-3 ${channel === 'whatsapp' ? 'bg-[#E7F3EA]' : 'border border-gray-100 bg-gray-50'}`}>
+          <p className="mb-1.5 text-xs font-semibold leading-4 text-gray-700">Preview with a sample patient</p>
+          <div className={`rounded-lg p-3 ${channel === 'whatsapp' ? 'bg-[#E7F3EA]' : 'border border-gray-100 bg-gray-50'}`}>
             {channel === 'email' && <p className="mb-2 border-b border-gray-200 pb-2 text-xs font-semibold text-gray-900">{preview?.subject}</p>}
             <p className={`whitespace-pre-wrap text-xs leading-relaxed text-gray-900 ${channel === 'whatsapp' ? 'max-w-[90%] rounded-lg rounded-tl-none bg-white p-2.5 shadow-2xs' : ''}`}>{preview?.body || <span className="text-gray-400">Nothing written for this language yet.</span>}</p>
           </div>

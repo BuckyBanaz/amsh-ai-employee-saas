@@ -805,7 +805,7 @@ async def simulate_voice_turn_stream(
                             emotion = ev.get("emotion")
                             spoken = f"[laughter] {piece}" if ev.get("tts_text") and n == 0 else None  # a laugh opens the sentence
                             _prefetch_tts(piece, voice, emotion, spoken, getattr(sim_rt.engine, "active_language", None))
-                            out = {"type": "sentence", "text": piece}
+                            out = {"type": "sentence", "text": piece, "voice_id": voice, "language": getattr(sim_rt.engine, "active_language", None)}
                             if emotion:
                                 out["emotion"] = emotion
                             if spoken:

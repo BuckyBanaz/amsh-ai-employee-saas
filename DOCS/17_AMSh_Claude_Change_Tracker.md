@@ -355,6 +355,178 @@ Run it: `python -m backend.ai.evals.runner` (`--live`, `--only persona,safety`, 
     4. SaaS Plan Quotas: Starter (2 channels), Professional (5 channels), Enterprise (15+ channels).
   - **MVP vs Post-MVP Strategy**: Keeps MVP lean for typical clinic traffic (1-2 concurrent calls) without paying for idle carrier channels.
   - **4-Phase Implementation Blueprint**: Carrier expansion, Redis-backed atomic channel limiter & holding queue, decoupled autoscaling voice gateway pods, and overage billing.
-  - Updated `DOCS/README.md` doc index.
+### Entry 72 - Session Expiry Guard, Business ID Storage Resilience & Image Optimization (2026-10-04)
+- **Problem**:
+  - When accessing `/dashboard` with an expired JWT session token or after checking out the `complete` branch, Next.js terminal and browser console showed:
+    `throw new Error('No active business ID found. Please log in ...')`
+    `GET /login?expired=1&redirect=%2Fdashboard`
+    `[browser] Failed to load dashboard stats: Error: No active business ID found.`
+    `[browser] Failed to load dashboard appointments: Error: No active business ID found.`
+    `[browser] Image with src "/_next/static/media/ai.2-vm8xhk0wylo.png" has "fill" but is missing "sizes" prop.`
+- **Root Cause**:
+  - In `frontend/user/services/api.service.ts`: `handleSessionExpired()` cleared storage (`StorageService.clearAll()`) and set `window.location.href = /login?expired=1&redirect=/dashboard`.
+  - Concurrently, unmounting `/dashboard` hooks (`DashboardPage.loadStats` and `AppointmentsTable.refresh`) executed before the window navigated, calling `DashboardController.getStats()` and `DashboardController.getAppointments()`.
+  - `DashboardController.getEffectiveBusinessId()` threw a raw `Error('No active business ID found...')` because storage was cleared, causing Next.js to log stack traces.
+  - `StorageService.getBusinessId()` only checked `localStorage.getItem('business_id')` without falling back to stored `user.business_id` or `business.id`.
+  - Next.js middleware in `middleware.ts` only checked `if (!accessToken)` and passed expired JWT cookies through to the client.
+  - `AIBanner.tsx` used Next.js `<Image src={aiRobotImg} fill />` without a `sizes` attribute.
+- **Changes Applied**:
+  - **`frontend/user/middleware.ts`**: Added `isTokenExpired()` check in Next.js middleware. Expired session cookies now directly redirect to `/login?expired=1&redirect=...` and delete the expired cookie before protected dashboard pages even mount.
+  - **`frontend/user/services/storage.service.ts`**: Enhanced `StorageService.getBusinessId()` with dual fallbacks (`user.business_id` and `business.id`), automatically restoring the top-level `business_id` key if missing.
+  - **`frontend/user/app/(dashboard)/dashboard/page.tsx` & `components/dashboard/AppointmentsTable.tsx`**: Added auth and business ID guards before invoking `DashboardController.getStats()` and `DashboardController.getAppointments()`, preventing unhandled promise rejections during session expiry or logout.
+  - **`frontend/user/components/dashboard/AIBanner.tsx`**: Added `sizes="(max-width: 640px) 72px, (max-width: 1024px) 80px, 88px"` to the Next.js `Image` component to optimize responsive image delivery and clear the browser warning.
+
+### Entry 73 - 3D Voice Orb Integration into Admin Receptionists & Playground (2026-10-04)
+- **User Request**:
+  - Bring the exact 3D Voice Orb code crafted with `ui-ux-pro-max` and `21st.dev` from the User App (`frontend/user/components/landing/HeroOrb.tsx`) into the Admin Portal (`frontend/admin`).
+- **Implementation**:
+  - **`frontend/admin/package.json` & Node Modules**:
+    - Added `@react-three/fiber` (`^9.8.1`), `three` (`^0.186.1`), and `@types/three` (`^0.186.0`) dependencies and ported the necessary packages into `frontend/admin/node_modules`.
+  - **`frontend/admin/src/components/admin/HeroOrb.tsx`**:
+    - Ported the exact Three.js & React-Three-Fiber `HeroOrb` component with noise vertex shaders, acoustic formant shifts, dynamic blue/cyan vs emerald/mint color morphing, rotating wireframe shell, dual orbital rings, and deterministic particle halo.
+  - **`frontend/admin/src/components/admin/AdminVoiceStudioModal.tsx`**:
+    - Built an interactive **AI Voice Studio Modal** for `/receptionists` using dynamically imported `HeroOrb`.
+    - Features the 3D Voice Orb as the visual center, real-time voice greeting preview via speech synthesis, two-way mic simulation with speech recognition, latency feedback, and live prompt/model tuning with direct database persistence.
+  - **`frontend/admin/src/app/(admin)/receptionists/page.tsx`**:
+    - Connected `AdminVoiceStudioModal` to each receptionist card and table row via a prominent "Voice Studio & Orb" action button.
+  - **`frontend/admin/src/app/(admin)/playground/page.tsx`**:
+    - Transformed the admin playground into an interactive Voice Studio stage featuring the exact 3D `HeroOrb`, audio voice toggle, microphone conversation streaming, and real-time sandbox ledger inspection.
+  - **Dependencies Resolved**:
+    - Added and linked `use-sync-external-store`, `zustand`, `base64-js`, `buffer`, and `@babel/runtime` into `frontend/admin/node_modules` and `package.json`, completely resolving the `use-sync-external-store/shim/with-selector.js` module resolution error.
+
+### Entry 74 - Next.js HTTPS CORS Support & Admin Receptionists Delete Confirmation Modal (2026-10-04)
+- **User Request**:
+  - Fix API connectivity failure (`TypeError: Failed to fetch`) on User Portal (`frontend/user` at `https://localhost:3000/login`).
+  - Explain how two AI receptionists were created for the same clinic ("Demo clinic").
+  - Add a Delete option in the Admin Portal Receptionists page (`http://localhost:3001/receptionists`) with a confirmation popup prior to deletion.
+- **Root Cause & Fixes**:
+  - **API `Failed to fetch` on `frontend/user`**:
+    - `frontend/user/package.json` was running `next dev --experimental-https` (`https://localhost:3000`).
+    - The FastAPI backend's `CORS_ORIGIN_REGEX` and `CORS_ORIGINS` in `docker-compose.yml` and `backend/server/common/config.py` were strictly limited to `http://`.
+    - As a result, browser preflight requests from `https://localhost:3000` were blocked with `HTTP 400 Disallowed CORS origin`.
+    - Updated `backend/server/common/config.py`, `backend/main.py`, and `docker-compose.yml` with `https?://` support to permit both HTTP and HTTPS dev servers.
+  - **Duplicate Clinic Receptionists**:
+    - The database `agents` table does not enforce a unique constraint on `business_id` (1-to-many relationship).
+    - "Sarah" was created during initial setup/seeding, and "AMSh Receptionist" was subsequently deployed via the admin portal modal.
+  - **Admin Receptionists Delete Option (`frontend/admin/src/app/(admin)/receptionists/page.tsx`)**:
+    - Added a trash icon delete button in the Actions column of the receptionists table.
+    - Built a high-density, destructive action confirmation modal (`agentToDelete`) showing the agent's name, assigned clinic, total calls, status, and an irreversible impact warning.
+    - Integrated with `deleteAdminReceptionist(agentId)` (`DELETE /api/admin/receptionists/{agent_id}`), live state pruning, success toast notifications, and KPI re-fetching.
+    - Fixed foreign key constraint violation in `delete_receptionist` by unlinking `Call.agent_id` before deleting the agent.
+
+### Entry 75 - Full Business Testing Parity in Admin Voice Studio (`AdminVoiceStudioModal.tsx`) (2026-10-04)
+- **User Request**:
+  - Enable full testing in `http://localhost:3001/receptionists` matching the Business User testing suite.
+- **Root Cause & Fixes**:
+  - `AdminVoiceStudioModal` was missing React hooks imports (`useState`, `useRef`, `useEffect`).
+  - Previously, `AdminVoiceStudioModal` regenerated a random `call_id` on every single turn, breaking multi-turn context (like appointment booking).
+  - Used browser robotic `speechSynthesis` instead of the real backend Cartesia streaming voice.
+- **Implementation**:
+  - Integrated `streamTurn`, `VoicePlayer`, and `MicSession` from `@/lib/voiceCall`.
+  - Added real-time Cartesia sentence-by-sentence streaming playback via `/voice/simulate/stream` and `/voice/preview`.
+  - Added stable conversation `callId` with a header **Reset** call button.
+  - Added **1-click Quick Test Scenarios**: Book Appointment, Reschedule, Timings & Fees, Dental Emergency, Hindi Booking.
+  - Added hands-free live microphone with barge-in interruption.
+  - Added Sandbox Ledger display showing tool executions (`[booking]`, `[check_availability]`, etc.).
+  - Added Audio Sound ON/OFF toggle in the studio header.
+
+### Entry 76 - Admin Voice Studio Continuous Duplex Conversation Loop, Persona Badging & Engine Architecture Specs (2026-10-04)
+- **User Request**:
+  - Fix voice studio so it has a continuous live conversation instead of stopping after greeting and requiring clicking mic every time.
+  - Display full voice character details (avatar, name, accent, primary language, voice model, and inference engine) matching the user app design.
+- **Root Cause**:
+  - Voice Studio previously had separate disconnected "Speak Greeting" and "Talk via Mic" buttons. Starting greeting merely synthesized the text and went idle without starting a live call session or engaging continuous listening.
+  - Raw Cartesia UUIDs (`f8f5f1b2-...`) were displayed instead of human persona names, accents, and avatars.
+- **Implementation**:
+  - **Created `frontend/admin/src/lib/voices.ts`**: Complete voice catalog with avatars, accents, languages, descriptions, and helper lookup utilities (`AVAILABLE_VOICES`, `SUPPORTED_ACCENTS`, `getVoiceByModelId`, `getAccentByCode`).
+  - **Persona Badging & Details (`AdminVoiceStudioModal.tsx`)**: Rendered the user app's exact pill badge (`<Avatar> <Voice Name> • <Accent> • <Dialect/Language>`), plus an Architecture Details Bar showing TTS Engine (`Cartesia Sonic Multilingual`), LLM Orchestrator (`Groq Llama 3.3 70B State Machine`), and Latency target (`<250ms`).
+  - **Hands-Free Duplex Call Loop**:
+    - Clicking the 3D Orb or "Start Live Voice Call" initiates a connected call with timer.
+    - AI greets the user; as soon as greeting audio finishes, the microphone automatically opens into continuous listening mode (`SpeechRecognition`).
+    - User speaks -> speech is captured and streamed to the engine -> AI answers and speaks -> upon sentence completion and echo cooldown, mic automatically re-arms for caller's next reply.
+    - Added In-Call Controls Dock: `[ || Interrupt ]` (barge-in), `[ 🎤 Mute/Unmute Mic ]`, and `[ ✕ End Call ]`.
+### Entry 78 - Landing Page UI/UX Overhaul, Testimonials, Interactive Voice Stage, Dev Docs & Ecosystem Redesign (2026-10-04)
+- **User Request**:
+  - Add Testimonials and clinical success metrics to the User Landing Page (`/landing`).
+  - Fix sizing and empty layout issues where components (like the interactive demo) looked awkwardly small on wide screens.
+  - Transform demo into a full interactive 3D Voice Orb & Conversation Stage with live speech synthesis, equalizer, persona badges, and executed tool action ledger (pure frontend simulation).
+  - Add Developer Documentation (`/docs`) accessible from the header navigation for developers to integrate AMSh.
+  - Add Technology & Infrastructure Partners section with official logos (Twilio, Meta/WhatsApp, Google Cloud, Groq, Deepgram, Cartesia, Stripe, Epic/HL7 FHIR).
+  - Move the Partners section to the end of the page and redesign it using `@ui-ux-pro-max` and `21st.dev` design principles in the current dark space `#050816` theme.
+- **Implementation**:
+  - **`frontend/user/components/landing/Testimonials.tsx`**:
+    - Built comprehensive clinical testimonials featuring 4 verified practitioner case studies: Apex Dental (+42% bookings), Glow Aesthetics (18 hrs saved/wk), LifeLine Multi-Specialty (3x concurrency), and PhysioFirst (-76% no-shows).
+    - Includes a 4-metric global impact banner (`45,000+` calls handled, `<200ms` latency, `99.4%` first-ring answer rate, `4.9/5` clinician satisfaction).
+  - **`frontend/user/components/landing/ChatDemo.tsx`**:
+    - Expanded from a constrained 672px card to an expansive `max-w-6xl` dual-column glassmorphic stage.
+    - Left column: 3D WebGL `HeroOrb`, live speech wave visualizer, persona pill (`Sarah • Indian English • Hindi/Hinglish`), 1-click test greeting button with Web Speech synthesis, and quick scenario chips.
+    - Right column: Word-by-word streaming dialogue with simulated tool execution cards (`[appointment.booked]`, `[emergency_escalation]`) and Groq `<180ms` latency badges.
+  - **`frontend/user/app/docs/page.tsx`**:
+    - Created developer documentation portal featuring system architecture pipeline diagrams, authentication specs, REST endpoints table, webhook event samples, and copyable code snippets in cURL, Node.js (TypeScript), and Python.
+  - **`frontend/user/components/landing/PartnersMarquee.tsx`**:
+    - Replaced the bulky static 8-card grid with an interactive **Ecosystem Architecture Console**:
+      - Interactive category filter tabs (`All`, `Voice & Audio`, `AI & Inference`, `Messaging & Chat`, `Clinical & Calendars`).
+      - Interactive partner selector with crisp brand vector SVGs and latency badges.
+      - Real-time **AMSh Pipeline Terminal Inspector** showing live connection beacon, protocol/encoding specs (`WSS Media Streams 8kHz mulaw / 16kHz PCM`, `Groq OpenAI Strict JSON Mode`), compliance badges (`SOC 2`, `HIPAA BAA`), formatted JSON payload previews, and developer docs quicklink.
+      - Continuous ambient smooth-scrolling logo ribbon with edge-fade gradient masks (`[mask-image:linear-gradient(...)]`).
+  - **`frontend/user/app/landing/page.tsx`**:
+    - Moved `<PartnersMarquee />` from below `<Hero />` to the end of the page (after `<Pricing />` and before `<Faq />` / `<BookDemo />`), creating a natural narrative flow from problem -> demo -> features -> testimonials -> pricing -> infrastructure/integrations -> FAQ -> conversion CTA.
+  - **`frontend/user/components/landing/Nav.tsx`**:
+    - Aligned header links to match page flow: `Live Demo` -> `What it does` -> `Testimonials` -> `Pricing` -> `Partners` -> `Docs`.
+  - **`frontend/user/middleware.ts`**:
+    - Added `/docs` to `isLandingPage` public paths so developer documentation is accessible without login redirects.
+
+### Entry 79 - Horizontal Auto-Scrolling Testimonials Marquee, Font Consistency & 3D Enterprise Footer (2026-10-04)
+- **User Request**:
+  - Testimonial layout adjustment: change the 2-column vertical split into a continuous horizontal auto-scrolling row marquee (`row mai bro, auto scroll hote rahe`) with toggle support.
+  - Fix font mismatch across new components to match the existing landing page typography.
+  - Build a 3D modern enterprise footer matching the JoyzAI reference layout using `@ui-ux-pro-max` and 21st.dev design principles in the current dark space theme.
+- **Implementation**:
+  - **Font Parity Across New Components**:
+    - Bound all titles, metrics, headings, and badge labels to `font-[family-name:var(--font-display)]` (Sora display font).
+    - Removed awkward italic styling from testimonial quotes; normalized body text to `text-slate-200 font-normal leading-relaxed` matching the site's typography tokens.
+  - **`frontend/user/components/landing/Testimonials.tsx`**:
+    - Replaced the side-by-side vertical columns with a continuous **Horizontal Auto-Scrolling Row Marquee** (`lp-marquee` + `lp-marquee-track`) where cards glide in a single row without wrapping.
+    - Added an interactive view toggle: `[ ↔ Horizontal Row Marquee ]` and `[ ↕ Vertical Row Stream ]`.
+    - Added hover-pause (`hover:[animation-play-state:paused]`) so visitors can read any doctor case study comfortably.
+  - **`frontend/user/components/landing/Footer3D.tsx`**:
+    - Built comprehensive 3D enterprise footer matching the JoyzAI reference architecture:
+      - 3D perspective horizon with glowing angled grid floor at the top.
+      - Giant 3D watermark typography (`AMSh`) softly illuminated in the background.
+      - 3D embossed social pill buttons (YouTube, X, Instagram, LinkedIn) with depth bevels and hover lift.
+      - Official partner badges: **Meta Business Partner** (with official Meta glyph & WhatsApp Cloud API tag) + **Twilio & Google Cloud Partner** badge.
+      - 5-column navigation: Useful Links, Clinic Practices & Verticals, Developers & Resources, and Contact Us.
+      - Refined Contact Us section to be clean and minimal matching JoyzAI reference (inline subtle vector icons for phone, email, and WhatsApp without bulky square boxes or neon button).
+      - Live platform status beacon (`● Systems 99.99% Operational`).
+      - Bottom bar with copyright and legal links (Privacy Policy, Terms & Conditions, HIPAA & Security).
+  - **`frontend/user/app/landing/page.tsx`**:
+    - Integrated `<Footer3D />` in place of the static footer.
+
+### Entry 80 - Typography Standardization to Sora & Full Responsiveness Containment (2026-10-04)
+- **User Request**:
+  - "ye section nhi h bro repsosnvie": Fix the layout responsiveness issue in `#integrations` (`PartnersMarquee`) where on narrow screens the section content clipped and left a blank white void on the right.
+  - "bhai is sefction ka font oro se diifernt kyu h bhia": Resolve the font discrepancy where this section had an alien, inconsistent font compared to the rest of the landing page.
+- **Root Cause Analysis**:
+  - **Font Mismatch**: `PartnersMarquee.tsx` was importing and referencing `Space_Grotesk` (`--font-ai`) and `JetBrains_Mono` (`--font-ai-mono`), whereas the entire landing page uses `Sora` (`--font-display`) for titles/eyebrows and standard clean sans for body text.
+  - **Responsiveness Blowout**:
+    1. Grid columns lacked `min-w-0`, allowing code blocks (`<pre>`) and long partner latency strings (e.g. `<180ms TTFT (Time To First Token)`) to expand beyond parent boundaries.
+    2. `globals.css` used `max-width: 100vw;` on `html, body`, which includes the Windows 17px vertical scrollbar and generates a horizontal overflow.
+    3. Marquee tracks with `flex w-max` lacked layout containment (`contain: paint`), causing sub-pixel canvas expansion on mobile/tablet viewports.
+- **Implementation**:
+  - **`frontend/user/components/landing/PartnersMarquee.tsx`**:
+    - Completely removed `Space_Grotesk` and `JetBrains_Mono`. Bound all titles, pills, and headlines to `var(--font-display)` (Sora) matching the entire site.
+    - Switched paragraph and tagline typography to standard clean sans without display styling.
+    - Updated eyebrow and heading to use the same tokens (`lp-gradient-text`, `sm:text-5xl font-semibold tracking-tight text-white`) as the rest of the page.
+    - Added `min-w-0` to the 12-column grid and both children columns.
+    - Compacted chip latency labels (`chipLatency`) to concise pills (`<45ms`, `<80ms`, `<120ms`, `<180ms`, etc.), keeping full descriptions in the inspector panel.
+    - Added `contain: "paint"` and `overflow-x-auto` to the pre/code inspector container and bottom logo ribbon.
+  - **`frontend/user/app/globals.css`**:
+    - Changed `max-width: 100vw` to `width: 100%; max-width: 100%`, preventing Windows scrollbar blowout.
+  - **`frontend/user/app/landing/landing.css`**:
+    - Added `contain: paint` to `.lp-marquee` to strictly contain infinite flex tracks within parent bounds.
+  - **`frontend/user/components/landing/Testimonials.tsx` & `frontend/user/app/landing/page.tsx`**:
+    - Added `contain: paint` to all marquee track wrappers for bulletproof responsive containment.
+
+
 
 

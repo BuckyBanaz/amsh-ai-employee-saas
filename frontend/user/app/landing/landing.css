@@ -30,7 +30,12 @@
 }
 
 .lp-marquee {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  contain: paint;
   mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
 }
 .lp-marquee-track {
   animation: lp-marquee 36s linear infinite;
@@ -69,9 +74,40 @@
 .lp-faq summary::-webkit-details-marker { display: none; }
 .lp-faq[open] .lp-faq-chevron { transform: rotate(180deg); }
 
+/* Vertical auto-scrolling marquee */
+.lp-vertical-mask {
+  mask-image: linear-gradient(to bottom, transparent, #000 10%, #000 90%, transparent);
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 10%, #000 90%, transparent);
+}
+
+@keyframes lp-vertical-scroll-up {
+  from { transform: translateY(0); }
+  to { transform: translateY(-50%); }
+}
+
+@keyframes lp-vertical-scroll-down {
+  from { transform: translateY(-50%); }
+  to { transform: translateY(0); }
+}
+
+.lp-vertical-track-up {
+  animation: lp-vertical-scroll-up 38s linear infinite;
+}
+
+.lp-vertical-track-down {
+  animation: lp-vertical-scroll-down 44s linear infinite;
+}
+
+.lp-vertical-track-up:hover,
+.lp-vertical-track-down:hover {
+  animation-play-state: paused;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .lp-grid-floor,
   .lp-gradient-text,
   .lp-marquee-track,
-  .lp-border-glow::before { animation: none; }
+  .lp-border-glow::before,
+  .lp-vertical-track-up,
+  .lp-vertical-track-down { animation: none; }
 }

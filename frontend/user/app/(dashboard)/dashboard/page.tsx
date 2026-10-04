@@ -13,6 +13,7 @@ import {
   DashboardController,
   DashboardStatsResponse,
 } from '../../../controllers/dashboard.controller';
+import { StorageService } from '../../../services/storage.service';
 import { useAutoRefresh } from '../../../hooks/useAutoRefresh';
 
 export default function DashboardPage() {
@@ -21,6 +22,11 @@ export default function DashboardPage() {
   const [isPlaygroundOpen, setIsPlaygroundOpen] = useState<boolean>(false);
 
   const loadStats = useCallback(() => {
+    if (!StorageService.getToken() || !StorageService.getBusinessId()) {
+      setLoading(false);
+      return;
+    }
+
     DashboardController.getStats()
       .then((res) => {
         if (res) {
@@ -28,6 +34,7 @@ export default function DashboardPage() {
         }
       })
       .catch((err) => {
+        if (!StorageService.getToken()) return;
         console.error('Failed to load dashboard stats:', err);
       })
       .finally(() => {

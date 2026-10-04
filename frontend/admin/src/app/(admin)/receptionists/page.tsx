@@ -11,6 +11,7 @@ import {
   ReceptionistsKpis,
   TenantItem,
 } from '@/lib/api';
+import { AdminVoiceStudioModal } from '@/components/admin/AdminVoiceStudioModal';
 
 const cap = (v: string | null | undefined) =>
   v ? v.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase()) : '';
@@ -96,6 +97,10 @@ export default function ReceptionistsPage() {
     greeting: 'Hello, thank you for calling. How can I assist you today?',
   });
   const [deploying, setDeploying] = useState(false);
+
+  // Delete Confirmation Modal
+  const [agentToDelete, setAgentToDelete] = useState<AdminReceptionistItem | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Voice playback simulation
   const [isPlayingVoice, setIsPlayingVoice] = useState(false);
@@ -223,6 +228,25 @@ export default function ReceptionistsPage() {
       setActionError(err instanceof Error ? err.message : 'Failed to deploy receptionist.');
     } finally {
       setDeploying(false);
+    }
+  };
+
+  // Delete agent permanently after modal confirmation
+  const handleDeleteConfirm = async () => {
+    if (!agentToDelete) return;
+    setIsDeleting(true);
+    setActionError('');
+    try {
+      await deleteAdminReceptionist(agentToDelete.id);
+      setReceptionists((prev) => prev.filter((a) => a.id !== agentToDelete.id));
+      setActionSuccess(`AI Receptionist "${agentToDelete.name}" was permanently removed.`);
+      setTimeout(() => setActionSuccess(''), 4000);
+      setAgentToDelete(null);
+      loadData();
+    } catch (err: unknown) {
+      setActionError(err instanceof Error ? err.message : 'Failed to delete receptionist.');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -541,7 +565,7 @@ export default function ReceptionistsPage() {
                 <th className="px-4 py-3 text-[10px] font-bold text-[#475569] uppercase tracking-wider min-w-[110px]">
                   Status
                 </th>
-                <th className="px-4 py-3 text-[10px] font-bold text-[#475569] uppercase tracking-wider text-right min-w-[150px]">
+                <th className="px-4 py-3 text-[10px] font-bold text-[#475569] uppercase tracking-wider text-right min-w-[180px]">
                   Actions
                 </th>
               </tr>
@@ -697,12 +721,24 @@ export default function ReceptionistsPage() {
                         <div className="flex items-center justify-end gap-1.5">
                           <button
                             onClick={() => handleOpenEditModal(agent)}
-                            className="px-2.5 py-1 bg-[#EFF6FF] border border-[#BFDBFE] hover:bg-blue-100 text-[#2563EB] rounded-md text-[11px] font-semibold transition-colors flex items-center gap-1"
+                            className="px-3 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg text-[11px] font-semibold transition-all shadow-xs flex items-center gap-1.5"
                           >
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                              <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                            <span className="w-1.5 h-1.5 rounded-full bg-cyan-300 animate-pulse" />
+                            Voice Studio & Orb
+                          </button>
+                          <button
+                            onClick={() => setAgentToDelete(agent)}
+                            className="p-1.5 text-[#94A3B8] hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors border border-transparent hover:border-rose-200"
+                            title={`Delete ${agent.name}`}
+                            aria-label={`Delete ${agent.name}`}
+                          >
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M3 6h18" />
+                              <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                              <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                              <line x1="10" y1="11" x2="10" y2="17" />
+                              <line x1="14" y1="11" x2="14" y2="17" />
                             </svg>
-                            Voice & Prompt
                           </button>
                         </div>
                       </td>
@@ -715,135 +751,19 @@ export default function ReceptionistsPage() {
         </div>
       </div>
 
-      {/* Voice Preview & Configuration Modal */}
+      {/* Interactive AI Voice Studio Modal with 3D Voice Orb */}
       {activeModalAgent && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-white border border-[#E2E8F0] rounded-2xl w-full max-w-lg shadow-2xl p-6 animate-in zoom-in-95 duration-200">
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-xl bg-blue-600 text-white font-bold text-base flex items-center justify-center shadow-xs">
-                  {activeModalAgent.name.charAt(0).toUpperCase()}
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-[#0F172A] leading-tight">
-                    {activeModalAgent.name} - AI Voice Settings
-                  </h3>
-                  <p className="text-xs text-[#475569] mt-0.5">
-                    Assigned to <span className="font-semibold text-[#2563EB]">{activeModalAgent.businessName}</span>
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-                    window.speechSynthesis.cancel();
-                  }
-                  setActiveModalAgent(null);
-                }}
-                className="text-[#94A3B8] hover:text-[#0F172A] p-1 rounded-md"
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Provider & Telephony Meta Card */}
-            <div className="p-3 bg-[#F8FAFC] rounded-xl border border-[#E2E8F0] space-y-2 mb-4 text-xs">
-              <div className="flex justify-between">
-                <span className="text-[#94A3B8]">Telephony Engine:</span>
-                <span className="font-semibold text-[#0F172A]">{cap(activeModalAgent.voiceProvider)} High-Speed</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-[#94A3B8]">Voice Model:</span>
-                <input
-                  type="text"
-                  value={editVoiceModel}
-                  onChange={(e) => setEditVoiceModel(e.target.value)}
-                  className="font-mono text-xs font-semibold text-[#0F172A] bg-white border border-[#E2E8F0] rounded px-2 py-0.5 text-right w-44"
-                />
-              </div>
-              <div className="flex justify-between">
-                <span className="text-[#94A3B8]">Virtual AI DID:</span>
-                <span className="font-mono font-semibold text-[#0F172A]">{activeModalAgent.aiNumber}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-[#94A3B8]">Forwarded Inbound:</span>
-                <span className="font-mono font-semibold text-[#0F172A]">{activeModalAgent.forwardedFrom}</span>
-              </div>
-            </div>
-
-            {/* Interactive Audio Greeting Player */}
-            <div className="p-4 bg-[#EFF6FF] border border-[#BFDBFE] rounded-xl mb-4">
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-[#2563EB]">
-                  Greeting Prompt (What Callers Hear First)
-                </span>
-                <span className="text-[10px] text-[#64748B]">Editable</span>
-              </div>
-              <textarea
-                rows={3}
-                value={editGreeting}
-                onChange={(e) => setEditGreeting(e.target.value)}
-                className="w-full text-xs text-[#0F172A] p-2.5 bg-white border border-[#BFDBFE] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 mb-3"
-              />
-
-              <button
-                type="button"
-                onClick={handleToggleVoicePlayback}
-                className="w-full flex items-center justify-center gap-2 py-2 bg-[#2563EB] hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors"
-              >
-                {isPlayingVoice ? (
-                  <>
-                    <span className="flex items-center gap-1">
-                      <span className="w-1 h-3 bg-white rounded-full animate-bounce"></span>
-                      <span className="w-1 h-4 bg-white rounded-full animate-bounce [animation-delay:0.2s]"></span>
-                      <span className="w-1 h-2 bg-white rounded-full animate-bounce [animation-delay:0.4s]"></span>
-                    </span>
-                    Stop Speech Audio
-                  </>
-                ) : (
-                  <>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                      <polygon points="5 3 19 12 5 21 5 3"></polygon>
-                    </svg>
-                    Speak / Test Voice Greeting
-                  </>
-                )}
-              </button>
-            </div>
-
-            {/* Modal Bottom Actions */}
-            <div className="flex items-center justify-between gap-3 pt-2">
-              <Link
-                href={`/businesses/${activeModalAgent.businessId}`}
-                className="text-xs font-semibold text-[#2563EB] hover:underline"
-              >
-                Open Clinic Profile →
-              </Link>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-                      window.speechSynthesis.cancel();
-                    }
-                    setActiveModalAgent(null);
-                  }}
-                  className="px-4 py-2 border border-[#E2E8F0] rounded-lg text-xs font-semibold text-[#475569] hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  disabled={savingAgent}
-                  onClick={handleSaveModalSettings}
-                  className="px-4 py-2 bg-[#0F172A] hover:bg-gray-800 text-white rounded-lg text-xs font-semibold disabled:opacity-50"
-                >
-                  {savingAgent ? 'Saving...' : 'Save Changes'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <AdminVoiceStudioModal
+          agent={activeModalAgent}
+          onClose={() => setActiveModalAgent(null)}
+          onAgentUpdated={(updated) => {
+            setReceptionists((prev) =>
+              prev.map((a) => (a.id === activeModalAgent.id ? { ...a, ...updated } : a))
+            );
+            setActionSuccess(`Voice settings saved for ${activeModalAgent.name}.`);
+            setTimeout(() => setActionSuccess(''), 3000);
+          }}
+        />
       )}
 
       {/* Deploy Receptionist Modal */}
@@ -965,6 +885,87 @@ export default function ReceptionistsPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {agentToDelete && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white border border-[#E2E8F0] rounded-2xl w-full max-w-md shadow-2xl p-6 animate-in zoom-in-95 duration-200">
+            <div className="flex items-start gap-4">
+              <div className="w-11 h-11 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 flex items-center justify-center shrink-0">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 6h18" />
+                  <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                  <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                  <line x1="10" y1="11" x2="10" y2="17" />
+                  <line x1="14" y1="11" x2="14" y2="17" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h3 className="text-base font-bold text-[#0F172A]">Delete AI Receptionist?</h3>
+                <p className="text-xs text-[#64748B] mt-1 leading-relaxed">
+                  Are you sure you want to permanently remove this receptionist from the platform?
+                </p>
+              </div>
+            </div>
+
+            {/* Receptionist Details Box */}
+            <div className="mt-4 p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-blue-600 text-white font-bold flex items-center justify-center text-sm shadow-xs shrink-0">
+                {agentToDelete.name.charAt(0).toUpperCase()}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-bold text-[#0F172A] truncate">
+                  {agentToDelete.name}
+                </div>
+                <div className="text-[11px] text-[#64748B] flex items-center gap-2 mt-0.5">
+                  <span className="font-medium text-[#2563EB]">{agentToDelete.businessName}</span>
+                  <span>•</span>
+                  <span>{agentToDelete.callsHandled} calls</span>
+                  <span>•</span>
+                  <span className="uppercase text-[10px] font-semibold text-emerald-600">{agentToDelete.status}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-3 p-3 bg-rose-50/80 border border-rose-200/60 rounded-xl text-[11px] text-rose-700 flex items-start gap-2">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0 mt-0.5">
+                <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/>
+                <line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+              <span>
+                <strong>Warning:</strong> Incoming phone calls and WhatsApp queries for this clinic will no longer be handled by this AI agent. This action cannot be undone.
+              </span>
+            </div>
+
+            <div className="mt-6 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => setAgentToDelete(null)}
+                className="px-4 py-2 border border-[#E2E8F0] rounded-lg text-xs font-semibold text-[#475569] hover:bg-gray-50 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={handleDeleteConfirm}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors flex items-center gap-2 disabled:opacity-50"
+              >
+                {isDeleting ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <span>Delete Receptionist</span>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

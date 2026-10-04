@@ -90,7 +90,7 @@ export const STRINGS = {
     LINKS: {
       DASHBOARD: "Dashboard", APPOINTMENTS: "Appointments", PATIENTS: "Patients",
       DOCTORS: "Doctors", CALL_LOGS: "Call Logs", AI_RECEPTIONIST: "AI Receptionist",
-      KNOWLEDGE_BASE: "Knowledge Base", AI_CONVERSATIONS: "AI Conversations",
+      KNOWLEDGE_BASE: "Knowledge Base", AI_CONVERSATIONS: "AI Conversations", MESSAGES: "Messages",
       SERVICES: "Services", INTEGRATIONS: "Integrations", ANALYTICS: "Analytics",
       NOTIFICATIONS: "Notifications", BILLING: "Billing", TEAM: "Team & Permissions",
       SETTINGS: "Settings", SUPPORT: "Help & Support",

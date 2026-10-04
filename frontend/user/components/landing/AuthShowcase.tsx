@@ -17,7 +17,7 @@ const EVENTS: Omit<Event, "id">[] = [
   { icon: "phone", tint: "#22c55e", title: "Call answered", meta: "Asked about root canal fees" },
   { brand: "whatsapp", tint: "#25D366", title: "Booked on WhatsApp", meta: "Riya S. · Thu 10:30 · Dr. Mehta" },
   { icon: "sms", tint: "#38bdf8", title: "Reminder sent", meta: "Arjun K. · tomorrow 5:00 PM" },
-  { brand: "gcal", tint: "#4285F4", title: "Rescheduled", meta: "Pooja S. · moved to Fri 4:15" },
+  { brand: "gcal", tint: "#4285F4", title: "Rescheduled", meta: "Maria S. · moved to Fri 4:15" },
   { icon: "transfer", tint: "#f59e0b", title: "Handed to staff", meta: "Urgent tooth pain · summary sent" },
   { icon: "phone", tint: "#22c55e", title: "After-hours call", meta: "11:42 PM · booked for 9:30 AM" },
 ];

@@ -167,6 +167,7 @@ def get_dashboard_agent(
                     "services": True,
                     "hours": True,
                     "transfer": True,
+                    "messages": True,
                 },
                 "toggles": {
                     "small_talk": True,

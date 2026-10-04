@@ -24,7 +24,7 @@ from backend.ai.engine.agent.language_layer import LanguageLayer
 from backend.ai.lexicon import language_pack
 from backend.ai.verticals.context import resolve_business_context
 from backend.ai.engine.agent.progress import booking_note
-from backend.ai.engine.agent.hindi import has_devanagari, hindi_escalation, looks_english, match_speaker_gender, normalize as normalize_hindi, requested_language
+from backend.ai.engine.agent.hindi import caller_is_leaving, has_devanagari, language_escalation, looks_english, match_speaker_gender, normalize as normalize_hindi, requested_language
 from backend.ai.engine.agent.validator import is_affirmative
 from backend.ai.engine.agent.llm_backend import ChatBackend, LLMUnavailable
 from backend.ai.engine.agent.prompt_builder import build_system_prompt
@@ -95,7 +95,6 @@ def _language_note(code: str) -> str:
     return f"{generic['asked'].format(name=name)} {style}"
 
 
-_HINDI_EMERGENCY_MSG = {True: _notes()["hindi_emergency"]["hindi"], False: _notes()["hindi_emergency"]["default"]}
 _BILLING = re.compile(r"\b(refunds?|billing|invoice|charged\s+twice|overcharg\w*|chargeback|dispute|bill\s+(?:is\s+)?wrong)\b", re.IGNORECASE)
 _BILLING_MSG = _lines("billing")
 _FRUSTRATED_MSG = _lines("frustrated")
@@ -383,6 +382,7 @@ class AgentEngine:
             self.toolbox.caller_number_ok = True
         self.toolbox.last_utterance = roman
         self.toolbox.said.append(roman)
+        self.toolbox.language = self.active_language or "en"
         self._raw_said.append(utterance)
         first_ms: Optional[int] = None
         spoken: List[str] = []
@@ -394,12 +394,12 @@ class AgentEngine:
         # 1. Deterministic safety gate: emergencies and "I want a human" never wait for the LLM.
         # Which triggers fire is the owner's Escalation-tab checklist. Emergencies always fire (patient safety).
         escalated, esc_msg, target = SafetyGuardrails.check_escalation(utterance, self.vertical_config)
-        if not escalated and (hindi := hindi_escalation(utterance)):  # Hindi / Devanagari cues the English rules miss
+        if not escalated and (hindi := language_escalation(utterance)):  # Hindi / Devanagari cues the English rules miss
             escalated, target = True, hindi
-            esc_msg = _HINDI_EMERGENCY_MSG[self.language == "hi"] if hindi == "emergency" else None
+            esc_msg = self._emergency_line(utterance) if hindi == "emergency" else None
         if not escalated and (emergency := EmergencyRule.evaluate(utterance, self.context.emergency_numbers))[0]:  # capabilities/rules: English + Hindi, whole phrases
             escalated, target = True, "emergency"
-            esc_msg = _HINDI_EMERGENCY_MSG[self.language == "hi"] if has_devanagari(utterance) else emergency[1]
+            esc_msg = self._emergency_line(utterance, emergency[1])
         transfers_on = "transfer_to_human" not in self.toolbox.disabled_tools
         if escalated and (target or "front_desk") != "emergency" and not (transfers_on and self.triggers["human_request"]):
             escalated = False  # trigger off or transfers off: a human request goes to the LLM, which will decline
@@ -670,6 +670,16 @@ class AgentEngine:
         """The language the agent speaks right now: what the caller asked for, else the tenant's primary language (/ai settings)."""
         return (self.language_pref or self.language or "en").split("-")[0].lower()
 
+    def _emergency_line(self, utterance: str, default: Optional[str] = None) -> str:
+        """What is spoken on an emergency, in the caller's language (from its pack's `strings.emergency`). English keeps the
+        region-aware line with the local numbers when one was built (`default`)."""
+        code = "hi" if has_devanagari(utterance) else (self.active_language or "en")
+        if code == "en" and default:
+            return default
+        line = (language_pack(code).get("strings") or {}).get("emergency") or default or language_pack("en")["strings"]["emergency"]
+        numbers = self.context.emergency_numbers
+        return f"{line} ({' / '.join(numbers)})" if numbers and code != "en" else line
+
     def _pack_language(self) -> Optional[str]:
         """The active language when it is something other than Hindi/English (those keep their sentence-based handling)."""
         active = self.active_language
@@ -702,6 +712,9 @@ class AgentEngine:
             self.toolbox.last_assistant = last["content"]  # what a caller's next "yes" would be agreeing to
 
     def _result(self, reply: str, started: float, tools: List[Dict[str, Any]], first_ms: Optional[int], degraded: bool = False, error: Optional[str] = None) -> AgentTurn:
+        if (not self.toolbox.pending and not degraded and "?" not in reply and "end_call" not in self.toolbox.disabled_tools
+                and self._raw_said and caller_is_leaving(self._raw_said[-1])):
+            self.toolbox.pending = {"type": "hangup"}  # the caller said goodbye and our reply asks nothing: end the call even if the model forgot end_call
         pending = self.toolbox.pending or {}
         if pending.get("type") == "hangup":
             self.ended = True

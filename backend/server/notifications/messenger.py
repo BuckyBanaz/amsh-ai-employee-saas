@@ -99,7 +99,7 @@ def _log(db: Session, business_id: Optional[str], event_key: str, channel: str, 
 async def send_event(
     db: Session, event_key: str, *, business_id: Optional[str], context: Dict[str, Any], phone: Optional[str] = None, email: Optional[str] = None,
     language: str = "en", fanout: bool = False, window_open: bool = False, respect_preferences: bool = True, now: Optional[datetime] = None,
-    adapters: Optional[Dict[str, Adapter]] = None,
+    adapters: Optional[Dict[str, Adapter]] = None, only_channels: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     event = templates.event_def(event_key)
     send = {**ADAPTERS, **(adapters or {})}
@@ -115,6 +115,8 @@ async def send_event(
     else:
         order = event["channels"] if fanout else event["default_order"]  # a fan-out (staff alert) uses every channel the contact has
 
+    if only_channels:  # the person asked for a particular channel ("send it on WhatsApp"): try it first, then the clinic's own order
+        order = [c for c in only_channels if c in event["channels"]] + [c for c in order if c not in only_channels]
     attempts: List[Dict[str, Any]] = []
     sent_any = False
     for channel in order:

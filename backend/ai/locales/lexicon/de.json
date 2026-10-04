@@ -59,8 +59,21 @@
   "frustrated": "Es tut mir wirklich leid für die Unannehmlichkeiten. Ich verbinde Sie sofort mit jemandem an der Rezeption.",
   "unsure_claim": "Ich möchte das kurz mit Ihnen bestätigen. Könnten Sie die Angaben bitte noch einmal bestätigen?",
   "unsure_times": "Ich möchte sichergehen, dass ich die richtige Uhrzeit nenne. Welcher Tag passt Ihnen?",
-  "transfer_generic": "Ihr Anruf wird weitergeleitet."
+  "transfer_generic": "Ihr Anruf wird weitergeleitet.",
+  "emergency": "Das klingt nach einem ernsten medizinischen Notfall. Bitte legen Sie auf und wählen Sie sofort Ihre örtliche Notrufnummer. Ich benachrichtige gleichzeitig unser ärztliches Bereitschaftsteam."
  },
  "native_name": "Deutsch",
- "direction": "ltr"
+ "direction": "ltr",
+ "emergency_patterns": [
+  "\\b(?:Brustschmerz\\w*|Schmerzen\\s+in\\s+der\\s+Brust|Herzinfarkt|Schlaganfall|keine\\s+Luft|nicht\\s+atmen|starke\\s+Blutung|blutet\\s+stark|bewusstlos|Krampfanfall|[ÜüUu]berdosis|Suizid\\w*|Selbstmord|will\\s+sterben|umbringen)\\b"
+ ],
+ "human_request": {
+  "who": "\\bmit\\s+(?:einem|einer|dem|der)?\\s*(?:echten\\s+|richtigen\\s+)?(?:Menschen|Mensch|Person|Mitarbeiter\\w*|Empfang\\w*|Manager\\w*)\\s+(?:sprechen|reden|verbinden)\\b|\\b(?:echten|richtigen)\\s+(?:Menschen|Person|Mitarbeiter\\w*)\\b|\\bverbinden\\s+Sie\\s+mich\\b"
+ },
+ "farewell_patterns": [
+  "\\b(?:auf\\s+wiedersehen|tsch(?:ü|ue|u)ss|gute\\s+nacht|bis\\s+(?:bald|sp[äa]ter|dann|morgen)|das\\s+war'?s|das\\s+ist\\s+alles)\\b"
+ ],
+ "hangup_patterns": [
+  "\\b(?:auflegen|aufh[äa]ngen|gespr[äa]ch\\s+beenden)\\b"
+ ]
 }

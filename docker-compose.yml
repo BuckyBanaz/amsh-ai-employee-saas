@@ -37,6 +37,8 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg2://amsh:${POSTGRES_PASSWORD:-amsh}@postgres:5432/amsh
       UVICORN_ARGS: "--reload"  # development only: docker-compose.prod.yml turns this off
+      # development only: let the Next.js apps call the API from a LAN address (phone, other PC) as well as localhost
+      CORS_ORIGIN_REGEX: 'https?://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+):\d+'
       REDIS_URL: redis://redis:6379/0
     ports:
       - "8010:8000"

@@ -65,6 +65,7 @@ export function AIBanner({
               src={aiRobotImg}
               alt="AI Receptionist Avatar"
               fill
+              sizes="(max-width: 640px) 72px, (max-width: 1024px) 80px, 88px"
               className="object-contain drop-shadow-[0_8px_16px_rgba(0,0,0,0.2)] select-none pointer-events-none"
               priority
             />

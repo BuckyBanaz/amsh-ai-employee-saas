@@ -57,8 +57,21 @@
   "frustrated": "Je suis vraiment désolé pour le désagrément. Je vous mets tout de suite en relation avec quelqu'un à l'accueil.",
   "unsure_claim": "Laissez-moi d'abord vérifier cela avec vous. Pouvez-vous confirmer les informations une fois de plus ?",
   "unsure_times": "Je veux m'assurer de vous donner la bonne heure. Quel jour vous conviendrait ?",
-  "transfer_generic": "Votre appel est en cours de transfert."
+  "transfer_generic": "Votre appel est en cours de transfert.",
+  "emergency": "Cela ressemble à une urgence médicale grave. Raccrochez et appelez immédiatement votre numéro d'urgence local. Je préviens en même temps notre équipe médicale de garde."
  },
  "native_name": "Français",
- "direction": "ltr"
+ "direction": "ltr",
+ "emergency_patterns": [
+  "\\b(?:douleur\\s+(?:dans\\s+la|à\\s+la|a\\s+la)\\s+poitrine|crise\\s+cardiaque|infarctus|(?:avc|accident\\s+vasculaire)|(?:ne\\s+peux|n'arrive)\\s+(?:pas\\s+)?(?:à\\s+|a\\s+)?respirer|h[ée]morragie|saigne\\s+(?:beaucoup|abondamment)|inconsci\\w+|[ée]vanou\\w+|convulsion\\w*|overdose|suicid\\w*|veux\\s+mourir|me\\s+tuer)\\b"
+ ],
+ "human_request": {
+  "who": "\\b(?:parler|passer|connecter|transf[ée]rer)\\s+(?:[àa]|avec)\\s+(?:un|une|quelqu'un|le|la)?\\s*(?:humain|personne|op[ée]rat\\w+|r[ée]ceptionniste|responsable|conseill\\w+)\\b|\\b(?:vraie?\\s+personne|[êe]tre\\s+humain)\\b"
+ },
+ "farewell_patterns": [
+  "\\b(?:au\\s+revoir|bonne\\s+(?:nuit|soir[ée]e|journ[ée]e)|[àa]\\s+bient[oô]t|c'est\\s+tout|[àa]\\s+demain)\\b"
+ ],
+ "hangup_patterns": [
+  "\\b(?:raccroch\\w+|terminer\\s+l'appel|coupe\\w*\\s+l'appel)\\b"
+ ]
 }

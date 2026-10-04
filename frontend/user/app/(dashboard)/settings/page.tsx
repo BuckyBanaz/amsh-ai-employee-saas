@@ -6,7 +6,6 @@ import { STRINGS } from '../../../utils/strings/en';
 import { ProfileSettings } from '../../../components/dashboard/settings/ProfileSettings';
 import { SecuritySettings } from '../../../components/dashboard/settings/SecuritySettings';
 import { NotificationSettings } from '../../../components/dashboard/settings/NotificationSettings';
-import { MessagesSettings } from '../../../components/dashboard/settings/MessagesSettings';
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<SettingsTab>('business');
@@ -17,7 +16,6 @@ export default function SettingsPage() {
       case 'profile': return <ProfileSettings />;
       case 'security': return <SecuritySettings />;
       case 'notifications': return <NotificationSettings />;
-      case 'messages': return <MessagesSettings />;
       case 'danger_zone':
         return <BusinessSettings focusDangerZone={true} />;
       case 'billing':

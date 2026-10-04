@@ -102,6 +102,12 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
         {"ref": {"type": "string"}, "new_date": _DATE, "new_time": _TIME, "confirmed_by_caller": _CONFIRMED},
         ["ref", "new_date", "new_time", "confirmed_by_caller"],
     ),
+    _fn(
+        "send_confirmation",
+        _msg("toolbox.tools.send_confirmation"),
+        {"phone_number": {"type": "string", "description": "only if the caller gave another number"}, "channel": {"type": "string", "enum": ["whatsapp", "sms"]}},
+        [],
+    ),
     _fn("search_knowledge", _msg("toolbox.tools.search_knowledge"), {"query": {"type": "string"}}, ["query"]),
     _fn(
         "transfer_to_human",
@@ -151,6 +157,8 @@ class AgentToolbox:
 
             self.ops = SandboxOperations(self.ops, sandbox)  # same interface; writes land in the ledger, reads see the clinic's real data
         self.caller_number_ok = False  # the caller agreed to use the number they are calling from
+        self.confirmations_sent = 0  # appointment details texted on this call (capped)
+        self.language = "en"  # the caller's language, set by the engine each turn, so the message goes out in it
         self.pending: Optional[Dict[str, Any]] = None  # {"type": "transfer"|"hangup", ...} consumed by the gateway
         self.calls: List[Dict[str, Any]] = []  # audit trail for evals and shadow logs
 
@@ -339,6 +347,42 @@ class AgentToolbox:
             self.gate.ref_phone[ref] = phone
             out.append({"ref": ref, "date": speak_date(d, today), "time": row.get("preferred_time"), "doctor": row.get("doctor_name"), "service": row.get("service_name")})
         return {"ok": True, "appointments": out}
+
+    def _tool_send_confirmation(self, args: Dict[str, Any], db: Session) -> Dict[str, Any]:
+        """Send the caller's next upcoming appointment to their phone with the clinic's own booking.confirmed template. Only
+        appointments booked under that phone number can be sent to it, and at most twice per call."""
+        phone = normalize_phone(args.get("phone_number") or self.caller_number)
+        if len(phone) < 10:
+            return err("bad_phone", _msg("toolbox.lookup_appointment.bad_phone"))
+        if self.confirmations_sent >= 2:
+            return err("limit", _msg("toolbox.send_confirmation.limit"))
+        today = self.now_fn().date()
+        mine = []
+        for row in self.ops.read.get_appointments(db, self.business_id, status="confirmed"):
+            d = parse_date(row.get("preferred_date"), today)
+            if same_phone(row.get("phone_number"), phone) and d and d >= today:
+                mine.append((d, str(row.get("preferred_time")), row))
+        if not mine:
+            return err("no_appointment", _msg("toolbox.send_confirmation.no_appointment"))
+        d, _, row = min(mine, key=lambda x: (x[0], x[1]))
+        channel = args.get("channel") if args.get("channel") in ("whatsapp", "sms") else None
+        if self.dry_run:
+            return {"ok": True, "code": "dry_run", "message": _msg("toolbox.send_confirmation.dry_run", channel=channel or "WhatsApp or SMS")}
+        from backend.server.database.models.business import Business
+        from backend.server.notifications.messenger import context_for, send_event_sync
+
+        biz = db.get(Business, self.business_id)
+        res = send_event_sync(
+            db, "booking.confirmed", business_id=self.business_id, phone=phone, language=self.language or "en", only_channels=[channel] if channel else None,
+            context=context_for("booking.confirmed", patient_name=row.get("customer_name") or row.get("patient_name"), service=row.get("service_name"), doctor=row.get("doctor_name"),
+                                date=speak_date(d, today), time=row.get("preferred_time"), clinic_name=biz.name if biz else "the clinic", clinic_phone=biz.business_phone if biz else None),
+        )
+        self.confirmations_sent += 1
+        done = next((a["channel"] for a in res.get("attempts", []) if a.get("sent")), None)
+        if res.get("sent") and done:
+            return {"ok": True, "code": "sent", "channel": done, "message": _msg("toolbox.send_confirmation.sent", channel="WhatsApp" if done == "whatsapp" else "SMS")}
+        reason = next((a.get("reason") for a in res.get("attempts", []) if a.get("reason")), None) or res.get("reason") or "no channel is available"
+        return err("not_sent", _msg("toolbox.send_confirmation.not_sent", reason=reason))
 
     def _owned_appointment(self, ref: Optional[str], db: Session):
         appt_id = self.gate.refs.get(str(ref or ""))

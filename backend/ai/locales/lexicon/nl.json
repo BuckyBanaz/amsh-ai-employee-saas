@@ -55,8 +55,21 @@
   "billing": "Facturatie en terugbetalingen worden door onze balie afgehandeld. Ik verbind u meteen door.",
   "frustrated": "Het spijt me echt van het ongemak. Ik verbind u meteen door met iemand van onze balie.",
   "unsure_claim": "Laat me dit even met u controleren. Kunt u de gegevens nog een keer bevestigen?",
-  "unsure_times": "Ik wil zeker zijn dat ik de juiste tijd noem. Welke dag komt u het beste uit?"
+  "unsure_times": "Ik wil zeker zijn dat ik de juiste tijd noem. Welke dag komt u het beste uit?",
+  "emergency": "Dit klinkt als een ernstig medisch noodgeval. Hang op en bel direct uw lokale alarmnummer. Ik waarschuw tegelijk ons medisch team."
  },
  "native_name": "Nederlands",
- "direction": "ltr"
+ "direction": "ltr",
+ "emergency_patterns": [
+  "\\b(?:pijn\\s+op\\s+de\\s+borst|hartaanval|beroerte|kan\\s+(?:niet|geen)\\s+(?:ademen|adem)|geen\\s+adem|ernstig\\s+bloed\\w*|bloedt\\s+erg|bewusteloos|epileptische\\s+aanval|overdosis|zelfmoord|wil\\s+dood|mezelf\\s+doden)\\b"
+ ],
+ "human_request": {
+  "who": "\\bmet\\s+(?:een|de)?\\s*(?:echte\\s+)?(?:mens|persoon|medewerker|receptionist\\w*|manager|baliemedewerker)\\s+(?:spreken|praten|doorverbinden)\\b|\\becht(?:e)?\\s+(?:mens|persoon|medewerker)\\b|\\bdoorverbinden\\b"
+ },
+ "farewell_patterns": [
+  "\\b(?:tot\\s+ziens|doei|welterusten|tot\\s+later|tot\\s+morgen|dat\\s+was\\s+het|dat\\s+is\\s+alles)\\b"
+ ],
+ "hangup_patterns": [
+  "\\b(?:ophangen|gesprek\\s+beëindigen|gesprek\\s+be[eë]indigen)\\b"
+ ]
 }

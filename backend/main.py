@@ -38,10 +38,14 @@ app = FastAPI(
     ],
 )
 
+cors_regex = settings.CORS_ORIGIN_REGEX
+if cors_regex and cors_regex.startswith("http://"):
+    cors_regex = "https?://" + cors_regex[len("http://"):]
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
-    allow_origin_regex=settings.CORS_ORIGIN_REGEX or None,
+    allow_origin_regex=cors_regex or None,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

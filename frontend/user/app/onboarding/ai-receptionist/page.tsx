@@ -35,6 +35,7 @@ const initialCapabilities = [
   { id: 'services', name: 'Explain services', enabled: true },
   { id: 'hours', name: 'Explain opening hours', enabled: true },
   { id: 'transfer', name: 'Transfer to human', enabled: true },
+  { id: 'messages', name: 'Send appointment details by WhatsApp / SMS', enabled: true },
 ];
 
 export default function AiReceptionistOnboardingPage() {

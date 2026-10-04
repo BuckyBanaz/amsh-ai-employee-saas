@@ -17,7 +17,6 @@ const navGroups = [
       { label: 'Businesses', href: '/businesses', icon: 'building' },
       { label: 'Business Owners', href: '/business-users', icon: 'users' },
       { label: 'AI Employees', href: '/receptionists', icon: 'bot' },
-      { label: 'Playground', href: '/playground', icon: 'flask' },
     ]
   },
   {
@@ -26,7 +25,6 @@ const navGroups = [
       { label: 'Appointments', href: '/appointments', icon: 'calendar' },
       { label: 'Calls', href: '/calls', icon: 'phone' },
       { label: 'Conversations', href: '/conversations', icon: 'message' },
-      { label: 'Customers', href: '/customers', icon: 'user' },
     ]
   },
   {

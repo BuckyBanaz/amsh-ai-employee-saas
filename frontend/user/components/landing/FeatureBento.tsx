@@ -25,8 +25,8 @@ function CardText({ eyebrow, title, body }: { eyebrow: string; title: string; bo
 
 // --- Voice -----------------------------------------------------------------
 const VOICE_LINES = [
-  { who: "Patient", text: "Kal subah Dr. Sharma free hain kya?" },
-  { who: "AMSh", text: "Haan ji — 10:30 ya 11:15, kaunsa time theek rahega?" },
+  { who: "Patient", text: "Is Dr. Carter free tomorrow morning?" },
+  { who: "AMSh", text: "Yes — 10:30 or 11:15. Which works better for you?" },
   { who: "Patient", text: "10:30. Actually wait — can I bring my mother too?" },
   { who: "AMSh", text: "Of course. I've booked two slots, 10:30 and 10:45." },
 ];
@@ -84,15 +84,15 @@ function VoiceVisual() {
 
 // --- Languages ---------------------------------------------------------------
 const GREETINGS = [
-  { text: "नमस्ते", lang: "Hindi" },
   { text: "Hello", lang: "English" },
-  { text: "Haan ji, bataiye", lang: "Hinglish" },
-  { text: "வணக்கம்", lang: "Tamil" },
-  { text: "নমস্কার", lang: "Bengali" },
-  { text: "नमस्कार", lang: "Marathi" },
   { text: "Hola", lang: "Spanish" },
-  { text: "مرحبا", lang: "Arabic" },
   { text: "Bonjour", lang: "French" },
+  { text: "مرحبا", lang: "Arabic" },
+  { text: "Hallo", lang: "German" },
+  { text: "Olá", lang: "Portuguese" },
+  { text: "你好", lang: "Mandarin" },
+  { text: "नमस्ते", lang: "Hindi" },
+  { text: "Ciao", lang: "Italian" },
   { text: "Hallo", lang: "Dutch" },
 ];
 
@@ -117,7 +117,7 @@ function LanguageVisual() {
             exit={{ opacity: 0, y: -24, rotateX: 60, filter: "blur(6px)" }}
             transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
             className="absolute inset-x-0 text-4xl font-semibold tracking-tight sm:text-5xl"
-            lang={g.lang === "Hindi" || g.lang === "Marathi" ? "hi" : undefined}
+            lang={g.lang === "Hindi" ? "hi" : g.lang === "Arabic" ? "ar" : g.lang === "Mandarin" ? "zh" : undefined}
           >
             {g.text}
           </motion.p>
@@ -201,9 +201,9 @@ function DashboardVisual() {
   const bars = [38, 52, 44, 70, 58, 84, 76];
   const days = ["M", "T", "W", "T", "F", "S", "S"];
   const rows = [
-    { brand: "whatsapp" as const, who: "Riya S.", what: "Booked · Thu 10:30", tone: "bg-emerald-50 text-emerald-700" },
-    { icon: "phone" as const, who: "+91 98••• ••210", what: "Asked about fees", tone: "bg-slate-100 text-slate-600" },
-    { icon: "phone" as const, who: "Arjun K.", what: "Rescheduled", tone: "bg-indigo-50 text-indigo-700" },
+    { brand: "whatsapp" as const, who: "Emma R.", what: "Booked · Thu 10:30", tone: "bg-emerald-50 text-emerald-700" },
+    { icon: "phone" as const, who: "+1 (718) •••-0210", what: "Asked about fees", tone: "bg-slate-100 text-slate-600" },
+    { icon: "phone" as const, who: "Daniel K.", what: "Rescheduled", tone: "bg-indigo-50 text-indigo-700" },
   ];
   return (
     <div className="mt-6 grid gap-4 sm:grid-cols-[1fr_1.1fr]">
@@ -247,119 +247,83 @@ function DashboardVisual() {
 }
 
 // --- Always on ---------------------------------------------------------------
-function ClockVisual() {
-  const reduce = useReducedMotion();
-  return (
-    <div className="mt-6 grid place-items-center">
-      <div className="relative h-36 w-36">
-        <svg viewBox="0 0 100 100" className="h-full w-full" aria-hidden="true">
-          <defs>
-            <linearGradient id="clockg" x1="0" x2="1" y1="0" y2="1">
-              <stop offset="0" stopColor="#f59e0b" />
-              <stop offset="0.5" stopColor="#6366f1" />
-              <stop offset="1" stopColor="#0ea5e9" />
-            </linearGradient>
-          </defs>
-          <circle cx="50" cy="50" r="44" fill="none" stroke="#e2e8f0" strokeWidth="6" />
-          <circle cx="50" cy="50" r="44" fill="none" stroke="url(#clockg)" strokeWidth="6" strokeLinecap="round" strokeDasharray="276.5" strokeDashoffset="0" />
-          {Array.from({ length: 24 }).map((_, i) => {
-            const a = (i / 24) * Math.PI * 2;
-            const r = (v: number) => Math.round(v * 100) / 100; // identical on server and client
-            return <line key={i} x1={r(50 + Math.sin(a) * 34)} y1={r(50 - Math.cos(a) * 34)} x2={r(50 + Math.sin(a) * 37)} y2={r(50 - Math.cos(a) * 37)} stroke="#cbd5e1" strokeWidth="1" />;
-          })}
-        </svg>
-        <motion.div
-          aria-hidden="true"
-          className="absolute inset-0"
-          animate={reduce ? undefined : { rotate: 360 }}
-          transition={{ duration: 12, repeat: Infinity, ease: "linear" }}
-        >
-          <span className="absolute left-1/2 top-[3%] h-3.5 w-3.5 -translate-x-1/2 rounded-full border-2 border-white bg-indigo-500 shadow-[0_0_12px_rgba(99,102,241,0.8)]" />
-        </motion.div>
-        <div className="absolute inset-0 grid place-items-center text-center">
-          <div>
-            <p className={`${DISPLAY} text-3xl font-semibold text-slate-950`}>24/7</p>
-            <p className="text-[11px] font-medium text-slate-500">365 days</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// --- Privacy -----------------------------------------------------------------
-function PrivacyRow() {
+// --- Always on + privacy, one compact strip ------------------------------------------
+function GuaranteeStrip() {
   const points = ["Encrypted in transit & at rest", "Access limited to your team", "You control recording retention"];
   return (
-    <div className="flex flex-col gap-6 md:flex-row md:items-center">
-      <div className="relative grid h-16 w-16 shrink-0 place-items-center rounded-2xl ring-8 ring-emerald-50">
-        <span className="relative grid h-16 w-16 place-items-center rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-600 text-white shadow-lg">
-          <Icon name="shield" className="h-8 w-8" />
+    <div className="grid gap-5 md:grid-cols-[auto_minmax(0,1fr)] md:items-center md:divide-x md:divide-slate-200">
+      <div className="flex items-center gap-4">
+        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-md">
+          <Icon name="clock" className="h-6 w-6" />
         </span>
+        <div>
+          <h3 className={`${DISPLAY} whitespace-nowrap text-lg font-semibold text-slate-950`}>Never off shift</h3>
+          <p className="text-sm text-slate-600">24/7 — nights, weekends and holidays.</p>
+        </div>
       </div>
-      <div className="flex-1">
-        <h3 className={`${DISPLAY} text-xl font-semibold text-slate-950`}>Private by design</h3>
-        <p className="mt-1 text-[15px] text-slate-600">Patient conversations stay yours.</p>
+      <div className="flex flex-col gap-3 md:pl-6 xl:flex-row xl:items-center">
+        <div className="flex items-center gap-4">
+          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-600 text-white shadow-md">
+            <Icon name="shield" className="h-6 w-6" />
+          </span>
+          <div>
+            <h3 className={`${DISPLAY} whitespace-nowrap text-lg font-semibold text-slate-950`}>Private by design</h3>
+            <p className="text-sm text-slate-600">Patient conversations stay yours.</p>
+          </div>
+        </div>
+        <ul className="flex flex-wrap gap-2 xl:ml-auto xl:justify-end">
+          {points.map((p) => (
+            <li key={p} className="flex items-center gap-1.5 rounded-full border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-800">
+              <Icon name="check" className="h-3.5 w-3.5" /> {p}
+            </li>
+          ))}
+        </ul>
       </div>
-      <ul className="flex flex-wrap gap-2">
-        {points.map((p) => (
-          <li key={p} className="flex items-center gap-2 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-800">
-            <Icon name="check" className="h-4 w-4" /> {p}
-          </li>
-        ))}
-      </ul>
     </div>
   );
 }
 
 export default function FeatureBento() {
   return (
-    <Stagger as="div" className="mt-16 grid auto-rows-auto gap-5 md:grid-cols-3">
+    <Stagger as="div" className="mt-10 grid auto-rows-auto gap-4 md:grid-cols-3">
       <StaggerItem as="div" className="md:col-span-2">
-        <SpotlightCard className={`${CARD} p-7`}>
+        <SpotlightCard className={`${CARD} p-5`}>
           <CardText eyebrow="Voice" title="Sounds like your best receptionist" body="Natural, warm conversations. Patients can interrupt, switch language mid-sentence or change their mind — just like with a person." />
           <VoiceVisual />
         </SpotlightCard>
       </StaggerItem>
 
       <StaggerItem as="div" className="md:row-span-2">
-        <SpotlightCard className={`${CARD} flex flex-col p-7`}>
-          <CardText eyebrow="Any language" title="Speaks your patients' language" body="Hindi, English, Hinglish, regional and international languages — AMSh replies in whatever language the patient uses." />
+        <SpotlightCard className={`${CARD} flex flex-col p-5`}>
+          <CardText eyebrow="Any language" title="Speaks your patients' language" body="English, Spanish, French, Arabic, Hindi and more — AMSh replies in whatever language the patient uses." />
           <LanguageVisual />
         </SpotlightCard>
       </StaggerItem>
 
       <StaggerItem as="div">
-        <SpotlightCard className={`${CARD} p-7`}>
+        <SpotlightCard className={`${CARD} p-5`}>
           <CardText eyebrow="Knowledge" title="Knows your clinic" body="Answers from your own doctors, services, fees and FAQs." />
           <KnowledgeVisual />
         </SpotlightCard>
       </StaggerItem>
 
       <StaggerItem as="div">
-        <SpotlightCard className={`${CARD} p-7`}>
+        <SpotlightCard className={`${CARD} p-5`}>
           <CardText eyebrow="Teamwork" title="Hands over when it matters" body="Urgent or complex? Your staff take over with a summary." />
           <HandoffVisual />
         </SpotlightCard>
       </StaggerItem>
 
-      <StaggerItem as="div" className="md:col-span-2">
-        <SpotlightCard className={`${CARD} p-7`}>
+      <StaggerItem as="div" className="md:col-span-3">
+        <SpotlightCard className={`${CARD} p-5`}>
           <CardText eyebrow="Visibility" title="Every conversation, one dashboard" body="Calls, WhatsApp chats and bookings in one place — with transcripts and summaries your team can review any time." />
           <DashboardVisual />
         </SpotlightCard>
       </StaggerItem>
 
-      <StaggerItem as="div">
-        <SpotlightCard className={`${CARD} p-7`}>
-          <CardText eyebrow="Always on" title="Never off shift" body="Nights, weekends and holidays." />
-          <ClockVisual />
-        </SpotlightCard>
-      </StaggerItem>
-
       <StaggerItem as="div" className="md:col-span-3">
-        <SpotlightCard className={`${CARD} p-7`}>
-          <PrivacyRow />
+        <SpotlightCard className={`${CARD} p-5`}>
+          <GuaranteeStrip />
         </SpotlightCard>
       </StaggerItem>
     </Stagger>

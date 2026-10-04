@@ -101,44 +101,31 @@ def fuzzy_in(token: str, texts: Iterable[str], threshold: float = 0.78) -> bool:
     return False
 
 
-# Deterministic Hindi/Devanagari cues for the safety gate (the vertical config's keywords are English only).
-_EMERGENCY = re.compile(
-    r"सीने\s*में\s*दर्द|सांस\s*(?:नहीं|लेने\s*में)|साँस\s*(?:नहीं|लेने\s*में)|दिल\s*का\s*दौरा|हार्ट\s*अटैक|बेहोश|बहुत\s*खून|खून\s*बह|आत्महत्या|इमरजेंसी|एमरजेंसी|"
-    r"\b(?:seene\s+mein\s+dard|saans\s+nahi|sans\s+nahi|behosh|dil\s+ka\s+daura|khoon\s+beh)\b",
-    re.IGNORECASE,
-)
-_HUMAN = re.compile(
-    r"(?:इंसान|इन्सान|असली\s*(?:व्यक्ति|इंसान)|किसी\s*(?:से|इंसान\s*से)\s*बात|मैनेजर|कर्मचारी|स्टाफ)"
-    r"|\b(?:insaan|insan|kisi\s+se\s+baat|kisi\s+insaan|asli\s+insaan|manager\s+se)\b",
-    re.IGNORECASE,
-)
-_HUMAN_VERB = re.compile(r"बात|मिला|कनेक्ट|ट्रांसफर|चाहिए|चाहता|चाहती|baat|milao|connect|transfer|chahiye", re.IGNORECASE)
+# Deterministic escalation cues for the safety gate (the vertical config's keywords are English only). The phrases are DATA in each
+# language's pack (`ai/locales/lexicon/<code>.json`: `emergency_patterns`, `human_request`), so every language with a pack is covered
+# and adding one needs no code change.
+def _compile_packs():
+    emergency, human = [], []
+    for code in pack_languages():
+        pack = language_pack(code)
+        if pack.get("emergency_patterns"):
+            emergency.append(re.compile("|".join(f"(?:{p})" for p in pack["emergency_patterns"]), re.IGNORECASE))
+        spec = pack.get("human_request")
+        if spec:
+            human.append((re.compile(spec["who"], re.IGNORECASE), re.compile(spec["ask"], re.IGNORECASE) if spec.get("ask") else None))
+    return emergency, human
 
 
-_ASK_HINDI = re.compile(
-    r"\b(?:in|mein|me)\s+hindi\b|\bhindi\s+(?:mein|me|main)\b|\bhindi\s+bol|हिंदी\s*में|हिन्दी\s*में|हिंदी\s*बोल|हिन्दी\s*बोल"
-    r"|इन\s*हिं?न?्?दी",  # "can we talk in Hindi" as speech-to-text writes it: कैन वी टॉक इन हिंदी
-    re.IGNORECASE,
-)
-_ASK_ENGLISH = re.compile(
-    r"\b(?:in|mein|me)\s+english\b|\benglish\s+(?:mein|me|main)\b|\benglish\s+bol|अंग्रेज़ी\s*में|अंग्रेजी\s*में|इंग्लिश\s*में|इंग्लिश\s*बोल"
-    r"|इन\s*इंग्लिश",
-    re.IGNORECASE,
-)
+_EMERGENCY_PACKS, _HUMAN_PACKS = _compile_packs()
 
 
 def requested_language(text: Optional[str]) -> Optional[str]:
-    """'hi' / 'en' when the caller asks to switch language ("can we talk in Hindi", "english mein baat karo"),
-    else None. Models forget such a request after a turn or two, so the engine remembers it in code."""
+    """Language code when the caller asks to switch language ("can we talk in Hindi", "english mein baat karo", "habla español"),
+    else None. Each language's "speak <language>" phrases come from its pack. Models forget such a request after a turn or two,
+    so the engine remembers it in code."""
     s = text or ""
     found = []  # (position, code): the latest mention wins when the caller names two languages
-    for code, pattern in (("hi", _ASK_HINDI), ("en", _ASK_ENGLISH)):
-        match = pattern.search(s)
-        if match:
-            found.append((match.start(), code))
-    for code in pack_languages():  # every other language: its own "speak <language>" phrases, from its pack
-        if code in ("hi", "en"):
-            continue
+    for code in pack_languages():
         for phrase in language_pack(code).get("ask_patterns", []):
             match = re.search(phrase, s, re.IGNORECASE)
             if match:
@@ -146,13 +133,36 @@ def requested_language(text: Optional[str]) -> Optional[str]:
     return max(found)[1] if found else None
 
 
-def hindi_escalation(text: str) -> Optional[str]:
-    """'emergency' / 'front_desk' when a Hindi or Devanagari utterance clearly needs it, else None."""
-    if _EMERGENCY.search(text or ""):
+def language_escalation(text: str) -> Optional[str]:
+    """'emergency' / 'front_desk' when an utterance in any packed language clearly needs it, else None."""
+    s = text or ""
+    if any(p.search(s) for p in _EMERGENCY_PACKS):
         return "emergency"
-    if _HUMAN.search(text or "") and _HUMAN_VERB.search(text or ""):
+    if any(who.search(s) and (ask is None or ask.search(s)) for who, ask in _HUMAN_PACKS):
         return "front_desk"
     return None
+
+
+hindi_escalation = language_escalation  # earlier name, kept for existing imports
+
+
+def _compile_key(key: str):
+    return [re.compile(p, re.IGNORECASE) for code in pack_languages() for p in language_pack(code).get(key, [])]
+
+
+_FAREWELL, _HANGUP = _compile_key("farewell_patterns"), _compile_key("hangup_patterns")
+_SHORT_FAREWELL_WORDS = 8  # "ok good night" ends the call; a long sentence that merely contains "bye" does not
+
+
+def caller_is_leaving(text: Optional[str]) -> bool:
+    """The caller is saying goodbye (a short farewell in any packed language) or asks for the call to be ended. A question is never a
+    goodbye. Phrases are data in each language's pack (`farewell_patterns`, `hangup_patterns`)."""
+    s = (text or "").strip()
+    if not s or "?" in s:
+        return False
+    if any(p.search(s) for p in _HANGUP):
+        return True
+    return len(s.split()) <= _SHORT_FAREWELL_WORDS and any(p.search(s) for p in _FAREWELL)
 
 
 # --- Speaker gender: a safety net under the prompt's gender rule ---------------------------------------------------

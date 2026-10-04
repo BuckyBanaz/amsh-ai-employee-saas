@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { STRINGS } from '../../utils/strings/en';
 import { DashboardController, AppointmentItem } from '../../controllers/dashboard.controller';
+import { StorageService } from '../../services/storage.service';
 
 import { ChannelBadge } from './ChannelBadge';
 import { channelOfAppointment } from '../../utils/channels';
@@ -19,11 +20,17 @@ export function AppointmentsTable({ items, loading: propLoading }: AppointmentsT
   const [loading, setLoading] = useState<boolean>(propLoading ?? !items);
 
   const refresh = useCallback(() => {
+    if (!StorageService.getToken() || !StorageService.getBusinessId()) {
+      setLoading(false);
+      return;
+    }
+
     DashboardController.getAppointments()
       .then((data) => {
         setAppointments(data || []);
       })
       .catch((err) => {
+        if (!StorageService.getToken()) return;
         console.error('Failed to load dashboard appointments:', err);
       })
       .finally(() => {

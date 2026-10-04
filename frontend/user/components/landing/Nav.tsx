@@ -7,11 +7,12 @@ import { Icon } from "./icons";
 import { Logo } from "./Logo";
 
 const LINKS = [
-  { href: "#see-it", label: "See it in action" },
+  { href: "#see-it", label: "Live Demo" },
   { href: "#features", label: "What it does" },
-  { href: "#product", label: "Product" },
-  { href: "#how-it-works", label: "How it works" },
+  { href: "#testimonials", label: "Testimonials" },
   { href: "#pricing", label: "Pricing" },
+  { href: "#integrations", label: "Partners" },
+  { href: "/docs", label: "Docs" },
 ];
 
 const FOCUS = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950";
@@ -49,9 +50,21 @@ export default function Nav() {
         <ul className="hidden items-center gap-1 lg:flex">
           {LINKS.map((l) => (
             <li key={l.href}>
-              <a href={l.href} className={`rounded-lg px-3 py-2 text-[15px] font-medium text-white/70 transition-colors duration-200 hover:text-white ${FOCUS}`}>
-                {l.label}
-              </a>
+              {l.href.startsWith("/") ? (
+                <Link
+                  href={l.href}
+                  className={`rounded-lg px-3 py-2 text-[15px] font-medium text-white/70 transition-colors duration-200 hover:text-white ${FOCUS}`}
+                >
+                  {l.label}
+                </Link>
+              ) : (
+                <a
+                  href={l.href}
+                  className={`rounded-lg px-3 py-2 text-[15px] font-medium text-white/70 transition-colors duration-200 hover:text-white ${FOCUS}`}
+                >
+                  {l.label}
+                </a>
+              )}
             </li>
           ))}
         </ul>
@@ -99,9 +112,23 @@ export default function Nav() {
             <ul>
               {LINKS.map((l) => (
                 <li key={l.href}>
-                  <a onClick={() => setOpen(false)} href={l.href} className={`block rounded-xl px-3 py-3 font-medium text-white/85 hover:bg-white/5 ${FOCUS}`}>
-                    {l.label}
-                  </a>
+                  {l.href.startsWith("/") ? (
+                    <Link
+                      onClick={() => setOpen(false)}
+                      href={l.href}
+                      className={`block rounded-xl px-3 py-3 font-medium text-white/85 hover:bg-white/5 ${FOCUS}`}
+                    >
+                      {l.label}
+                    </Link>
+                  ) : (
+                    <a
+                      onClick={() => setOpen(false)}
+                      href={l.href}
+                      className={`block rounded-xl px-3 py-3 font-medium text-white/85 hover:bg-white/5 ${FOCUS}`}
+                    >
+                      {l.label}
+                    </a>
+                  )}
                 </li>
               ))}
             </ul>

@@ -1,9 +1,10 @@
 "use client";
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { fetchTenant, fetchTenantSection, TenantDetail } from '../../../../lib/api';
 import { TenantActionDialog, TenantAction } from '../../../../components/admin/TenantActionDialog';
+import { DeleteBusinessDialog } from '../../../../components/admin/DeleteBusinessDialog';
 
 // ---- helpers ----------------------------------------------------------------------------------------------------------
 
@@ -94,6 +95,8 @@ export default function BusinessDetailPage() {
   const [loaded, setLoaded] = useState<{ key: string; tenant?: TenantDetail; error?: string } | null>(null);
   const [action, setAction] = useState<TenantAction | null>(null);
   const [notice, setNotice] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const router = useRouter();
   const key = `${id}#${reload}`;
 
   useEffect(() => {
@@ -159,14 +162,18 @@ export default function BusinessDetailPage() {
           <p className="text-[11px] text-[#94A3B8] mt-1">Business ID {tenant.id}</p>
         </div>
         <div className="flex items-center gap-2">
+          <Link href={`/businesses/${tenant.id}/edit`} className="px-3 py-1.5 text-xs font-semibold text-[#475569] border border-[#E2E8F0] bg-white rounded-md hover:bg-[#F8FAFC]">Edit</Link>
           <button onClick={() => setAction('plan')} className="px-3 py-1.5 text-xs font-semibold text-[#475569] border border-[#E2E8F0] bg-white rounded-md hover:bg-[#F8FAFC]">Change plan</button>
           {tenant.status === 'suspended' ? (
             <button onClick={() => setAction('reactivate')} className="px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-md">Reactivate</button>
           ) : (
             <button onClick={() => setAction('suspend')} className="px-3 py-1.5 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 rounded-md">Suspend</button>
           )}
+          <button onClick={() => setDeleting(true)} className="px-3 py-1.5 text-xs font-semibold text-red-600 border border-red-200 bg-white rounded-md hover:bg-red-50">Delete…</button>
         </div>
       </header>
+
+      {deleting && <DeleteBusinessDialog business={tenant} onClose={() => setDeleting(false)} onDeleted={() => router.push('/businesses')} />}
 
       {notice && (
         <div role="status" className="mb-3 flex items-center justify-between text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-md px-3 py-2">

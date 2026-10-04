@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { fetchPlans, fetchTenants, updateTenant, PlanApi, TenantItem, TenantList } from '../../../lib/api';
+import { DeleteBusinessDialog } from '../../../components/admin/DeleteBusinessDialog';
 
 const STATUS_STYLES: Record<string, { bg: string; text: string }> = {
   active: { bg: 'bg-[#D1FAE5]', text: 'text-[#065F46]' },
@@ -45,6 +46,7 @@ export default function BusinessesPage() {
   const [busy, setBusy] = useState(false);
   const [dialogError, setDialogError] = useState('');
   const [notice, setNotice] = useState('');
+  const [deleting, setDeleting] = useState<TenantItem | null>(null);
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(search.trim()), 300);
@@ -177,14 +179,9 @@ export default function BusinessesPage() {
             <button onClick={reset} className="text-[11px] font-semibold text-[#2563EB] hover:underline px-1">Reset</button>
           )}
         </div>
-        {/* Clinics sign themselves up through the tenant app, so there is no "add business" here. */}
-        <button
-          disabled
-          title="Clinics create their own account in the tenant app"
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-[#E2E8F0] text-[#94A3B8] rounded-md text-xs font-semibold cursor-not-allowed"
-        >
+        <Link href="/businesses/add" className="flex items-center gap-1.5 px-3 py-1.5 bg-[#2563EB] hover:bg-blue-700 text-white rounded-md text-xs font-semibold transition-colors">
           Add Business
-        </button>
+        </Link>
       </div>
 
       {/* Results Count */}
@@ -203,15 +200,15 @@ export default function BusinessesPage() {
       </div>
 
       {/* Businesses Table */}
-      <div className="bg-white border border-[#E2E8F0] rounded-lg shadow-2xs overflow-hidden">
-        <div className="overflow-x-auto">
+      <div className="bg-white border border-[#E2E8F0] rounded-xl shadow-2xs">
+        <div className="overflow-x-auto min-h-[300px] pb-24">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0]">
                 {['Business Name', 'Type', 'Owner', 'Country', 'AI Receptionist', 'Plan', 'Usage (30 days)', 'Status', 'Created'].map((h) => (
                   <th key={h} className="px-3.5 py-2 text-[10px] font-bold text-[#475569] uppercase tracking-wider whitespace-nowrap">{h}</th>
                 ))}
-                <th className="px-3.5 py-2 w-8"><span className="sr-only">Actions</span></th>
+                <th className="px-3.5 py-2 w-10 text-right"><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#E2E8F0]">
@@ -275,24 +272,104 @@ export default function BusinessesPage() {
                             e.stopPropagation();
                             setMenuFor(menuFor === b.id ? null : b.id);
                           }}
-                          className="p-1 text-[#94A3B8] hover:text-[#0F172A] hover:bg-gray-100 rounded-md transition-colors"
+                          className={`p-1.5 rounded-lg transition-colors ${
+                            menuFor === b.id
+                              ? 'text-[#0F172A] bg-gray-200'
+                              : 'text-[#94A3B8] hover:text-[#0F172A] hover:bg-gray-100'
+                          }`}
                         >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                             <circle cx="12" cy="12" r="1"></circle>
                             <circle cx="19" cy="12" r="1"></circle>
                             <circle cx="5" cy="12" r="1"></circle>
                           </svg>
                         </button>
                         {menuFor === b.id && (
-                          <div className="absolute right-3 top-8 z-20 w-40 bg-white border border-[#E2E8F0] rounded-md shadow-lg py-1 text-left" onClick={(e) => e.stopPropagation()}>
-                            <Link href={`/businesses/${b.id}`} className="block px-3 py-1.5 text-xs text-[#334155] hover:bg-[#F8FAFC]">View details</Link>
-                            <button onClick={() => openDialog(b, 'plan')} className="block w-full text-left px-3 py-1.5 text-xs text-[#334155] hover:bg-[#F8FAFC]">Change plan</button>
-                            {b.status === 'suspended' ? (
-                              <button onClick={() => openDialog(b, 'reactivate')} className="block w-full text-left px-3 py-1.5 text-xs text-emerald-700 hover:bg-[#F8FAFC]">Reactivate</button>
-                            ) : (
-                              <button onClick={() => openDialog(b, 'suspend')} className="block w-full text-left px-3 py-1.5 text-xs text-red-600 hover:bg-[#F8FAFC]">Suspend</button>
-                            )}
-                          </div>
+                          <>
+                            {/* Backdrop to close menu on click outside */}
+                            <div
+                              className="fixed inset-0 z-20 cursor-default"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setMenuFor(null);
+                              }}
+                            />
+                            {/* Dropdown Menu */}
+                            <div
+                              className="absolute right-3 top-9 z-30 w-44 bg-white border border-[#E2E8F0] rounded-xl shadow-xl py-1 text-left animate-in fade-in zoom-in-95 duration-150"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Link
+                                href={`/businesses/${b.id}`}
+                                onClick={() => setMenuFor(null)}
+                                className="flex items-center gap-2 px-3 py-1.5 text-xs text-[#334155] hover:bg-[#F8FAFC] hover:text-[#2563EB] transition-colors"
+                              >
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                                  <circle cx="12" cy="12" r="3" />
+                                </svg>
+                                View details
+                              </Link>
+                              <Link
+                                href={`/businesses/${b.id}/edit`}
+                                onClick={() => setMenuFor(null)}
+                                className="flex items-center gap-2 px-3 py-1.5 text-xs text-[#334155] hover:bg-[#F8FAFC] hover:text-[#2563EB] transition-colors"
+                              >
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                                </svg>
+                                Edit clinic
+                              </Link>
+                              <button
+                                onClick={() => openDialog(b, 'plan')}
+                                className="flex items-center gap-2 w-full text-left px-3 py-1.5 text-xs text-[#334155] hover:bg-[#F8FAFC] hover:text-[#2563EB] transition-colors"
+                              >
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <rect width="20" height="14" x="2" y="5" rx="2" />
+                                  <line x1="2" x2="22" y1="10" y2="10" />
+                                </svg>
+                                Change plan
+                              </button>
+                              {b.status === 'suspended' ? (
+                                <button
+                                  onClick={() => openDialog(b, 'reactivate')}
+                                  className="flex items-center gap-2 w-full text-left px-3 py-1.5 text-xs text-emerald-700 hover:bg-emerald-50 transition-colors"
+                                >
+                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <polygon points="5 3 19 12 5 21 5 3" />
+                                  </svg>
+                                  Reactivate
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => openDialog(b, 'suspend')}
+                                  className="flex items-center gap-2 w-full text-left px-3 py-1.5 text-xs text-amber-700 hover:bg-amber-50 transition-colors"
+                                >
+                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <circle cx="12" cy="12" r="10" />
+                                    <line x1="10" x2="10" y1="15" y2="9" />
+                                    <line x1="14" x2="14" y1="15" y2="9" />
+                                  </svg>
+                                  Suspend
+                                </button>
+                              )}
+                              <div className="border-t border-[#F1F5F9] my-1" />
+                              <button
+                                onClick={() => {
+                                  setMenuFor(null);
+                                  setDeleting(b);
+                                }}
+                                className="flex items-center gap-2 w-full text-left px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 transition-colors"
+                              >
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <path d="M3 6h18" />
+                                  <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                                  <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                                </svg>
+                                Delete clinic…
+                              </button>
+                            </div>
+                          </>
                         )}
                       </td>
                     </tr>
@@ -303,6 +380,14 @@ export default function BusinessesPage() {
           </table>
         </div>
       </div>
+
+      {deleting && (
+        <DeleteBusinessDialog
+          business={deleting}
+          onClose={() => setDeleting(null)}
+          onDeleted={(name) => { setDeleting(null); setNotice(`${name} was deleted permanently.`); load(); }}
+        />
+      )}
 
       {/* Confirmation dialog (an in-page dialog: the browser's confirm() is not reliable inside embedded views) */}
       {dialog && (

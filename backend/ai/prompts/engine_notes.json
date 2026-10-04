@@ -11,10 +11,6 @@
   "asked": "The caller asked you to speak {name}. Reply in {name} for the rest of the call, even when their next message is transcribed in another script or contains words from another language, until they ask for another language.",
   "native": "Speak {name} the way a native speaker does on the phone: real everyday filler words, acknowledgements and politeness forms of that language (never translate English fillers word for word)."
  },
- "hindi_emergency": {
-  "hindi": "Yeh emergency lag rahi hai. Main aapko turant emergency coordinator se connect kar rahi hoon. Agar aap khatre mein hain toh abhi emergency services ko call kijiye.",
-  "default": "This sounds like an emergency. I am transferring you to an emergency care coordinator immediately. If you are in immediate danger, please dial emergency services right now."
- },
  "guard_note": "Your draft mentioned the time(s) {times}, but the caller did not say them and no tool returned them. Never state or offer a time that did not come from check_availability or the caller. Call check_availability first, or ask the caller what time suits them.",
  "claim_note": "Your draft said the appointment was {kinds}, but no tool has confirmed that. Never claim an action is done before the tool result says so. If the caller has already said yes to the read-back, call the tool now (book_appointment with confirmed_by_caller=true); otherwise read the details back and ask for their confirmation.",
  "mood_notes": {
@@ -80,7 +76,13 @@
    "transfer_to_human.not_requested": "The caller did not ask for a person. Ask if they would like to be connected to the front desk, and wait for their answer. Do not transfer yet.",
    "transfer_to_human.dry_run": "Transfer requested (shadow mode).",
    "transfer.transfer_unavailable": "Transfer is not possible right now. Apologise, and offer to take a message.",
-   "transfer.started": "Transfer started. Say one short sentence that you are connecting them."
+   "transfer.started": "Transfer started. Say one short sentence that you are connecting them.",
+   "tools.send_confirmation": "Send the caller's upcoming appointment details to their phone by WhatsApp or SMS (the clinic's own message template). Use it when the caller asks you to send, resend or text the details. Pass channel only if they named one.",
+   "send_confirmation.no_appointment": "No upcoming appointment was found for that number, so there is nothing to send. Offer to book one.",
+   "send_confirmation.limit": "Details were already sent twice on this call. Do not send again; offer the front desk if they still did not receive them.",
+   "send_confirmation.dry_run": "Test call: nothing was sent. In a real call the appointment details would go to the caller's phone by {channel}.",
+   "send_confirmation.sent": "Sent by {channel}. Tell the caller the appointment details were sent to their phone.",
+   "send_confirmation.not_sent": "Could not send the details ({reason}). Tell the caller honestly that it did not go through and offer the front desk."
   }
  }
 }

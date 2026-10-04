@@ -1,0 +1,166 @@
+"""Platform admin: create and permanently delete a business (tenant) from the admin portal.
+
+A clinic normally signs itself up in the tenant app; this is for staff who set a business up on its behalf. Both actions are
+guarded by `require_platform_admin` and written to the audit log.
+
+Create: one call makes the business and its owner login, optionally on a chosen plan (catalog or enterprise).
+Delete: PERMANENT. It is reached only through an explicit, previewed, name-confirmed request: `GET .../delete-preview` shows what
+would go (nothing is touched), and `DELETE` refuses unless `confirm` equals the business's exact name. There is no undo, so the
+admin portal offers Suspend (reversible) first. Never call either from a read endpoint or on startup.
+"""
+
+from datetime import datetime, timezone
+from typing import Any, Dict, Literal, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel, EmailStr, Field
+from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
+from backend.server.api.routes.businesses import ALLOWED_VERTICALS
+from backend.server.auth.security import hash_password, require_platform_admin
+from backend.server.database.models.audit_log import AuditLog
+from backend.server.database.models.business import Business
+from backend.server.database.models.call import Call
+from backend.server.database.models.message import Message
+from backend.server.database.models.service import Service, staff_services
+from backend.server.database.models.staff import Staff
+from backend.server.database.models.user import User
+from backend.server.database.session import Base, get_db
+from backend.server.services.audit import audit, client_ip
+from backend.server.services.plans import find_by_key
+
+router = APIRouter(prefix="/api/admin/tenants", tags=["admin-tenants-manage"])
+
+
+class OwnerIn(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
+
+
+class TenantCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    vertical: str = "clinic"
+    business_type: Optional[str] = None
+    business_subtype: Optional[str] = None
+    country: Optional[str] = None
+    website: Optional[str] = None
+    business_email: Optional[str] = None
+    business_phone: Optional[str] = None
+    city: Optional[str] = None
+    address: Optional[str] = None
+    postal_code: Optional[str] = None
+    timezone: str = "UTC"
+    currency: str = Field(default="USD", min_length=3, max_length=3)
+    working_hours: Optional[Dict[str, Any]] = None
+    plan: Optional[str] = None  # a plan key, catalog or enterprise
+    status: Literal["active", "paused", "suspended", "pending"] = "active"
+    owner: OwnerIn
+
+
+@router.post("", status_code=status.HTTP_201_CREATED)
+def create_tenant(payload: TenantCreate, request: Request, db: Session = Depends(get_db), admin: User = Depends(require_platform_admin)) -> Dict[str, Any]:
+    if payload.vertical not in ALLOWED_VERTICALS:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"vertical must be one of {sorted(ALLOWED_VERTICALS)}")
+    email = payload.owner.email.lower()
+    if db.scalar(select(User.id).where(func.lower(User.email) == email)):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="That owner email is already registered")
+    plan_key = None
+    if payload.plan:
+        plan = find_by_key(db, payload.plan.strip().lower())
+        if not plan:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Unknown plan '{payload.plan}'")
+        plan_key = plan.key
+
+    fields = payload.model_dump(exclude={"owner", "plan", "working_hours", "business_type"})
+    business = Business(**fields)
+    if payload.business_type:
+        business.business_type = payload.business_type
+    if payload.working_hours is not None:
+        business.working_hours = payload.working_hours
+    if plan_key:
+        business.plan = plan_key
+    db.add(business)
+    db.flush()
+    owner = User(
+        name=payload.owner.name,
+        email=email,
+        hashed_password=hash_password(payload.owner.password),
+        scope="business",
+        role="owner",
+        business_id=business.id,
+        email_verified_at=datetime.now(timezone.utc),  # staff vouched for this address
+    )
+    db.add(owner)
+    db.commit()
+    audit(db, "admin.tenant_created", admin, business_id=business.id, target_type="business", target_id=business.id, ip=client_ip(request),
+          meta={"name": business.name, "vertical": business.vertical, "plan": business.plan, "status": business.status, "owner_email": email})
+    return {"id": business.id, "name": business.name, "plan": business.plan, "status": business.status, "owner": {"id": owner.id, "email": owner.email}}
+
+
+# ---- Permanent delete ---------------------------------------------------------------------------------------------------
+
+def _business_tables():
+    """Every table that carries a `business_id` (child tables first), found from the models so a new table is never forgotten."""
+    return [t for t in reversed(Base.metadata.sorted_tables) if "business_id" in t.c and t.name != "businesses"]
+
+
+def _get_business(db: Session, business_id: str) -> Business:
+    business = db.get(Business, business_id)
+    if not business:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Business not found")
+    return business
+
+
+@router.get("/{business_id}/delete-preview")
+def delete_preview(business_id: str, db: Session = Depends(get_db), admin: User = Depends(require_platform_admin)) -> Dict[str, Any]:
+    """What a permanent delete would remove. Touches nothing."""
+    business = _get_business(db, business_id)
+    counts: Dict[str, int] = {}
+    for table in _business_tables():
+        n = db.scalar(select(func.count()).select_from(table).where(table.c.business_id == business_id)) or 0
+        if n:
+            counts[table.name] = int(n)
+    return {
+        "id": business.id, "name": business.name, "status": business.status, "plan": business.plan,
+        "counts": counts, "total_rows": sum(counts.values()),
+        "confirm_with": business.name,
+        "suggestion": "Suspend the business instead if you may need it again: a suspended business can be reactivated, a deleted one cannot.",
+    }
+
+
+class DeleteRequest(BaseModel):
+    confirm: str = ""  # must equal the business's exact name
+
+
+@router.delete("/{business_id}")
+def delete_tenant(business_id: str, payload: DeleteRequest, request: Request, db: Session = Depends(get_db), admin: User = Depends(require_platform_admin)) -> Dict[str, Any]:
+    business = _get_business(db, business_id)
+    if payload.confirm.strip() != business.name.strip():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Type the business's exact name to confirm. Nothing was deleted.")
+    name, deleted = business.name, 0
+    try:
+        # Rows that point at this business's rows without carrying business_id themselves
+        call_ids = db.scalars(select(Call.id).where(Call.business_id == business_id)).all()
+        if call_ids:
+            db.execute(delete(Message).where(Message.call_id.in_(call_ids)))
+        staff_ids = db.scalars(select(Staff.id).where(Staff.business_id == business_id)).all()
+        service_ids = db.scalars(select(Service.id).where(Service.business_id == business_id)).all()
+        conds = ([staff_services.c.staff_id.in_(staff_ids)] if staff_ids else []) + ([staff_services.c.service_id.in_(service_ids)] if service_ids else [])
+        if conds:
+            db.execute(delete(staff_services).where(or_(*conds)))
+        user_ids = db.scalars(select(User.id).where(User.business_id == business_id)).all()
+        if user_ids:  # keep other businesses' and platform audit rows, just forget who these users were
+            db.execute(update(AuditLog).where(AuditLog.actor_user_id.in_(user_ids)).values(actor_user_id=None))
+            db.execute(update(Call).where(Call.taken_over_by_user_id.in_(user_ids)).values(taken_over_by_user_id=None))
+        for table in _business_tables():
+            deleted += db.execute(delete(table).where(table.c.business_id == business_id)).rowcount or 0
+        db.execute(delete(Business).where(Business.id == business_id))  # its users go with it (rows carrying business_id above)
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Something still refers to this business, so nothing was deleted. Suspend it instead.") from exc
+    audit(db, "admin.tenant_deleted", admin, target_type="business", target_id=business_id, ip=client_ip(request), meta={"name": name, "rows_deleted": deleted})
+    return {"deleted": True, "id": business_id, "name": name, "rows_deleted": deleted}

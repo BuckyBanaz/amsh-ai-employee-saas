@@ -75,6 +75,7 @@ _CAPABILITY_TOOLS: Dict[str, Set[str]] = {
     "reschedule": {"reschedule_appointment"},
     "cancel": {"cancel_appointment"},
     "transfer": {"transfer_to_human"},
+    "messages": {"send_confirmation"},
 }
 _CAPABILITY_TEXT: Dict[str, str] = {
     "faq": "answering general questions about the clinic",
@@ -85,6 +86,7 @@ _CAPABILITY_TEXT: Dict[str, str] = {
     "services": "explaining the clinic's services",
     "hours": "stating the clinic's opening hours",
     "transfer": "transferring calls to staff",
+    "messages": "sending appointment details by WhatsApp or SMS",
 }
 
 

@@ -38,7 +38,36 @@ export const StorageService = {
 
   getBusinessId: () => {
     if (typeof window === 'undefined') return null;
-    return localStorage.getItem('business_id');
+    const directId = localStorage.getItem('business_id');
+    if (directId && directId !== 'null' && directId !== 'undefined' && directId.trim() !== '') {
+      return directId;
+    }
+
+    // Fallback 1: Extract from stored user object
+    try {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const u = JSON.parse(userStr);
+        if (u?.business_id) {
+          localStorage.setItem('business_id', u.business_id);
+          return u.business_id;
+        }
+      }
+    } catch {}
+
+    // Fallback 2: Extract from stored business object
+    try {
+      const bStr = localStorage.getItem('business');
+      if (bStr) {
+        const b = JSON.parse(bStr);
+        if (b?.id) {
+          localStorage.setItem('business_id', b.id);
+          return b.id;
+        }
+      }
+    } catch {}
+
+    return null;
   },
 
   setBusinessId: (id: string) => {
