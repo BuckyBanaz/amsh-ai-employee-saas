@@ -177,7 +177,7 @@ def build_system_prompt(
         country=getattr(facts, "country", ""),
         timezone=facts.timezone,
     )
-    compliance_clause = compliance.get("compliance_clause", "")
+    compliance_clause = getattr(facts, "compliance_clause", "") or compliance.get("compliance_clause", "")  # the platform's edit wins over the built-in text
     if compliance_clause:
         prompt += fp["policy"].format(clause=compliance_clause)
 

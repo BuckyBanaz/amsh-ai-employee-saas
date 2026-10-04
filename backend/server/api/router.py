@@ -4,7 +4,9 @@ from backend.server.api.routes import (
     admin,
     admin_alerts,
     admin_audit,
+    admin_policies,
     admin_spend,
+    policies as policy_routes,
     admin_calls,
     admin_platform_data,
     admin_integrations,
@@ -88,6 +90,9 @@ api_router.include_router(admin_calls.router)
 api_router.include_router(admin_audit.router)
 api_router.include_router(admin_alerts.router)
 api_router.include_router(admin_spend.router)
+api_router.include_router(admin_policies.router)
+api_router.include_router(policy_routes.public_router)
+api_router.include_router(policy_routes.business_router)
 api_router.include_router(admin_users.router)
 api_router.include_router(admin_verticals.router)
 api_router.include_router(admin_platform_data.router)

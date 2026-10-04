@@ -38,6 +38,7 @@ class BusinessFacts:
     vertical: str = ""  # required: no silent "clinic" (resolve_business_context raises when it is empty)
     slot_minutes: int = DEFAULT_SLOT_MINUTES  # visit length + the owner's buffer between visits
     notice_hours: float = 0.0  # minimum lead time before an appointment can start
+    compliance_clause: str = ""  # the platform's privacy instruction for this region (admin: Policies & Privacy); empty = the built-in text
 
 
 @dataclass

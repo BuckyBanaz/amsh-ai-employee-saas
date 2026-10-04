@@ -118,6 +118,8 @@ def load_facts(db: Session, business_id: str) -> BusinessFacts:
     clinical = [s.name for s in staff if _CLINICAL_ROLE.search(s.role or "")] or [s.name for s in staff]
     services = db.query(Service).filter(Service.business_id == business_id).all()
     durations = [s.duration_minutes for s in services if s.duration_minutes]
+    from backend.server.services.policies import rule_data
+
     return BusinessFacts(
         name=business.name,
         timezone=(business.timezone or "").strip(),
@@ -130,6 +132,7 @@ def load_facts(db: Session, business_id: str) -> BusinessFacts:
         country=business.country or "",
         vertical=(business.vertical or "").strip(),
         slot_minutes=min(max(min(durations), 15), 60) if durations else DEFAULT_SLOT_MINUTES,
+        compliance_clause=str(rule_data(db, business.country or "", (business.vertical or "").strip().lower()).get("compliance_clause") or ""),
     )
 
 

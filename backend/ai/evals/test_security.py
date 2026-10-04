@@ -218,6 +218,7 @@ class NoUnguardedRoutes(unittest.TestCase):
         ("GET", "/api/billing/config"), ("GET", "/api/billing/trial-config"), ("GET", "/api/payments/config"), ("GET", "/api/voice/stt-config"),
         ("GET", "/api/calendar/{business_id}/{token}.ics"), ("GET", "/api/recordings/{call_id}/{token}"),  # the token in the URL is the secret
         ("GET", "/api/v1/whatsapp/webhook"), ("POST", "/api/v1/whatsapp/webhook"),  # Meta verify token / signature checked inside
+        ("GET", "/api/policies/public/{key}"),  # the published Terms and Privacy text, shown before sign-up
         ("GET", "/api/seo/public"), ("GET", "/api/seo/robots.txt"), ("GET", "/api/seo/sitemap.xml"),  # public marketing-site SEO
         ("GET", "/"), ("GET", "/health"),
     }

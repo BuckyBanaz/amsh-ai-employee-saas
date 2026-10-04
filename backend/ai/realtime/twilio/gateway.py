@@ -28,6 +28,7 @@ from backend.ai.engine.conversation.states import CallState
 from backend.ai.engine.conversation.nlu import ConversationalNLU
 from backend.ai.engine.agent.runtime import AgentRuntime, get_sim_runtime, store_sim_runtime
 from backend.ai.engine.agent.sandbox import SandboxLedger
+from backend.server.services import policies as policy_service
 from backend.ai.llm.client import llm_client
 from backend.ai.memory.session_memory import session_memory
 from backend.ai.realtime import latency
@@ -145,6 +146,7 @@ class CallSession:
         )
         session_memory.store_session(call_id, self.state_machine)
         greeting = self.state_machine.start_call(self.agent_settings.get("greeting"))
+        greeting = await asyncio.to_thread(policy_service.greeting_for, self.business_id, greeting, self.agent_settings.get("language"))  # recording notice where the region asks for it
         try:
             self.agent_rt = await AgentRuntime.create(
                 self.business_id, call_id, self.caller_number, vertical_cfg, greeting, self.agent_settings.get("language")
@@ -626,6 +628,7 @@ async def _ensure_sim_session(payload: VoiceSimulateRequest, db: Session) -> Tup
         session_memory.store_session(call_id, state_machine)
         # Advance initial greeting
         initial_greeting = state_machine.start_call(agent_settings.get("greeting"))
+        initial_greeting = await asyncio.to_thread(policy_service.greeting_for, payload.business_id, initial_greeting, agent_settings.get("language"))  # the playground says what a caller would hear
         record_call_start(
             call_id=call_id,
             business_id=payload.business_id,

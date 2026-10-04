@@ -33,6 +33,7 @@ class RegisterRequest(BaseModel):
     name: str
     email: EmailStr
     password: str
+    accept_terms: bool = False  # required once Terms or a Privacy Policy is published (admin: Policies & Privacy)
 
 
 class LoginRequest(BaseModel):
@@ -103,6 +104,11 @@ def register(payload: RegisterRequest, request: Request, background: BackgroundT
     existing = db.query(User).filter(User.email == payload.email).first()
     if existing:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
+    from backend.server.services import policies as policy_service
+
+    signup_policies = policy_service.signup_policies(db)
+    if signup_policies and not payload.accept_terms:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Please accept the Terms of Service and the Privacy Policy to create an account")
 
     user = User(
         name=payload.name,
@@ -115,6 +121,8 @@ def register(payload: RegisterRequest, request: Request, background: BackgroundT
     db.commit()
     db.refresh(user)
     audit(db, "auth.register", user, ip=client_ip(request))
+    if signup_policies:  # the proof: which version, who, when, from where
+        policy_service.accept(db, user, None, [v.id for _, v in signup_policies], client_ip(request), request.headers.get("user-agent"))
     background.add_task(_send_verification_email, user)
 
     token = create_access_token(user.id)
