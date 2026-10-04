@@ -204,7 +204,8 @@ def report(db: Session, days: int = 30) -> Dict[str, Any]:
         t, b = tenants[biz], info.get(biz)
         spend = t["spend"] + t["test_spend"]
         rev = revenue.get(biz, 0.0)
-        rows.append({"id": biz, "name": b.name if b else "(deleted clinic)", "plan": b.plan if b else None, "status": b.status if b else None, "calls": t["calls"], "minutes": round(t["minutes"], 1),
+        vq = next((q for q in quotas.status_for(db, b) if q["key"] == "voice_minutes"), None) if b else None
+        rows.append({"id": biz, "voice_quota": {k: vq[k] for k in ("used", "limit", "percent", "state")} if vq else None, "name": b.name if b else "(deleted clinic)", "plan": b.plan if b else None, "status": b.status if b else None, "calls": t["calls"], "minutes": round(t["minutes"], 1),
                      "spend": round(spend, 4), "test_spend": round(t["test_spend"], 4), "revenue": round(rev, 2), "profit": round(rev - spend, 4)})
     rows.sort(key=lambda r: r["profit"])  # the clinics costing us most relative to what they pay come first
 

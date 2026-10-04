@@ -904,7 +904,7 @@ export const saveAlertPrefs = (muted: string[]) => adminFetch<{ muted: string[] 
 // ---- Spend and profit (Usage & Limits) ------------------------------------------------------------------------------
 
 export interface SpendTool { tool: string; label: string; provider: string; unit: string; quantity: number; cost: number; test_cost: number; share_pct: number; estimated: boolean }
-export interface SpendTenant { id: string; name: string; plan: string | null; status: string | null; calls: number; minutes: number; spend: number; test_spend: number; revenue: number; profit: number }
+export interface SpendTenant { id: string; name: string; plan: string | null; status: string | null; calls: number; minutes: number; spend: number; test_spend: number; revenue: number; profit: number; voice_quota: { used: number; limit: number | null; percent: number | null; state: string } | null }
 export interface SpendReport {
   days: number;
   currency: string;
