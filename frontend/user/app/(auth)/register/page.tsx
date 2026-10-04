@@ -136,7 +136,7 @@ export default function RegisterPage() {
         <div className="flex items-start gap-2 pt-1">
           <input type="checkbox" required className="w-3.5 h-3.5 mt-0.5 rounded border-gray-300 text-[#0066FF] focus:ring-[#0066FF]" />
           <label className="text-xs text-gray-600 leading-tight">
-            {content.TERMS} <Link href="#" className="font-medium text-[#0066FF] hover:underline">{content.TOS}</Link> {content.AND} <Link href="#" className="font-medium text-[#0066FF] hover:underline">{content.PRIVACY}</Link>.
+            {content.TERMS} <Link href="/legal/terms" target="_blank" className="font-medium text-[#0066FF] hover:underline">{content.TOS}</Link> {content.AND} <Link href="/legal/privacy" target="_blank" className="font-medium text-[#0066FF] hover:underline">{content.PRIVACY}</Link>.
           </label>
         </div>
 

@@ -219,6 +219,30 @@ class Acceptance(Base):
         self.assertEqual(self.c.get("/api/policies/public/terms").status_code, 404)  # not published
 
 
+class GoingLive(Base):
+    def setUp(self):
+        super().setUp()
+        from backend.server.api.routes import billing
+
+        self.c.app.include_router(billing.router)
+
+    def test_a_trial_and_a_payment_wait_for_the_owner_to_accept_what_applies(self):
+        self.make("terms")
+        r = self.c.post(f"/api/billing/businesses/{self.biz}/start-trial", headers=self.h["owner"], json={"plan_id": "starter"})
+        self.assertEqual(r.status_code, 409, r.text)
+        self.assertIn("Terms", r.json()["detail"])
+        order = self.c.post("/api/billing/razorpay/create-order", headers=self.h["owner"], json={"plan_id": "starter", "cycle": "monthly", "business_id": self.biz})
+        self.assertEqual(order.status_code, 409)  # refused before any payment is taken
+        vid = self.status()["items"][0]["version_id"]
+        self.c.post(f"/api/businesses/{self.biz}/policies/accept", headers=self.h["owner"], json={"version_ids": [vid]})
+        ok = self.c.post(f"/api/billing/businesses/{self.biz}/start-trial", headers=self.h["owner"], json={"plan_id": "starter"})
+        self.assertEqual(ok.status_code, 200, ok.text)
+
+    def test_nothing_changes_for_a_business_when_nothing_is_published(self):
+        r = self.c.post(f"/api/billing/businesses/{self.biz}/start-trial", headers=self.h["owner"], json={"plan_id": "starter"})
+        self.assertEqual(r.status_code, 200, r.text)
+
+
 class AiRules(Base):
     def rule(self, region="*", vertical="*", data=None, who="super"):
         return self.c.put("/api/admin/policies/rules", headers=self.h[who], json={"scope_region": region, "scope_vertical": vertical, "data": data or {}})

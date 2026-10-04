@@ -43,11 +43,11 @@ export const AuthController = {
     }
   },
   
-  register: async (name: string, email: string, password: string) => {
+  register: async (name: string, email: string, password: string, acceptTerms = true) => {
     try {
       const response = await ApiService.post<any>(
         API_ENDPOINTS.AUTH.REGISTER, 
-        { name, email, password },
+        { name, email, password, accept_terms: acceptTerms },
         { requireAuth: false }
       );
       

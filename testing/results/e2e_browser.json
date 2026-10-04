@@ -1,7 +1,7 @@
 {
-  "ran_at": "2026-10-03 21:55:02",
-  "seconds": 22.0,
-  "passed": 18,
+  "ran_at": "2026-10-04 04:27:18",
+  "seconds": 34.8,
+  "passed": 33,
   "failed": 0,
   "checks": [
     {
@@ -67,10 +67,35 @@
     {
       "check": "admin: the daily spend chart draws bars",
       "ok": true,
-      "detail": "{'x': 1393.265625, 'y': 270.453125, 'width': 9.6875, 'height': 76.046875}"
+      "detail": "{'x': 1393.265625, 'y': 268.4375, 'width': 9.6875, 'height': 78.0625}"
     },
     {
       "check": "admin: editing a price saves and marks it edited",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "admin: starter policy drafts are added and say they are not published",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "admin: the starter text warns it is a draft for a lawyer",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "admin: three policies are live after publishing",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "admin: AI rules show India's framework and the built-in notice",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "admin: the edited notice is shown as what the AI says",
       "ok": true,
       "detail": ""
     },
@@ -88,6 +113,56 @@
       "check": "user: playground shows the test-mode banner",
       "ok": true,
       "detail": "TEST MODE\nNothing here is real: no booking is saved and no message is sent."
+    },
+    {
+      "check": "user: the published Terms are public (no login) at /legal/terms",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "user: the Privacy Policy page loads",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "user: an unpublished policy says so instead of failing",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "user: sign-up links to the real Terms and Privacy pages",
+      "ok": true,
+      "detail": "['/legal/terms', '/legal/privacy']"
+    },
+    {
+      "check": "user: onboarding shows what the AI does for the clinic's region",
+      "ok": true,
+      "detail": "How your AI follows the rules for India\nPrivacy framework: DPDP Act (India) & DISHA\nEmergencies: the AI sends callers to 112 / 108, and never gives medical advice.\nPrivacy instruction: built into the "
+    },
+    {
+      "check": "user: onboarding lists Terms, Privacy and the DPDP addendum",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "user: the next step is blocked until the policies are accepted",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "user: accepting unblocks the next step",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "user: a new version that needs accepting shows a dashboard banner",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "user: accepting the new version clears the banner",
+      "ok": true,
+      "detail": ""
     },
     {
       "check": "user: no uncaught script errors on user pages",

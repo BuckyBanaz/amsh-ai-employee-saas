@@ -15,16 +15,18 @@ Architecture and status: `DOCS/README.md`. Latency work: `DOCS/07_AMSh_Latency_O
 
 Method: each part is a checklist of items (pages or capabilities), equal weight; done = 1, partial = 0.4 to 0.9, pending = 0.
 These are estimates, not measurements. Almost nothing has been checked by a person in a real browser or on a real phone call:
-the evidence is 451 offline tests (all green: `backend/ai/evals/*`), both apps type-check, lint (0 errors) and build, a 35-check API smoke on the real app and an 18-check browser
+the evidence is 475 offline tests (all green: `backend/ai/evals/*`), both apps type-check, lint (0 errors) and build, a 54-check API smoke on the real app and a 33-check browser
 test of both apps (`testing/`, report in `testing/REPORT.md`). The earlier "~72%" did not match this table's own average (about 82%); the figures above are the average of the four parts. Owner-only items: `DOCS/26_AMSh_Owner_Actions.md`.
 
-## Branch `complete` (2026-10-03): see `DOCS/17_...` rows 64 to 76
+## Branch `complete` (2026-10-03): see `DOCS/17_...` rows 64 to 77
 
 Security hardening, message templates with real sending, admin SEO / audit / security / staff / tickets / announcements / verticals, real dashboard numbers, quotas,
 suspended-clinic block, frontend cleanup (zero TypeScript errors), CI, competitor analysis (`DOCS/25`).
 Latest: **playground test mode** (the AI works on a throwaway ledger; nothing is saved, sent or transferred) in the clinic's playgrounds and a new admin **Playground** for any clinic; admin **Alerts**
 (signups, sign-ins, trials, trial-to-plan, plan changes, suspensions, tickets, security; unread badge, muting); admin **Usage & Limits** rebuilt on real data (spend per tool, clinic and day,
 revenue, profit, margin, trial and testing burn, plans near limits, editable rate card; LLM tokens metered per clinic); `testing/` folder with smoke, browser test and report.
+2026-10-04: **policy and privacy management** (row 77): admin Policies & Privacy (documents by region and vertical, versions, publish, acceptances; AI privacy rules and recording notice by region),
+consent at sign-up and at the onboarding review step (enforced before a trial or payment), public `/legal/*` pages, re-accept banner, and the AI now speaks a recording notice at the start of recorded calls.
 
 ## Changes since the 2026-09-28 version
 
@@ -67,7 +69,7 @@ the playground's "Live engine verification" panel still shows fixed claims (Post
 ## Admin frontend (~95%, Claude)
 Done (real data): login + guard, dashboard, businesses list and detail, billing / plan catalog and trial config, integrations (credential editing, SMTP), health, settings,
 analytics, receptionists, appointments, conversations, **audit, security, admin users, tickets (+ detail), announcements, verticals, SEO, message templates, playground,
-alerts (notifications page), usage & limits (spend and profit)**.
+alerts (notifications page), usage & limits (spend and profit), policies & privacy**.
 Pending: business-users (+ detail) and customers are still sample or per-clinic only (no cross-clinic customers API), services, and the detail pages of appointments / conversations.
 Not checked: mobile layouts of the new pages (desktop screenshots only), a person's click-through. Analytics revenue now follows recorded payments.
 
@@ -84,12 +86,12 @@ Open question: whether to switch `GROQ_MODEL` to `llama-3.3-70b-versatile` (remo
 Known small issue: after a barge-in the full reply, including unspoken sentences, is still saved to history.
 
 ## Server (~88%, Claude, except analytics / notifications / billing by Antigravity)
-Done: auth and hardening, businesses / onboarding CRUD, calls + recordings + analysis, Alembic migrations (0001 to 0010), audit log, admin auth / tenants / tenant data / plans / overview,
+Done: auth and hardening, businesses / onboarding CRUD, calls + recordings + analysis, Alembic migrations (0001 to 0011), audit log, admin auth / tenants / tenant data / plans / overview,
 secure Razorpay order and verify, billing status with real usage, invoices, change-plan, start-trial, trial config, admin integrations API, tenant integrations API, admin health / settings,
 Twilio and Exotel signature checks, stream tokens, rate limits, production startup guard, message templates and messenger, quotas and suspended-clinic block, support tickets and announcements,
 admin users / audit / security / verticals / SEO APIs, **admin alerts feed (per-admin unread, muting), spend and profit report with rate card, LLM token metering, playground sandbox**.
 Pending: alerts by email or push, an alert when a trial expires, exact LLM token counts for streamed replies, tracking of post-call analysis / previews / WhatsApp fees / number rental in spend,
-overage billing, a cross-clinic customers API, delivery webhooks for messages, portal-saved provider keys used by live calls (checks only today), Postgres run of the new migrations.
+retention enforcement and lawyer-reviewed policy text, overage billing, a cross-clinic customers API, delivery webhooks for messages, portal-saved provider keys used by live calls (checks only today), Postgres run of the new migrations.
 
 ## Security - full list in `DOCS/23`
 Fixed on branch `complete`: billing routes have auth, upgrades cannot be switched on for free, the free trial is once per business, payment verification checks the order with Razorpay,

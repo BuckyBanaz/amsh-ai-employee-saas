@@ -1,7 +1,7 @@
 {
-  "ran_at": "2026-10-03 21:54:01",
-  "seconds": 5.1,
-  "passed": 35,
+  "ran_at": "2026-10-04 04:25:47",
+  "seconds": 6.4,
+  "passed": 54,
   "failed": 0,
   "checks": [
     {
@@ -163,6 +163,101 @@
       "check": "simulate refuses no token",
       "ok": true,
       "detail": ""
+    },
+    {
+      "check": "/api/admin/policies refuses no token and a clinic owner",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "/api/admin/policies/rules refuses no token and a clinic owner",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "starter policy drafts are added (not published)",
+      "ok": true,
+      "detail": "{'created': 5, 'items': [{'id': '19cfa659-31ab-4016-9001-23d2f3232276', 'key': 'baa', 'title': 'Business Associate Agreement (HIPAA)', 'scope_region': 'HIPAA', 'scope_vertical': 'clinic', 'requires_ac"
+    },
+    {
+      "check": "an unpublished policy binds nobody",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "admin publishes Data Processing Addendum (DPDP, India)",
+      "ok": true,
+      "detail": "200"
+    },
+    {
+      "check": "admin publishes Privacy Policy",
+      "ok": true,
+      "detail": "200"
+    },
+    {
+      "check": "admin publishes Terms of Service",
+      "ok": true,
+      "detail": "200"
+    },
+    {
+      "check": "the public page serves the published text without a login",
+      "ok": true,
+      "detail": "{'key': 'privacy', 'title': 'Privacy Policy', 'version': 1, 'body': '> STARTER DRAFT. This is a structure to edit, not l"
+    },
+    {
+      "check": "sign-up now needs the Terms and Privacy to be accepted",
+      "ok": true,
+      "detail": "422 {'detail': 'Please accept the Terms of Service and the Privacy Policy to create an account'}"
+    },
+    {
+      "check": "sign-up works once they are accepted, and the acceptance is recorded",
+      "ok": true,
+      "detail": "201 {'access_token': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwMGNhNDRmZC1iNDFmLTQ3NzYtYTZlNS04OWJjNThmMmZlOGEiLCJleHAiOjE3OTE2OTI3NDd9.GsMaYcvs68Mr4evc6yZ16Rd8PVA58y5ILVrEodyOpWA', 'token_type': 'bearer', 'user': {'id': '00ca44fd-b41f-4776-a6e5-89bc58f2fe8a', 'name': 'New Owner', 'email': 'second@clinic-smoke.com', 'scope': 'business', 'role': 'owner', 'business_id': None, 'email_verified_at': None}}"
+    },
+    {
+      "check": "acceptance records exist for the new account (terms + privacy)",
+      "ok": true,
+      "detail": "2"
+    },
+    {
+      "check": "the clinic in India is shown Terms, Privacy and the DPDP addendum",
+      "ok": true,
+      "detail": "{'items': [{'policy_id': '0ec48642-7228-49e2-87ca-8a5eab9d0674', 'version_id': 'c1f47f63-7119-4ccb-83e3-b64b23bd7f10', 'key': 'terms', 'title': 'Terms of Service', 'version': 1, 'summary': 'Starter dr"
+    },
+    {
+      "check": "the owner is told what the AI does for India",
+      "ok": true,
+      "detail": "{'region': 'India', 'framework': 'DPDP Act (India) & DISHA', 'emergency': '112 / 108', 'privacy_instruction': True, 'custom_privacy_instruction': False, 'recording_on': True, 'recording_notice': 'Please note that this call may be recorded to help us serve you better.'}"
+    },
+    {
+      "check": "payment is refused until the owner accepts",
+      "ok": true,
+      "detail": "409 {'detail': 'Accept these policies before continuing: Terms of Service, Privacy Policy, Data Processing Addendum (DPDP, India)'}"
+    },
+    {
+      "check": "the owner accepts all three",
+      "ok": true,
+      "detail": "{'accepted': 3, 'items': [{'policy_id': '0ec48642-7228-49e2-87ca-8a5eab9d0674', 'version_id': 'c1f47f63-7119-4ccb-83e3-b64b23bd7f10', 'key': 'terms', 'title': '"
+    },
+    {
+      "check": "the AI's opening line carries the built-in recording notice",
+      "ok": true,
+      "detail": "Hello, thank you for calling Sanjeevani Clinic. I am the AI receptionist. How can I help you today? Please note that this call may be recorded to help us serve you better."
+    },
+    {
+      "check": "admin edits the India rule",
+      "ok": true,
+      "detail": "200"
+    },
+    {
+      "check": "the edited notice is what the next call says",
+      "ok": true,
+      "detail": "Hello, thank you for calling Sanjeevani Clinic. I am the AI receptionist. How can I help you today? Heads up: this call is recorded for training."
+    },
+    {
+      "check": "policy changes are in the audit log",
+      "ok": true,
+      "detail": "5"
     },
     {
       "check": "admin can suspend a clinic",

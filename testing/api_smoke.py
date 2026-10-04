@@ -82,6 +82,52 @@ def main() -> int:
         s, _ = h.call(base, "POST", "/api/voice/simulate", {"business_id": biz, "user_transcript": "hi"})
         check("simulate refuses no token", s == 401)
 
+        # ---- policies: documents, consent at sign-up and before launch, and the AI following the region's rules
+        for path in ("/api/admin/policies", "/api/admin/policies/rules"):
+            check(f"{path} refuses no token and a clinic owner", h.call(base, "GET", path)[0] == 401 and h.call(base, "GET", path, token=owner)[0] == 403)
+        s, made = h.call(base, "POST", "/api/admin/policies/starters", token=admin)
+        check("starter policy drafts are added (not published)", s == 200 and made["created"] == 5 and all(i["published_version"] is None for i in made["items"]), str(made)[:200])
+        check("an unpublished policy binds nobody", h.call(base, "GET", "/api/policies/public/terms")[0] == 404)
+        for item in made["items"]:
+            if (item["key"], item["scope_region"]) in (("terms", "*"), ("privacy", "*"), ("dpa", "DPDP")):
+                s, _ = h.call(base, "POST", f"/api/admin/policies/{item['id']}/publish", token=admin)
+                check(f"admin publishes {item['title']}", s == 200, str(s))
+        s, pub = h.call(base, "GET", "/api/policies/public/privacy?country=India")
+        check("the public page serves the published text without a login", s == 200 and "Privacy Policy" in pub["title"] and pub["version"] == 1, str(pub)[:120])
+        s, r = h.call(base, "POST", "/api/auth/register", {"name": "New Owner", "email": "second@clinic-smoke.com", "password": h.OWNER_PASSWORD})
+        check("sign-up now needs the Terms and Privacy to be accepted", s == 422 and "Terms of Service" in str(r), f"{s} {r}")
+        s, r = h.call(base, "POST", "/api/auth/register", {"name": "New Owner", "email": "second@clinic-smoke.com", "password": h.OWNER_PASSWORD, "accept_terms": True})
+        check("sign-up works once they are accepted, and the acceptance is recorded", s == 201, f"{s} {r}")
+        from backend.server.database.models.policy import PolicyAcceptance
+
+        with h.db_session(db_path) as db:
+            n = db.query(PolicyAcceptance).count()
+        check("acceptance records exist for the new account (terms + privacy)", n == 2, str(n))
+        s, st = h.call(base, "GET", f"/api/businesses/{biz}/policies", token=owner)
+        check("the clinic in India is shown Terms, Privacy and the DPDP addendum", s == 200 and [i["key"] for i in st["items"]] == ["terms", "privacy", "dpa"] and st["pending"] == 3, str(st)[:200])
+        check("the owner is told what the AI does for India", st["ai"]["framework"].startswith("DPDP") and st["ai"]["recording_on"] and "recorded" in st["ai"]["recording_notice"], str(st["ai"]))
+        s, r = h.call(base, "POST", f"/api/billing/businesses/{biz}/change-plan", {"plan_id": "starter"}, owner)  # not a go-live action; the trial was started before any policy existed
+        s, r = h.call(base, "POST", "/api/billing/razorpay/create-order", {"plan_id": "starter", "cycle": "monthly", "business_id": biz}, owner)
+        check("payment is refused until the owner accepts", s == 409 and "Accept these policies" in str(r), f"{s} {r}")
+        s, r = h.call(base, "POST", f"/api/businesses/{biz}/policies/accept", {"version_ids": [i["version_id"] for i in st["items"]]}, owner)
+        check("the owner accepts all three", s == 200 and r["accepted"] == 3 and r["pending"] == 0, str(r)[:160])
+
+        from backend.server.database.models.message import Message
+
+        def greeting_of(call_id: str) -> str:
+            with h.db_session(db_path) as db:
+                m = db.query(Message).filter(Message.call_id == call_id, Message.sequence == 0).first()
+                return m.text if m else ""
+
+        s, _ = h.call(base, "POST", "/api/voice/simulate", {"business_id": biz, "call_id": "sim_policy_a", "user_transcript": "hello"}, owner)
+        check("the AI's opening line carries the built-in recording notice", "may be recorded" in greeting_of("sim_policy_a"), greeting_of("sim_policy_a"))
+        s, rules = h.call(base, "PUT", "/api/admin/policies/rules", {"scope_region": "IN", "data": {"recording_notice": {"en": "Heads up: this call is recorded for training."}, "compliance_clause": "COMPLIANCE (India): Say nothing about other patients."}}, admin)
+        check("admin edits the India rule", s == 200 and any(r["code"] == "IN" and "Say nothing about other patients" in r["effective_clause"] for r in rules["regions"]), str(s))
+        s, _ = h.call(base, "POST", "/api/voice/simulate", {"business_id": biz, "call_id": "sim_policy_b", "user_transcript": "hello"}, owner)
+        check("the edited notice is what the next call says", "Heads up: this call is recorded for training." in greeting_of("sim_policy_b"), greeting_of("sim_policy_b"))
+        s, aud = h.call(base, "GET", "/api/admin/audit?action=admin.policy", token=admin)
+        check("policy changes are in the audit log", s == 200 and aud["total"] >= 5, str(aud.get("total")))
+
         # ---- suspension still works with the new routes in place
         s, _ = h.call(base, "PATCH", f"/api/admin/tenants/{biz}", {"status": "suspended"}, admin)
         check("admin can suspend a clinic", s == 200, str(s))

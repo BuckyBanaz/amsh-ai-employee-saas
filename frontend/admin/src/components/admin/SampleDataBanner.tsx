@@ -23,6 +23,7 @@ const REAL_PAGES = [
   '/admin-users',
   '/tickets',
   '/playground',
+  '/policies',
   '/announcements',
   '/verticals',
   '/templates',

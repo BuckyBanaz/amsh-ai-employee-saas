@@ -919,3 +919,28 @@ export interface RateItem { key: string; tool: string; label: string; provider: 
 export const fetchSpend = (days: number) => adminFetch<SpendReport>(`/admin/spend?days=${days}`);
 export const fetchRates = () => adminFetch<{ currency: string; items: RateItem[] }>('/admin/spend/rates');
 export const saveRates = (prices: Record<string, number>) => adminFetch<{ currency: string; items: RateItem[] }>('/admin/spend/rates', { method: 'PUT', body: JSON.stringify({ prices }) });
+
+// ---- Policies and privacy -------------------------------------------------------------------------------------------
+
+export interface PolicyRow { id: string; key: string; title: string; scope_region: string; scope_vertical: string; requires_acceptance: boolean; status: string; published_version: number | null; published_at: string | null; has_draft: boolean; accepted_count: number }
+export interface PolicyVersionItem { id: string; version: number; status: 'draft' | 'published' | 'superseded'; body: string; summary: string; requires_reacceptance: boolean; created_at: string | null; published_at: string | null; accepted_count: number }
+export interface PolicyDetail { id: string; key: string; title: string; scope_region: string; scope_vertical: string; requires_acceptance: boolean; status: string; versions: PolicyVersionItem[] }
+export interface PolicyAcceptanceRow { id: string; version: number; email: string; business: string | null; accepted_at: string | null; ip: string | null }
+export interface PolicyRuleData { compliance_clause?: string; recording_notice?: { en?: string; hi?: string }; recording_notice_enabled?: boolean }
+export interface PolicyRuleRow { id: string; scope_region: string; scope_vertical: string; data: PolicyRuleData; updated_at: string | null }
+export interface PolicyRegionView { code: string; name: string; framework: string; emergency: string; built_in_clause: string; effective_clause: string; effective_notice: string; notice_enabled: boolean }
+export interface PolicyRules { rules: PolicyRuleRow[]; regions: PolicyRegionView[]; built_in_notice: { en: string; hi: string }; scopes: string[] }
+
+export const fetchPolicies = () => adminFetch<{ items: PolicyRow[]; regions: string[] }>('/admin/policies');
+export const fetchPolicy = (id: string) => adminFetch<PolicyDetail>(`/admin/policies/${id}`);
+export const createPolicy = (body: { key: string; title: string; scope_region: string; scope_vertical: string; requires_acceptance: boolean; body: string; summary?: string }) =>
+  adminFetch<PolicyDetail>('/admin/policies', { method: 'POST', body: JSON.stringify(body) });
+export const addPolicyStarters = () => adminFetch<{ created: number; items: PolicyRow[] }>('/admin/policies/starters', { method: 'POST' });
+export const savePolicyDraft = (id: string, body: { title?: string; body: string; summary: string; requires_reacceptance: boolean }) =>
+  adminFetch<PolicyDetail>(`/admin/policies/${id}/draft`, { method: 'PUT', body: JSON.stringify(body) });
+export const publishPolicy = (id: string) => adminFetch<PolicyDetail>(`/admin/policies/${id}/publish`, { method: 'POST' });
+export const setPolicyArchived = (id: string, archived: boolean) => adminFetch<PolicyDetail>(`/admin/policies/${id}/${archived ? 'archive' : 'restore'}`, { method: 'POST' });
+export const fetchPolicyAcceptances = (id: string) => adminFetch<{ items: PolicyAcceptanceRow[] }>(`/admin/policies/${id}/acceptances`);
+export const fetchPolicyRules = () => adminFetch<PolicyRules>('/admin/policies/rules');
+export const savePolicyRule = (scope_region: string, scope_vertical: string, data: PolicyRuleData) =>
+  adminFetch<PolicyRules>('/admin/policies/rules', { method: 'PUT', body: JSON.stringify({ scope_region, scope_vertical, data }) });

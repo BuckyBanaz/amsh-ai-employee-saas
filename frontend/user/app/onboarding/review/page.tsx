@@ -3,9 +3,15 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { STRINGS } from '../../../utils/strings/en';
+import { StorageService } from '../../../services/storage.service';
+import { PolicyAcceptance } from '../../../components/policies/PolicyAcceptance';
 
 export default function ReviewOnboardingPage() {
   const router = useRouter();
+  // Policies for this business's region: the owner must accept them before launching (the AI's own rules for the region are listed beside them).
+  const [businessId, setBusinessId] = useState<string | null>(null);
+  const [policiesPending, setPoliciesPending] = useState(0);
+  useEffect(() => { setBusinessId(StorageService.getBusinessId()); }, []);
 
   // 1. Business Info
   const [businessInfo, setBusinessInfo] = useState({
@@ -461,6 +467,13 @@ export default function ReviewOnboardingPage() {
 
       </div>
 
+      {businessId && (
+        <div className="mt-6">
+          <h2 className="mb-2 text-base font-bold text-gray-900">Policies and privacy</h2>
+          <PolicyAcceptance businessId={businessId} onPending={setPoliciesPending} />
+        </div>
+      )}
+
       {/* Footer Navigation */}
       <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
         <button 
@@ -473,7 +486,9 @@ export default function ReviewOnboardingPage() {
         <button 
           type="button" 
           onClick={() => router.push('/onboarding/plans')}
-          className="px-6 py-2.5 rounded-lg bg-[#0066FF] hover:bg-[#0052cc] text-white text-sm font-bold transition-all shadow-sm cursor-pointer flex items-center gap-2"
+          disabled={policiesPending > 0}
+          title={policiesPending > 0 ? 'Accept the policies above to continue' : undefined}
+          className="px-6 py-2.5 rounded-lg bg-[#0066FF] hover:bg-[#0052cc] text-white text-sm font-bold transition-all shadow-sm cursor-pointer flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <span>Select Subscription Plan</span>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">

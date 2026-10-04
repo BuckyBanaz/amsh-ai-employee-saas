@@ -13,6 +13,9 @@ export const API_ENDPOINTS = {
     VERIFY_EMAIL: `${BASE_URL}/auth/verify-email`,
     SEND_VERIFICATION: `${BASE_URL}/auth/send-verification`,
   },
+  POLICIES: {
+    PUBLIC: (key: string, country?: string) => `${BASE_URL}/policies/public/${key}${country ? `?country=${encodeURIComponent(country)}` : ''}`,
+  },
   VOICE: {
     GET_VOICES: `${BASE_URL}/voice/voices`,
     PREVIEW: `${BASE_URL}/voice/preview`,

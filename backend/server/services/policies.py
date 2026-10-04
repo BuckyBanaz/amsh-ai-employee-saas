@@ -103,6 +103,16 @@ def business_status(db: Session, business: Business, user: Optional[User]) -> Di
     return {"items": items, "pending": len(pending), "ai": ai_summary(db, business)}
 
 
+def require_accepted(db: Session, business: Business, user: User) -> None:
+    """Raises ValueError naming what is missing when a required policy for this business has not been accepted. Platform staff are not asked:
+    they act for the business, they do not accept on its behalf."""
+    if user.scope == "platform":
+        return
+    missing = [i["title"] for i in business_status(db, business, user)["items"] if i["requires_acceptance"] and not i["accepted"]]
+    if missing:
+        raise ValueError("Accept these policies before continuing: " + ", ".join(missing))
+
+
 def accept(db: Session, user: User, business: Optional[Business], version_ids: List[str], ip: Optional[str], user_agent: Optional[str]) -> int:
     """Record acceptance of the given versions. Only a version that is currently published, and that applies to the business (or to every
     sign-up), can be accepted. Raises ValueError otherwise. Returns how many new acceptances were recorded."""
@@ -297,7 +307,7 @@ def seed_starters(db: Session, user: User) -> int:
     for s in STARTERS:
         if db.scalars(select(Policy).where(Policy.key == s["key"], Policy.scope_region == s["region"], Policy.scope_vertical == s["vertical"])).first():
             continue
-        create_policy(db, user, s["key"], s["title"], s["region"], s["vertical"], True, s["body"], "Starter draft")
+        create_policy(db, user, s["key"], s["title"], s["region"], s["vertical"], True, s["body"])
         made += 1
     return made
 

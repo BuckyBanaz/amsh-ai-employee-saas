@@ -63,6 +63,16 @@ def _payments_configured() -> bool:
     return bool(settings.RAZORPAY_KEY_ID and settings.RAZORPAY_KEY_SECRET)
 
 
+def _require_policies(db: Session, biz: Business, user: User) -> None:
+    """Going live (a trial or a paid plan) needs the owner to have accepted the policies that apply to the business's region."""
+    from backend.server.services import policies
+
+    try:
+        policies.require_accepted(db, biz, user)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+
+
 @router.get("/config")
 def get_billing_config():
     """Returns public payment gateway credentials for client-side checkout SDKs."""
@@ -90,6 +100,9 @@ async def create_razorpay_order(payload: CreateOrderRequest, db: Session = Depen
     upgrade), never from the request. With a business_id the caller must be that business's owner or admin."""
     if payload.business_id:
         require_owner_or_admin(payload.business_id, current_user)
+        biz = db.query(Business).filter(Business.id == payload.business_id).first()
+        if biz:
+            _require_policies(db, biz, current_user)  # before any money moves: never take a payment we then refuse to activate
     target_plan, full_amount, currency = price_for(db, payload.plan_id, payload.cycle)
     charge_amount, proration_applied, current_plan_name, current_plan_price = compute_charge(db, target_plan, full_amount, payload.cycle, payload.business_id)
 
@@ -399,6 +412,7 @@ def start_business_free_trial(business_id: str, request: Request, payload: Start
     if (biz.status or "").lower() == "active" and any(float((row.details or {}).get("amount") or 0) > 0 for row in _payment_rows(db, biz.id)):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This business already has a paid subscription.")
 
+    _require_policies(db, biz, current_user)
     target_plan = find_by_key(db, payload.plan_id)
     plan_key = target_plan.key if target_plan else payload.plan_id.strip().lower()
     plan_name = target_plan.name if target_plan else plan_key.capitalize()
