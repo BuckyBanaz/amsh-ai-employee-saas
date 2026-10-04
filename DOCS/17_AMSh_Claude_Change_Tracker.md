@@ -345,3 +345,16 @@ Run it: `python -m backend.ai.evals.runner` (`--live`, `--only persona,safety`, 
   - `frontend/admin/src/app/(admin)/business-users/page.tsx`: updated page title to "Business Owners", subtitle to "Primary clinic and business owners across active platform tenants", adjusted Bento cards to "Total Business Owners", "Active Owners", "Suspended Owners", and "Verified Owners", and set default provisioning role to `owner`.
   - `frontend/admin/src/components/admin/Sidebar.tsx`: updated navigation label to "Business Owners".
 
+### Entry 71 - Call Concurrency & Post-MVP Scaling Roadmap Documented (2026-10-04)
+- **User Request**: Document how virtual number concurrent calls work across layers (telephony channels, AI streaming, FastAPI server, commercial plans), and define the post-MVP roadmap since high-concurrency enterprise trunks are deferred past the MVP.
+- **Created `DOCS/27_AMSh_Call_Concurrency_and_Scaling_Roadmap.md`**:
+  - **4 Layers of Concurrency**:
+    1. Telephony Carrier: Exotel virtual number PRI channels (2-5 basic vs 15-50+ multi-channel trunks) and Twilio CPS (1 CPS default vs 10+ CPS elastic SIP).
+    2. Server Async Loop: FastAPI non-blocking WebSocket sessions (`/media-stream/{business_id}`), handling 50-100 parallel calls per container.
+    3. AI Streaming Services: Deepgram STT stream scaling, Cartesia TTS parallel synthesis, and Groq/Gemini RPM/TPM rate limits with multi-model fallback chain.
+    4. SaaS Plan Quotas: Starter (2 channels), Professional (5 channels), Enterprise (15+ channels).
+  - **MVP vs Post-MVP Strategy**: Keeps MVP lean for typical clinic traffic (1-2 concurrent calls) without paying for idle carrier channels.
+  - **4-Phase Implementation Blueprint**: Carrier expansion, Redis-backed atomic channel limiter & holding queue, decoupled autoscaling voice gateway pods, and overage billing.
+  - Updated `DOCS/README.md` doc index.
+
+
