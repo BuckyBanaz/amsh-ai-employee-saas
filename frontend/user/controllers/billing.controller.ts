@@ -8,8 +8,9 @@ export interface BillingConfig {
 }
 
 export interface CreateOrderPayload {
-  amount: number;
-  currency: string;
+  /** Ignored by the server (it prices from the plan catalog); kept for older callers. */
+  amount?: number;
+  currency?: string;
   plan_id: string;
   cycle: string;
   business_id: string | null;
@@ -80,6 +81,9 @@ export const BillingController = {
     }
   },
 
+  /** One public plan, or throws when it is not offered (archived, draft, quoted). */
+  getPlan: (key: string): Promise<PlanItem> => ApiService.get<PlanItem>(API_ENDPOINTS.PLANS.GET(encodeURIComponent(key)), { requireAuth: false }),
+
   getConfig: async (): Promise<BillingConfig> => {
     try {
       return await ApiService.get<BillingConfig>(
@@ -96,8 +100,7 @@ export const BillingController = {
     try {
       return await ApiService.post<CreateOrderResponse>(
         API_ENDPOINTS.BILLING.CREATE_ORDER,
-        payload,
-        { requireAuth: false }
+        payload
       );
     } catch (error) {
       console.error('Failed to create billing order:', error);
@@ -109,8 +112,7 @@ export const BillingController = {
     try {
       return await ApiService.post<VerifyPaymentResponse>(
         API_ENDPOINTS.BILLING.VERIFY,
-        payload,
-        { requireAuth: false }
+        payload
       );
     } catch (error) {
       console.error('Failed to verify payment:', error);

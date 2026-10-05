@@ -2,9 +2,9 @@
 
 import React, { Suspense, useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ApiService } from '../../../services/api.service';
 import { StorageService } from '../../../services/storage.service';
-import { BillingController } from '../../../controllers/billing.controller';
+import { BillingController, PlanItem } from '../../../controllers/billing.controller';
+import { formatPrice } from '../../../utils/money';
 
 declare global {
   interface Window {
@@ -48,49 +48,24 @@ function CheckoutOrderContent() {
   }, []);
 
   const isIndia = businessCountry.toLowerCase().includes('india');
-  const currencySymbol = isIndia ? '₹' : '$';
-
-  // Plan pricing
-  const planInfo = {
-    starter: {
-      name: 'Starter Practice',
-      priceMonthlyINR: 4999,
-      priceYearlyINR: 49990,
-      priceMonthlyUSD: 99,
-      priceYearlyUSD: 990,
-      minutes: '500 Voice Mins / mo'
-    },
-    professional: {
-      name: 'Professional Clinic',
-      priceMonthlyINR: 9999,
-      priceYearlyINR: 99990,
-      priceMonthlyUSD: 199,
-      priceYearlyUSD: 1990,
-      minutes: '2,000 Voice Mins / mo'
-    },
-    business: {
-      name: 'Multi-Location / Hospital',
-      priceMonthlyINR: 19999,
-      priceYearlyINR: 199990,
-      priceMonthlyUSD: 399,
-      priceYearlyUSD: 3990,
-      minutes: '6,000 Voice Mins / mo'
-    },
-  }[planParam] || {
-    name: 'Professional Clinic',
-    priceMonthlyINR: 9999,
-    priceYearlyINR: 99990,
-    priceMonthlyUSD: 199,
-    priceYearlyUSD: 1990,
-    minutes: '2,000 Voice Mins / mo'
-  };
-
   const isYearly = cycleParam === 'yearly';
-  const planPrice = isIndia
-    ? (isYearly ? planInfo.priceYearlyINR : planInfo.priceMonthlyINR)
-    : (isYearly ? planInfo.priceYearlyUSD : planInfo.priceMonthlyUSD);
 
-  const totalAmount = planPrice;
+  // The plan as the server will charge it (GET /api/plans/{key}): same price and currency create-order uses
+  const [plan, setPlan] = useState<PlanItem | null>(null);
+  const [planError, setPlanError] = useState('');
+  useEffect(() => {
+    BillingController.getPlan(planParam)
+      .then(setPlan)
+      .catch(() => setPlanError('This plan is not available. Go back and choose another plan.'));
+  }, [planParam]);
+
+  const planPrice = plan ? (isYearly ? plan.price_yearly : plan.price_monthly) : null;
+  const priceText = plan && planPrice !== null ? formatPrice(planPrice, plan.currency) : '…';
+  const planInfo = {
+    name: plan?.name || 'Selected plan',
+    minutes: plan?.quotas?.voice_minutes ? `${plan.quotas.voice_minutes.toLocaleString()} voice minutes / month` : 'your plan allowance',
+  };
+  const unavailable = Boolean(planError) || (plan !== null && planPrice === null);
 
   // Processing state
   const [isProcessing, setIsProcessing] = useState(false);
@@ -123,75 +98,76 @@ function CheckoutOrderContent() {
 
     const businessId = StorageService.getBusinessId();
 
+    const activate = async (orderId: string, paymentId: string, signature: string) => {
+      // The server checks the order with Razorpay (or accepts it in its own test mode) before switching the plan on
+      await BillingController.verifyPayment({
+        razorpay_order_id: orderId,
+        razorpay_payment_id: paymentId,
+        razorpay_signature: signature,
+        plan_id: planParam,
+        business_id: businessId,
+      });
+      StorageService.setOnboardingCompleted(true);
+      router.push('/onboarding/success');
+    };
+
     try {
-      // 1. Create order on backend via BillingController
+      // 1. Create the order; the server prices it from the plan catalog
       const orderData = await BillingController.createOrder({
-        amount: totalAmount,
-        currency: isIndia ? 'INR' : 'USD',
         plan_id: planParam,
         cycle: cycleParam,
         business_id: businessId
       });
 
-      const activeKey = orderData.key_id || razorpayKeyId;
-
-      // 2. If Razorpay SDK is available, open Razorpay Checkout modal
-      if (window.Razorpay && activeKey && activeKey !== 'rzp_test_placeholder') {
-        const options = {
-          key: activeKey,
-          amount: orderData.amount,
-          currency: orderData.currency,
-          name: 'AMSh AI SaaS',
-          description: `${planInfo.name} Subscription (${isYearly ? 'Annual' : 'Monthly'})`,
-          order_id: orderData.order_id,
-          prefill: {
-            name: businessName || 'Valued Business',
-            email: businessEmail || 'billing@example.com',
-            contact: businessPhone || ''
-          },
-          theme: {
-            color: '#0066FF'
-          },
-          handler: async function (response: any) {
-            try {
-              // Verify payment cryptographic signature & activate subscription
-              await BillingController.verifyPayment({
-                razorpay_order_id: response.razorpay_order_id,
-                razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_signature: response.razorpay_signature,
-                plan_id: planParam,
-                business_id: businessId
-              });
-
-              StorageService.setOnboardingCompleted(true);
-              router.push('/onboarding/success');
-            } catch (vErr: any) {
-              console.error('Payment verification failed:', vErr);
-              setCheckoutError(vErr.message || 'Payment signature verification failed.');
-              setIsProcessing(false);
-            }
-          },
-          modal: {
-            ondismiss: function () {
-              setIsProcessing(false);
-            }
-          }
-        };
-
-        const rzp = new window.Razorpay(options);
-        rzp.open();
+      // 2. Server without payment keys (development): nothing is charged, the order is confirmed in test mode
+      if (orderData.test_mode) {
+        await activate(orderData.order_id, `pay_test_${Date.now()}`, 'test_mode');
         return;
       }
-    } catch (err: any) {
-      console.warn('Razorpay live checkout error, proceeding with instant onboarding activation:', err);
-    }
 
-    // Fallback: Instant test activation
-    setTimeout(() => {
+      const activeKey = orderData.key_id || razorpayKeyId;
+      if (!window.Razorpay || !activeKey || activeKey === 'rzp_test_placeholder') {
+        throw new Error('The payment window could not load. Check your connection and try again.');
+      }
+
+      // 3. Live: open Razorpay Checkout
+      const rzp = new window.Razorpay({
+        key: activeKey,
+        amount: orderData.amount,
+        currency: orderData.currency,
+        name: 'AMSh AI SaaS',
+        description: `${planInfo.name} Subscription (${isYearly ? 'Annual' : 'Monthly'})`,
+        order_id: orderData.order_id,
+        prefill: {
+          name: businessName || '',
+          email: businessEmail || '',
+          contact: businessPhone || ''
+        },
+        theme: {
+          color: '#0066FF'
+        },
+        handler: async function (response: any) {
+          try {
+            await activate(response.razorpay_order_id, response.razorpay_payment_id, response.razorpay_signature);
+          } catch (vErr: any) {
+            console.error('Payment verification failed:', vErr);
+            setCheckoutError(vErr.message || 'Payment signature verification failed.');
+            setIsProcessing(false);
+          }
+        },
+        modal: {
+          ondismiss: function () {
+            setIsProcessing(false);
+          }
+        }
+      });
+      rzp.open();
+    } catch (err: any) {
+      // Never pretend it worked: the plan is only active once the server has confirmed the payment
+      console.warn('Checkout failed:', err);
+      setCheckoutError(err?.message || 'Could not start the payment. Please try again.');
       setIsProcessing(false);
-      StorageService.setOnboardingCompleted(true);
-      router.push('/onboarding/success');
-    }, 1200);
+    }
   };
 
   return (
@@ -203,10 +179,10 @@ function CheckoutOrderContent() {
         </p>
       </div>
 
-      {checkoutError && (
+      {(checkoutError || planError) && (
         <div className="mb-6 p-3 bg-red-50 border border-red-200 text-red-700 text-xs font-medium rounded-lg flex items-center gap-2">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
-          <span>{checkoutError}</span>
+          <span>{checkoutError || planError}</span>
         </div>
       )}
 
@@ -298,7 +274,7 @@ function CheckoutOrderContent() {
           <button 
             type="button" 
             onClick={handleRazorpayPayment}
-            disabled={isProcessing}
+            disabled={isProcessing || !plan || unavailable}
             className="w-full py-3 rounded-xl bg-[#0066FF] text-white font-bold text-sm hover:bg-[#0052cc] transition-all shadow-md mt-4 disabled:opacity-60 flex items-center justify-center gap-2 cursor-pointer"
           >
             {isProcessing ? (
@@ -310,7 +286,7 @@ function CheckoutOrderContent() {
                 <span>Opening Razorpay Gateway...</span>
               </>
             ) : (
-              `Pay ${currencySymbol}${totalAmount.toLocaleString('en-IN')} & Deploy AI Receptionist`
+              `Pay ${priceText} & Deploy AI Receptionist`
             )}
           </button>
         </div>
@@ -335,7 +311,7 @@ function CheckoutOrderContent() {
                 <p className="font-bold text-gray-900">{planInfo.name}</p>
                 <p className="text-[11px] text-gray-500">Includes {planInfo.minutes}</p>
               </div>
-              <span className="font-bold text-gray-900">{currencySymbol}{planPrice.toLocaleString('en-IN')}</span>
+              <span className="font-bold text-gray-900">{priceText}</span>
             </div>
 
             <div className="flex justify-between items-start">
@@ -361,7 +337,7 @@ function CheckoutOrderContent() {
                 <p className="text-sm font-bold text-gray-900">Total Due Today</p>
                 <p className="text-[11px] text-gray-500">Billed {isYearly ? 'yearly' : 'monthly'}</p>
               </div>
-              <span className="text-xl sm:text-2xl font-black text-[#0066FF]">{currencySymbol}{totalAmount.toLocaleString('en-IN')}</span>
+              <span data-testid="checkout-total" className="text-xl sm:text-2xl font-black text-[#0066FF]">{priceText}</span>
             </div>
           </div>
 

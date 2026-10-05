@@ -5,8 +5,7 @@ export const OnboardingController = {
   fetchVoices: async () => {
     try {
       const response = await ApiService.get<any>(
-        API_ENDPOINTS.VOICE.GET_VOICES,
-        { requireAuth: false } // We can make this true if voices API needs auth
+        API_ENDPOINTS.VOICE.GET_VOICES // needs the login: the server guards every voice endpoint
       );
       
       return response;

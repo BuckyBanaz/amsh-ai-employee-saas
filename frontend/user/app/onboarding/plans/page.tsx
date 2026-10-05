@@ -1,13 +1,23 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { BillingController, PlanItem } from '../../../controllers/billing.controller';
+import { formatPrice, quotaLines } from '../../../utils/money';
+
+type Cycle = 'Monthly' | 'Yearly';
+
+function priceFor(plan: PlanItem, cycle: Cycle): number | null {
+  return cycle === 'Monthly' ? plan.price_monthly : plan.price_yearly;
+}
 
 export default function PlansSelectionPage() {
   const router = useRouter();
-  const [cycle, setCycle] = useState<'Monthly' | 'Yearly'>('Monthly');
-  const [selectedPlan, setSelectedPlan] = useState<string>('professional');
-  const [agentName, setAgentName] = useState('your AI receptionist');
+  const [cycle, setCycle] = useState<Cycle>('Monthly');
+  const [selectedPlan, setSelectedPlan] = useState<string>('');
+  const [agentName, setAgentName] = useState('');
+  // The same public catalog the server charges from (GET /api/plans), so the price shown is the price paid
+  const [plans, setPlans] = useState<PlanItem[] | null>(null);
 
   React.useEffect(() => {
     try {
@@ -19,59 +29,23 @@ export default function PlansSelectionPage() {
     } catch (e) {}
   }, []);
 
-  const plans = [
-    {
-      id: 'starter',
-      name: 'Starter Practice',
-      price: cycle === 'Monthly' ? 99 : 990,
-      badge: null,
-      desc: 'Ideal for solo practitioners and small dental/medical clinics.',
-      features: [
-        '500 Voice Minutes / mo',
-        '2 Concurrent Patient Calls',
-        'Dedicated AI Phone Number Included',
-        'Google & Outlook Calendar Sync',
-        'Standard Human Call Transfer',
-        'Email & Helpdesk Support'
-      ]
-    },
-    {
-      id: 'professional',
-      name: 'Professional Clinic',
-      price: cycle === 'Monthly' ? 199 : 1990,
-      badge: 'MOST POPULAR',
-      desc: 'For busy clinics needing higher capacity and multi-language AI.',
-      features: [
-        '2,000 Voice Minutes / mo',
-        '5 Concurrent Patient Calls',
-        'Dedicated AI Phone Number or Call Forwarding',
-        'Multi-Language AI (English, Dutch, Spanish, etc.)',
-        'Instant Call Recording & AI Transcripts',
-        'WhatsApp Reminder Notifications',
-        'Priority Phone Support'
-      ]
-    },
-    {
-      id: 'business',
-      name: 'Multi-Location / Hospital',
-      price: cycle === 'Monthly' ? 399 : 3990,
-      badge: 'ENTERPRISE READY',
-      desc: 'For multi-doctor centers and high call volume practices.',
-      features: [
-        '6,000 Voice Minutes / mo',
-        '15 Concurrent Patient Calls',
-        'Multiple Dedicated Lines & Forwarding Trunks',
-        'Custom Doctor Voice Clone',
-        'Online Payment Collection Integration',
-        'Custom EHR / EMR Webhook Integrations',
-        '24/7 Dedicated Account Manager'
-      ]
-    }
-  ];
+  useEffect(() => {
+    BillingController.getPlans().then(({ items }) => {
+      setPlans(items);
+      setSelectedPlan((current) => current || (items.find((p) => p.highlighted) || items[0])?.key || '');
+    });
+  }, []);
 
-  const handleProceedToCheckout = () => {
-    // Navigate to checkout with selected plan details
-    router.push(`/onboarding/checkout?plan=${selectedPlan}&cycle=${cycle.toLowerCase()}`);
+  const offered = (plans || []).filter((p) => priceFor(p, cycle) !== null);
+  const yearlySaving = Math.max(
+    0,
+    ...(plans || []).map((p) => (p.price_monthly && p.price_yearly ? 1 - p.price_yearly / (p.price_monthly * 12) : 0))
+  );
+  const canYearly = (plans || []).some((p) => p.price_yearly !== null);
+
+  const handleProceedToCheckout = (planKey: string = selectedPlan) => {
+    if (!planKey) return;
+    router.push(`/onboarding/checkout?plan=${encodeURIComponent(planKey)}&cycle=${cycle.toLowerCase()}`);
   };
 
   return (
@@ -79,7 +53,8 @@ export default function PlansSelectionPage() {
       <div className="mb-6 text-center">
         <h1 className="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">Select your subscription plan</h1>
         <p className="mt-2 text-xs sm:text-sm leading-relaxed text-gray-500 max-w-xl mx-auto">
-          Choose the right plan to activate {agentName}, your practice&apos;s AI receptionist. Transparent pricing with no hidden carrier surcharges.
+          Choose the right plan to activate {agentName ? <>{agentName}, your practice&apos;s AI receptionist</> : <>your practice&apos;s AI receptionist</>}.
+          Transparent pricing with no hidden carrier surcharges.
         </p>
       </div>
 
@@ -100,6 +75,7 @@ export default function PlansSelectionPage() {
           <button 
             type="button"
             onClick={() => setCycle('Yearly')}
+            disabled={!canYearly}
             className={`px-5 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
               cycle === 'Yearly' 
                 ? 'bg-white shadow-xs text-gray-900' 
@@ -107,30 +83,50 @@ export default function PlansSelectionPage() {
             }`}
           >
             <span>Annual Billing</span>
-            <span className="bg-emerald-100 text-emerald-700 text-[10px] font-extrabold px-1.5 py-0.5 rounded">
-              Save 16%
-            </span>
+            {yearlySaving >= 0.01 && (
+              <span className="bg-emerald-100 text-emerald-700 text-[10px] font-extrabold px-1.5 py-0.5 rounded">
+                Save {Math.round(yearlySaving * 100)}%
+              </span>
+            )}
           </button>
         </div>
       </div>
 
       {/* Plan Cards Grid */}
+      {plans === null && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8" aria-busy="true">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="h-96 rounded-2xl bg-gray-100 animate-pulse" />
+          ))}
+        </div>
+      )}
+
+      {plans !== null && offered.length === 0 && (
+        <div role="alert" className="mb-8 rounded-xl border border-amber-200 bg-amber-50 p-5 text-center text-sm text-amber-800">
+          No plans are available for {cycle.toLowerCase()} billing right now. {cycle === 'Yearly' ? 'Try monthly billing, or ' : ''}contact
+          AMSh support to get started.
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
-        {plans.map(plan => {
-          const isSelected = selectedPlan === plan.id;
+        {offered.map(plan => {
+          const isSelected = selectedPlan === plan.key;
+          const price = priceFor(plan, cycle) as number;
+          const lines = [...quotaLines(plan.quotas), ...(plan.features || []).map((f) => f.label)];
           return (
             <div 
-              key={plan.id}
-              onClick={() => setSelectedPlan(plan.id)}
+              key={plan.key}
+              data-testid={`plan-${plan.key}`}
+              onClick={() => setSelectedPlan(plan.key)}
               className={`border-2 rounded-2xl p-5 sm:p-6 cursor-pointer transition-all relative flex flex-col justify-between ${
                 isSelected 
                   ? 'border-[#0066FF] bg-blue-50/20 shadow-md ring-2 ring-[#0066FF]/20 scale-[1.02]' 
                   : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-xs'
               }`}
             >
-              {plan.badge && (
+              {plan.highlighted && (
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-[#0066FF] text-white text-[10px] font-extrabold px-3 py-0.5 rounded-full shadow-xs tracking-wider">
-                  {plan.badge}
+                  MOST POPULAR
                 </div>
               )}
 
@@ -146,11 +142,11 @@ export default function PlansSelectionPage() {
                   </div>
                 </div>
 
-                <p className="text-xs text-gray-500 mb-4 min-h-[32px]">{plan.desc}</p>
+                <p className="text-xs text-gray-500 mb-4 min-h-[32px]">{plan.description}</p>
 
                 <div className="mb-5 pb-5 border-b border-gray-100">
                   <div className="flex items-baseline gap-1">
-                    <span className="text-3xl sm:text-4xl font-extrabold text-gray-900">${plan.price}</span>
+                    <span className="text-3xl sm:text-4xl font-extrabold text-gray-900">{formatPrice(price, plan.currency)}</span>
                     <span className="text-xs font-semibold text-gray-500">/{cycle === 'Monthly' ? 'month' : 'year'}</span>
                   </div>
                   <p className="text-[11px] text-gray-400 mt-1">Billed {cycle.toLowerCase()}, cancel anytime.</p>
@@ -158,7 +154,7 @@ export default function PlansSelectionPage() {
 
                 <p className="text-[11px] font-bold text-gray-900 uppercase tracking-wider mb-3">Included Capabilities:</p>
                 <ul className="space-y-2.5">
-                  {plan.features.map((feature, idx) => (
+                  {lines.map((feature, idx) => (
                     <li key={idx} className="flex items-start text-xs text-gray-700">
                       <svg className="w-4 h-4 text-[#10B981] mr-2 shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                         <polyline points="20 6 9 17 4 12"></polyline>
@@ -172,7 +168,7 @@ export default function PlansSelectionPage() {
               <div className="mt-6 pt-4">
                 <button
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); setSelectedPlan(plan.id); handleProceedToCheckout(); }}
+                  onClick={(e) => { e.stopPropagation(); setSelectedPlan(plan.key); handleProceedToCheckout(plan.key); }}
                   className={`w-full py-2.5 rounded-xl text-xs font-bold transition-all shadow-xs ${
                     isSelected
                       ? 'bg-[#0066FF] text-white hover:bg-[#0052cc]'
@@ -198,8 +194,9 @@ export default function PlansSelectionPage() {
         </button>
         <button 
           type="button" 
-          onClick={handleProceedToCheckout}
-          className="px-7 py-2.5 rounded-lg bg-[#0066FF] text-white text-sm font-bold hover:bg-[#0052cc] transition-colors shadow-md flex items-center gap-2"
+          onClick={() => handleProceedToCheckout()}
+          disabled={!offered.some((p) => p.key === selectedPlan)}
+          className="px-7 py-2.5 rounded-lg bg-[#0066FF] text-white text-sm font-bold hover:bg-[#0052cc] disabled:opacity-50 transition-colors shadow-md flex items-center gap-2"
         >
           <span>Proceed to Order Checkout</span>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
