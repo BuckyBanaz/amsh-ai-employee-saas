@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from backend.server.api.routes._shared import require_owner_or_admin
 from backend.server.auth.security import get_current_user
 from backend.server.database.models.business import Business
 from backend.server.database.models.user import User
@@ -49,6 +50,9 @@ class BusinessCreate(BaseModel):
     postal_code: str | None = None
     timezone: str = "UTC"
     currency: str = "USD"
+
+
+PLATFORM_ONLY_FIELDS = {"plan", "status"}
 
 
 class BusinessUpdate(BaseModel):
@@ -155,6 +159,7 @@ def get_business(business_id: str, db: Session = Depends(get_db), current_user: 
 def update_business(
     business_id: str,
     payload: BusinessUpdate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -165,6 +170,12 @@ def update_business(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed")
 
     updates = payload.model_dump(exclude_unset=True)
+    if current_user.scope != "platform":
+        require_owner_or_admin(business.id, current_user)
+        # A clinic's plan and status change only through Billing (payment, trial, downgrade) or a platform admin
+        locked = sorted(PLATFORM_ONLY_FIELDS & set(updates))
+        if locked:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"{', '.join(locked)} can only be changed through Billing")
     if "business_type" in updates or "business_subtype" in updates:
         _validate_business_type(
             updates.get("business_type", business.business_type),
@@ -175,6 +186,8 @@ def update_business(
         setattr(business, field, value)
     db.commit()
     db.refresh(business)
+    audit(db, "business.updated", current_user, business_id=business.id, target_type="business", target_id=business.id,
+          ip=client_ip(request), meta={"fields": sorted(updates)})
     return business
 
 

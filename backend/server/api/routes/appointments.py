@@ -13,7 +13,7 @@ from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
 from backend.ai.capabilities.operations.clinic import ClinicReadOperations, ClinicWriteOperations
-from backend.server.api.routes._shared import get_business_or_404, require_membership
+from backend.server.api.routes._shared import get_business_or_404, require_membership, require_owner_or_admin
 from backend.server.auth.security import get_current_user
 from backend.server.database.models.user import User
 from backend.server.database.session import get_db
@@ -134,9 +134,9 @@ def delete_appointment(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> None:
-    """Delete an appointment using ClinicWriteOperations."""
+    """Delete an appointment using ClinicWriteOperations. Owner or admin only: staff cancel (PATCH status) instead, which keeps history."""
     get_business_or_404(business_id, db)
-    require_membership(business_id, current_user)
+    require_owner_or_admin(business_id, current_user)
     success = ClinicWriteOperations.delete_appointment(db, business_id, appointment_id)
     if not success:
         raise HTTPException(status_code=404, detail="Appointment not found")

@@ -140,6 +140,7 @@ class ClinicReadOperations:
             select(Transaction).where(
                 Transaction.id == appointment_id,
                 Transaction.business_id == business_id,
+                Transaction.type == "appointment",
             )
         )
         if not tx:

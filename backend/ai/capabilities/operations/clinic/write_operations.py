@@ -123,6 +123,7 @@ class ClinicWriteOperations:
         tx = db.query(Transaction).filter(
             Transaction.id == appointment_id,
             Transaction.business_id == business_id,
+            Transaction.type == "appointment",  # payments and trial markers share this table: never edit or delete them here
         ).first()
 
         if not tx:
@@ -193,6 +194,7 @@ class ClinicWriteOperations:
         tx = db.query(Transaction).filter(
             Transaction.id == appointment_id,
             Transaction.business_id == business_id,
+            Transaction.type == "appointment",  # payments and trial markers share this table: never edit or delete them here
         ).first()
         if not tx:
             return False
