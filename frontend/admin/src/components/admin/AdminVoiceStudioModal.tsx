@@ -111,26 +111,33 @@ export function AdminVoiceStudioModal({
   const chatScrollRef = useRef<HTMLDivElement>(null);
 
   const isLiveActiveRef = useRef(isLiveActive);
-  isLiveActiveRef.current = isLiveActive;
   const isMutedRef = useRef(isMuted);
-  isMutedRef.current = isMuted;
   const isAISpeakingRef = useRef(isAISpeaking);
-  isAISpeakingRef.current = isAISpeaking;
   const isThinkingRef = useRef(isThinking);
-  isThinkingRef.current = isThinking;
   const echoLockRef = useRef(false);
   const selectedVoiceRef = useRef(selectedVoice);
-  selectedVoiceRef.current = selectedVoice;
   const selectedAccentRef = useRef(selectedAccent);
-  selectedAccentRef.current = selectedAccent;
   const voiceAudioEnabledRef = useRef(voiceAudioEnabled);
-  voiceAudioEnabledRef.current = voiceAudioEnabled;
+
+  // Keep the refs read by speech / audio callbacks in step with state (after commit, not during render)
+  useEffect(() => {
+    isLiveActiveRef.current = isLiveActive;
+    isMutedRef.current = isMuted;
+    isAISpeakingRef.current = isAISpeaking;
+    isThinkingRef.current = isThinking;
+    selectedVoiceRef.current = selectedVoice;
+    selectedAccentRef.current = selectedAccent;
+    voiceAudioEnabledRef.current = voiceAudioEnabled;
+  }, [isLiveActive, isMuted, isAISpeaking, isThinking, selectedVoice, selectedAccent, voiceAudioEnabled]);
 
   const formatDuration = (s: number) =>
     `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
   // Forward ref for handleSendTurn to avoid circular closures in recognition
   const sendTurnHandlerRef = useRef<(text: string, isSpoken?: boolean) => Promise<void>>(async () => {});
+  // Same for barge-in and the recognition restart, which are declared after (or are) startListening
+  const interruptHandlerRef = useRef<() => void>(() => {});
+  const startListeningRef = useRef<() => void>(() => {});
 
   // Continuous Speech Recognition Engine
   const startListening = useCallback(() => {
@@ -184,7 +191,7 @@ export function AdminVoiceStudioModal({
         if (isAISpeakingRef.current) {
           // Caller spoke over AI -> Barge In!
           if (final.trim() || interim.trim()) {
-            handleInterrupt();
+            interruptHandlerRef.current();
           }
           return;
         }
@@ -226,7 +233,7 @@ export function AdminVoiceStudioModal({
               !isThinkingRef.current &&
               !echoLockRef.current
             ) {
-              startListening();
+              startListeningRef.current();
             }
           }, 200);
         }
@@ -357,8 +364,6 @@ export function AdminVoiceStudioModal({
     }
   };
 
-  sendTurnHandlerRef.current = handleSendTurn;
-
   // Interrupt AI (Barge-in): stops speech immediately and opens mic
   const handleInterrupt = useCallback(() => {
     getPlayer().stop();
@@ -371,6 +376,12 @@ export function AdminVoiceStudioModal({
       startListening();
     }
   }, [getPlayer, startListening]);
+
+  useEffect(() => {
+    sendTurnHandlerRef.current = handleSendTurn;
+    interruptHandlerRef.current = handleInterrupt;
+    startListeningRef.current = startListening;
+  });
 
   // Start Live Duplex Call
   const handleStartLiveCall = () => {
