@@ -30,6 +30,7 @@ from backend.server.api.routes import (
     calls,
     customers,
     dashboard_stats,
+    demo,
     exotel,
     integrations,
     knowledge,
@@ -74,6 +75,7 @@ api_router.include_router(voice_stream_router)
 api_router.include_router(voice.router)
 api_router.include_router(stt.router)
 api_router.include_router(plans_public.router)
+api_router.include_router(demo.router)
 api_router.include_router(languages.router)
 api_router.include_router(admin_plans.router)
 api_router.include_router(message_templates.admin_router)

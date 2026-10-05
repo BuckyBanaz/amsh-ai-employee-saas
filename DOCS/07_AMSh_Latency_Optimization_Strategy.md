@@ -107,3 +107,16 @@ Fix (`realtime/barge_in/coordinator.py`, `twilio/gateway.py`, `speech/stt/deepgr
 - The silence watchdog counts from the end of playback, not the end of sending.
 
 Still open: after a barge-in the interrupted turn's full reply (including unspoken sentences) is saved to history and the call record, as before.
+
+### 6.7 LLM-first wording and fewer model rounds (2026-10-05, branch `version-0.1`)
+
+Measured offline only (scripted model, `test_voice_latency`, `test_agent_core`); still to be confirmed with the `[LATENCY]` log on a real call.
+
+| Change | Where | Effect |
+| :--- | :--- | :--- |
+| **Day prefetch.** When the caller names one day ("tomorrow", "Thursday"), its open times are read before the first model round and given to the model as an already-made `check_availability` call | `engine/agent/agent_loop.py` (`_prefetch_availability`) | A booking turn usually needs one model round instead of two: one time-to-first-token less (~300-600 ms on Groq). Same tool, same checks; not repeated for the same day within 120 s |
+| **One turn per utterance.** Deepgram's mid-speech final segments (is_final without speech_final) are joined until `speech_final` or `UtteranceEnd` (`utterance_end_ms=1000`) | `realtime/twilio/gateway.py`, `speech/stt/deepgram.py` | The AI no longer answers half a sentence and then the rest; no extra wait in the usual case (speech_final arrives with the last segment) |
+| **Filler audio from memory.** Each call synthesizes its "one moment..." fillers while the greeting plays; Cartesia's cache is now an LRU (400 entries / 24 MB) instead of stopping after 200 sentences | `speech/tts/cartesia.py`, `realtime/twilio/gateway.py` | A calendar turn starts speaking without a TTS round trip; the greeting of a returning tenant also plays from memory |
+| **LLM-worded fixed moments.** Transfers, emergencies, a failed transfer and a twice-blocked reply are worded by the model (engine_notes.json `spoken_line`) while the transfer is set up | `engine/agent/agent_loop.py` (`_spoken_line`) | No canned sentences while the model is up. Costs one short model call on those turns, bounded: after 2.5 s (1.5 s for emergencies) the language pack's line is spoken |
+
+Fixed lines are now only the model-down fallback, and every offered language has all of them (`test_language_coverage`).

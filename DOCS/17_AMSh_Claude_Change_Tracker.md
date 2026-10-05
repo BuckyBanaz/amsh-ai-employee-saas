@@ -8,6 +8,14 @@ Status legend: `DONE` / `IN PROGRESS` / `PLANNED` / `BLOCKED`
 
 ---
 
+### Entry 82 - LLM-first replies, every-language fallbacks, latency, live landing demo (2026-10-05) - DONE
+- No fixed sentences while the model is up: transfers, emergencies, a failed transfer and a twice-blocked reply are worded by the LLM (`spoken_line` in `engine_notes.json`), with the language pack's line only when the model fails or is slow (2.5 s; 1.5 s for emergencies). The transfer is still decided by code.
+- Model-down fallbacks exist in all 7 offered languages: legacy templates added for Arabic, German and French; WhatsApp and playground "could not answer" lines localised; `test_language_coverage` fails on any missing key or placeholder.
+- Latency: day prefetch (one model round instead of two on booking turns), one turn per caller utterance (speech_final / UtteranceEnd), filler audio prewarmed per call and an LRU audio cache. See `07_...` 6.7.
+- Landing page demo console now talks to the real agent on a made-up clinic in test mode (`POST /api/public/demo-chat`, in-memory demo database, rate limited per IP / conversation / day); the keyword answers only show, labelled "preview", when the live AI is unavailable. The unmeasured "Sub-200ms · Groq Llama 3.3" label is replaced by the measured latency of the last reply.
+- Touched Gemini's area minimally: `realtime/twilio/gateway.py` (utterance joining, TTS params, filler prewarm, localised playground notice).
+- Verified: 533 backend tests, API smoke 54/54, browser e2e 47/47.
+
 ### Entry 81 - Pending items completed on `version-0.1` (2026-10-05) - DONE
 Full list, checks and what is still open: `28_AMSh_Pending_Status_2026-10-05.md`.
 - Admin CI fixed (lockfile, Voice Studio lint errors).

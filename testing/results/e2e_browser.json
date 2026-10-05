@@ -1,7 +1,7 @@
 {
-  "ran_at": "2026-10-05 11:44:26",
-  "seconds": 72.4,
-  "passed": 46,
+  "ran_at": "2026-10-05 12:30:25",
+  "seconds": 77.4,
+  "passed": 47,
   "failed": 0,
   "checks": [
     {
@@ -123,6 +123,11 @@
       "check": "user: an unpublished policy says so instead of failing",
       "ok": true,
       "detail": ""
+    },
+    {
+      "check": "user: the landing demo asks the live AI and labels a fallback as a preview",
+      "ok": true,
+      "detail": "['http://127.0.0.1:8011/api/public/demo-chat']"
     },
     {
       "check": "user: sign-up links to the real Terms and Privacy pages",

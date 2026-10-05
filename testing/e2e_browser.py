@@ -189,6 +189,13 @@ def user_flow(browser) -> None:
     check("user: the Privacy Policy page loads", "Privacy Policy" in apage.inner_text("h1"))
     apage.goto(f"{USER}/legal/unknown-thing", wait_until="networkidle")
     check("user: an unpublished policy says so instead of failing", "has not been published" in apage.inner_text("body"))
+    # landing demo: it asks the live demo API; this test server has no model keys, so the page must say it is a preview
+    demo_calls = []
+    apage.on("request", lambda r: demo_calls.append(r.url) if "/public/demo-chat" in r.url else None)
+    apage.goto(f"{USER}/landing", wait_until="networkidle")
+    apage.get_by_role("button", name="Timings & Fees").first.click()
+    apage.wait_for_selector("text=Live AI is resting", timeout=15000)
+    check("user: the landing demo asks the live AI and labels a fallback as a preview", bool(demo_calls), str(demo_calls[:1]))
     apage.goto(f"{USER}/register", wait_until="networkidle")
     hrefs = apage.eval_on_selector_all("a[target=_blank]", "els => els.map(e => e.getAttribute('href'))")
     check("user: sign-up links to the real Terms and Privacy pages", "/legal/terms" in hrefs and "/legal/privacy" in hrefs, str(hrefs))

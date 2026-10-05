@@ -1,6 +1,6 @@
 {
-  "ran_at": "2026-10-05 11:44:33",
-  "seconds": 6.7,
+  "ran_at": "2026-10-05 12:26:23",
+  "seconds": 7.2,
   "passed": 54,
   "failed": 0,
   "checks": [
@@ -177,7 +177,7 @@
     {
       "check": "starter policy drafts are added (not published)",
       "ok": true,
-      "detail": "{'created': 5, 'items': [{'id': 'e5586557-57a3-41cb-b258-f697a8255a32', 'key': 'baa', 'title': 'Business Associate Agreement (HIPAA)', 'scope_region': 'HIPAA', 'scope_vertical': 'clinic', 'requires_ac"
+      "detail": "{'created': 5, 'items': [{'id': 'daf20dba-2763-4782-8a8d-ca0354cd3f04', 'key': 'baa', 'title': 'Business Associate Agreement (HIPAA)', 'scope_region': 'HIPAA', 'scope_vertical': 'clinic', 'requires_ac"
     },
     {
       "check": "an unpublished policy binds nobody",
@@ -212,7 +212,7 @@
     {
       "check": "sign-up works once they are accepted, and the acceptance is recorded",
       "ok": true,
-      "detail": "201 {'access_token': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3MTg2NzFjYS05ODI0LTRlYzAtOWU5OC1kZjEwZDA3ZDlkOGMiLCJleHAiOjE3OTE4MDU0NzIsImlhdCI6MTc5MTIwMDY3Mi43MjR9.7ObGCk4L1Lqhcj3Ji8zOUplMPjhNvHvqxiQZfd3op7w', 'token_type': 'bearer', 'user': {'id': '718671ca-9824-4ec0-9e98-df10d07d9d8c', 'name': 'New Owner', 'email': 'second@clinic-smoke.com', 'scope': 'business', 'role': 'owner', 'business_id': None, 'email_verified_at': None}}"
+      "detail": "201 {'access_token': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0NzBhMTcxNi05MzZiLTRkMTAtYjJmMS1lMTE1ODlkMzRjY2EiLCJleHAiOjE3OTE4MDc5ODIsImlhdCI6MTc5MTIwMzE4Mi41MDZ9.cfB3dKZMon4KoEcuDLQjauLQn2Jd8PjaFvkNuIezNMM', 'token_type': 'bearer', 'user': {'id': '470a1716-936b-4d10-b2f1-e11589d34cca', 'name': 'New Owner', 'email': 'second@clinic-smoke.com', 'scope': 'business', 'role': 'owner', 'business_id': None, 'email_verified_at': None}}"
     },
     {
       "check": "acceptance records exist for the new account (terms + privacy)",
@@ -222,7 +222,7 @@
     {
       "check": "the clinic in India is shown Terms, Privacy and the DPDP addendum",
       "ok": true,
-      "detail": "{'items': [{'policy_id': '19046db6-7d38-4197-90c7-9225a8b3d246', 'version_id': 'd4d09b63-aa57-455e-9f08-edfbae2fc385', 'key': 'terms', 'title': 'Terms of Service', 'version': 1, 'summary': '', 'body':"
+      "detail": "{'items': [{'policy_id': '3d6a7864-91f1-4cf1-9cba-da5f83fe6199', 'version_id': '5bc26fab-4b34-49d6-a882-79c8d7a72074', 'key': 'terms', 'title': 'Terms of Service', 'version': 1, 'summary': '', 'body':"
     },
     {
       "check": "the owner is told what the AI does for India",
@@ -237,7 +237,7 @@
     {
       "check": "the owner accepts all three",
       "ok": true,
-      "detail": "{'accepted': 3, 'items': [{'policy_id': '19046db6-7d38-4197-90c7-9225a8b3d246', 'version_id': 'd4d09b63-aa57-455e-9f08-edfbae2fc385', 'key': 'terms', 'title': '"
+      "detail": "{'accepted': 3, 'items': [{'policy_id': '3d6a7864-91f1-4cf1-9cba-da5f83fe6199', 'version_id': '5bc26fab-4b34-49d6-a882-79c8d7a72074', 'key': 'terms', 'title': '"
     },
     {
       "check": "the AI's opening line carries the built-in recording notice",

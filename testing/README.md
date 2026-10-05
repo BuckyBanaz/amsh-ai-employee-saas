@@ -6,12 +6,12 @@ Everything that checks the platform end to end lives here. Nothing in this folde
 |---|---|
 | `run_all.sh` | Runs every step below and prints one PASS/FAIL line each. `PYTHON=/path/to/venv/bin/python bash testing/run_all.sh` |
 | `api_smoke.py` | Starts the real app (real routes, real auth, Alembic migrations from empty) and checks access control, alerts, spend report, rate card, playground test mode and suspension. 54 checks. |
-| `e2e_browser.py` | Playwright. Starts the API and both built Next apps, signs in through the real login forms, clicks through alerts, the admin Voice Studio, usage and the rate card, policies, onboarding plans and checkout, patients, team invites and sign out everywhere, and takes screenshots. 46 checks. |
+| `e2e_browser.py` | Playwright. Starts the API and both built Next apps, signs in through the real login forms, clicks through alerts, the admin Voice Studio, usage and the rate card, policies, onboarding plans and checkout, patients, team invites and sign out everywhere, the landing demo, and takes screenshots. 47 checks. |
 | `harness.py` | Shared setup (API process, seeding a clinic the way a customer does, seeding spend). |
 | `REPORT.md` | The latest results, what they found, and what is not covered. |
 | `results/` | `api_smoke.json`, `e2e_browser.json` (kept); `*.log` per step (ignored by git). |
 | `screenshots/` | What the browser test saw. |
 
-The offline backend suite (509 tests) is `backend/ai/evals`; CI runs it and `api_smoke.py` on every push (`.github/workflows/ci.yml`).
+The offline backend suite (533 tests) is `backend/ai/evals`; CI runs it and `api_smoke.py` on every push (`.github/workflows/ci.yml`).
 
 The browser test needs both apps built against the port it uses (8011): `run_all.sh` does this.

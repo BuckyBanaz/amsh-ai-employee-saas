@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Icon } from "./icons";
+import { BASE_URL } from "../../utils/api_endpoints";
 
 const HeroOrb = dynamic(() => import("./HeroOrb"), {
   ssr: false,
@@ -115,7 +116,49 @@ export default function ChatDemo() {
     window.speechSynthesis.speak(utterance);
   };
 
-  const ask = (userQuery: string) => {
+  // The live demo: the real AI receptionist on a made-up clinic, in test mode (POST /api/public/demo-chat). The keyword
+  // answers above are only a preview for when the live demo is unavailable, and are labelled as such.
+  type Answer = { text: string; action: { kind: string; summary: string }; latency?: number };
+  const conversationId = useRef<string>("");
+  const [lastLatency, setLastLatency] = useState<number | null>(null);
+  const [live, setLive] = useState(true);
+
+  const askLive = async (q: string): Promise<Answer | null> => {
+    if (!conversationId.current) {
+      conversationId.current =
+        typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+    }
+    try {
+      const res = await fetch(`${BASE_URL}/public/demo-chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: q, conversation_id: conversationId.current }),
+      });
+      if (!res.ok) return null;
+      const data: { reply: string; actions: { kind: string; summary: string }[]; latency_ms: number } = await res.json();
+      const last = data.actions?.[data.actions.length - 1];
+      return {
+        text: data.reply,
+        action: last ? { kind: `test_mode.${last.kind}`, summary: last.summary } : { kind: "agent.response", summary: `Live AI · ${data.latency_ms} ms` },
+        latency: data.latency_ms,
+      };
+    } catch {
+      return null;
+    }
+  };
+
+  const preview = (q: string): Answer => {
+    const lower = q.toLowerCase();
+    const match = PREVIEW_ANSWERS.map((a) => ({ a, score: a.keys.filter((k) => lower.includes(k)).length }))
+      .filter((x) => x.score > 0)
+      .sort((x, y) => y.score - x.score)[0];
+    return {
+      text: match?.a.text ?? FALLBACK_REPLY,
+      action: { kind: "preview", summary: "Live AI is resting right now: this is a sample answer" },
+    };
+  };
+
+  const ask = async (userQuery: string) => {
     const q = userQuery.trim();
     if (!q || busy) return;
 
@@ -129,54 +172,33 @@ export default function ChatDemo() {
 
     const userId = idRef.current++;
     const aiId = idRef.current++;
-
-    // Find best answer
-    const lower = q.toLowerCase();
-    const match = PREVIEW_ANSWERS.map((a) => ({
-      a,
-      score: a.keys.filter((k) => lower.includes(k)).length,
-    }))
-      .filter((x) => x.score > 0)
-      .sort((x, y) => y.score - x.score)[0];
-
-    const answerText = match?.a.text ?? FALLBACK_REPLY;
-    const actionData = match?.a.action ?? { kind: "agent.response", summary: "Response generated in 180ms" };
-
     setTurns((t) => [...t, { id: userId, from: "user", text: q }]);
 
-    // Simulated streaming response
-    timers.current.push(
-      setTimeout(() => {
-        setTurns((t) => [
-          ...t,
-          {
-            id: aiId,
-            from: "ai",
-            text: answerText,
-            action: actionData,
-            latency: 175,
-          },
-        ]);
+    const answer: Answer = (await askLive(q)) ?? preview(q);
+    const isLive = answer.latency !== undefined;
+    setLive(isLive);
+    if (answer.latency !== undefined) setLastLatency(answer.latency);
 
-        speakText(answerText);
+    setTurns((t) => [
+      ...t,
+      { id: aiId, from: "ai", text: answer.text, action: answer.action, latency: answer.latency },
+    ]);
+    speakText(answer.text);
 
-        const words = answerText.split(" ").length;
-        if (reduce) {
-          setBusy(false);
-          return;
-        }
-
-        for (let w = 1; w <= words; w++) {
-          timers.current.push(
-            setTimeout(() => {
-              setStreaming(w < words ? { id: aiId, shown: w } : null);
-              if (w === words) setBusy(false);
-            }, w * 30)
-          );
-        }
-        setStreaming({ id: aiId, shown: 0 });
-      }, reduce ? 0 : 500)
-    );
+    const words = answer.text.split(" ").length;
+    if (reduce) {
+      setBusy(false);
+      return;
+    }
+    for (let w = 1; w <= words; w++) {
+      timers.current.push(
+        setTimeout(() => {
+          setStreaming(w < words ? { id: aiId, shown: w } : null);
+          if (w === words) setBusy(false);
+        }, w * 30)
+      );
+    }
+    setStreaming({ id: aiId, shown: 0 });
   };
 
   const handleTestGreeting = () => {
@@ -341,12 +363,12 @@ export default function ChatDemo() {
                   <h3 className="text-sm font-bold text-white">AMSh Interactive Console</h3>
                   <p className="text-xs text-emerald-400 flex items-center gap-1">
                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    Sub-200ms Turn Latency · Groq Llama 3.3
+                    {live ? `Live AI · test mode${lastLatency !== null ? ` · last reply ${lastLatency} ms` : ""}` : "Preview answers · live AI resting"}
                   </p>
                 </div>
               </div>
               <span className="px-3 py-1 rounded-full text-[10px] font-mono font-semibold bg-white/5 border border-white/10 text-cyan-300">
-                Interactive Preview
+                {live ? "Live Demo" : "Preview"}
               </span>
             </div>
 
