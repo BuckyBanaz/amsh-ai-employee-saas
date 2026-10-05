@@ -11,6 +11,8 @@ export const API_ENDPOINTS = {
     RESET_PASSWORD: `${BASE_URL}/auth/reset-password`,
     CHANGE_PASSWORD: `${BASE_URL}/auth/change-password`,
     LOGOUT_ALL: `${BASE_URL}/auth/logout-all`,
+    INVITE_INFO: (token: string) => `${BASE_URL}/auth/invite?token=${encodeURIComponent(token)}`,
+    ACCEPT_INVITE: `${BASE_URL}/auth/accept-invite`,
     VERIFY_EMAIL: `${BASE_URL}/auth/verify-email`,
     SEND_VERIFICATION: `${BASE_URL}/auth/send-verification`,
   },

@@ -21,6 +21,7 @@ from backend.server.auth.security import (
     verify_password,
 )
 from backend.server.database.models.audit_log import AuditLog
+from backend.server.database.models.business import Business
 from backend.server.database.models.user import User
 from backend.server.common.config import get_settings
 from backend.server.database.session import get_db
@@ -173,20 +174,49 @@ class AcceptInviteRequest(BaseModel):
     password: str
 
 
-@router.post("/accept-invite", response_model=TokenOut)
-def accept_invite(payload: AcceptInviteRequest, db: Session = Depends(get_db)):
-    user_id = decode_invite_token(payload.token)
-    user = db.get(User, user_id)
+class InviteInfoOut(BaseModel):
+    name: str
+    email: str
+    role: str
+    business_name: str | None
+
+
+def _pending_invitee(token: str, db: Session) -> User:
+    """The invited user behind a link, or why the link cannot be used. A member who joined and was later deactivated
+    cannot use their old link to switch themselves back on."""
+    from backend.server.api.routes.users import invite_pending
+
+    user = db.get(User, decode_invite_token(token))
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invite is no longer valid")
-    if user.is_active:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This invite has already been accepted")
+    if not invite_pending(user):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This invite has already been used. Sign in instead.")
+    ensure_not_suspended(db, user)
+    return user
 
+
+@router.get("/invite", response_model=InviteInfoOut)
+def invite_info(token: str, db: Session = Depends(get_db)):
+    """Who the invite link is for, so the page can greet them. Needs the secret link token."""
+    user = _pending_invitee(token, db)
+    business = db.get(Business, user.business_id) if user.business_id else None
+    return InviteInfoOut(name=user.name, email=user.email, role=user.role, business_name=business.name if business else None)
+
+
+@router.post("/accept-invite", response_model=TokenOut)
+def accept_invite(payload: AcceptInviteRequest, request: Request, db: Session = Depends(get_db)):
+    user = _pending_invitee(payload.token, db)
+    if len(payload.password) < MIN_PASSWORD_LENGTH:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Password must be at least {MIN_PASSWORD_LENGTH} characters")
+
+    now = datetime.now(timezone.utc)
     user.hashed_password = hash_password(payload.password)
     user.is_active = True
-    user.last_active_at = datetime.now(timezone.utc)
+    user.last_active_at = now
+    user.email_verified_at = user.email_verified_at or now  # the link reached their inbox
     db.commit()
     db.refresh(user)
+    audit(db, "auth.invite_accepted", user, ip=client_ip(request))
 
     token = create_access_token(user.id)
     return TokenOut(access_token=token, user=UserOut.model_validate(user))

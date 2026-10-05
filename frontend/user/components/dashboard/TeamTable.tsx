@@ -11,6 +11,7 @@ export interface TeamMemberItem {
   is_active?: boolean;
   status?: string;
   last_active?: string;
+  last_active_at?: string | null;
   created_at?: string;
 }
 
@@ -18,12 +19,26 @@ interface TeamTableProps {
   members: TeamMemberItem[];
   loading?: boolean;
   onDeleteMember?: (id: string) => void;
+  onResendInvite?: (member: TeamMemberItem) => void;
 }
+
+/** Invited people who never signed in are "pending"; members switched off after joining are "deactivated". */
+export function memberStatus(member: TeamMemberItem): 'active' | 'pending' | 'deactivated' {
+  if (member.is_active !== false) return 'active';
+  return member.last_active_at ? 'deactivated' : 'pending';
+}
+
+const STATUS_BADGE = {
+  active: { label: 'Active', box: 'bg-emerald-50 text-emerald-700 border-emerald-100', dot: 'bg-emerald-500' },
+  pending: { label: 'Invite pending', box: 'bg-amber-50 text-amber-700 border-amber-100', dot: 'bg-amber-500' },
+  deactivated: { label: 'Deactivated', box: 'bg-gray-100 text-gray-500 border-gray-200', dot: 'bg-gray-400' },
+};
 
 export function TeamTable({
   members,
   loading = false,
   onDeleteMember,
+  onResendInvite,
 }: TeamTableProps) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -127,10 +142,15 @@ export function TeamTable({
 
                 {/* Status Column */}
                 <td className="px-3.5 py-2.5 whitespace-nowrap">
-                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-100">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                    Active
-                  </span>
+                  {(() => {
+                    const badge = STATUS_BADGE[memberStatus(member)];
+                    return (
+                      <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold border ${badge.box}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${badge.dot}`} />
+                        {badge.label}
+                      </span>
+                    );
+                  })()}
                 </td>
 
                 {/* Actions Column */}
@@ -158,12 +178,22 @@ export function TeamTable({
                           </button>
                         </div>
                       ) : (
+                        <>
+                        {onResendInvite && memberStatus(member) === 'pending' && (
+                          <button
+                            onClick={() => onResendInvite(member)}
+                            className="text-xs font-semibold text-[#0066FF] hover:bg-blue-50 px-2 py-1 rounded transition-colors cursor-pointer"
+                          >
+                            Resend invite
+                          </button>
+                        )}
                         <button
                           onClick={() => setDeletingId(member.id)}
                           className="text-xs font-semibold text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded transition-colors cursor-pointer"
                         >
                           Remove
                         </button>
+                        </>
                       )}
                     </div>
                   )}

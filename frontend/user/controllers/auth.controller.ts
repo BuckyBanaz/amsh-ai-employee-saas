@@ -32,6 +32,28 @@ export const AuthController = {
     return res;
   },
 
+  /** Who an invite link is for (name, email, role, clinic). Fails when the link is invalid, expired or already used. */
+  inviteInfo: (token: string) =>
+    ApiService.get<{ name: string; email: string; role: string; business_name: string | null }>(API_ENDPOINTS.AUTH.INVITE_INFO(token), {
+      requireAuth: false,
+    }),
+
+  /** Joins the clinic with the chosen password and signs in, like a normal login. */
+  acceptInvite: async (token: string, password: string) => {
+    const response = await ApiService.post<any>(API_ENDPOINTS.AUTH.ACCEPT_INVITE, { token, password }, { requireAuth: false });
+    if (response.access_token) {
+      StorageService.setToken(response.access_token);
+      if (response.user) {
+        StorageService.setUser(response.user);
+        if (response.user.business_id) {
+          StorageService.setBusinessId(response.user.business_id);
+          StorageService.setOnboardingCompleted(true); // they join a clinic that is already set up
+        }
+      }
+    }
+    return response;
+  },
+
   login: async (email: string, password: string) => {
     try {
       const response = await ApiService.post<any>(

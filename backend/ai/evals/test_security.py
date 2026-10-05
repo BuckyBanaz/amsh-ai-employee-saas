@@ -213,7 +213,7 @@ class NoUnguardedRoutes(unittest.TestCase):
 
     PUBLIC = {
         ("POST", "/api/auth/register"), ("POST", "/api/auth/login"), ("POST", "/api/auth/forgot-password"), ("POST", "/api/auth/reset-password"),
-        ("POST", "/api/auth/verify-email"), ("POST", "/api/auth/accept-invite"), ("POST", "/api/admin/auth/login"),
+        ("POST", "/api/auth/verify-email"), ("POST", "/api/auth/accept-invite"), ("GET", "/api/auth/invite"), ("POST", "/api/admin/auth/login"),
         ("GET", "/api/plans"), ("GET", "/api/plans/{key}"), ("GET", "/api/languages"),
         ("GET", "/api/billing/config"), ("GET", "/api/billing/trial-config"), ("GET", "/api/payments/config"), ("GET", "/api/voice/stt-config"),
         ("GET", "/api/calendar/{business_id}/{token}.ics"), ("GET", "/api/recordings/{call_id}/{token}"),  # the token in the URL is the secret

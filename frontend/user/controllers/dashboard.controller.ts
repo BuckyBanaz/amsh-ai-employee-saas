@@ -683,6 +683,11 @@ export const DashboardController = {
     return ApiService.post<any>(`${BASE_URL}/businesses/${bId}/users`, payload);
   },
 
+  async resendInvite(userId: string, businessId?: string): Promise<{ invite_url: string }> {
+    const bId = this.getEffectiveBusinessId(businessId);
+    return ApiService.post<{ invite_url: string }>(`${BASE_URL}/businesses/${bId}/users/${userId}/resend-invite`, {});
+  },
+
   async updateTeamMember(userId: string, payload: { role?: string; is_active?: boolean }, businessId?: string): Promise<any> {
     const bId = this.getEffectiveBusinessId(businessId);
     return ApiService.patch<any>(`${BASE_URL}/businesses/${bId}/users/${userId}`, payload);

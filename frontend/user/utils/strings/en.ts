@@ -52,11 +52,9 @@ export const STRINGS = {
     },
     ACCEPT_INVITE: {
       TITLE_PREFIX: "You've been invited to join",
-      TITLE_BUSINESS: "Smile Dental Clinic",
-      DESC: "Dr. Sarah Wilson has invited you to join their team.",
-      NAME_PLACEHOLDER: "Arthur Pendragon",
-      SUBMIT: "Accept Invitation",
-      DECLINE: "Decline invitation"
+      DESC: "Choose a password to join the team. You'll sign in with",
+      SUBMIT: "Accept invitation",
+      DECLINE: "Not you? Go to sign in"
     },
     VERIFY_EMAIL: {
       TITLE: "Verify your email",
