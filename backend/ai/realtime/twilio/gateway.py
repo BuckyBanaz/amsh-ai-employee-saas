@@ -12,13 +12,14 @@ import json
 import logging
 import re
 import time
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from backend.ai.engine.agent.fillers import wait_text
 from backend.ai.engine.agent.facts import load_vertical_name
 from backend.ai.speech.stt.language import resolve_stt_language
 from backend.ai.verticals.errors import MissingContextError
@@ -180,6 +181,9 @@ class CallSession:
         self._stt_connect_task = asyncio.create_task(self._connect_stt(call_id))
         self._watchdog_task = asyncio.create_task(self._watchdog())
         self._warm_providers(force=True)  # LLM connection opens while the greeting plays, not on the first turn
+        prewarm = latency.create_detached_task(self._prewarm_fillers())
+        self._bg_tasks.add(prewarm)
+        prewarm.add_done_callback(self._bg_tasks.discard)
 
         await self._speak_turn(greeting)
 
@@ -212,24 +216,41 @@ class CallSession:
         self._warm_providers()
 
     async def _consume_stt_events(self) -> None:
+        """One turn per caller utterance. Deepgram also finalises a segment in the middle of long speech (is_final without
+        speech_final); answering that would cut the caller off mid-sentence and then answer the rest separately, so final
+        segments are joined until the pause (speech_final) or Deepgram's UtteranceEnd. In the usual case speech_final comes
+        with the last segment, so this adds no wait."""
         assert self.stt is not None
+        pending: List[str] = []
+        last: Optional[Dict[str, Any]] = None
         async for event in self.stt.events():
             if event["type"] == "speech_started":  # only queued when no on_speech_started hook is set
                 await self._on_caller_speech_started()
-            elif event["type"] == "transcript" and event.get("is_final") and event.get("text", "").strip():
-                self._busy = True  # we are thinking/answering: the watchdog must not call this silence
-                tracker = self._new_turn_tracker(event)
-                token = latency.start_turn(tracker)
+                continue
+            if event["type"] == "transcript" and event.get("is_final") and event.get("text", "").strip():
+                pending.append(event["text"].strip())
+                last = event
+                if not event.get("speech_final"):
+                    continue
+            elif not (event["type"] == "utterance_end" and pending):
+                continue
+            utterance = " ".join(pending)
+            # word timing from the last segment; arrival = when the turn was actually closed (the UtteranceEnd, if that closed it)
+            final_event = dict(last or event, text=utterance, received_at=event.get("received_at") or (last or {}).get("received_at"))
+            pending, last = [], None
+            self._busy = True  # we are thinking/answering: the watchdog must not call this silence
+            tracker = self._new_turn_tracker(final_event)
+            token = latency.start_turn(tracker)
+            try:
+                await self._handle_transcript(utterance)
+            finally:
+                latency.end_turn(token)
                 try:
-                    await self._handle_transcript(event["text"])
-                finally:
-                    latency.end_turn(token)
-                    try:
-                        tracker.report()
-                    except Exception as e:  # measurement must never break a call
-                        logger.debug("latency report failed: %s", e)
-                    self._busy = False
-                    self.last_activity = time.monotonic()
+                    tracker.report()
+                except Exception as e:  # measurement must never break a call
+                    logger.debug("latency report failed: %s", e)
+                self._busy = False
+                self.last_activity = time.monotonic()
 
     def _new_turn_tracker(self, event: Dict[str, Any]) -> latency.TurnLatency:
         """Per-utterance latency tracker. Origin = the caller's estimated end of speech (Deepgram word timing), clamped to
@@ -448,25 +469,34 @@ class CallSession:
         except asyncio.CancelledError:
             pass
 
-    async def _stream_tts(self, text: str, emotion: Optional[str] = None) -> None:
-        voice_id = self.agent_settings.get("voice_id")
+    def _tts_params(self, text: str, emotion: Optional[str] = None) -> Dict[str, Any]:
+        """Everything Cartesia is asked for besides the words (and the audio cache key): voice, encoding, language, speed, emotion."""
         # The owner's explicit TTS language wins; otherwise the language the agent is speaking (primary language from /ai, or the one the
         # caller switched to). Hindi/English calls still pick per sentence so Hindi words are pronounced as Hindi.
         active = getattr(getattr(self, "agent_rt", None) and self.agent_rt.engine, "active_language", None) or self.agent_settings.get("language")
-        language = self.agent_settings.get("tts_language") or resolve_tts_language(active, text)
-        speed = self.agent_settings.get("tts_speed")  # Voice tab speed / personality default
-        emotion = emotion or self.agent_settings.get("tts_emotion")  # the sentence's own emotion wins over the Voice-tab default
-        if self.pcm:
-            audio = cartesia_tts.stream_speech(
-                text, voice_id=voice_id, encoding="pcm_s16le", sample_rate=8000, language=language,
-                speed=speed, emotion=emotion,
-            )
-            frames = frame_stream(audio, PCM_FRAME_BYTES)
-        else:
-            frames = frame_stream(
-                cartesia_tts.stream_speech(text, voice_id=voice_id, language=language, speed=speed, emotion=emotion),
-                FRAME_BYTES,
-            )
+        return {
+            "voice_id": self.agent_settings.get("voice_id"),
+            "encoding": "pcm_s16le" if self.pcm else "pcm_mulaw",
+            "sample_rate": 8000,
+            "language": self.agent_settings.get("tts_language") or resolve_tts_language(active, text),
+            "speed": self.agent_settings.get("tts_speed"),  # Voice tab speed / personality default
+            "emotion": emotion or self.agent_settings.get("tts_emotion"),  # the sentence's own emotion wins over the Voice-tab default
+        }
+
+    async def _prewarm_fillers(self) -> None:
+        """LATENCY: synthesize this call's "one moment..." fillers while the greeting plays, so a turn that has to check the
+        calendar starts speaking from memory instead of waiting for text-to-speech. Cached across calls (same voice)."""
+        engine = getattr(self.agent_rt, "engine", None)
+        if engine is None or not getattr(engine, "fillers_on", False):
+            return
+        code = (getattr(engine, "active_language", None) or "en").split("-")[0]
+        texts = {wait_text(False), wait_text(True)} if code in ("hi", "en") else {wait_text(False, language=code)}
+        for text in texts:
+            await cartesia_tts.prewarm(text, **self._tts_params(text))
+
+    async def _stream_tts(self, text: str, emotion: Optional[str] = None) -> None:
+        params = self._tts_params(text, emotion)
+        frames = frame_stream(cartesia_tts.stream_speech(text, **params), PCM_FRAME_BYTES if self.pcm else FRAME_BYTES)
         sent = 0
         async for frame_b64 in frames:
             sent += 1

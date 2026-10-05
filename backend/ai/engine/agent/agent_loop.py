@@ -30,7 +30,7 @@ from backend.ai.engine.agent.llm_backend import ChatBackend, LLMUnavailable
 from backend.ai.engine.agent.prompt_builder import build_system_prompt
 from backend.ai.engine.agent.toolbox import TOOL_SCHEMAS, AgentToolbox
 from backend.ai.engine.agent.validator import ActionGate, BusinessFacts
-from backend.ai.engine.agent.datetime_utils import local_now
+from backend.ai.engine.agent.datetime_utils import dates_in, local_now
 from backend.ai.engine.conversation.i18n import language_code
 from backend.ai.engine.conversation.i18n import t
 from backend.ai.engine.guardrails.safety import SafetyGuardrails
@@ -59,6 +59,11 @@ SPOKEN_LINE_TIMEOUT_S = 2.5
 EMERGENCY_LINE_TIMEOUT_S = 1.5
 SPOKEN_LINE_MAX_CHARS = 320
 SPOKEN_LINE_MIN_WORDS = 5  # "ok" is not a transfer or emergency message
+# LATENCY: a caller who names a day ("tomorrow", "Thursday") nearly always needs that day's open times, which costs the model a
+# whole extra round (ask for check_availability, wait, ask again). The engine reads them first, in a few ms, and hands them
+# to the model as an already-made check_availability call, so the first round can answer. Not repeated for the same day
+# within this many seconds of the call.
+PREFETCH_REPEAT_S = 120.0
 # Tools safe to run side by side when the model asks for several in one round ("tomorrow or Friday?"). Only pure reads
 # qualify: lookup_appointment assigns A1/A2 refs on the gate and search_knowledge may (re)build the index, so they stay
 # sequential.
@@ -279,6 +284,7 @@ class AgentEngine:
         self.gender = gender
         self.fillers_on = fillers  # natural fillers ("hmm...", "one moment..."): spoken calls only, see agent/fillers.py
         self._last_filler_turn = -99
+        self._prefetched: Dict[Any, float] = {}  # day -> when its open times were last read ahead of the model (latency)
         self._wait_spoken = False
         self._ack_used: set = set()  # acknowledgement words ("sure", "got it"...) already said this turn, see _speech
         self.channel = channel  # "voice" (phone call, playground) or "chat" (WhatsApp text)
@@ -442,7 +448,9 @@ class AgentEngine:
             yield {"type": "done", "turn": self._result(reply, started, tools=[{"tool": "transfer_to_human", "via": "safety_gate"}], first_ms=elapsed())}
             return
 
-        # 2. LLM + tool rounds
+        # 2. LLM + tool rounds (with the day the caller named already looked up)
+        if prefetched := await self._prefetch_availability(roman):
+            group.extend(prefetched)
         degraded = False
         error: Optional[str] = None
         reply = ""
@@ -695,6 +703,37 @@ class AgentEngine:
         line = (language_pack(code).get("strings") or {}).get("emergency") or default or language_pack("en")["strings"]["emergency"]
         numbers = self.context.emergency_numbers
         return f"{line} ({' / '.join(numbers)})" if numbers and code != "en" else line
+
+    async def _prefetch_availability(self, roman: str) -> List[Dict[str, Any]]:
+        """The open times for the one day the caller just named, as a finished check_availability call (assistant tool call +
+        tool result) the model sees in its first round. Same tool, same checks and records as when the model asks itself;
+        skipped when the tool is switched off, the caller named no day or several, or that day was read moments ago."""
+        if not any(s["function"]["name"] == "check_availability" for s in self.tools):
+            return []
+        days = dates_in(roman, self.now_fn().date())
+        if len(days) != 1:
+            return []
+        day = next(iter(days))
+        if day < self.now_fn().date():
+            return []
+        now = time.monotonic()
+        if now - self._prefetched.get(day, -PREFETCH_REPEAT_S) < PREFETCH_REPEAT_S:
+            return []
+        self._prefetched[day] = now
+        args = {"date": day.isoformat()}
+        latency.mark("tool_start", tool="check_availability", prefetch=True)
+        try:
+            result = await self.toolbox.execute("check_availability", args)
+        finally:
+            latency.mark("tool_end", tool="check_availability", prefetch=True)
+        if not result.get("ok"):
+            return []  # e.g. a date the caller did not really say: let the model ask the normal way
+        call_id = f"prefetch_{day.isoformat()}_{len(self._turns)}"
+        return [
+            {"role": "assistant", "content": None,
+             "tool_calls": [{"id": call_id, "type": "function", "function": {"name": "check_availability", "arguments": json.dumps(args)}}]},
+            {"role": "tool", "tool_call_id": call_id, "content": json.dumps(result, default=str)},
+        ]
 
     async def _spoken_line(
         self, group: List[Dict[str, Any]], kind: str, fallback: str, timeout: float = SPOKEN_LINE_TIMEOUT_S, must_say_one_of: Any = (),

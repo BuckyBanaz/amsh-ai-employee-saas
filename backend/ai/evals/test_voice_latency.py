@@ -323,6 +323,39 @@ class GatewayTurn(unittest.TestCase):
         self.assertGreater(len(media), 0)
         self.assertEqual(reports[0]["engine"], "llm_agent")
 
+    def _turns_from(self, events):
+        session, _ = self._session(ScriptedBackend())
+        heard = []
+
+        async def handle(text):
+            heard.append(text)
+
+        session._handle_transcript = handle
+
+        async def go():
+            class STT:
+                async def events(inner):
+                    for e in events:
+                        yield e
+            session.stt = STT()
+            await session._consume_stt_events()
+        run(go())
+        return heard
+
+    def test_a_long_utterance_is_one_turn_not_two(self):
+        """Deepgram finalises long speech in pieces (is_final without speech_final); answering each piece would cut in."""
+        part = dict(self._transcript_event("I want to book an appointment"), speech_final=False)
+        end = self._transcript_event("for tomorrow morning with Dr Sharma")
+        self.assertEqual(self._turns_from([part, end]), ["I want to book an appointment for tomorrow morning with Dr Sharma"])
+
+    def test_utterance_end_closes_a_turn_the_pause_detection_missed(self):
+        part = dict(self._transcript_event("haan ji appointment chahiye"), speech_final=False)
+        self.assertEqual(self._turns_from([part, {"type": "utterance_end", "received_at": time.monotonic()}]), ["haan ji appointment chahiye"])
+        self.assertEqual(self._turns_from([{"type": "utterance_end"}]), [])  # nothing pending: nothing to answer
+        # interim (non-final) results never start a turn, and two utterances stay two turns
+        interim = dict(self._transcript_event("I want"), is_final=False, speech_final=False)
+        self.assertEqual(self._turns_from([interim, self._transcript_event("hello"), self._transcript_event("are you open")]), ["hello", "are you open"])
+
     def test_barge_in_still_cancels_playback_and_clears_twilio(self):
         backend = ScriptedBackend(reply("Of course, I can certainly help you with booking that appointment today."))
         session, sent = self._session(backend, tts_delay=0.05, tts_chunks=40)
@@ -472,3 +505,75 @@ class ProviderClients(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class _SinkWS:
+    async def send_text(self, text):
+        pass
+
+
+class SpeechAudioCache(unittest.TestCase):
+    """LATENCY: finished utterances are kept (least recently used dropped first), and a call's fillers are synthesized while the
+    greeting plays, so a calendar-checking turn starts speaking from memory."""
+
+    def _tts(self):
+        from backend.ai.speech.tts.cartesia import CartesiaTTS
+
+        tts = CartesiaTTS()
+        tts.api_key = "k"
+        tts.requests = []
+
+        async def ws(text, voice_id, encoding, sample_rate, language, speed, emotion):
+            tts.requests.append(text)
+            yield f"audio:{text}".encode()
+
+        tts._stream_speech_ws = ws
+        return tts
+
+    def _say(self, tts, text, **params):
+        async def go():
+            return b"".join([c async for c in tts.stream_speech(text, **params)])
+        return run(go())
+
+    def test_repeats_come_from_memory_and_the_oldest_is_dropped_first(self):
+        tts = self._tts()
+        tts.AUDIO_CACHE_ENTRIES = 2
+        self._say(tts, "Hello")
+        self._say(tts, "One moment")
+        self._say(tts, "Hello")  # from memory, and now the most recent
+        self._say(tts, "Goodbye")  # evicts "One moment", the least recently used
+        self.assertEqual(tts.requests, ["Hello", "One moment", "Goodbye"])
+        self._say(tts, "Hello")
+        self._say(tts, "One moment")
+        self.assertEqual(tts.requests, ["Hello", "One moment", "Goodbye", "One moment"])
+        self.assertLessEqual(len(tts._audio_cache), 2)
+
+    def test_the_cache_also_has_a_size_limit(self):
+        tts = self._tts()
+        tts.AUDIO_CACHE_BYTES = 30
+        for word in ("aaaaaaaaaa", "bbbbbbbbbb", "cccccccccc"):
+            self._say(tts, word)
+        self.assertLessEqual(tts._audio_cache_bytes, 30)
+        self.assertEqual(tts._audio_cache_bytes, sum(len(v) for v in tts._audio_cache.values()))
+
+    def test_a_call_prewarms_its_fillers_with_the_parameters_playback_will_use(self):
+        from backend.ai.realtime.twilio import gateway
+
+        tts = self._tts()
+        saved = gateway.cartesia_tts
+        gateway.cartesia_tts = tts
+        try:
+            session = gateway.CallSession(_SinkWS(), "biz")
+            session.agent_settings = {"voice_id": "v1", "tts_speed": 1.1}
+            session.agent_rt = type("RT", (), {"engine": type("E", (), {"fillers_on": True, "active_language": "hi"})()})()
+            run(session._prewarm_fillers())
+            prewarmed = list(tts.requests)
+            self.assertEqual(sorted(prewarmed), sorted({gateway.wait_text(False), gateway.wait_text(True)}))
+
+            async def play():
+                await session._stream_tts(gateway.wait_text(True))
+            session.stream_sid = "MS1"
+            run(play())
+            self.assertEqual(tts.requests, prewarmed)  # played from memory: no new synthesis
+        finally:
+            gateway.cartesia_tts = saved

@@ -383,6 +383,42 @@ class CancelAndReschedule(unittest.TestCase):
         self.assertEqual(run(self.tb.execute("reschedule_appointment", {**args, "confirmed_by_caller": True}))["code"], "rescheduled")
 
 
+class AvailabilityPrefetch(unittest.TestCase):
+    """LATENCY: the day the caller names is looked up before the first model round, so the model can answer in one round."""
+
+    def test_the_named_day_reaches_the_first_round(self):
+        backend = ScriptedBackend(reply("Tomorrow I have 09:00 AM or 10:30 AM open. Which suits you?"))
+        engine, _ = make_engine(backend)
+        out = run(engine.turn("can I come in tomorrow?"))
+        first = backend.seen[0]["messages"]
+        tool = [m for m in first if m.get("role") == "tool"]
+        self.assertEqual(len(tool), 1)
+        self.assertTrue(json.loads(tool[0]["content"])["ok"])
+        self.assertEqual(len(backend.seen), 1)  # one model round, not two
+        self.assertIn("09:00 AM", out.reply)  # the times came from the real read, so the grounding guard lets them through
+        self.assertEqual([t["tool"] for t in out.tools], ["check_availability"])
+
+    def test_no_day_several_days_a_past_day_or_the_tool_off_means_no_prefetch(self):
+        for said in ("hello, I need an appointment", "tomorrow or Friday?", "I came in yesterday"):
+            backend = ScriptedBackend(reply("Sure, which day works for you?"))
+            engine, _ = make_engine(backend)
+            run(engine.turn(said))
+            self.assertFalse([m for m in backend.seen[0]["messages"] if m.get("role") == "tool"], said)
+        backend = ScriptedBackend(reply("Sure, which day works for you?"))
+        engine, _ = make_engine(backend)
+        engine.tools = [s for s in engine.tools if s["function"]["name"] != "check_availability"]
+        run(engine.turn("can I come in tomorrow?"))
+        self.assertFalse([m for m in backend.seen[0]["messages"] if m.get("role") == "tool"])
+
+    def test_the_same_day_is_not_read_again_moments_later(self):
+        backend = ScriptedBackend(reply("Tomorrow I have 09:00 AM open."), reply("Yes, tomorrow works."))
+        engine, _ = make_engine(backend)
+        run(engine.turn("anything tomorrow?"))
+        run(engine.turn("ok tomorrow then"))
+        reads = [t for t in engine.toolbox.calls if t["tool"] == "check_availability"]
+        self.assertEqual(len(reads), 1)
+
+
 class AgentLoop(unittest.TestCase):
     def test_prompt_contains_tenant_facts_and_identity(self):
         engine, _ = make_engine(ScriptedBackend())
@@ -1447,8 +1483,9 @@ class MultiProviderLLM(unittest.TestCase):
         engine, _ = make_engine(backend)
         run(engine.turn("is there any slot tomorrow?"))
         resent = backend.http.requests[1]["messages"]
-        assistant_call = [m for m in resent if m.get("tool_calls")][0]["tool_calls"][0]
-        self.assertEqual(assistant_call["extra_content"], sig)  # echoed back on the tool-result round trip
+        calls = {c["id"]: c for m in resent for c in (m.get("tool_calls") or [])}
+        self.assertEqual(calls["c1"]["extra_content"], sig)  # echoed back on the tool-result round trip
+        self.assertTrue(any(i.startswith("prefetch_") for i in calls))  # the engine's own read of "tomorrow" sits beside it
 
     def test_agent_turn_reports_which_provider_answered(self):
         from backend.ai.engine.agent.llm_backend import FallbackChatBackend

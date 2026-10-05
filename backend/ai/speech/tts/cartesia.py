@@ -8,6 +8,7 @@ import base64
 import json
 import logging
 import uuid
+from collections import OrderedDict
 from typing import AsyncGenerator, Optional
 import httpx
 import websockets
@@ -41,7 +42,9 @@ class CartesiaTTS:
         self._client = pooled_http_client(timeout=10.0)
         # Full-audio cache for the scripted prompts (greeting, slot questions) that
         # repeat across calls: a hit skips the Cartesia round trip entirely.
-        self._audio_cache: dict[tuple, bytes] = {}
+        # Finished utterances, least recently used evicted first: the greeting and fillers recur on every call, so they stay
+        self._audio_cache: "OrderedDict[tuple, bytes]" = OrderedDict()
+        self._audio_cache_bytes = 0
         self._preview_cache: dict[tuple, bytes] = {}  # dashboard previews (MP3), so repeats do not spend credits
         self._preview_inflight: dict[tuple, "asyncio.Future"] = {}  # syntheses in progress, shared by identical requests
         self.last_error: tuple[int, str] | None = None  # (HTTP status, message) of the last failed request
@@ -91,6 +94,7 @@ class CartesiaTTS:
         cache_key = (text, voice_id or self.voice_id, encoding, sample_rate, language, speed, emotion)
         cached = self._audio_cache.get(cache_key)
         if cached is not None:
+            self._audio_cache.move_to_end(cache_key)
             latency.mark("tts_first_audio", cached=True)
             yield cached
             return
@@ -105,10 +109,32 @@ class CartesiaTTS:
             async for chunk in self._stream_speech_rest(text, voice_id, encoding, sample_rate, language, speed, emotion):
                 collected.extend(chunk)
                 yield chunk
-        if collected and len(self._audio_cache) < 200:
+        if collected:
             # Only cache a REST-fallback or a websocket run that finished (a barge-in cancellation stops mid-stream and
             # never reaches here, so a cached entry is always the complete utterance).
-            self._audio_cache[cache_key] = bytes(collected)
+            self._remember(cache_key, bytes(collected))
+
+    AUDIO_CACHE_ENTRIES = 400
+    AUDIO_CACHE_BYTES = 24 * 1024 * 1024  # ~12 minutes of 8 kHz 16-bit phone audio
+
+    def _remember(self, key: tuple, audio: bytes) -> None:
+        old = self._audio_cache.pop(key, None)
+        if old is not None:
+            self._audio_cache_bytes -= len(old)
+        self._audio_cache[key] = audio
+        self._audio_cache_bytes += len(audio)
+        while self._audio_cache and (len(self._audio_cache) > self.AUDIO_CACHE_ENTRIES or self._audio_cache_bytes > self.AUDIO_CACHE_BYTES):
+            _, dropped = self._audio_cache.popitem(last=False)
+            self._audio_cache_bytes -= len(dropped)
+
+    async def prewarm(self, text: str, **params) -> None:
+        """Synthesize `text` now (same parameters as the later `stream_speech` call) so it plays from memory when needed:
+        the "one moment..." filler a tool turn starts with. Never raises; a cached text is not requested again."""
+        try:
+            async for _ in self.stream_speech(text, **params):
+                pass
+        except Exception as e:
+            logger.debug(f"[CARTESIA TTS] prewarm skipped: {e}")
 
     async def _stream_speech_ws(
         self,

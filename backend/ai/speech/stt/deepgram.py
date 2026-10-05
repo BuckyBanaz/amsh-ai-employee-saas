@@ -59,8 +59,8 @@ deepgram_stt = DeepgramSTT()
 DEEPGRAM_LIVE_URL_TEMPLATE = (
     "wss://api.deepgram.com/v1/listen"
     "?model={model}&language={language}&encoding={encoding}&sample_rate=8000&channels=1"
-    "&punctuate=true&interim_results=true&endpointing=200&vad_events=true"
-)
+    "&punctuate=true&interim_results=true&endpointing=200&vad_events=true&utterance_end_ms=1000"
+)  # utterance_end_ms: an UtteranceEnd closes a turn whose pause endpointing missed (noise), see the phone gateway
 
 # Languages Nova-3's multilingual mode understands while the caller switches between them mid-sentence.
 _MULTI_LANGS = ("en", "hi")
@@ -156,6 +156,8 @@ class DeepgramLiveConnection:
                             logger.warning(f"[DEEPGRAM LIVE] speech_started handler failed: {e}")
                     else:
                         await self._queue.put({"type": "speech_started"})
+                elif msg_type == "UtteranceEnd":
+                    await self._queue.put({"type": "utterance_end", "received_at": time.monotonic()})
                 elif msg_type == "Results":
                     alt = msg.get("channel", {}).get("alternatives", [{}])[0]
                     transcript = alt.get("transcript", "")
