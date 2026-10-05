@@ -80,7 +80,15 @@ def conversation_id(business_id: str, sender: str, now: Optional[datetime] = Non
 
 def find_whatsapp_integration(db: Any, phone_number_id: str) -> Optional[Integration]:
     rows = db.scalars(select(Integration).where(Integration.provider == "whatsapp", Integration.status == "connected")).all()
-    return next((r for r in rows if str((r.config or {}).get("phone_number_id")) == phone_number_id), None)
+    matches = [r for r in rows if str((r.config or {}).get("phone_number_id")) == str(phone_number_id)]
+    if len(matches) > 1:
+        logger.error(
+            "[WHATSAPP] phone_number_id %s matches %d connected businesses: refusing ambiguous message",
+            phone_number_id,
+            len(matches),
+        )
+        return None
+    return matches[0] if matches else None
 
 
 async def send_text(config: Dict[str, Any], to: str, body: str) -> bool:

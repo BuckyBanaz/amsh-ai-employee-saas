@@ -92,29 +92,16 @@ export default function WhatsappSetupPage() {
     setIsSaving(true);
 
     try {
-      localStorage.setItem('onboarding_whatsapp_connected', 'true');
+      localStorage.setItem('onboarding_whatsapp_connected', metaStatus === 'connected' ? 'true' : 'false');
       localStorage.setItem('onboarding_whatsapp_phone', businessPhone);
       const mode = metaStatus === 'connected' ? 'embedded_signup' : activeTab === 'turnkey' ? 'turnkey_cloud' : 'custom_waba';
       localStorage.setItem('onboarding_whatsapp_mode', mode);
-
-      const businessId = getActiveBusinessId();
-      if (businessId) {
-        await ApiService.post(API_ENDPOINTS.INTEGRATIONS.CONNECT(businessId, 'whatsapp'), {
-          provider: 'whatsapp',
-          config: {
-            mode,
-            business_phone: businessPhone,
-            admin_alert_phone: adminAlertPhone,
-            instant_cards: enableInstantCards,
-            reminder_2hr: enable2HourReminder,
-            missed_call_followup: enableMissedCallFollowup,
-            custom_phone_id: customPhoneId || null,
-            custom_waba_id: customWabaId || null,
-          }
-        });
-      }
+      localStorage.setItem('onboarding_whatsapp_admin_alert', adminAlertPhone);
+      localStorage.setItem('onboarding_whatsapp_instant_cards', enableInstantCards ? 'true' : 'false');
+      localStorage.setItem('onboarding_whatsapp_reminder_2hr', enable2HourReminder ? 'true' : 'false');
+      localStorage.setItem('onboarding_whatsapp_missed_call', enableMissedCallFollowup ? 'true' : 'false');
     } catch (err) {
-      console.warn('Backend connect warning (falling back to localStorage):', err);
+      console.warn('LocalStorage save warning:', err);
     }
 
     setTimeout(() => {

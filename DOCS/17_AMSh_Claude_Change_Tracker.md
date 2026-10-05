@@ -569,7 +569,29 @@ Run it: `python -m backend.ai.evals.runner` (`--live`, `--only persona,safety`, 
     - `backend/ai/evals/` (546 official unit/eval tests) kept 100% intact.
   - Net savings: **54 files removed, 4,435 lines of dead/scratch code eliminated**.
 
-
-
-
-
+### Entry 82 - P0 Fix F4: WhatsApp Routing Security & Meta Embedded Signup Isolation (2026-10-05)
+- **Problem**:
+  - Previously, clinics could POST arbitrary JSON (`{"phone_number_id": "..."}`) to `/api/businesses/{id}/integrations/whatsapp/connect` or onboarding connect, claiming any WhatsApp number ID without Meta verification or ownership checks.
+  - In `whatsapp_agent.py`, incoming Meta webhooks used `next(...)` matching, which would route messages arbitrarily to the first match if multiple businesses shared a `phone_number_id`.
+  - Manual credential forms (`phone_number_id`, `waba_id`, `access_token`) on the dashboard were prone to human error and token exposure.
+- **Backend Hardening (`backend/server/api/routes/integrations.py` & `backend/server/services/whatsapp_agent.py`)**:
+  - **Blocked Generic Connect**: `POST .../integrations/whatsapp/connect` now raises `400 Bad Request` ("WhatsApp cannot be connected via generic connect. Use Meta Embedded Signup or platform admin.").
+  - **Early Conflict Check**: In `whatsapp_embedded_signup`, checked for `phone_number_id` conflicts against existing connected businesses *before* making any external Graph API calls, returning `409 Conflict` on duplicates.
+  - **Ambiguous Webhook Rejection**: `find_whatsapp_integration` checks match counts. If `len(matches) > 1`, logs an error and returns `None` to safely refuse ambiguous messages rather than guessing.
+  - **Platform Admin Endpoints (`backend/server/api/routes/admin_tenant_manage.py`)**:
+    - Added `POST /api/admin/tenants/{business_id}/whatsapp` with uniqueness enforcement (409 Conflict) and audit logging (`admin.whatsapp_assigned`).
+    - Added `DELETE /api/admin/tenants/{business_id}/whatsapp` disconnecting the integration and logging `admin.whatsapp_removed`.
+- **Frontend Upgrades (`frontend/user`)**:
+  - **`frontend/user/components/dashboard/IntegrationsGrid.tsx`**:
+    - Marked WhatsApp in `baseCatalog` with `isWhatsappSpecial: true` and cleared manual credential input fields.
+    - Wired "Connect" button directly to `wa.connect()` (Meta Embedded Signup popup via `FB.login`).
+    - Updated modal for connected WhatsApp to show verified status and allow clean Disconnect.
+  - **`frontend/user/app/onboarding/integrations/whatsapp/page.tsx`**:
+    - Removed manual generic connect call from `handleSaveAndContinue`, preserving Meta Embedded Signup and local state.
+- **Test Hardening (`backend/ai/evals/test_tenant_hardening.py`)**:
+  - Added `WhatsAppRoutesOnlyThroughUnambiguousVerifiedNumbers` suite covering:
+    - Generic connect refusal on onboarding and dashboard routes (`400 Bad Request`).
+    - Duplicate `phone_number_id` rejection across businesses on admin and embedded signup (`409 Conflict`).
+    - Ambiguous `phone_number_id` resolution refusal (`find_whatsapp_integration` returns `None`).
+    - Platform admin assignment (201) and removal (200) with audit log validation and non-admin 403 enforcement.
+  - All 15 tenant hardening tests passed cleanly (`Ran 15 tests in 28.041s. OK`).

@@ -50,6 +50,11 @@ def connect_integration(
     require_owner_or_admin(business_id, current_user)
     if payload.provider != provider:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="provider in path and body must match")
+    if provider == "whatsapp":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="WhatsApp cannot be connected via generic connect. Use Meta Embedded Signup or platform admin.",
+        )
 
     integration = (
         db.query(Integration)
@@ -176,6 +181,24 @@ async def whatsapp_embedded_signup(
 ):
     get_business_or_404(business_id, db)
     require_owner_or_admin(business_id, current_user)
+
+    # Ensure phone_number_id is not already connected to another business
+    conflict = (
+        db.query(Integration)
+        .filter(
+            Integration.provider == "whatsapp",
+            Integration.status == "connected",
+            Integration.business_id != business_id,
+        )
+        .all()
+    )
+    for ext in conflict:
+        if str((ext.config or {}).get("phone_number_id")) == str(payload.phone_number_id):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"WhatsApp phone number ID {payload.phone_number_id} is already connected to another business",
+            )
+
     settings = get_settings()
     if not settings.META_APP_SECRET:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="META_APP_SECRET is not configured on the server")

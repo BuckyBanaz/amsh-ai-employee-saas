@@ -209,3 +209,104 @@ def remove_number(business_id: str, number_id: str, request: Request, db: Sessio
     db.commit()
     audit(db, "admin.number_removed", admin, target_type="business", target_id=business_id, ip=client_ip(request), meta=out)
     return {"removed": True, **out}
+
+
+# ---- WhatsApp (what routes WhatsApp messages to this business) --------------------------------------
+
+class WhatsappAssign(BaseModel):
+    phone_number_id: str = Field(min_length=5, max_length=50)
+    access_token: str = Field(min_length=10)
+    waba_id: Optional[str] = Field(default=None, max_length=50)
+    display_phone_number: Optional[str] = None
+    verified_name: Optional[str] = None
+
+
+@router.post("/{business_id}/whatsapp", status_code=status.HTTP_201_CREATED)
+def assign_whatsapp(
+    business_id: str,
+    payload: WhatsappAssign,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_platform_admin),
+) -> Dict[str, Any]:
+    """Route WhatsApp messages on this phone_number_id to this business. Refused when phone_number_id
+    already belongs to any active connected business."""
+    from backend.server.database.models.integration import Integration
+    from backend.server.auth.crypto import CryptoManager
+
+    _get_business(db, business_id)
+    phone_number_id = payload.phone_number_id.strip()
+
+    # Check for conflict
+    existing = (
+        db.query(Integration)
+        .filter(
+            Integration.provider == "whatsapp",
+            Integration.status == "connected",
+            Integration.business_id != business_id,
+        )
+        .all()
+    )
+    for ext in existing:
+        if str((ext.config or {}).get("phone_number_id")) == phone_number_id:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"WhatsApp phone number ID {phone_number_id} is already connected to another business",
+            )
+
+    integration = (
+        db.query(Integration)
+        .filter(Integration.business_id == business_id, Integration.provider == "whatsapp")
+        .first()
+    )
+    if not integration:
+        integration = Integration(business_id=business_id, provider="whatsapp")
+        db.add(integration)
+
+    integration.status = "connected"
+    integration.config = {
+        **(integration.config or {}),
+        "phone_number_id": phone_number_id,
+        "waba_id": payload.waba_id,
+        "access_token": CryptoManager.encrypt(payload.access_token),
+        "display_phone_number": payload.display_phone_number,
+        "verified_name": payload.verified_name,
+        "mode": "admin_assigned",
+    }
+    integration.connected_at = datetime.utcnow()
+    db.commit()
+
+    meta = {
+        "phone_number_id": phone_number_id,
+        "waba_id": payload.waba_id,
+        "display_phone_number": payload.display_phone_number,
+    }
+    audit(db, "admin.whatsapp_assigned", admin, target_type="business", target_id=business_id, ip=client_ip(request), meta=meta)
+    return {"connected": True, "business_id": business_id, **meta}
+
+
+@router.delete("/{business_id}/whatsapp")
+def remove_whatsapp(
+    business_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_platform_admin),
+) -> Dict[str, Any]:
+    from backend.server.database.models.integration import Integration
+
+    _get_business(db, business_id)
+    integration = (
+        db.query(Integration)
+        .filter(Integration.business_id == business_id, Integration.provider == "whatsapp")
+        .first()
+    )
+    if not integration or integration.status != "connected":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No connected WhatsApp integration found for this business")
+
+    phone_number_id = (integration.config or {}).get("phone_number_id")
+    integration.status = "disconnected"
+    integration.connected_at = None
+    db.commit()
+
+    audit(db, "admin.whatsapp_removed", admin, target_type="business", target_id=business_id, ip=client_ip(request), meta={"phone_number_id": phone_number_id})
+    return {"removed": True, "business_id": business_id, "phone_number_id": phone_number_id}

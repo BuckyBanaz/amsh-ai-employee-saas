@@ -125,17 +125,14 @@ const baseCatalog: CatalogItem[] = [
     id: 'whatsapp',
     providerKey: 'whatsapp',
     name: 'Meta WhatsApp Business',
-    description: 'Send booking confirmations & reminders from your official verified WhatsApp number (BYO WABA).',
+    description: 'Send booking confirmations & reminders from your official verified WhatsApp number via Meta Embedded Signup.',
     iconType: 'whatsapp',
     iconBg: 'bg-[#25D366]/10',
     iconColor: 'text-[#25D366]',
     category: 'Communication',
     badgeText: 'Clinic Branded',
-    fields: [
-      { key: 'phone_number_id', label: 'Phone Number ID', placeholder: '1400432583145565' },
-      { key: 'waba_id', label: 'WhatsApp Business Account ID', placeholder: '1129742056242779' },
-      { key: 'access_token', label: 'Meta System User Token (EAA...)', placeholder: 'EAA...' },
-    ],
+    isWhatsappSpecial: true,
+    fields: [],
   },
   {
     id: 'custom-smtp',
@@ -238,7 +235,7 @@ export function IntegrationsGrid({ filter = 'All Integrations' }: { filter?: str
 
   useEffect(() => {
     fetchIntegrations();
-  }, [businessId]);
+  }, [businessId, wa.status]);
 
   const handleOpenModal = (item: any) => {
     const existing = tenantIntegrations.find((ti) => ti.provider === item.providerKey);
@@ -308,6 +305,10 @@ export function IntegrationsGrid({ filter = 'All Integrations' }: { filter?: str
         }
       );
       if (res.ok) {
+        if (providerKey === 'whatsapp') {
+          localStorage.removeItem('onboarding_whatsapp_connected');
+          localStorage.removeItem('onboarding_whatsapp_mode');
+        }
         await fetchIntegrations();
         setActiveModalItem(null);
       }

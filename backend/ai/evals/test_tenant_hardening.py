@@ -207,5 +207,109 @@ class CallsRouteOnlyThroughAssignedNumbers(_Api):
             self.assertEqual(sorted(a.action for a in db.query(AuditLog).filter(AuditLog.action.like("admin.number_%"))), ["admin.number_assigned", "admin.number_removed"])
 
 
+class WhatsAppRoutesOnlyThroughUnambiguousVerifiedNumbers(_Api):
+    """F4: WhatsApp routing security: generic connect refuses WhatsApp (must use Meta Embedded Signup or platform admin),
+    duplicate phone_number_id is refused (409 Conflict), ambiguous matches refuse inbound messages, and platform admin
+    can assign/remove WhatsApp integrations with audit logs."""
+
+    @property
+    def ROUTERS(self):
+        from backend.server.api.routes import admin_tenant_manage, integrations
+
+        return (integrations.router, integrations.dashboard_router, admin_tenant_manage.router)
+
+    def setUp(self):
+        super().setUp()
+        from backend.scripts.create_platform_admin import create_platform_admin
+        from backend.server.auth.security import create_access_token
+
+        with self.factory() as db:
+            admin = create_platform_admin(db, "root@amsh.ai", "Root", "a-long-enough-pass")
+            self.admin_h = {"Authorization": f"Bearer {create_access_token(admin.id)}"}
+
+    def test_generic_connect_refuses_whatsapp(self):
+        body = {"provider": "whatsapp", "config": {"phone_number_id": "12345"}}
+        # Onboarding route
+        r1 = self.client.post(f"/api/onboarding/businesses/{self.biz}/integrations/whatsapp/connect", json=body, headers=self.h["owner"])
+        self.assertEqual(r1.status_code, 400)
+        self.assertIn("cannot be connected via generic connect", r1.json()["detail"])
+        # Dashboard route
+        r2 = self.client.post(f"/api/businesses/{self.biz}/integrations/whatsapp/connect", json=body, headers=self.h["owner"])
+        self.assertEqual(r2.status_code, 400)
+        self.assertIn("cannot be connected via generic connect", r2.json()["detail"])
+
+    def test_duplicate_phone_number_id_is_refused(self):
+        # Connect WhatsApp for self.biz via admin
+        r1 = self.client.post(
+            f"/api/admin/tenants/{self.biz}/whatsapp",
+            json={"phone_number_id": "1400432583145565", "waba_id": "1129742056242779", "access_token": "EAABBBCCC111222"},
+            headers=self.admin_h,
+        )
+        self.assertEqual(r1.status_code, 201)
+
+        # Trying to assign same phone_number_id to another business via admin -> 409
+        r2 = self.client.post(
+            f"/api/admin/tenants/other-biz/whatsapp",
+            json={"phone_number_id": "1400432583145565", "waba_id": "99999", "access_token": "EAAXXXYYY111222"},
+            headers=self.admin_h,
+        )
+        self.assertEqual(r2.status_code, 409)
+
+        # Trying to connect via embedded-signup with same phone_number_id for other-biz -> 409
+        r3 = self.client.post(
+            f"/api/onboarding/businesses/other-biz/integrations/whatsapp/embedded-signup",
+            json={"code": "code123", "phone_number_id": "1400432583145565", "waba_id": "1129742056242779"},
+            headers=self.h["stranger"],
+        )
+        self.assertEqual(r3.status_code, 409)
+
+    def test_ambiguous_phone_number_id_refuses_inbound_message(self):
+        from backend.server.database.models.integration import Integration
+        from backend.server.services.whatsapp_agent import find_whatsapp_integration
+
+        with self.factory() as db:
+            # Two businesses sharing the same phone_number_id (e.g. legacy/direct DB write)
+            db.add(Integration(business_id=self.biz, provider="whatsapp", status="connected", config={"phone_number_id": "dup999"}))
+            db.add(Integration(business_id="other-biz", provider="whatsapp", status="connected", config={"phone_number_id": "dup999"}))
+            db.commit()
+
+            # Ambiguous resolution returns None
+            self.assertIsNone(find_whatsapp_integration(db, "dup999"))
+            # Non-existent returns None
+            self.assertIsNone(find_whatsapp_integration(db, "nonexistent"))
+
+    def test_admin_can_assign_and_remove_whatsapp(self):
+        from backend.server.database.models.audit_log import AuditLog
+
+        # Non-admin forbidden
+        r_forbidden = self.client.post(
+            f"/api/admin/tenants/{self.biz}/whatsapp",
+            json={"phone_number_id": "555111", "waba_id": "waba1", "access_token": "EAABBBCCC111222"},
+            headers=self.h["owner"],
+        )
+        self.assertEqual(r_forbidden.status_code, 403)
+
+        # Admin assigns
+        r_assign = self.client.post(
+            f"/api/admin/tenants/{self.biz}/whatsapp",
+            json={"phone_number_id": "555111", "waba_id": "waba1", "access_token": "EAABBBCCC111222", "display_phone_number": "+91 99999 88888"},
+            headers=self.admin_h,
+        )
+        self.assertEqual(r_assign.status_code, 201)
+        self.assertTrue(r_assign.json()["connected"])
+        self.assertEqual(r_assign.json()["phone_number_id"], "555111")
+
+        # Admin removes
+        r_remove = self.client.delete(f"/api/admin/tenants/{self.biz}/whatsapp", headers=self.admin_h)
+        self.assertEqual(r_remove.status_code, 200)
+        self.assertTrue(r_remove.json()["removed"])
+
+        # Verify audit log
+        with self.factory() as db:
+            actions = [a.action for a in db.query(AuditLog).filter(AuditLog.action.like("admin.whatsapp_%")).all()]
+            self.assertIn("admin.whatsapp_assigned", actions)
+            self.assertIn("admin.whatsapp_removed", actions)
+
+
 if __name__ == "__main__":
     unittest.main()
