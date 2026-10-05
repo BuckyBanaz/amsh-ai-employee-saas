@@ -1,7 +1,7 @@
 {
-  "ran_at": "2026-10-05 11:20:34",
-  "seconds": 40.0,
-  "passed": 38,
+  "ran_at": "2026-10-05 11:44:26",
+  "seconds": 72.4,
+  "passed": 46,
   "failed": 0,
   "checks": [
     {
@@ -150,6 +150,21 @@
       "detail": ""
     },
     {
+      "check": "user: onboarding plans come from the catalog",
+      "ok": true,
+      "detail": "Starter\n\nFor a single small practice getting started.\n\n$99\n/month\n\nBilled monthly, cancel anytime.\n\nINCLUDED CAPABILITIE"
+    },
+    {
+      "check": "user: choosing a plan checks out that plan at its catalog price",
+      "ok": true,
+      "detail": "$99"
+    },
+    {
+      "check": "user: a payment that cannot start shows the error instead of a fake success",
+      "ok": true,
+      "detail": "http://127.0.0.1:3000/onboarding/checkout?plan=starter&cycle=monthly"
+    },
+    {
       "check": "user: a new version that needs accepting shows a dashboard banner",
       "ok": true,
       "detail": ""
@@ -176,6 +191,31 @@
     },
     {
       "check": "user: removing a patient takes them off the list",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "user: inviting a teammate gives a shareable link",
+      "ok": true,
+      "detail": "http://localhost:3000/accept-invite?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e"
+    },
+    {
+      "check": "user: the team list shows the invite as pending",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "user: the invite page greets the invitee and names the clinic",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "user: accepting the invite signs the teammate in to the dashboard",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "user: the invite link works only once",
       "ok": true,
       "detail": ""
     },
