@@ -1,7 +1,7 @@
 {
-  "ran_at": "2026-10-04 04:27:18",
-  "seconds": 34.8,
-  "passed": 33,
+  "ran_at": "2026-10-05 11:20:34",
+  "seconds": 40.0,
+  "passed": 38,
   "failed": 0,
   "checks": [
     {
@@ -40,14 +40,9 @@
       "detail": ""
     },
     {
-      "check": "admin: playground shows the test-mode banner",
+      "check": "admin: voice studio sends a test turn and shows the reply",
       "ok": true,
-      "detail": ""
-    },
-    {
-      "check": "admin: playground gets a reply for the chosen clinic",
-      "ok": true,
-      "detail": "I want to book a checkup tomorrow at 10 AM\nI'm sorry, I'm having trouble right now. Could you say that again, or would you like me to connect you to the front desk?\ngroq \u00b7 0.0s"
+      "detail": "2 AI messages"
     },
     {
       "check": "admin: usage page shows spend, revenue and profit",
@@ -65,9 +60,9 @@
       "detail": ""
     },
     {
-      "check": "admin: the daily spend chart draws bars",
+      "check": "admin: the daily spend chart draws a line",
       "ok": true,
-      "detail": "{'x': 1393.265625, 'y': 268.4375, 'width': 9.6875, 'height': 78.0625}"
+      "detail": "M 0.0 140.0 L 24.1 140.0 L 48.3 140.0 L 72.4 140.0 L 96.6 140.0 L 120.7 140.0 L "
     },
     {
       "check": "admin: editing a price saves and marks it edited",
@@ -161,6 +156,36 @@
     },
     {
       "check": "user: accepting the new version clears the banner",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "user: a booking appears as a patient with its next visit",
+      "ok": true,
+      "detail": "AS\nAsha Verma\n\t+91 98765 43210\t1\t\u2014\t2099-01-15\tACTIVE\t"
+    },
+    {
+      "check": "user: adding a patient does not create an appointment",
+      "ok": true,
+      "detail": "['Asha Verma']"
+    },
+    {
+      "check": "user: patient history lists the appointment",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "user: removing a patient takes them off the list",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "user: sign out everywhere ends the other session",
+      "ok": true,
+      "detail": "401"
+    },
+    {
+      "check": "user: this browser is still signed in afterwards",
       "ok": true,
       "detail": ""
     },

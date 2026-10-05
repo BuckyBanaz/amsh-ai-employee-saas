@@ -94,18 +94,18 @@ def admin_flow(browser, owner_token_unused: str) -> None:
     check("admin: category tab filters to trials", "started a free trial" in page.inner_text("[data-testid=alerts]") and "Sign-in" not in page.inner_text("[data-testid=alerts]"))
     shot(page, "admin-03-alerts-trials")
 
-    page.goto(f"{ADMIN}/playground", wait_until="networkidle")
-    page.wait_for_selector("select option:has-text('Sanjeevani Clinic')", state="attached")
-    check("admin: playground shows the test-mode banner", "Test mode" in page.inner_text("[data-testid=test-mode-banner]"))
-    value = page.locator("select option", has_text="Sanjeevani Clinic").first.get_attribute("value")  # labelled "(trial)" while on a trial
-    page.select_option("select", value=value)
-    page.fill("input[aria-label='Caller message']", "I want to book a checkup tomorrow at 10 AM")
-    page.click("button:has-text('Send')")
-    page.wait_for_selector("[data-testid=chat] >> text=thinking", state="detached", timeout=60000)
+    # The admin playground page was replaced by the Voice Studio on AI Receptionists (always test mode on the server)
+    page.goto(f"{ADMIN}/receptionists", wait_until="networkidle")
+    page.locator("tr", has_text="Sanjeevani Clinic").get_by_role("button", name="Voice Studio & Orb").first.click()
+    box = page.get_by_placeholder("Type a message (or speak via live mic above)...")
+    box.fill("I want to book a checkup tomorrow at 10 AM")
+    page.get_by_role("button", name="Send", exact=True).click()
+    page.wait_for_selector("button:has-text('Thinking...')", state="detached", timeout=60000)
     page.wait_for_timeout(500)
-    chat = page.inner_text("[data-testid=chat]")
-    check("admin: playground gets a reply for the chosen clinic", chat.count("\n") >= 1 and "book a checkup" in chat, chat[:200])
-    shot(page, "admin-04-playground")
+    replies = page.locator("text=(AI)").count()
+    check("admin: voice studio sends a test turn and shows the reply", replies >= 2 and page.locator("text=book a checkup").count() >= 1, f"{replies} AI messages")
+    shot(page, "admin-04-voice-studio")
+    page.get_by_role("button", name="Close studio").click()
 
     page.goto(f"{ADMIN}/usage", wait_until="networkidle")
     page.wait_for_selector("text=Spend by tool")
@@ -113,8 +113,9 @@ def admin_flow(browser, owner_token_unused: str) -> None:
     check("admin: usage page shows spend, revenue and profit", all(w.lower() in text.lower() for w in ("Tool spend", "Revenue", "Profit", "Margin")))  # labels are uppercased by CSS
     check("admin: usage page lists the tools and the clinic", all(w in text for w in ("Text to speech", "Phone calls", "SMS", "Sanjeevani Clinic")))
     check("admin: usage page notes that prices are estimates", "estimates" in text)
-    bar = page.locator("[aria-label='Daily spend'] > div > div").last.bounding_box()  # a chart whose bars have no height is a real bug this test once caught
-    check("admin: the daily spend chart draws bars", bar is not None and bar["height"] > 3, str(bar))
+    # the trend is a line chart now (v1.4 design); an empty or flat path is the bug this check is for
+    line = page.locator("svg[aria-label^='Daily tool spend'] path[fill='none']").first.get_attribute("d") or ""
+    check("admin: the daily spend chart draws a line", line.count("L") >= 2, line[:80])
     shot(page, "admin-05-usage")
     price = page.locator("input[aria-label='Text to speech price']")
     price.fill("0.06")
@@ -229,6 +230,52 @@ def user_flow(browser) -> None:
     page.get_by_role("button", name="Accept all").click()
     page.wait_for_selector("text=needs your acceptance", state="detached", timeout=10000)
     check("user: accepting the new version clears the banner", True)
+
+    # ---- patients: a booking shows up as a patient; add, edit, history, remove
+    api = f"http://127.0.0.1:{API_PORT}"
+    owner, me = h.login(api, h.OWNER_EMAIL, h.OWNER_PASSWORD)
+    biz = me["business_id"]
+    h.call(api, "POST", f"/api/businesses/{biz}/appointments", {"customer_name": "Asha Verma", "phone_number": "+91 98765 43210",
+           "service_name": "General Consultation", "preferred_date": "2099-01-15", "preferred_time": "10:00 AM"}, owner)
+    page.goto(f"{USER}/patients", wait_until="networkidle")
+    page.wait_for_selector("tr:has-text('Asha Verma')", timeout=15000)
+    row = page.locator("tr", has_text="Asha Verma")
+    check("user: a booking appears as a patient with its next visit", "2099-01-15" in row.inner_text(), row.inner_text())
+    page.get_by_role("button", name="Add Patient").first.click()
+    page.fill("input[placeholder^='e.g. Parikshit']", "Ravi Kumar")
+    page.fill("input[type=tel]", "+91 11111 22222")
+    page.get_by_role("button", name="Register Patient").click()
+    page.wait_for_selector("tr:has-text('Ravi Kumar')", timeout=10000)
+    _, appts = h.call(api, "GET", f"/api/businesses/{biz}/appointments", token=owner)
+    check("user: adding a patient does not create an appointment", [a["customer_name"] for a in appts] == ["Asha Verma"], str([a["customer_name"] for a in appts]))
+    page.get_by_role("button", name="Edit Ravi Kumar").click()
+    page.fill("textarea", "Allergic to penicillin")
+    page.get_by_role("button", name="Save Changes").click()
+    page.wait_for_selector("text=Edit Patient", state="detached", timeout=10000)
+    page.get_by_role("button", name="Visit history of Asha Verma").click()
+    page.wait_for_selector("[role=dialog] >> text=General Consultation", timeout=10000)
+    check("user: patient history lists the appointment", "appointments (1)" in page.inner_text("[role=dialog]").lower())  # heading is uppercased by CSS
+    shot(page, "user-07-patient-history")
+    page.keyboard.press("Escape")
+    page.get_by_role("button", name="Remove Ravi Kumar").click()
+    page.get_by_role("button", name="Confirm").click()
+    page.wait_for_selector("tr:has-text('Ravi Kumar')", state="detached", timeout=10000)
+    check("user: removing a patient takes them off the list", page.locator("tr", has_text="Asha Verma").count() == 1)
+    shot(page, "user-08-patients")
+
+    # ---- sign out everywhere: another session's token stops working, this browser stays in
+    other, _ = h.login(api, h.OWNER_EMAIL, h.OWNER_PASSWORD)
+    page.goto(f"{USER}/settings", wait_until="networkidle")
+    page.get_by_text("Security", exact=True).first.click()
+    page.get_by_role("button", name="Sign out everywhere").click()
+    page.get_by_role("button", name="Confirm").click()
+    page.wait_for_selector("text=Signed out everywhere else", timeout=10000)
+    status_other, _ = h.call(api, "GET", "/api/auth/me", token=other)
+    check("user: sign out everywhere ends the other session", status_other == 401, str(status_other))
+    shot(page, "user-09-sign-out-everywhere")
+    page.goto(f"{USER}/patients", wait_until="networkidle")
+    page.wait_for_selector("tr:has-text('Asha Verma')", timeout=15000)
+    check("user: this browser is still signed in afterwards", True)
     check("user: no uncaught script errors on user pages", not errors, "; ".join(errors)[:300])
     ctx.close()
 
