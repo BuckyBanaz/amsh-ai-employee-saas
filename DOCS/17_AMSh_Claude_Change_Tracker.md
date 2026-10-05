@@ -546,6 +546,30 @@ Run it: `python -m backend.ai.evals.runner` (`--live`, `--only persona,safety`, 
   - **`frontend/user/components/landing/Testimonials.tsx` & `frontend/user/app/landing/page.tsx`**:
     - Added `contain: paint` to all marquee track wrappers for bulletproof responsive containment.
 
+### Entry 81 - Ponytail Cleanup: Removal of 54 Obsolete Test and Scratch Scripts (2026-10-05)
+- **User Request**:
+  - "hn or ye jo test vegra scrpts h naa inko remove kar bro yrr /ponytail se use karke ye code space bda rhe h ro"
+  - "testing isko chod dio bro ye kaam kaa h bro yrr"
+  - "backend isme se kar bro"
+- **Actions Taken**:
+  - Removed 10 standalone, obsolete manual test scripts from `backend/`:
+    - `backend/test_staff_api.py`
+    - `backend/test_ws.py`
+    - `backend/scripts/test_conversational_nlu.py`
+    - `backend/scripts/test_crypto.py`
+    - `backend/scripts/test_dashboard_apis.py`
+    - `backend/scripts/test_i18n_verticals.py`
+    - `backend/scripts/test_rag_engine.py`
+    - `backend/scripts/test_voice_engine.py`
+    - `backend/scripts/test_website_scraper.py`
+    - `backend/scripts/test_whatsapp_api.py`
+  - Removed all 44 obsolete scratch/patch scripts from `scratch/` (e.g. `check_admin_pages.py`, `patch_admin_analytics.py`, `test_cartesia.py`, `wire_original_pages.py`).
+  - **Preserved**:
+    - `testing/` (harness, `api_smoke.py`, `e2e_browser.py`) kept 100% intact as instructed.
+    - `backend/ai/evals/` (546 official unit/eval tests) kept 100% intact.
+  - Net savings: **54 files removed, 4,435 lines of dead/scratch code eliminated**.
+
+
 
 
 
