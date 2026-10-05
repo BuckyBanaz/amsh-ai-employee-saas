@@ -11,7 +11,7 @@ Status as of 2026-10-03.
 | 2 | Set `EXOTEL_WEBHOOK_SECRET` (a long random value) and **add `?key=<that value>` to the applet URL** in Exotel | Exotel does not sign its requests, so the key in the URL is the only proof the call came from them | Exotel dashboard, your flow |
 | 3 | Set `TWILIO_AUTH_TOKEN` if Twilio is used | Twilio webhooks are rejected without it once `ALLOW_DEV_FALLBACKS` is off | `.env` |
 | 4 | Production settings: `ENV=production`, `DEBUG=false`, `ALLOW_DEV_FALLBACKS=false`, a random `JWT_SECRET` of 32+ characters, a real `POSTGRES_PASSWORD`, `CORS_ORIGINS`, `PUBLIC_BASE_URL`; start with `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d` | In production the API **refuses to start** with unsafe values; the Security page in the admin portal lists what is still wrong | `.env`, server |
-| 5 | Run the database migrations on the real Postgres: `alembic upgrade head` (new: 0006 templates, 0007 SEO, 0008 support and announcements, 0009 alert state, 0010 usage events and cost rates, 0011 policies) | They were tested on SQLite only | server |
+| 5 | Run the database migrations on the real Postgres: `alembic upgrade head` (new: 0006 templates, 0007 SEO, 0008 support and announcements, 0009 alert state, 0010 usage events and cost rates, 0011 policies, 0012 patients, 0013 sign out everywhere) | They were tested on SQLite only | server |
 | 6 | Review the GitHub dependency alerts once this branch is merged; two are known and cannot be fixed yet (`braces` in the lint tool, `ecdsa` inside `python-jose`) | The rest were fixed | GitHub, Security |
 | 7 | Turn on branch protection so a pull request needs the CI checks to pass | CI now exists (`.github/workflows/ci.yml`) | GitHub, Settings, Branches |
 

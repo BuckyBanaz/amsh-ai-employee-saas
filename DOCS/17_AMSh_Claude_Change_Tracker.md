@@ -8,6 +8,17 @@ Status legend: `DONE` / `IN PROGRESS` / `PLANNED` / `BLOCKED`
 
 ---
 
+### Entry 81 - Pending items completed on `version-0.1` (2026-10-05) - DONE
+Full list, checks and what is still open: `28_AMSh_Pending_Status_2026-10-05.md`.
+- Admin CI fixed (lockfile, Voice Studio lint errors).
+- Patients: `patients` table (migration 0012), real counts and visits, edit / remove / history; the old fake "New patient" appointments are migrated out of `transactions`.
+- Sign out everywhere; password change and reset end other sessions (migration 0013); STT stream checks the account.
+- Team invites work end to end (email + shareable link, accept page, resend, deactivated members cannot reuse a link).
+- Payments sent the login token nowhere (401 on every payment); onboarding plans and checkout now use the real catalog and never fake a success.
+- API keys / webhooks card says "Coming soon" instead of a sample key.
+- Not touched: `ai/engine/conversation/*`, `ai/realtime/twilio/gateway.py`, locales, clinic YAMLs (Gemini's area).
+- Verified: 509 backend tests, API smoke 54/54, browser e2e 46/46, tsc + eslint clean, both production builds.
+
 ## 2026-10-02
 
 ### Entries
