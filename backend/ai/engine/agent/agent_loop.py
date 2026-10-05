@@ -64,6 +64,14 @@ SPOKEN_LINE_MIN_WORDS = 5  # "ok" is not a transfer or emergency message
 # to the model as an already-made check_availability call, so the first round can answer. Not repeated for the same day
 # within this many seconds of the call.
 PREFETCH_REPEAT_S = 120.0
+# Same idea for "move / cancel my appointment": the caller's own upcoming appointments (by the number they call from) are read
+# first, so the model can say which one it found instead of spending a round on lookup_appointment.
+_CHANGE_APPOINTMENT = re.compile(
+    r"\b(?:reschedul\w*|cancel\w*|postpone\w*|prepone\w*|(?:change|move|shift)\s+(?:my|the|our)\s+(?:appointment|booking|slot))\b"
+    r"|\b(?:appointment|booking)\s+(?:badal\w*|change\s+kar\w*|cancel\s+kar\w*|aage\s+kar\w*)"
+    r"|रद्द|कैंसिल|बदल|री\s*शेड्यूल",
+    re.IGNORECASE,
+)
 # Tools safe to run side by side when the model asks for several in one round ("tomorrow or Friday?"). Only pure reads
 # qualify: lookup_appointment assigns A1/A2 refs on the gate and search_knowledge may (re)build the index, so they stay
 # sequential.
@@ -449,7 +457,7 @@ class AgentEngine:
             return
 
         # 2. LLM + tool rounds (with the day the caller named already looked up)
-        if prefetched := await self._prefetch_availability(roman):
+        if prefetched := await self._prefetch(roman, utterance):
             group.extend(prefetched)
         degraded = False
         error: Optional[str] = None
@@ -704,36 +712,49 @@ class AgentEngine:
         numbers = self.context.emergency_numbers
         return f"{line} ({' / '.join(numbers)})" if numbers and code != "en" else line
 
-    async def _prefetch_availability(self, roman: str) -> List[Dict[str, Any]]:
-        """The open times for the one day the caller just named, as a finished check_availability call (assistant tool call +
-        tool result) the model sees in its first round. Same tool, same checks and records as when the model asks itself;
-        skipped when the tool is switched off, the caller named no day or several, or that day was read moments ago."""
-        if not any(s["function"]["name"] == "check_availability" for s in self.tools):
+    def _wanted_reads(self, roman: str, utterance: str) -> List[Tuple[str, Dict[str, Any]]]:
+        """Reads the model would almost surely ask for first: the one day the caller named (open times), and the caller's own
+        appointments when they want to move or cancel one. Skipped for a tool that is switched off, several or past days, a
+        caller without a usable number, or the same read moments ago."""
+        offered = {s["function"]["name"] for s in self.tools}
+        now, today = time.monotonic(), self.now_fn().date()
+        reads: List[Tuple[str, Dict[str, Any]]] = []
+        days = dates_in(roman, today)
+        if "check_availability" in offered and len(days) == 1 and (day := next(iter(days))) >= today:
+            if now - self._prefetched.get(day, -PREFETCH_REPEAT_S) >= PREFETCH_REPEAT_S:
+                self._prefetched[day] = now
+                reads.append(("check_availability", {"date": day.isoformat()}))
+        own_number = len(re.sub(r"\D", "", self.toolbox.caller_number or "")) >= 10
+        if "lookup_appointment" in offered and own_number and (_CHANGE_APPOINTMENT.search(roman) or _CHANGE_APPOINTMENT.search(utterance)):
+            if now - self._prefetched.get("lookup", -PREFETCH_REPEAT_S) >= PREFETCH_REPEAT_S:
+                self._prefetched["lookup"] = now
+                reads.append(("lookup_appointment", {}))
+        return reads
+
+    async def _prefetch(self, roman: str, utterance: str) -> List[Dict[str, Any]]:
+        """Those reads, done before the first model round and handed to it as finished tool calls (assistant tool calls + tool
+        results). Same tools, same checks and records as when the model asks itself; a read that fails is left out so the
+        model asks the normal way."""
+        reads = self._wanted_reads(roman, utterance)
+        if not reads:
             return []
-        days = dates_in(roman, self.now_fn().date())
-        if len(days) != 1:
-            return []
-        day = next(iter(days))
-        if day < self.now_fn().date():
-            return []
-        now = time.monotonic()
-        if now - self._prefetched.get(day, -PREFETCH_REPEAT_S) < PREFETCH_REPEAT_S:
-            return []
-        self._prefetched[day] = now
-        args = {"date": day.isoformat()}
-        latency.mark("tool_start", tool="check_availability", prefetch=True)
-        try:
-            result = await self.toolbox.execute("check_availability", args)
-        finally:
-            latency.mark("tool_end", tool="check_availability", prefetch=True)
-        if not result.get("ok"):
-            return []  # e.g. a date the caller did not really say: let the model ask the normal way
-        call_id = f"prefetch_{day.isoformat()}_{len(self._turns)}"
-        return [
-            {"role": "assistant", "content": None,
-             "tool_calls": [{"id": call_id, "type": "function", "function": {"name": "check_availability", "arguments": json.dumps(args)}}]},
-            {"role": "tool", "tool_call_id": call_id, "content": json.dumps(result, default=str)},
-        ]
+
+        async def one(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
+            latency.mark("tool_start", tool=name, prefetch=True)
+            try:
+                return await self.toolbox.execute(name, args)
+            finally:
+                latency.mark("tool_end", tool=name, prefetch=True)
+
+        results = await asyncio.gather(*(one(n, a) for n, a in reads))  # both are pure reads: side by side
+        calls, answers = [], []
+        for i, ((name, args), result) in enumerate(zip(reads, results)):
+            if not result.get("ok"):
+                continue
+            call_id = f"prefetch_{name}_{len(self._turns)}_{i}"
+            calls.append({"id": call_id, "type": "function", "function": {"name": name, "arguments": json.dumps(args)}})
+            answers.append({"role": "tool", "tool_call_id": call_id, "content": json.dumps(result, default=str)})
+        return [{"role": "assistant", "content": None, "tool_calls": calls}, *answers] if calls else []
 
     async def _spoken_line(
         self, group: List[Dict[str, Any]], kind: str, fallback: str, timeout: float = SPOKEN_LINE_TIMEOUT_S, must_say_one_of: Any = (),

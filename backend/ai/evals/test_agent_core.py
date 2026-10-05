@@ -410,6 +410,30 @@ class AvailabilityPrefetch(unittest.TestCase):
         run(engine.turn("can I come in tomorrow?"))
         self.assertFalse([m for m in backend.seen[0]["messages"] if m.get("role") == "tool"])
 
+    def test_move_or_cancel_reads_the_callers_own_appointments_first(self):
+        from backend.ai.capabilities.operations.clinic import ClinicWriteOperations
+
+        english = "I can see your appointment on Wednesday, which day would you like instead?"
+        hindi = "आपका अपॉइंटमेंट बुधवार को है, आप किस दिन आना चाहेंगे?"  # a Hindi caller gets Hindi (the language guard)
+        for said, answer in (("I want to reschedule my appointment", english), ("mujhe appointment cancel karna hai", hindi), ("मेरा अपॉइंटमेंट रद्द कर दो", hindi)):
+            backend = ScriptedBackend(reply(answer))
+            engine, factory = make_engine(backend)
+            with factory() as db:
+                ClinicWriteOperations.store_appointment(db, engine.toolbox.business_id, "Asha", "+91 98765 43210", preferred_date="2026-09-30",
+                                                        preferred_time="10:00 AM", source="manual_dashboard")
+            run(engine.turn(said))
+            tools = [json.loads(m["content"]) for m in backend.seen[0]["messages"] if m.get("role") == "tool"]
+            self.assertEqual(len(tools), 1, said)
+            self.assertEqual(tools[0]["appointments"][0]["ref"], "A1", said)
+            self.assertEqual(len(backend.seen), 1, said)
+
+    def test_no_lookup_without_the_callers_own_number_or_without_a_change_request(self):
+        for caller, said in (("", "I want to reschedule my appointment"), ("+919876543210", "what are your hours?")):
+            backend = ScriptedBackend(reply("Sure, let me help you with that today."))
+            engine, _ = make_engine(backend, caller=caller)
+            run(engine.turn(said))
+            self.assertFalse([m for m in backend.seen[0]["messages"] if m.get("role") == "tool"], (caller, said))
+
     def test_the_same_day_is_not_read_again_moments_later(self):
         backend = ScriptedBackend(reply("Tomorrow I have 09:00 AM open."), reply("Yes, tomorrow works."))
         engine, _ = make_engine(backend)

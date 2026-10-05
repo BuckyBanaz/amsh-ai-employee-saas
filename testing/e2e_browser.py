@@ -10,6 +10,7 @@ The API URL is baked into each build, so build with port 8011 (the port this scr
 
 import glob
 import json
+import re
 import os
 import signal
 import subprocess
@@ -233,9 +234,14 @@ def user_flow(browser) -> None:
     page.wait_for_function("!document.querySelector('[data-testid=checkout-total]').textContent.includes('…')", timeout=15000)
     total = page.inner_text("[data-testid=checkout-total]")
     check("user: choosing a plan checks out that plan at its catalog price", f"{starter['price_monthly']:,.0f}" in total, total)
-    page.get_by_role("button", name="Deploy AI Receptionist").click()
+    page.get_by_role("button", name=re.compile(r"^Pay ")).click()
     page.wait_for_selector("text=Payments are not configured", timeout=15000)  # this test server has no payment keys
     check("user: a payment that cannot start shows the error instead of a fake success", "/onboarding/checkout" in page.url, page.url)
+    methods = page.inner_text("[data-testid=payment-methods]")
+    check("user: checkout shows the clinic's own payment methods (India: UPI, Net Banking)", "Net Banking" in methods and page.locator("[aria-label='Payment methods for India']").count() == 1, methods[:120])
+    page.select_option("[data-testid=checkout-country]", "NL")
+    check("user: switching the billing country switches the methods (Netherlands: iDEAL)", page.locator("[data-testid=payment-methods] [title='iDEAL']").count() == 1)
+    check("user: checkout has no emoji", not re.search("[\U0001F300-\U0001FAFF\u2600-\u27BF]", page.inner_text("main") if page.locator("main").count() else page.inner_text("body")))
     shot(page, "user-05c-checkout-error")
 
     # a new version that asks everyone to accept again: the dashboard says so

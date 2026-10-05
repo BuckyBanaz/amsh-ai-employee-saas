@@ -1,7 +1,7 @@
 {
-  "ran_at": "2026-10-05 12:30:25",
-  "seconds": 77.4,
-  "passed": 47,
+  "ran_at": "2026-10-05 12:43:43",
+  "seconds": 74.2,
+  "passed": 50,
   "failed": 0,
   "checks": [
     {
@@ -168,6 +168,21 @@
       "check": "user: a payment that cannot start shows the error instead of a fake success",
       "ok": true,
       "detail": "http://127.0.0.1:3000/onboarding/checkout?plan=starter&cycle=monthly"
+    },
+    {
+      "check": "user: checkout shows the clinic's own payment methods (India: UPI, Net Banking)",
+      "ok": true,
+      "detail": "UPI\nUPI\nGoogle Pay (UPI)\nPhonePe\nPaytm\nRuPay\nRuPay\nVisa\nMastercard\nNet Banking"
+    },
+    {
+      "check": "user: switching the billing country switches the methods (Netherlands: iDEAL)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "user: checkout has no emoji",
+      "ok": true,
+      "detail": ""
     },
     {
       "check": "user: a new version that needs accepting shows a dashboard banner",

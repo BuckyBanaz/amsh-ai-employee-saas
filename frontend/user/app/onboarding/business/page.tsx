@@ -145,6 +145,8 @@ export default function BusinessOnboardingPage() {
               <option value="United States">United States</option>
               <option value="United Arab Emirates">United Arab Emirates</option>
               <option value="United Kingdom">United Kingdom</option>
+              <option value="Netherlands">Netherlands</option>
+              <option value="Saudi Arabia">Saudi Arabia</option>
               <option value="Canada">Canada</option>
               <option value="Australia">Australia</option>
               <option value="Singapore">Singapore</option>
