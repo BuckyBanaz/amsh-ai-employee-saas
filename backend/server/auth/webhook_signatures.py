@@ -76,6 +76,17 @@ async def verify_exotel(request: Request) -> None:
         raise _refuse("Invalid webhook key")
 
 
+# --- Signed tenant on an outbound call's callback URL (Exotel "call me") ---
+def sign_business_route(business_id: str) -> str:
+    """Goes next to `business_id` in a callback URL we build. The incoming webhook routes on business_id only when this matches,
+    so knowing the shared Exotel key is not enough to send a call to any clinic."""
+    return hmac.new(get_settings().JWT_SECRET.encode(), f"route:{business_id}".encode(), hashlib.sha256).hexdigest()[:32]
+
+
+def business_route_ok(business_id: str, signature: str | None) -> bool:
+    return bool(business_id) and hmac.compare_digest(sign_business_route(business_id), str(signature or ""))
+
+
 # --- Media-stream token: the websocket that carries a call's audio must only be opened by a call we accepted ---
 STREAM_TOKEN_TTL = 15 * 60
 

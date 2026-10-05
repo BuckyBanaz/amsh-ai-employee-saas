@@ -12,7 +12,8 @@ from sqlalchemy.orm import Session
 
 from backend.ai.realtime.twilio.call_control import build_base_url, to_ws_url
 from backend.ai.tools.framework.base import ToolContext
-from backend.server.auth.webhook_signatures import create_stream_token, verify_exotel
+from backend.server.auth.webhook_signatures import business_route_ok, create_stream_token, verify_exotel
+from backend.server.services.number_routing import resolve_business
 from backend.server.common.config import get_settings
 from backend.server.database.models.business import Business
 from backend.server.database.session import get_db
@@ -52,21 +53,20 @@ async def handle_exotel_incoming_call(
     #    a) business_id query param (set by outbound call-me)
     #    b) dialed number match
     #    c) latest registered business (fallback for direct Exotel applet calls)
-    business = None
+    business, how = None, "no match"
     business_id_param = query_params.get("business_id")
     if business_id_param:
-        business = db.execute(select(Business).where(Business.id == business_id_param)).scalars().first()
-        if business:
-            logger.info(f"[EXOTEL INCOMING] Tenant resolved from business_id param: {business.id} ({business.name})")
+        if business_route_ok(business_id_param, query_params.get("bsig")):  # only a URL we signed ("call me")
+            business = db.get(Business, business_id_param)
+            how = "signed business_id"
+        else:
+            logger.warning("[EXOTEL INCOMING] ignoring an unsigned business_id on call %s", call_sid)
 
-    if not business and dialed_to:
-        business = (
-            db.execute(select(Business).where(Business.business_phone.contains(dialed_to[-10:])))
-            .scalars()
-            .first()
-        )
+    if not business:  # only numbers the platform assigned (phone_numbers); an ambiguous match is refused, never guessed
+        business, how = resolve_business(db, dialed_to)
+    logger.info("[EXOTEL INCOMING] call %s routing: %s", call_sid, how)
 
-    if not business and get_settings().ALLOW_DEV_FALLBACKS:
+    if not business and how == "no match" and get_settings().ALLOW_DEV_FALLBACKS:
         logger.warning("[EXOTEL INCOMING] No tenant matched: using the newest business (ALLOW_DEV_FALLBACKS)")
         # Fallback: pick the most-recently-created ACTIVE business
         business = db.execute(

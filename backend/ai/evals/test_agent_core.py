@@ -3862,11 +3862,17 @@ class AdminTenants(unittest.TestCase):
         from types import SimpleNamespace
 
         from backend.server.api.routes import exotel, voice
+        from backend.server.auth.webhook_signatures import sign_business_route
         from backend.server.database.models.business import Business
+        from backend.server.database.models.phone_number import PhoneNumber
+
+        with self.factory() as db:  # the number the platform assigned this clinic
+            db.add(PhoneNumber(business_id=self.biz1, number="+912000000000", status="active"))
+            db.commit()
 
         def call_both():
             with self.factory() as db:
-                request = SimpleNamespace(query_params={"business_id": self.biz1})
+                request = SimpleNamespace(query_params={"business_id": self.biz1, "bsig": sign_business_route(self.biz1)})
                 ex = run(exotel.handle_exotel_incoming_call(request, CallSid="EXO1", From="+911", To="+912000000000", CallType=None, Direction=None, db=db))
                 tw = run(voice.handle_incoming_call(To="+912000000000", From="+911", CallSid="CA1", ForwardedFrom=None, db=db))
             return ex, tw

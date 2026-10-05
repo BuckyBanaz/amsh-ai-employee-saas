@@ -59,6 +59,11 @@ class TelephonyWebhooks(unittest.TestCase):
                 yield db
 
         app.dependency_overrides[get_db] = override
+        with factory() as db:  # calls route only through a number the platform assigned
+            from backend.server.database.models.phone_number import PhoneNumber
+
+            db.add(PhoneNumber(business_id=self.biz, number="+912000000000", status="active"))
+            db.commit()
         self.c = TestClient(app)
         self.addCleanup(patch.stopall)
 

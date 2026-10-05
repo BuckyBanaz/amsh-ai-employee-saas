@@ -24,11 +24,13 @@ from backend.server.database.models.audit_log import AuditLog
 from backend.server.database.models.business import Business
 from backend.server.database.models.call import Call
 from backend.server.database.models.message import Message
+from backend.server.database.models.phone_number import PhoneNumber
 from backend.server.database.models.service import Service, staff_services
 from backend.server.database.models.staff import Staff
 from backend.server.database.models.user import User
 from backend.server.database.session import Base, get_db
 from backend.server.services.audit import audit, client_ip
+from backend.server.services.number_routing import assignment_conflict, number_key
 from backend.server.services.plans import find_by_key
 
 router = APIRouter(prefix="/api/admin/tenants", tags=["admin-tenants-manage"])
@@ -164,3 +166,46 @@ def delete_tenant(business_id: str, payload: DeleteRequest, request: Request, db
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Something still refers to this business, so nothing was deleted. Suspend it instead.") from exc
     audit(db, "admin.tenant_deleted", admin, target_type="business", target_id=business_id, ip=client_ip(request), meta={"name": name, "rows_deleted": deleted})
     return {"deleted": True, "id": business_id, "name": name, "rows_deleted": deleted}
+
+
+# ---- Phone numbers (what routes a call to this business) ----------------------------------------------------------------
+
+class NumberAssign(BaseModel):
+    number: str = Field(min_length=7, max_length=30)  # the line callers dial (ours, or the clinic's own in "dedicated" mode)
+    mode: Literal["forwarding", "dedicated"] = "dedicated"
+    forwarded_from: Optional[str] = Field(default=None, max_length=30)  # the clinic's published line when it forwards to `number`
+    status: Literal["active", "pending"] = "active"
+
+
+def _number_out(pn: PhoneNumber) -> Dict[str, Any]:
+    return {"id": pn.id, "number": pn.number, "mode": pn.mode, "forwarded_from": pn.forwarded_from, "status": pn.status}
+
+
+@router.post("/{business_id}/numbers", status_code=status.HTTP_201_CREATED)
+def assign_number(business_id: str, payload: NumberAssign, request: Request, db: Session = Depends(get_db), admin: User = Depends(require_platform_admin)) -> Dict[str, Any]:
+    """Route calls on this number to this business. Refused when it would make routing ambiguous (the number, or the line it is
+    forwarded from, already belongs to any assignment)."""
+    _get_business(db, business_id)
+    number, forwarded_from = payload.number.strip(), (payload.forwarded_from or "").strip() or None
+    if not number_key(number) or (forwarded_from and not number_key(forwarded_from)):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Enter a full phone number")
+    conflict = assignment_conflict(db, number, forwarded_from)
+    if conflict:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=conflict)
+    pn = PhoneNumber(business_id=business_id, number=number, mode=payload.mode, forwarded_from=forwarded_from, status=payload.status)
+    db.add(pn)
+    db.commit()
+    audit(db, "admin.number_assigned", admin, target_type="business", target_id=business_id, ip=client_ip(request), meta=_number_out(pn))
+    return _number_out(pn)
+
+
+@router.delete("/{business_id}/numbers/{number_id}")
+def remove_number(business_id: str, number_id: str, request: Request, db: Session = Depends(get_db), admin: User = Depends(require_platform_admin)) -> Dict[str, Any]:
+    pn = db.get(PhoneNumber, number_id)
+    if not pn or pn.business_id != business_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Number not found")
+    out = _number_out(pn)
+    db.delete(pn)
+    db.commit()
+    audit(db, "admin.number_removed", admin, target_type="business", target_id=business_id, ip=client_ip(request), meta=out)
+    return {"removed": True, **out}

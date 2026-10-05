@@ -124,5 +124,88 @@ class ClinicCannotChangeItsOwnPlan(_Api):
         self.assertEqual((r.status_code, r.json()["plan"]), (200, "business"))
 
 
+class CallsRouteOnlyThroughAssignedNumbers(_Api):
+    """F3: a call reaches a clinic only through a number the platform assigned it, never one a clinic typed into its settings."""
+
+    @property
+    def ROUTERS(self):
+        from backend.server.api.routes import admin_tenant_manage
+
+        return (admin_tenant_manage.router,)
+
+    def setUp(self):
+        super().setUp()
+        from backend.scripts.create_platform_admin import create_platform_admin
+        from backend.server.auth.security import create_access_token
+
+        with self.factory() as db:
+            admin = create_platform_admin(db, "root@amsh.ai", "Root", "a-long-enough-pass")
+            self.admin_h = {"Authorization": f"Bearer {create_access_token(admin.id)}"}
+
+    def _calls(self, to, forwarded_from=None, query=None):
+        """(business id Twilio routed to or None, business id Exotel routed to or None)."""
+        import asyncio
+        from types import SimpleNamespace
+
+        from backend.server.api.routes import exotel, voice
+
+        with self.factory() as db:
+            tw = asyncio.run(voice.handle_incoming_call(To=to, From="+911", CallSid="CA1", ForwardedFrom=forwarded_from, db=db))
+            ex = asyncio.run(exotel.handle_exotel_incoming_call(SimpleNamespace(query_params=query or {}), CallSid="E1", From="+911", To=to, CallType=None, Direction=None, db=db))
+        tw_biz = tw.body.decode().split("/media-stream/")[1].split('"')[0] if b"/media-stream/" in tw.body else None
+        return tw_biz, (ex["business_id"] if isinstance(ex, dict) else None)
+
+    def _assign(self, biz, number, **extra):
+        return self.client.post(f"/api/admin/tenants/{biz}/numbers", json={"number": number, **extra}, headers=self.admin_h)
+
+    def test_a_clinic_typing_another_clinics_number_into_its_settings_gets_none_of_its_calls(self):
+        with self.factory() as db:
+            db.get(self.Business, "other-biz").business_phone = "+912000000000"  # the same line the fixture clinic shows
+            db.commit()
+        self.assertEqual(self._calls("+912000000000"), (None, None))  # unassigned: nobody gets it (no dev fallback)
+        self.assertEqual(self._assign(self.biz, "+91 20000 00000").status_code, 201)
+        self.assertEqual(self._calls("+912000000000"), (self.biz, self.biz))
+        self.assertEqual(self._calls("02000000000"), (self.biz, self.biz))  # same line, provider's local format
+
+    def test_a_number_cannot_be_assigned_twice_and_ambiguous_rows_are_refused(self):
+        from backend.server.database.models.phone_number import PhoneNumber
+
+        self.assertEqual(self._assign(self.biz, "+912000000000").status_code, 201)
+        self.assertEqual(self._assign("other-biz", "02000000000").status_code, 409)
+        self.assertEqual(self._assign("other-biz", "+913000000000", mode="forwarding", forwarded_from="+912000000000").status_code, 409)
+        self.assertEqual(self._assign("other-biz", "123").status_code, 422)
+        self.assertEqual(self.client.post(f"/api/admin/tenants/{self.biz}/numbers", json={"number": "+914000000000"}, headers=self.h["owner"]).status_code, 403)
+        with self.factory() as db:  # rows written around the API that collide: the call is refused, not guessed
+            db.add(PhoneNumber(business_id="other-biz", number="2000000000", status="active"))
+            db.commit()
+        self.assertEqual(self._calls("+912000000000"), (None, None))
+
+    def test_short_or_partial_numbers_never_match(self):
+        self.assertEqual(self._assign(self.biz, "+912000000000").status_code, 201)
+        for to in ("", "0000", "+91", "000000"):
+            self.assertEqual(self._calls(to), (None, None), to)
+
+    def test_a_forwarded_call_routes_on_the_line_it_was_forwarded_from(self):
+        self.assertEqual(self._assign(self.biz, "+15550000001", mode="forwarding", forwarded_from="+912000000000").status_code, 201)
+        self.assertEqual(self._calls("+15559999999", forwarded_from="+912000000000")[0], self.biz)
+
+    def test_exotel_trusts_a_business_id_only_with_our_signature(self):
+        from backend.server.auth.webhook_signatures import sign_business_route
+
+        self.assertEqual(self._calls("+919999999999", query={"business_id": "other-biz"})[1], None)
+        self.assertEqual(self._calls("+919999999999", query={"business_id": "other-biz", "bsig": sign_business_route(self.biz)})[1], None)
+        self.assertEqual(self._calls("+919999999999", query={"business_id": "other-biz", "bsig": sign_business_route("other-biz")})[1], "other-biz")
+
+    def test_assignments_are_audited_and_removable(self):
+        from backend.server.database.models.audit_log import AuditLog
+
+        pn = self._assign(self.biz, "+912000000000").json()
+        self.assertEqual(self.client.delete(f"/api/admin/tenants/other-biz/numbers/{pn['id']}", headers=self.admin_h).status_code, 404)
+        self.assertEqual(self.client.delete(f"/api/admin/tenants/{self.biz}/numbers/{pn['id']}", headers=self.admin_h).status_code, 200)
+        self.assertEqual(self._calls("+912000000000"), (None, None))
+        with self.factory() as db:
+            self.assertEqual(sorted(a.action for a in db.query(AuditLog).filter(AuditLog.action.like("admin.number_%"))), ["admin.number_assigned", "admin.number_removed"])
+
+
 if __name__ == "__main__":
     unittest.main()

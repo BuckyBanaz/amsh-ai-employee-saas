@@ -16,7 +16,8 @@ from backend.ai.realtime.twilio.call_control import build_base_url, to_ws_url
 from backend.ai.tools.common.send_sms import SendSmsTool
 from backend.ai.tools.framework.base import ToolContext
 from backend.server.auth.security import create_media_token, get_voice_user
-from backend.server.auth.webhook_signatures import create_stream_token, verify_twilio
+from backend.server.auth.webhook_signatures import create_stream_token, sign_business_route, verify_twilio
+from backend.server.services.number_routing import resolve_business
 from backend.server.common import ratelimit
 from backend.server.services import quotas
 from backend.server.common.config import get_settings
@@ -152,8 +153,8 @@ async def trigger_test_call(payload: CallMeRequest, db: Session = Depends(get_db
             base_url = build_base_url()
             callback_url = f"{base_url}/api/voice/exotel/incoming"
             params = []
-            if business_id:
-                params.append(f"business_id={business_id}")
+            if business_id:  # signed: the incoming webhook trusts a business_id only with its signature
+                params.append(f"business_id={business_id}&bsig={sign_business_route(business_id)}")
             if get_settings().EXOTEL_WEBHOOK_SECRET:
                 params.append(f"key={get_settings().EXOTEL_WEBHOOK_SECRET}")
             if params:
@@ -197,14 +198,11 @@ async def handle_incoming_call(
     Path B (carrier call forwarding, *72): tenant's published line arrives as
     `ForwardedFrom`, `To` is our shared background trunk number.
     """
-    lookup_number = ForwardedFrom or To
-    business = (
-        db.execute(select(Business).where(Business.business_phone == lookup_number))
-        .scalars()
-        .first()
-    )
+    # Only numbers the platform assigned (phone_numbers) route a call; an ambiguous match is refused, never guessed
+    business, how = resolve_business(db, To, ForwardedFrom)
+    logger.info("[VOICE INCOMING] call %s routing: %s", CallSid, how)
 
-    if not business and get_settings().ALLOW_DEV_FALLBACKS:
+    if not business and how == "no match" and get_settings().ALLOW_DEV_FALLBACKS:
         logger.warning("[VOICE INCOMING] No tenant matched: using the newest business (ALLOW_DEV_FALLBACKS)")
         # Fallback to latest business for development and trial numbers
         business = db.execute(select(Business).order_by(Business.created_at.desc())).scalars().first()
