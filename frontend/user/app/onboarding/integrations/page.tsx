@@ -18,7 +18,16 @@ export default function IntegrationsOnboardingPage() {
   const router = useRouter();
 
   const [businessCountry, setBusinessCountry] = useState('India');
-  const [telephonyNumber, setTelephonyNumber] = useState('+91 80472 84627');
+  const [telephonyNumber, setTelephonyNumber] = useState('');
+  const [telephonyConnected, setTelephonyConnected] = useState(false);
+
+  const [waConnected, setWaConnected] = useState(false);
+  const [waDetails, setWaDetails] = useState('');
+
+  const [calendarConnected, setCalendarConnected] = useState(false);
+  const [outlookConnected, setOutlookConnected] = useState(false);
+  const [meetConnected, setMeetConnected] = useState(false);
+  const [stripeConnected, setStripeConnected] = useState(false);
 
   React.useEffect(() => {
     try {
@@ -35,36 +44,49 @@ export default function IntegrationsOnboardingPage() {
           bPhone = parsed.phone || parsed.business_phone;
         }
       }
+
+      // 1. Telephony line status
+      const isTelConn = localStorage.getItem('onboarding_telephony_connected') === 'true';
+      setTelephonyConnected(isTelConn);
       const savedPhone = localStorage.getItem('onboarding_telephony_phone');
       if (savedPhone) {
         setTelephonyNumber(savedPhone);
       } else if (bPhone) {
         setTelephonyNumber(bPhone);
       } else {
-        setTelephonyNumber(bCountry === 'India' ? '+91 80472 84627' : '+1 (656) 254-7488');
+        setTelephonyNumber('');
       }
 
-      const savedWaPhone = localStorage.getItem('onboarding_whatsapp_phone') || bPhone || '+91 89014 14107';
-      setWaConnected(true);
-      setWaDetails(`AMSh Cloud Gateway (${savedWaPhone})`);
+      // 2. WhatsApp status
+      const isWaConn = localStorage.getItem('onboarding_whatsapp_connected') === 'true';
+      setWaConnected(isWaConn);
+      const savedWaPhone = localStorage.getItem('onboarding_whatsapp_phone');
+      if (isWaConn) {
+        setWaDetails(savedWaPhone ? `Connected (${savedWaPhone})` : 'Connected via Meta');
+      } else {
+        setWaDetails('');
+      }
+
+      // 3. Calendar & additional integrations
+      setCalendarConnected(localStorage.getItem('onboarding_calendar_connected') === 'true');
+      setOutlookConnected(localStorage.getItem('onboarding_outlook_connected') === 'true');
+      setMeetConnected(localStorage.getItem('onboarding_meet_connected') === 'true');
+      setStripeConnected(localStorage.getItem('onboarding_stripe_connected') === 'true');
     } catch (e) {
-      console.error('Failed to parse business country:', e);
+      console.error('Failed to parse onboarding integrations state:', e);
     }
   }, []);
 
   const isIndia = businessCountry === 'India';
 
-  const [waConnected, setWaConnected] = useState(true);
-  const [waDetails, setWaDetails] = useState('AMSh Cloud Gateway');
-
-  const [integrations, setIntegrations] = useState<IntegrationItem[]>([
+  const integrations: IntegrationItem[] = [
     {
       id: 'google-calendar',
       provider: 'google_calendar',
       name: 'Google Calendar',
       description: 'Sync appointments with Google Calendar automatically.',
-      connected: true,
-      details: 'Primary Business Calendar (Auto-sync)',
+      connected: calendarConnected,
+      details: calendarConnected ? 'Primary Business Calendar (Auto-sync)' : undefined,
       icon: (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#0066FF]">
           <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
@@ -81,8 +103,8 @@ export default function IntegrationsOnboardingPage() {
       description: isIndia 
         ? 'Indian (+91) Virtual Voice Line & Call Forwarding powered by Exotel.' 
         : 'Dedicated AI telephony line or smart call forwarding powered by Twilio.',
-      connected: true,
-      details: `${telephonyNumber} (${isIndia ? 'Active Exotel Line' : 'Active Twilio Line'})`,
+      connected: telephonyConnected,
+      details: telephonyConnected && telephonyNumber ? `${telephonyNumber} (${isIndia ? 'Active Exotel Line' : 'Active Twilio Line'})` : undefined,
       icon: (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#0066FF]">
           <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
@@ -95,7 +117,7 @@ export default function IntegrationsOnboardingPage() {
       name: 'WhatsApp Business Channel',
       description: 'Send instant booking cards, Google Maps location, & 2-hr visit reminders.',
       connected: waConnected,
-      details: waDetails,
+      details: waConnected ? (waDetails || 'Connected') : undefined,
       icon: (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#10B981]">
           <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
@@ -107,7 +129,7 @@ export default function IntegrationsOnboardingPage() {
       provider: 'outlook',
       name: 'Microsoft Outlook',
       description: 'Sync bookings with Outlook corporate calendar.',
-      connected: false,
+      connected: outlookConnected,
       icon: (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#0066FF]">
           <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
@@ -120,7 +142,7 @@ export default function IntegrationsOnboardingPage() {
       provider: 'google_meet',
       name: 'Google Meet',
       description: 'Create video links on appointment generation.',
-      connected: false,
+      connected: meetConnected,
       icon: (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#0066FF]">
           <polygon points="23 7 16 12 23 17 23 7"></polygon>
@@ -133,7 +155,7 @@ export default function IntegrationsOnboardingPage() {
       provider: 'stripe',
       name: 'Stripe Payments',
       description: 'Enable payment collection on booking checkout.',
-      connected: false,
+      connected: stripeConnected,
       icon: (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#0066FF]">
           <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
@@ -141,7 +163,7 @@ export default function IntegrationsOnboardingPage() {
         </svg>
       ),
     },
-  ]);
+  ];
 
   const handleCardClick = (integration: IntegrationItem) => {
     if (integration.id === 'twilio') {
@@ -152,9 +174,30 @@ export default function IntegrationsOnboardingPage() {
       router.push('/onboarding/integrations/whatsapp');
       return;
     }
-    setIntegrations(integrations.map(item => 
-      item.id === integration.id ? { ...item, connected: !item.connected } : item
-    ));
+    if (integration.id === 'google-calendar') {
+      const next = !calendarConnected;
+      setCalendarConnected(next);
+      localStorage.setItem('onboarding_calendar_connected', String(next));
+      return;
+    }
+    if (integration.id === 'outlook') {
+      const next = !outlookConnected;
+      setOutlookConnected(next);
+      localStorage.setItem('onboarding_outlook_connected', String(next));
+      return;
+    }
+    if (integration.id === 'meet') {
+      const next = !meetConnected;
+      setMeetConnected(next);
+      localStorage.setItem('onboarding_meet_connected', String(next));
+      return;
+    }
+    if (integration.id === 'stripe') {
+      const next = !stripeConnected;
+      setStripeConnected(next);
+      localStorage.setItem('onboarding_stripe_connected', String(next));
+      return;
+    }
   };
 
   return (
