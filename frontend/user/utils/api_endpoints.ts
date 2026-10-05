@@ -10,6 +10,7 @@ export const API_ENDPOINTS = {
     FORGOT_PASSWORD: `${BASE_URL}/auth/forgot-password`,
     RESET_PASSWORD: `${BASE_URL}/auth/reset-password`,
     CHANGE_PASSWORD: `${BASE_URL}/auth/change-password`,
+    LOGOUT_ALL: `${BASE_URL}/auth/logout-all`,
     VERIFY_EMAIL: `${BASE_URL}/auth/verify-email`,
     SEND_VERIFICATION: `${BASE_URL}/auth/send-verification`,
   },
@@ -56,6 +57,8 @@ export const API_ENDPOINTS = {
   CUSTOMERS: {
     LIST: (businessId: string) => `${BASE_URL}/businesses/${businessId}/customers`,
     CREATE: (businessId: string) => `${BASE_URL}/businesses/${businessId}/customers`,
+    DETAIL: (businessId: string, patientId: string) => `${BASE_URL}/businesses/${businessId}/customers/${encodeURIComponent(patientId)}`,
+    HISTORY: (businessId: string, patientId: string) => `${BASE_URL}/businesses/${businessId}/customers/${encodeURIComponent(patientId)}/history`,
   },
   SERVICES: {
     CREATE: (businessId: string) => `${BASE_URL}/businesses/${businessId}/services`,

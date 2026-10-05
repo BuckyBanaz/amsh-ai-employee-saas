@@ -10,13 +10,16 @@ interface NewPatientModalProps {
     email?: string;
     notes?: string;
   }) => Promise<void>;
+  /** Edit mode: the form starts from this patient (give the modal a `key` per patient so it resets). */
+  initial?: { name: string; phone_number: string; email?: string | null; notes?: string | null };
 }
 
-export function NewPatientModal({ isOpen, onClose, onSubmit }: NewPatientModalProps) {
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
-  const [notes, setNotes] = useState('');
+export function NewPatientModal({ isOpen, onClose, onSubmit, initial }: NewPatientModalProps) {
+  const isEdit = Boolean(initial);
+  const [name, setName] = useState(initial?.name ?? '');
+  const [phone, setPhone] = useState(initial?.phone_number ?? '');
+  const [email, setEmail] = useState(initial?.email ?? '');
+  const [notes, setNotes] = useState(initial?.notes ?? '');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,8 +38,9 @@ export function NewPatientModal({ isOpen, onClose, onSubmit }: NewPatientModalPr
       await onSubmit({
         name: name.trim(),
         phone_number: phone.trim(),
-        email: email.trim() || undefined,
-        notes: notes.trim() || undefined,
+        // When editing, an emptied field is sent as '' so the server clears it
+        email: email.trim() || (isEdit ? '' : undefined),
+        notes: notes.trim() || (isEdit ? '' : undefined),
       });
       setName('');
       setPhone('');
@@ -44,7 +48,7 @@ export function NewPatientModal({ isOpen, onClose, onSubmit }: NewPatientModalPr
       setNotes('');
       onClose();
     } catch (err: any) {
-      setError(err?.message || 'Failed to register patient');
+      setError(err?.message || (isEdit ? 'Could not save the changes' : 'Failed to register patient'));
     } finally {
       setIsSubmitting(false);
     }
@@ -58,8 +62,8 @@ export function NewPatientModal({ isOpen, onClose, onSubmit }: NewPatientModalPr
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50/60">
           <div>
-            <h2 className="text-base font-bold text-gray-900">Register New Patient</h2>
-            <p className="text-xs text-gray-500 mt-0.5">Add patient record into your clinic CRM</p>
+            <h2 className="text-base font-bold text-gray-900">{isEdit ? 'Edit Patient' : 'Register New Patient'}</h2>
+            <p className="text-xs text-gray-500 mt-0.5">{isEdit ? 'Update this patient\'s details' : 'Add patient record into your clinic CRM'}</p>
           </div>
           <button
             onClick={onClose}
@@ -149,7 +153,7 @@ export function NewPatientModal({ isOpen, onClose, onSubmit }: NewPatientModalPr
                   <span>Saving...</span>
                 </>
               ) : (
-                <span>Register Patient</span>
+                <span>{isEdit ? 'Save Changes' : 'Register Patient'}</span>
               )}
             </button>
           </div>

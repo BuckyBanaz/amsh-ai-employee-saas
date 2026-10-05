@@ -154,14 +154,42 @@ export interface StaffItem {
 }
 
 export interface CustomerItem {
-  id: string;
+  id: string; // a saved record's id, or "ph_<digits>" for a patient known only from bookings
+  saved?: boolean;
   name: string;
   phone_number: string;
-  email?: string;
-  notes?: string;
+  email?: string | null;
+  notes?: string | null;
   total_bookings: number;
-  last_visit: string;
-  status: string;
+  upcoming_bookings?: number;
+  last_visit: string | null;
+  next_visit?: string | null;
+  status: string; // active | inactive
+  created_at?: string | null;
+}
+
+export interface PatientHistory {
+  patient: CustomerItem;
+  appointments: {
+    id: string;
+    status: string;
+    service_name: string;
+    doctor_name: string;
+    preferred_date: string;
+    preferred_time: string;
+    notes: string;
+    channel: string;
+    channel_label: string;
+    created_at: string | null;
+  }[];
+  calls: {
+    id: string;
+    started_at: string | null;
+    duration_seconds: number;
+    outcome: string;
+    intent: string | null;
+    summary: string | null;
+  }[];
 }
 
 export interface KnowledgeItem {
@@ -403,6 +431,25 @@ export const DashboardController = {
   ): Promise<CustomerItem> {
     const bId = this.getEffectiveBusinessId(businessId);
     return ApiService.post<CustomerItem>(API_ENDPOINTS.CUSTOMERS.CREATE(bId), payload);
+  },
+
+  async updateCustomer(
+    patientId: string,
+    payload: { name?: string; phone_number?: string; email?: string; notes?: string },
+    businessId?: string
+  ): Promise<CustomerItem> {
+    const bId = this.getEffectiveBusinessId(businessId);
+    return ApiService.patch<CustomerItem>(API_ENDPOINTS.CUSTOMERS.DETAIL(bId, patientId), payload);
+  },
+
+  async deleteCustomer(patientId: string, businessId?: string): Promise<void> {
+    const bId = this.getEffectiveBusinessId(businessId);
+    await ApiService.delete<void>(API_ENDPOINTS.CUSTOMERS.DETAIL(bId, patientId));
+  },
+
+  async getCustomerHistory(patientId: string, businessId?: string): Promise<PatientHistory> {
+    const bId = this.getEffectiveBusinessId(businessId);
+    return ApiService.get<PatientHistory>(API_ENDPOINTS.CUSTOMERS.HISTORY(bId, patientId));
   },
 
   async getKnowledge(businessId?: string): Promise<KnowledgeItem[]> {
