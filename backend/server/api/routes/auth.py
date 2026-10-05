@@ -17,6 +17,7 @@ from backend.server.auth.security import (
     password_matches_fingerprint,
     get_current_user,
     hash_password,
+    revoke_sessions,
     verify_password,
 )
 from backend.server.database.models.audit_log import AuditLog
@@ -225,6 +226,7 @@ def reset_password(payload: ResetPasswordRequest, request: Request, db: Session 
     if not user or not user.is_active or not password_matches_fingerprint(user.hashed_password, fingerprint):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This reset link is invalid or has expired")
     user.hashed_password = hash_password(payload.password)
+    revoke_sessions(user)  # whoever knew the old password is signed out too
     db.commit()
     audit(db, "auth.password_reset", user, ip=client_ip(request))
     return {"ok": True}
@@ -242,9 +244,19 @@ def change_password(payload: ChangePasswordRequest, request: Request, db: Sessio
     if len(payload.new_password) < MIN_PASSWORD_LENGTH:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Password must be at least {MIN_PASSWORD_LENGTH} characters")
     current_user.hashed_password = hash_password(payload.new_password)
+    revoke_sessions(current_user)  # other devices must sign in with the new password
     db.commit()
     audit(db, "auth.password_changed", current_user, ip=client_ip(request))
-    return {"ok": True}
+    return {"ok": True, "access_token": create_access_token(current_user.id)}  # this device stays signed in
+
+
+@router.post("/logout-all", response_model=TokenOut)
+def logout_all(request: Request, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Sign out everywhere: every login token of this account stops working. A fresh one keeps this device signed in."""
+    revoke_sessions(current_user)
+    db.commit()
+    audit(db, "auth.logout_all", current_user, ip=client_ip(request))
+    return TokenOut(access_token=create_access_token(current_user.id), user=UserOut.model_validate(current_user))
 
 
 @router.post("/send-verification")

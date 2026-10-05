@@ -11,7 +11,7 @@ from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy import desc, func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
-from backend.server.auth.security import bearer_scheme, decode_access_token
+from backend.server.auth.security import bearer_scheme, decode_access_claims, ensure_session_current
 from backend.server.database.models.agent import Agent
 from backend.server.auth.security import require_platform_admin
 from backend.server.database.models.business import Business
@@ -37,9 +37,10 @@ def _get_optional_admin(
     if not credentials:
         return None
     try:
-        user_id = decode_access_token(credentials.credentials)
+        user_id, issued_at = decode_access_claims(credentials.credentials)
         user = db.get(User, user_id)
         if user and user.is_active:
+            ensure_session_current(user, issued_at)
             return user
     except Exception:
         pass

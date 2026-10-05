@@ -15,8 +15,22 @@ export const AuthController = {
 
   sendVerification: () => ApiService.post<{ ok: boolean; already_verified?: boolean }>(API_ENDPOINTS.AUTH.SEND_VERIFICATION, {}),
 
-  changePassword: (currentPassword: string, newPassword: string) =>
-    ApiService.post<{ ok: boolean }>(API_ENDPOINTS.AUTH.CHANGE_PASSWORD, { current_password: currentPassword, new_password: newPassword }),
+  /** Other devices are signed out by the server; this one gets a fresh token so it stays signed in. */
+  changePassword: async (currentPassword: string, newPassword: string) => {
+    const res = await ApiService.post<{ ok: boolean; access_token?: string }>(API_ENDPOINTS.AUTH.CHANGE_PASSWORD, {
+      current_password: currentPassword,
+      new_password: newPassword,
+    });
+    if (res.access_token) StorageService.setToken(res.access_token);
+    return res;
+  },
+
+  /** Sign out everywhere: every existing login of this account stops working; this device continues with a fresh token. */
+  logoutAll: async () => {
+    const res = await ApiService.post<{ access_token: string }>(API_ENDPOINTS.AUTH.LOGOUT_ALL, {});
+    if (res.access_token) StorageService.setToken(res.access_token);
+    return res;
+  },
 
   login: async (email: string, password: string) => {
     try {

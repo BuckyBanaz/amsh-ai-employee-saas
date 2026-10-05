@@ -14,6 +14,23 @@ export function SecuritySettings() {
   const [confirm, setConfirm] = useState('');
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
+  const [confirmLogoutAll, setConfirmLogoutAll] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [logoutMessage, setLogoutMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
+
+  const handleLogoutAll = async () => {
+    setLoggingOut(true);
+    setLogoutMessage(null);
+    try {
+      await AuthController.logoutAll();
+      setConfirmLogoutAll(false);
+      setLogoutMessage({ kind: 'ok', text: 'Signed out everywhere else. This device is still signed in.' });
+    } catch (err: any) {
+      setLogoutMessage({ kind: 'error', text: err?.message || 'Could not sign out other sessions.' });
+    } finally {
+      setLoggingOut(false);
+    }
+  };
 
   const handleUpdate = async () => {
     setMessage(null);
@@ -26,7 +43,7 @@ export function SecuritySettings() {
       setCurrent('');
       setNext('');
       setConfirm('');
-      setMessage({ kind: 'ok', text: 'Password updated.' });
+      setMessage({ kind: 'ok', text: 'Password updated. Other devices have been signed out.' });
     } catch (err: any) {
       setMessage({ kind: 'error', text: err?.message || 'Could not update the password.' });
     } finally {
@@ -63,6 +80,46 @@ export function SecuritySettings() {
           >
             {saving ? 'Updating...' : content.CHANGE_PASSWORD.UPDATE}
           </button>
+        </div>
+      </div>
+
+      <div className="bg-white border border-gray-100 rounded-xl p-4 shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h3 className="text-sm font-bold text-gray-900 tracking-tight mb-0.5">Sign out everywhere</h3>
+            <p className="text-xs text-gray-500">
+              Ends every other session of your account: other browsers, phones and anyone using your old login. Use it if a device was lost or
+              you think someone else signed in.
+            </p>
+            {logoutMessage && (
+              <p className={`text-xs font-medium mt-2 ${logoutMessage.kind === 'ok' ? 'text-emerald-600' : 'text-red-600'}`}>{logoutMessage.text}</p>
+            )}
+          </div>
+          {confirmLogoutAll ? (
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                onClick={handleLogoutAll}
+                disabled={loggingOut}
+                className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-md text-xs font-semibold disabled:opacity-60 transition-colors"
+              >
+                {loggingOut ? 'Signing out...' : 'Confirm'}
+              </button>
+              <button
+                onClick={() => setConfirmLogoutAll(false)}
+                disabled={loggingOut}
+                className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md text-xs font-semibold transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirmLogoutAll(true)}
+              className="px-3.5 py-1.5 bg-white border border-gray-200 text-gray-900 rounded-md text-xs font-semibold hover:bg-gray-50 shrink-0 transition-colors"
+            >
+              Sign out everywhere
+            </button>
+          )}
         </div>
       </div>
 

@@ -23,6 +23,8 @@ class User(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     last_active_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     email_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # null = not verified yet
+    # "Sign out everywhere" and password resets: login tokens issued before this moment stop working
+    sessions_revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     business = relationship("Business", back_populates="users")

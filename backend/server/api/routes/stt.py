@@ -18,8 +18,10 @@ import websockets
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from backend.ai.speech.stt.deepgram import model_for, resolve_stt_language
-from backend.server.auth.security import decode_access_token
+from backend.server.auth.security import decode_access_claims, ensure_not_suspended, ensure_session_current
 from backend.server.common.config import get_settings
+from backend.server.database.models.user import User
+from backend.server.database.session import SessionLocal
 
 logger = logging.getLogger(__name__)
 
@@ -63,8 +65,16 @@ class TranscriptAssembler:
 
 
 def _authorised(token: str) -> Optional[str]:
+    """The user id behind a login token that is still good: the account exists, is active, not suspended, not signed out."""
     try:
-        return decode_access_token(token)
+        user_id, issued_at = decode_access_claims(token)
+        with SessionLocal() as db:
+            user = db.get(User, user_id)
+            if user is None or not user.is_active:
+                return None
+            ensure_session_current(user, issued_at)
+            ensure_not_suspended(db, user)
+        return user_id
     except Exception:
         return None
 
