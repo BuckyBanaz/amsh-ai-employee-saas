@@ -6,7 +6,7 @@ import { STRINGS } from '../../../utils/strings/en';
 import { OnboardingController } from '../../../controllers/onboarding.controller';
 import { API_ENDPOINTS } from '../../../utils/api_endpoints';
 import { StorageService } from '../../../services/storage.service';
-import { withPreviewToken } from '../../../services/voice_preview.service';
+import { getPreviewAudioUrl, warmPreviewToken, withPreviewToken } from '../../../services/voice_preview.service';
 
 const initialPersonalities = [
   { id: 'professional', name: 'Professional', desc: 'Polite, clinical, focused on scheduling accuracy' },
@@ -116,6 +116,8 @@ export default function AiReceptionistOnboardingPage() {
         }
       })
       .catch(err => console.error('Failed to fetch voices:', err));
+
+    void warmPreviewToken();
   }, []);
 
   React.useEffect(() => {
@@ -126,7 +128,7 @@ export default function AiReceptionistOnboardingPage() {
     }
   }, [aiName, greeting, selectedVoice, selectedPersonality, transferPhone, primaryLanguage]);
 
-  const togglePlay = (e: React.MouseEvent, voiceId: string) => {
+  const togglePlay = async (e: React.MouseEvent, voiceId: string) => {
     e.stopPropagation();
     
     // Stop currently playing audio if any
@@ -141,7 +143,8 @@ export default function AiReceptionistOnboardingPage() {
       setPlayingVoice(voiceId);
       
       const audioUrl = `${API_ENDPOINTS.VOICE.PREVIEW}?voice_id=${voiceId}&text=${encodeURIComponent(greeting)}`;
-      const audio = new Audio(withPreviewToken(audioUrl));
+      const finalUrl = await getPreviewAudioUrl(audioUrl);
+      const audio = new Audio(finalUrl);
       
       audio.onended = () => {
         setPlayingVoice(null);

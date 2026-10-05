@@ -615,3 +615,24 @@ Run it: `python -m backend.ai.evals.runner` (`--live`, `--only persona,safety`, 
 - **Verification**:
   - All 15 tenant hardening tests passing (`Ran 15 tests in 19.683s. OK`).
   - Git commit: `42de9fc` pushed to `version-0.2`.
+
+### Entry 84 - AI Receptionist Persona Persistence, Voice Preview Auth & Groq Keep-Alive Ping Fix (2026-10-05)
+- **Problem**:
+  - When configuring AI Receptionist during onboarding (`/onboarding/ai-receptionist`), clicking the audio preview button returned `401 Unauthorized` because the media token was not warmed and was missing on the first click.
+  - In `backend/server/api/routes/agents.py`, `AgentCreate` dropped `personality`, `voice_id`, `transfer_phone`, `escalation_policy`, and `capabilities` because they were not mapped into `config`, leaving the agent's database `config` as `{}`.
+  - In `backend/server/common/warmup.py`, the 4-minute keep-alive ping called Groq `chat/completions` with non-existent `llama-3.1-8b-instant`, producing recurring `404 Not Found` errors in the container logs.
+- **Implementation**:
+  - **Voice Preview Auth (`frontend/user/services/voice_preview.service.ts` & `frontend/user/app/onboarding/ai-receptionist/page.tsx`)**:
+    - Added `getPreviewAudioUrl(url: string)` that awaits `warmPreviewToken()` so the token is guaranteed before `<audio>` playback starts.
+    - Prewarmed the preview token in `useEffect` on component mount.
+  - **Persona & Configuration Persistence (`backend/server/api/routes/agents.py`)**:
+    - Added `personality`, `voice_id`, `transfer_phone`, `escalation_policy`, and `capabilities` to `AgentCreate` and `AgentUpdate`.
+    - Automatically mapped them into `agent.config` and updated `voice_model` and `voice_provider`.
+    - Handled onboarding re-submissions gracefully via upsert instead of duplicate creation.
+    - Updated active test business agent config in Postgres DB.
+  - **Keep-Alive Zero-Token Ping (`backend/server/common/warmup.py`)**:
+    - Replaced the failing chat completion call with `GET /v1/models`, keeping the connection warm with zero token spend and `200 OK`.
+- **Verification**:
+  - Direct GET to `/v1/models` inside container returns `200 OK`.
+  - All 15 tenant hardening tests pass (`Ran 15 tests in 19.906s. OK`).
+  - All 305 agent core tests pass cleanly (`Ran 305 tests. OK (skipped=1)`).

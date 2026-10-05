@@ -39,7 +39,12 @@ class AgentCreate(BaseModel):
     languages: list[str] = []
     voice_provider: str = "elevenlabs"
     voice_model: str = "default"
+    voice_id: str | None = None
     primary_language: str = "en"
+    personality: str | None = None
+    transfer_phone: str | None = None
+    escalation_policy: str | None = None
+    capabilities: list[str] | dict | None = None
     config: dict = {}  # {personality, capabilities: {id: bool}, transfer_phone, escalation}
 
 
@@ -50,7 +55,12 @@ class AgentUpdate(BaseModel):
     languages: list[str] | None = None
     voice_provider: str | None = None
     voice_model: str | None = None
+    voice_id: str | None = None
     primary_language: str | None = None
+    personality: str | None = None
+    transfer_phone: str | None = None
+    escalation_policy: str | None = None
+    capabilities: list[str] | dict | None = None
     config: dict | None = None
 
 
@@ -79,8 +89,36 @@ def create_agent(
 ):
     get_business_or_404(business_id, db)
     require_owner_or_admin(business_id, current_user)
-    agent = Agent(business_id=business_id, **payload.model_dump())
-    db.add(agent)
+
+    cfg = dict(payload.config or {})
+    if payload.personality:
+        cfg["personality"] = payload.personality
+    if payload.transfer_phone:
+        cfg["transfer_phone"] = payload.transfer_phone
+    if payload.escalation_policy:
+        cfg["escalation"] = payload.escalation_policy
+    if payload.capabilities is not None:
+        if isinstance(payload.capabilities, list):
+            cfg["capabilities"] = {c: True for c in payload.capabilities}
+        else:
+            cfg["capabilities"] = payload.capabilities
+
+    agent_data = payload.model_dump(exclude={"personality", "transfer_phone", "escalation_policy", "capabilities", "voice_id"})
+    agent_data["config"] = cfg
+    if payload.voice_id:
+        agent_data["voice_model"] = payload.voice_id
+        if agent_data.get("voice_provider") == "elevenlabs" and payload.voice_id != "default":
+            agent_data["voice_provider"] = "cartesia"
+
+    existing = db.query(Agent).filter(Agent.business_id == business_id).first()
+    if existing:
+        for k, v in agent_data.items():
+            setattr(existing, k, v)
+        agent = existing
+    else:
+        agent = Agent(business_id=business_id, **agent_data)
+        db.add(agent)
+
     db.commit()
     db.refresh(agent)
     return agent
@@ -112,10 +150,34 @@ def update_agent(
     require_owner_or_admin(business_id, current_user)
     agent = _get_agent_or_404(business_id, agent_id, db)
     update_data = payload.model_dump(exclude_unset=True)
+
+    cfg_updates: dict = {}
     if "config" in update_data and update_data["config"] is not None:
-        agent.config = merge_agent_config(agent.config, update_data["config"])
-        flag_modified(agent, "config")
+        cfg_updates.update(update_data["config"])
         del update_data["config"]
+    if payload.personality is not None:
+        cfg_updates["personality"] = payload.personality
+    if payload.transfer_phone is not None:
+        cfg_updates["transfer_phone"] = payload.transfer_phone
+    if payload.escalation_policy is not None:
+        cfg_updates["escalation"] = payload.escalation_policy
+    if payload.capabilities is not None:
+        if isinstance(payload.capabilities, list):
+            cfg_updates["capabilities"] = {c: True for c in payload.capabilities}
+        else:
+            cfg_updates["capabilities"] = payload.capabilities
+
+    for field in ("personality", "transfer_phone", "escalation_policy", "capabilities", "voice_id"):
+        update_data.pop(field, None)
+
+    if cfg_updates:
+        agent.config = merge_agent_config(agent.config, cfg_updates)
+        flag_modified(agent, "config")
+
+    if payload.voice_id:
+        agent.voice_model = payload.voice_id
+        if agent.voice_provider == "elevenlabs" and payload.voice_id != "default":
+            agent.voice_provider = "cartesia"
 
     for field, value in update_data.items():
         setattr(agent, field, value)

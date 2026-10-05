@@ -239,14 +239,9 @@ async def keep_alive_ping() -> None:
             if getattr(settings, "GROQ_API_KEY", None):
                 import httpx
                 async with httpx.AsyncClient(timeout=5.0) as client:
-                    await client.post(
-                        "https://api.groq.com/openai/v1/chat/completions",
+                    await client.get(
+                        "https://api.groq.com/openai/v1/models",
                         headers={"Authorization": f"Bearer {settings.GROQ_API_KEY}"},
-                        json={
-                            "model": "llama-3.1-8b-instant",
-                            "messages": [{"role": "user", "content": "ping"}],
-                            "max_tokens": 1,
-                        },
                     )
                 logger.debug("[KEEP-ALIVE] Ping sent successfully")
         except Exception as e:

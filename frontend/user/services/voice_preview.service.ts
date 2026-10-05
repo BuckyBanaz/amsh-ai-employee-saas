@@ -29,6 +29,12 @@ export function warmPreviewToken(): Promise<void> {
   return inFlight;
 }
 
+export async function getPreviewAudioUrl(url: string): Promise<string> {
+  await warmPreviewToken();
+  if (!cached) return url;
+  return `${url}${url.includes('?') ? '&' : '?'}token=${encodeURIComponent(cached.token)}`;
+}
+
 export function withPreviewToken(url: string): string {
   void warmPreviewToken();
   if (!cached) return url;
