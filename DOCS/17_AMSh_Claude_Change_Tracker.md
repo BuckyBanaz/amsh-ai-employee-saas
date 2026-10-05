@@ -595,3 +595,23 @@ Run it: `python -m backend.ai.evals.runner` (`--live`, `--only persona,safety`, 
     - Ambiguous `phone_number_id` resolution refusal (`find_whatsapp_integration` returns `None`).
     - Platform admin assignment (201) and removal (200) with audit log validation and non-admin 403 enforcement.
   - All 15 tenant hardening tests passed cleanly (`Ran 15 tests in 28.041s. OK`).
+
+### Entry 83 - Dynamic Onboarding Integrations & Live Twilio Number Search API (2026-10-05)
+- **Problem**:
+  - `onboarding/integrations/page.tsx` hardcoded Google Calendar, Exotel/Twilio, and WhatsApp to `connected: true` by default, making fresh signups appear already connected before setup.
+  - `onboarding/integrations/twilio/page.tsx` displayed static mockup numbers (`254-7488`... / `80472 84627`...) with a fake search spinner rather than connecting to live telephony carrier inventories.
+- **Implementation**:
+  - **Dynamic Integrations State (`frontend/user/app/onboarding/integrations/page.tsx`)**:
+    - Replaced hardcoded `connected: true` with dynamic state loaded from `localStorage` (`onboarding_telephony_connected`, `onboarding_whatsapp_connected`, `onboarding_calendar_connected`, etc.).
+    - All cards default to disconnected on fresh onboarding sessions, displaying active setup/connect CTAs.
+  - **Live Telephony Search API (`backend/server/api/routes/integrations.py` & `backend/server/api/router.py`)**:
+    - Added `GET /api/telephony/available-numbers?country={country}&area_code={area_code}`.
+    - If `TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN` are present in settings, calls Twilio's live `AvailablePhoneNumbers/{country}/Local.json` REST API, returning real-time buyable carrier numbers filtered by area code.
+    - For India (`+91`), returns available virtual line pool filtered by requested STD code (`080`, `011`, `022`, etc.).
+    - Gracefully falls back to preview pool if Twilio credentials are unconfigured or in offline development.
+  - **Frontend Integration (`frontend/user/app/onboarding/integrations/twilio/page.tsx`)**:
+    - Wired `fetchNumbers()` to call `GET /api/telephony/available-numbers` whenever country or area code changes, or when clicking "Search Numbers".
+    - Added live carrier badge (`Live Twilio Carrier Inventory`) when live inventory is returned.
+- **Verification**:
+  - All 15 tenant hardening tests passing (`Ran 15 tests in 19.683s. OK`).
+  - Git commit: `42de9fc` pushed to `version-0.2`.
