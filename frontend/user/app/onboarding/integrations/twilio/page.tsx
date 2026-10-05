@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { BASE_URL } from '../../../../utils/api_endpoints';
 
 export default function TwilioSetupPage() {
   const router = useRouter();
@@ -11,6 +12,44 @@ export default function TwilioSetupPage() {
   const [selectedCountry, setSelectedCountry] = useState('IN (+91)');
   const [areaCode, setAreaCode] = useState('080');
   const [isSearching, setIsSearching] = useState(false);
+
+  const [availableNumbers, setAvailableNumbers] = useState<Array<{ number: string; locality: string; feature: string; is_live?: boolean }>>([
+    { number: '+91 080 4728 4627', locality: 'Exotel Direct Indian Line • STD (080)', feature: 'Exotel HD • Sub-50ms Latency', is_live: false },
+    { number: '+91 080 4728 4628', locality: 'Exotel Toll-Free Line • India (080)', feature: 'Exotel HD • Toll Free Voice', is_live: false },
+    { number: '+91 080 4728 4629', locality: 'Exotel Smart Trunk Line • India (080)', feature: 'Exotel HD • Call Recording', is_live: false },
+  ]);
+  const [selectedNumber, setSelectedNumber] = useState(availableNumbers[0].number);
+  const [numberSource, setNumberSource] = useState<string>('');
+
+  const [existingPhone, setExistingPhone] = useState('');
+  const [humanTransferPhone, setHumanTransferPhone] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  const isIndia = businessCountry === 'India' || selectedCountry.includes('+91');
+
+  const fetchNumbers = useCallback(async (countryVal: string, code: string) => {
+    setIsSearching(true);
+    try {
+      const countryParam = countryVal.includes('+91') || countryVal === 'India' ? 'IN' : 'US';
+      const cleanCode = code.replace(/[^0-9]/g, '');
+      const res = await fetch(`${BASE_URL}/telephony/available-numbers?country=${encodeURIComponent(countryParam)}&area_code=${encodeURIComponent(cleanCode)}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.numbers && data.numbers.length > 0) {
+          setAvailableNumbers(data.numbers);
+          setNumberSource(data.source || '');
+          setSelectedNumber((prev) => {
+            if (data.numbers.some((n: any) => n.number === prev)) return prev;
+            return data.numbers[0].number;
+          });
+        }
+      }
+    } catch (err) {
+      console.warn('Live number fetch warning:', err);
+    } finally {
+      setIsSearching(false);
+    }
+  }, []);
 
   React.useEffect(() => {
     try {
@@ -31,48 +70,38 @@ export default function TwilioSetupPage() {
           if (parsed.country === 'India') {
             setSelectedCountry('IN (+91)');
             setAreaCode('080');
-            setSelectedNumber('+91 80472 84627');
             setExistingPhone(parsed.phone || '');
             setHumanTransferPhone(savedEscalation || parsed.phone || '');
+            fetchNumbers('IN', '080');
           } else {
             setSelectedCountry('US (+1)');
             setAreaCode('656');
-            setSelectedNumber('+1 (656) 254-7488');
             setExistingPhone(parsed.phone || '');
             setHumanTransferPhone(savedEscalation || parsed.phone || '');
+            fetchNumbers('US', '656');
           }
+        } else {
+          fetchNumbers('IN', '080');
         }
-      } else if (savedEscalation) {
-        setHumanTransferPhone(savedEscalation);
+      } else {
+        if (savedEscalation) setHumanTransferPhone(savedEscalation);
+        fetchNumbers('IN', '080');
       }
     } catch (e) {
       console.error('Failed to parse business country:', e);
+      fetchNumbers('IN', '080');
     }
-  }, []);
+  }, [fetchNumbers]);
 
-  const isIndia = businessCountry === 'India' || selectedCountry.includes('+91');
-
-  const availableNumbers = isIndia ? [
-    { number: `+91 ${areaCode === '080' ? '80472 84627' : '80472 84627'}`, locality: `Exotel Direct Indian Line • STD (${areaCode})`, feature: 'Exotel HD • Sub-50ms Latency' },
-    { number: `+91 ${areaCode === '080' ? '80472 84628' : '80472 84628'}`, locality: `Exotel Toll-Free Line • India`, feature: 'Exotel HD • Toll Free' },
-    { number: `+91 ${areaCode === '080' ? '80472 84629' : '80472 84629'}`, locality: `Exotel Smart Trunk Line • India`, feature: 'Exotel HD • Call Recording' },
-  ] : [
-    { number: `+1 (${areaCode}) 254-7488`, locality: `Twilio US Direct Line • Area Code (${areaCode})`, feature: 'Twilio HD • Ultra Low Latency' },
-    { number: `+1 (${areaCode}) 254-7489`, locality: `Twilio Toll-Free Line • Area Code (${areaCode})`, feature: 'Twilio HD • SIP Trunk' },
-    { number: `+1 (${areaCode}) 254-7490`, locality: `Twilio Digital Carrier • Area Code (${areaCode})`, feature: 'Twilio HD • Call Recording' },
-  ];
-
-  const [selectedNumber, setSelectedNumber] = useState(availableNumbers[0].number);
-  const [existingPhone, setExistingPhone] = useState('');
-  const [humanTransferPhone, setHumanTransferPhone] = useState('');
-
-  const [isSaving, setIsSaving] = useState(false);
+  const handleCountryChange = (val: string) => {
+    setSelectedCountry(val);
+    const newArea = val.includes('+91') ? '080' : '656';
+    setAreaCode(newArea);
+    fetchNumbers(val, newArea);
+  };
 
   const handleSearch = () => {
-    setIsSearching(true);
-    setTimeout(() => {
-      setIsSearching(false);
-    }, 400);
+    fetchNumbers(selectedCountry, areaCode);
   };
 
   const handleSave = (e: React.FormEvent) => {
@@ -216,7 +245,7 @@ export default function TwilioSetupPage() {
                 <label className="text-[11px] font-semibold text-gray-700 mb-0.5 block">Country</label>
                 <select
                   value={selectedCountry}
-                  onChange={(e) => setSelectedCountry(e.target.value)}
+                  onChange={(e) => handleCountryChange(e.target.value)}
                   className="w-full px-3 py-1.5 text-xs bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#0066FF]"
                 >
                   <option value="US (+1)">United States (+1)</option>
@@ -243,7 +272,7 @@ export default function TwilioSetupPage() {
                   type="button"
                   onClick={handleSearch}
                   disabled={isSearching}
-                  className="w-full py-1.5 px-3 text-xs font-bold bg-[#0066FF] text-white hover:bg-[#0052cc] rounded-lg transition-colors cursor-pointer flex items-center justify-center gap-1"
+                  className="w-full py-1.5 px-3 text-xs font-bold bg-[#0066FF] text-white hover:bg-[#0052cc] rounded-lg transition-colors cursor-pointer flex items-center justify-center gap-1 disabled:opacity-50"
                 >
                   {isSearching ? 'Searching...' : 'Search Numbers'}
                 </button>
@@ -251,7 +280,15 @@ export default function TwilioSetupPage() {
             </div>
 
             <div className="pt-1 space-y-1.5">
-              <label className="text-xs font-bold text-gray-900 block">Available HD Telephony Lines:</label>
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-gray-900 block">Available HD Telephony Lines:</label>
+                {numberSource === 'twilio_live' && (
+                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    Live Twilio Carrier Inventory
+                  </span>
+                )}
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                 {availableNumbers.map((item) => (
                   <div

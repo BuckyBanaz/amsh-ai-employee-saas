@@ -304,6 +304,133 @@ async def whatsapp_test_message(
 
 
 # -----------------------------------------------------------------------------
+# Telephony Available Numbers Endpoint (Twilio Live Search + Indian Fallback)
+# -----------------------------------------------------------------------------
+from fastapi import Query
+
+telephony_router = APIRouter(prefix="/api/telephony", tags=["telephony"])
+
+
+class AvailableNumberItem(BaseModel):
+    number: str
+    locality: str
+    feature: str
+    is_live: bool = False
+
+
+class AvailableNumbersResponse(BaseModel):
+    source: str
+    country: str
+    area_code: str | None = None
+    numbers: list[AvailableNumberItem]
+
+
+@telephony_router.get("/available-numbers", response_model=AvailableNumbersResponse)
+async def get_available_telephony_numbers(
+    country: str = Query("US", min_length=2, max_length=10),
+    area_code: str | None = Query(None),
+    limit: int = Query(3, ge=1, le=20),
+):
+    """Fetch available phone numbers from Twilio's live inventory if Twilio credentials are configured,
+    or provide an intelligent curated available pool for Indian STD codes / development."""
+    settings = get_settings()
+    c_upper = country.strip().upper()
+    if "IN" in c_upper or "+91" in c_upper:
+        std = (area_code or "080").strip().lstrip("0")
+        code_str = f"0{std}" if std else "080"
+        return AvailableNumbersResponse(
+            source="exotel_pool",
+            country="IN",
+            area_code=code_str,
+            numbers=[
+                AvailableNumberItem(
+                    number=f"+91 {code_str} 4728 4627",
+                    locality=f"Exotel Direct Indian Line • STD ({code_str})",
+                    feature="Exotel HD • Sub-50ms Latency",
+                    is_live=False,
+                ),
+                AvailableNumberItem(
+                    number=f"+91 {code_str} 4728 4628",
+                    locality=f"Exotel Toll-Free Line • India ({code_str})",
+                    feature="Exotel HD • Toll Free Voice",
+                    is_live=False,
+                ),
+                AvailableNumberItem(
+                    number=f"+91 {code_str} 4728 4629",
+                    locality=f"Exotel Smart Trunk Line • India ({code_str})",
+                    feature="Exotel HD • Call Recording",
+                    is_live=False,
+                ),
+            ],
+        )
+
+    # For US/Canada/UK/etc., check if Twilio credentials are set
+    if settings.TWILIO_ACCOUNT_SID and settings.TWILIO_AUTH_TOKEN:
+        iso_country = "CA" if "CA" in c_upper else ("GB" if "GB" in c_upper else "US")
+        clean_area = "".join(ch for ch in (area_code or "") if ch.isdigit())
+        params: dict = {"PageSize": limit}
+        if clean_area:
+            params["AreaCode"] = clean_area
+
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                url = f"https://api.twilio.com/2010-04-01/Accounts/{settings.TWILIO_ACCOUNT_SID}/AvailablePhoneNumbers/{iso_country}/Local.json"
+                resp = await client.get(url, auth=(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN), params=params)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    items = data.get("available_phone_numbers", [])
+                    if items:
+                        results = []
+                        for it in items[:limit]:
+                            num_formatted = it.get("friendly_name") or it.get("phone_number")
+                            loc = it.get("locality") or it.get("region") or f"Area Code ({clean_area or 'US'})"
+                            results.append(
+                                AvailableNumberItem(
+                                    number=num_formatted,
+                                    locality=f"Twilio US Direct Line • {loc}",
+                                    feature="Twilio HD • Live PSTN Line",
+                                    is_live=True,
+                                )
+                            )
+                        return AvailableNumbersResponse(
+                            source="twilio_live",
+                            country=iso_country,
+                            area_code=clean_area or None,
+                            numbers=results,
+                        )
+        except Exception as e:
+            logger.warning("[TELEPHONY] Twilio live number search failed, falling back to curated pool: %s", e)
+
+    # Fallback pool for US/Intl when credentials are not configured or search returned 0
+    clean_area = "".join(ch for ch in (area_code or "656") if ch.isdigit()) or "656"
+    return AvailableNumbersResponse(
+        source="twilio_preview_pool",
+        country="US",
+        area_code=clean_area,
+        numbers=[
+            AvailableNumberItem(
+                number=f"+1 ({clean_area}) 254-7488",
+                locality=f"Twilio US Direct Line • Area Code ({clean_area})",
+                feature="Twilio HD • Ultra Low Latency",
+                is_live=False,
+            ),
+            AvailableNumberItem(
+                number=f"+1 ({clean_area}) 254-7489",
+                locality=f"Twilio Toll-Free Line • Area Code ({clean_area})",
+                feature="Twilio HD • SIP Trunk",
+                is_live=False,
+            ),
+            AvailableNumberItem(
+                number=f"+1 ({clean_area}) 254-7490",
+                locality=f"Twilio Digital Carrier • Area Code ({clean_area})",
+                feature="Twilio HD • Call Recording",
+                is_live=False,
+            ),
+        ],
+    )
+
+
+# -----------------------------------------------------------------------------
 # Meta WhatsApp Cloud API Webhook Endpoints
 # -----------------------------------------------------------------------------
 wa_webhook_router = APIRouter(prefix="/api/v1/whatsapp/webhook", tags=["whatsapp-webhook"])
