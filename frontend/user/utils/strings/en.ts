@@ -718,24 +718,14 @@ export const STRINGS = {
           API_KEYS: {
             TITLE: "API Keys",
             SUBTITLE: "Generate keys to authenticate your API requests.",
-            GENERATE_BTN: "Generate New Key",
-            TABLE: {
-              COLS: ["Name", "Key", "Created", "Actions"],
-              MOCK_DATA: {
-                NAME: "Production App",
-                KEY: "sk_live_...4f9a",
-                CREATED: "Aug 10, 2026",
-                REVOKE: "Revoke"
-              }
-            }
+            EMPTY: "API keys are not available yet. Until then, connect calendars and messaging from the integrations above."
           },
           WEBHOOKS: {
             TITLE: "Webhooks",
             SUBTITLE: "Receive real-time HTTP POST payloads when events occur.",
             ENDPOINT_LABEL: "Endpoint URL",
             EVENTS_LABEL: "Events to send",
-            EVENTS: ["appointment.created", "patient.created", "call.completed"],
-            SAVE_BTN: "Save Webhook"
+            EVENTS: ["appointment.created", "patient.created", "call.completed"]
           }
         },
         INSIGHTS_CARD: {
