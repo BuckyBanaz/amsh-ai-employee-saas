@@ -23,7 +23,7 @@ from backend.ai.engine.agent.facts import load_vertical_name
 from backend.ai.speech.stt.language import resolve_stt_language
 from backend.ai.verticals.errors import MissingContextError
 from backend.ai.engine.conversation.state_machine import ConversationStateMachine, load_agent_settings, load_business_context, load_tone
-from backend.ai.engine.conversation.i18n import normalize_language
+from backend.ai.engine.conversation.i18n import normalize_language, t
 from backend.ai.engine.conversation.states import CallState
 from backend.ai.engine.conversation.nlu import ConversationalNLU
 from backend.ai.engine.agent.runtime import AgentRuntime, get_sim_runtime, store_sim_runtime
@@ -718,7 +718,7 @@ def _finish_agent_turn(call_id: str, state_machine: ConversationStateMachine, pa
 def _unavailable_turn(call_id: str, state_machine: ConversationStateMachine) -> Dict[str, Any]:
     return {
         "call_id": call_id, "test_mode": True, "test_actions": [], "state": state_machine.current_state.value,
-        "bot_response": "Sorry, the AI could not answer just now. Please try again in a moment.",
+        "bot_response": t(getattr(state_machine, "language", "en"), "llm_down_test"),  # the only fixed playground line: the model is down
         "collected_slots": state_machine.collected_slots, "tool_result": None, "should_hangup": False, "should_transfer": False,
         "transfer_target": None,
     }

@@ -414,13 +414,33 @@ class AgentLoop(unittest.TestCase):
         roles = [m["role"] for m in backend.seen[2]["messages"]]
         self.assertEqual(roles.count("user"), 2)  # history carried into the next turn
 
-    def test_safety_gate_transfers_without_calling_llm(self):
-        backend = ScriptedBackend()  # any LLM call raises AssertionError
+    def test_safety_gate_transfers_even_when_the_llm_is_down(self):
+        from backend.ai.engine.agent.llm_backend import LLMUnavailable
+
+        backend = ScriptedBackend(LLMUnavailable("down"))
+        engine, _ = make_engine(backend)
+        out = run(engine.turn("I have severe chest pain"))
+        self.assertTrue(out.transferred)  # decided by code, not by the model
+        self.assertIn("emergency", out.reply.lower())  # the language pack's line, because the model failed
+        self.assertEqual([s["tools"] for s in backend.seen], [[]])  # the model was only asked for words, never given tools
+
+    def test_safety_gate_words_come_from_the_llm(self):
+        engine, _ = make_engine(ScriptedBackend())
+        numbers = " or ".join(engine.context.emergency_numbers) or "your local emergency number"
+        line = f"Please stay calm, I am connecting you to emergency care right now; if you are in danger call {numbers} immediately."
+        backend = ScriptedBackend(reply(line))
         engine, _ = make_engine(backend)
         out = run(engine.turn("I have severe chest pain"))
         self.assertTrue(out.transferred)
-        self.assertIn("emergency", out.reply.lower())
-        self.assertEqual(backend.seen, [])
+        self.assertEqual(out.reply, line)
+        self.assertIn("emergency", backend.seen[0]["messages"][-1]["content"].lower())  # the spoken_line instruction
+
+    def test_a_transfer_line_that_breaks_a_rule_falls_back_to_the_pack(self):
+        for bad in ("ok", "Your appointment is booked for tomorrow at 4 PM, connecting you to the front desk now."):
+            engine, _ = make_engine(ScriptedBackend(reply(bad)))
+            out = run(engine.turn("I want to speak to a human"))
+            self.assertTrue(out.transferred)
+            self.assertNotEqual(out.reply, bad)
 
     def test_human_request_transfers(self):
         engine, _ = make_engine(ScriptedBackend())
@@ -691,7 +711,18 @@ class GroundingGuard(unittest.TestCase):
         engine, _ = make_engine(ScriptedBackend(reply("How about 4:45 PM?"), reply("Still 4:45 PM then.")))
         out = run(engine.turn("hello"))
         self.assertNotIn("4:45", out.reply)
-        self.assertIn("Which day", out.reply)
+        self.assertIn("Which day", out.reply)  # the model had nothing more to say: the language pack's line
+
+    def test_repeat_offender_line_is_written_by_the_llm_when_it_can(self):
+        backend = ScriptedBackend(reply("How about 4:45 PM?"), reply("Still 4:45 PM then."),
+                                  reply("Let me check the real calendar first, which day would you like to come in?"))
+        engine, _ = make_engine(backend)
+        out = run(engine.turn("hello"))
+        self.assertEqual(out.reply, "Let me check the real calendar first, which day would you like to come in?")
+        self.assertEqual(backend.seen[2]["tools"], [])
+        # a third invented time is never spoken either
+        engine, _ = make_engine(ScriptedBackend(reply("How about 4:45 PM?"), reply("Still 4:45 PM then."), reply("Fine, 4:45 PM it is for you then.")))
+        self.assertNotIn("4:45", run(engine.turn("hello")).reply)
 
 
 class ConfirmationSms(unittest.TestCase):
@@ -966,7 +997,7 @@ class DashboardTabsAreLive(unittest.TestCase):
         e2, _, _ = self.engine(backend)
         out = run(e2.turn("I want a refund, I was charged twice"))
         self.assertTrue(out.transferred)
-        self.assertEqual(backend.seen, [])
+        self.assertTrue(all(s["tools"] == [] for s in backend.seen))  # the model only words it (here it fails: the pack's line)
         # emergencies always fire, even with human_request off
         self.assertTrue(run(self.engine(ScriptedBackend())[0].turn("mujhe chest pain ho raha hai, emergency")).transferred)
 
@@ -1105,7 +1136,7 @@ class HindiAndDevanagari(unittest.TestCase):
             engine, _ = make_engine(backend)
             out = run(engine.turn(said))
             self.assertTrue(out.transferred, said)
-            self.assertEqual(backend.seen, [], said)
+            self.assertTrue(all(s["tools"] == [] for s in backend.seen), said)  # words only; the transfer is the code's
             self.assertEqual(engine.toolbox.pending["department"], department)
 
 
@@ -2858,7 +2889,7 @@ class WhatsAppChannel(unittest.TestCase):
         agent, sent, biz, backend = self._agent(reply("ok"))
         run(agent.handle(Inbound("111", "919876500002", "wamid.9", "I have chest pain and cannot breathe", None)))
         self.assertEqual(len(sent), 1)
-        self.assertIn("emergency", sent[0][1].lower())  # answered by the safety gate, no LLM call, no call to redirect
+        self.assertIn("emergency", sent[0][1].lower())  # answered by the safety gate ("ok" is no emergency message), no call to redirect
         rt = agent._runtimes[conversation_id(biz, "919876500002")]
         names = {t["function"]["name"] for t in rt.engine.tools}
         self.assertNotIn("transfer_to_human", names)

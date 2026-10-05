@@ -53,6 +53,12 @@ def _lines(key: str) -> Dict[str, str]:
 logger = logging.getLogger(__name__)
 
 MAX_TOOL_ROUNDS = 3
+# Fixed moments (a transfer, a failed transfer, a reply blocked twice) are worded by the LLM in the caller's language; the language
+# pack's fixed line is spoken only when the LLM fails or takes longer than this. Emergencies get the shortest wait.
+SPOKEN_LINE_TIMEOUT_S = 2.5
+EMERGENCY_LINE_TIMEOUT_S = 1.5
+SPOKEN_LINE_MAX_CHARS = 320
+SPOKEN_LINE_MIN_WORDS = 5  # "ok" is not a transfer or emergency message
 # Tools safe to run side by side when the model asks for several in one round ("tomorrow or Friday?"). Only pure reads
 # qualify: lookup_appointment assigns A1/A2 refs on the gate and search_knowledge may (re)build the index, so they stay
 # sequential.
@@ -394,6 +400,7 @@ class AgentEngine:
         # 1. Deterministic safety gate: emergencies and "I want a human" never wait for the LLM.
         # Which triggers fire is the owner's Escalation-tab checklist. Emergencies always fire (patient safety).
         escalated, esc_msg, target = SafetyGuardrails.check_escalation(utterance, self.vertical_config)
+        esc_kind = "front_desk"  # which spoken_line instruction words the transfer (engine_notes.json)
         if not escalated and (hindi := language_escalation(utterance)):  # Hindi / Devanagari cues the English rules miss
             escalated, target = True, hindi
             esc_msg = self._emergency_line(utterance) if hindi == "emergency" else None
@@ -404,23 +411,31 @@ class AgentEngine:
         if escalated and (target or "front_desk") != "emergency" and not (transfers_on and self.triggers["human_request"]):
             escalated = False  # trigger off or transfers off: a human request goes to the LLM, which will decline
         if not escalated and transfers_on and self.triggers["complex_billing"] and _BILLING.search(utterance):
-            escalated, target = True, "front_desk"
+            escalated, target, esc_kind = True, "front_desk", "billing"
             esc_msg = _scripted(_BILLING_MSG, "billing", self.active_language)
         if not escalated and transfers_on and self.triggers["frustration"]:
             self.frustrated_turns = self.frustrated_turns + 1 if detect_sentiment(utterance) == Sentiment.FRUSTRATED else 0
             if self.frustrated_turns >= 2:  # same rule as the legacy engine: two upset turns in a row
-                escalated, target = True, "front_desk"
+                escalated, target, esc_kind = True, "front_desk", "frustrated"
                 esc_msg = _scripted(_FRUSTRATED_MSG, "frustrated", self.active_language)
         if escalated:
             department = target or "front_desk"
             if self.dry_run or self.channel == "chat" or self.sandbox is not None:  # chat: reply with the message, nothing to redirect
                 self.toolbox.pending = {"type": "transfer", "department": department, "twiml": None, "dry_run": True}
-                result: Dict[str, Any] = {"ok": True}
+                transfer = None
             else:
-                result = await self.toolbox.transfer(department, f"Safety escalation: {utterance}")
-            reply = esc_msg or t(self.active_language, "transfer_generic")
-            if not result.get("ok") and department != "emergency":
-                reply = _scripted(_NO_TRANSFER, "no_transfer", self.active_language)
+                transfer = asyncio.create_task(self.toolbox.transfer(department, f"Safety escalation: {utterance}"))
+            # The transfer is decided by code (never waits for the model); only the words are the model's, written while
+            # the transfer is set up. The fixed line is the fallback for a failed or slow model.
+            emergency_now = department == "emergency"
+            reply, _ = await self._spoken_line(
+                group, "emergency" if emergency_now else esc_kind, esc_msg or t(self.active_language, "transfer_generic"),
+                timeout=EMERGENCY_LINE_TIMEOUT_S if emergency_now else SPOKEN_LINE_TIMEOUT_S,
+                must_say_one_of=self.context.emergency_numbers if emergency_now else (),
+            )
+            result: Dict[str, Any] = await transfer if transfer is not None else {"ok": True}
+            if not result.get("ok") and not emergency_now:
+                reply, _ = await self._spoken_line(group, "no_transfer", _scripted(_NO_TRANSFER, "no_transfer", self.active_language))
             group.append({"role": "assistant", "content": reply})
             self._commit(group)
             yield {"type": "sentence", "text": reply}
@@ -528,9 +543,10 @@ class AgentEngine:
                     times = sorted({x for x in invented if not x.startswith("claim:")})
                     claimed = sorted({x[6:] for x in invented if x.startswith("claim:")})
                     logger.warning("Guard blocked a reply: invented time(s)=%s unbacked claim(s)=%s", times, claimed)
-                    if guard_notes:  # the model repeated the mistake after a correction: say something safe instead
+                    if guard_notes:  # the model repeated the mistake after a correction: one plain, tool-less line instead
                         table = _UNSURE_CLAIM if claimed else _UNSURE_TIMES
-                        safe = _scripted(table, "unsure_claim" if claimed else "unsure_times", self.active_language)
+                        key = "unsure_claim" if claimed else "unsure_times"
+                        safe, _ = await self._spoken_line(group, key, _scripted(table, key, self.active_language))
                         first_ms = first_ms if first_ms is not None else elapsed()
                         spoken.append(safe)
                         yield {"type": "sentence", "text": safe}
@@ -679,6 +695,41 @@ class AgentEngine:
         line = (language_pack(code).get("strings") or {}).get("emergency") or default or language_pack("en")["strings"]["emergency"]
         numbers = self.context.emergency_numbers
         return f"{line} ({' / '.join(numbers)})" if numbers and code != "en" else line
+
+    async def _spoken_line(
+        self, group: List[Dict[str, Any]], kind: str, fallback: str, timeout: float = SPOKEN_LINE_TIMEOUT_S, must_say_one_of: Any = (),
+    ) -> Tuple[str, bool]:
+        """(line, written_by_llm). The model words a fixed moment of the call from `engine_notes.spoken_line.<kind>`, with the whole
+        conversation so it matches the caller's language and tone. The same guards as a normal reply apply (no invented time, no
+        unconfirmed booking, the caller's language, no thinking out loud); `must_say_one_of` must appear (emergency numbers).
+        `fallback` (the language pack's fixed line) is returned when the model fails, is slower than `timeout`, or breaks a rule."""
+        notes = _notes()["spoken_line"]
+        numbers = [n for n in (must_say_one_of or []) if n]
+        instruction = notes[kind].format(numbers=" / ".join(numbers) or notes["no_numbers"])
+        messages = self._messages(group) + [{"role": "system", "content": f"{notes['common']} {instruction}"}]
+        try:
+            resp = await asyncio.wait_for(self.backend.chat(messages, []), timeout)
+        except (LLMUnavailable, asyncio.TimeoutError) as e:
+            logger.info("Spoken line '%s' from the language pack (model: %s)", kind, type(e).__name__)
+            return fallback, False
+        except Exception as e:  # never let wording break a transfer or an emergency
+            logger.warning("Spoken line '%s' failed: %s", kind, e)
+            return fallback, False
+        line = self._speech(" ".join((resp.get("content") or "").split()))
+        if (
+            not line
+            or len(line.split()) < SPOKEN_LINE_MIN_WORDS
+            or resp.get("tool_calls")
+            or len(line) > SPOKEN_LINE_MAX_CHARS
+            or is_reasoning_leak(line)
+            or ungrounded(line, messages)
+            or unbacked_claim(line, self.toolbox.succeeded)
+            or (self._expects_hindi() and looks_english(line))
+            or (numbers and not any(n in line for n in numbers))
+        ):
+            logger.info("Spoken line '%s' from the language pack (draft broke a rule)", kind)
+            return fallback, False
+        return line, True
 
     def _pack_language(self) -> Optional[str]:
         """The active language when it is something other than Hindi/English (those keep their sentence-based handling)."""

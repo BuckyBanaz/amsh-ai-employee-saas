@@ -84,5 +84,17 @@
    "send_confirmation.sent": "Sent by {channel}. Tell the caller the appointment details were sent to their phone.",
    "send_confirmation.not_sent": "Could not send the details ({reason}). Tell the caller honestly that it did not go through and offer the front desk."
   }
+ },
+ "spoken_line": {
+  "_about": "One spoken line the engine needs at a fixed moment (a transfer, a failed transfer, a reply the guard blocked twice). The LLM writes it in the caller's language from these instructions; the language pack's fixed line (`strings.<key>`) is used only when the LLM fails or is too slow.",
+  "common": "Write exactly what you will say next to the caller, in the language they are speaking, as one or two short natural spoken sentences. No lists, no emojis, no tags, no greeting, no question about anything else. Do not mention a date, a time or a booking that was not already confirmed.",
+  "front_desk": "The caller asked for a person. You are connecting them to the front desk right now: tell them so warmly.",
+  "billing": "The caller raised billing, a refund or a payment problem. The front desk team handles those and you are connecting them right now: tell them so.",
+  "frustrated": "The caller is upset. Apologise sincerely and tell them you are connecting them to someone at the front desk right now.",
+  "emergency": "The caller described a medical emergency. Calmly tell them you are transferring them to emergency care immediately, and that if they are in immediate danger they must call the emergency number {numbers} now. Say the number exactly as written.",
+  "no_transfer": "You tried to connect the caller to a person but nobody can take the call right now. Apologise and offer to take a message for the front desk.",
+  "unsure_claim": "Your last draft said something was booked, cancelled or changed that no tool confirmed. Do not claim that. Ask the caller to confirm the details once more so you can do it properly.",
+  "unsure_times": "Your last draft offered a time the calendar did not give you. Do not offer any time. Ask the caller which day would suit them so you can check the real open times.",
+  "no_numbers": "for their area"
  }
 }

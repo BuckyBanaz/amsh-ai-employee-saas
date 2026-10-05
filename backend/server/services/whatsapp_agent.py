@@ -22,12 +22,18 @@ from backend.server.common.config import get_settings
 from backend.server.database.models.business import Business
 from backend.server.database.models.integration import Integration
 from backend.server.database.session import SessionLocal
+from backend.ai.engine.conversation.i18n import language_code, t
 from backend.server.services.call_recorder import load_call_turns, record_call_start, record_call_turn
 
 logger = logging.getLogger(__name__)
 
 NOT_TEXT_REPLY = "Thanks for your message! I can only read text messages here for now. Could you type what you need?"
-TROUBLE_REPLY = "Sorry, I am having trouble right now. Please try again in a minute, or call the clinic directly."
+TROUBLE_REPLY = t("en", "llm_down_chat")  # English; a conversation gets it in its own language (trouble_reply)
+
+
+def trouble_reply(language: Optional[str]) -> str:
+    """The only fixed WhatsApp reply: the AI could not answer (model down). In the conversation's language (ai/locales)."""
+    return t(language_code(language), "llm_down_chat")
 
 
 @dataclass
@@ -198,19 +204,18 @@ class WhatsAppAgent:
         call_id = conversation_id(business_id, msg.sender)
         lock = self._locks.setdefault(call_id, asyncio.Lock())
         async with lock:  # one message at a time per patient, in order
+            rt = None
             try:
                 rt = await self._runtime(call_id, business_id, msg.sender, msg.sender_name)
                 if rt is None:
                     raise RuntimeError("agent engine unavailable")
                 turn = await rt.engine.turn(msg.text)
-                reply = (turn.reply or "").strip() or TROUBLE_REPLY
-                if turn.degraded and not turn.reply:
-                    reply = TROUBLE_REPLY
+                reply = (turn.reply or "").strip() or trouble_reply(rt.engine.active_language)
                 self._seq[call_id] = self._seq.get(call_id, 0) + 1
                 await asyncio.to_thread(record_call_turn, call_id, msg.text, reply, self._seq[call_id])
             except Exception as e:
                 logger.warning("[WHATSAPP] turn failed for %s: %s", call_id, e)
-                reply = TROUBLE_REPLY
+                reply = trouble_reply(getattr(getattr(rt, "engine", None), "active_language", None))
             await self.send(config, msg.sender, reply)  # inside the lock: replies leave in the order they were made
         return reply
 

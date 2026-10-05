@@ -43,5 +43,7 @@
   "persona_is_ai": "Main {business_name} ki AI receptionist hoon. Main appointment book karne, doctors ki jaankari aur clinic ke sawalon me madad kar sakti hoon. Agar aap kisi vyakti se baat karna chahte hain toh main transfer kar sakti hoon. Bataiye, kya chahiye?",
   "out_of_scope_redirect": "Main clinic ke appointments, doctors aur services ki jaankari me madad kar sakti hoon. Bataiye, clinic se related aapki kya madad karoon?",
   "unclear_speech_repeat": "Maaf kijiye, mujhe theek se sunai nahi diya. Kya aap dobara bol sakte hain?",
-  "ambiguous_clarification": "Kya aap thoda saaf bata sakte hain ki kaunsi appointment ya detail badalni hai?"
+  "ambiguous_clarification": "Kya aap thoda saaf bata sakte hain ki kaunsi appointment ya detail badalni hai?",
+  "llm_down_chat": "माफ़ कीजिए, अभी थोड़ी दिक्कत आ रही है। कृपया एक मिनट बाद फिर कोशिश करें, या सीधे क्लिनिक को कॉल करें।",
+  "llm_down_test": "माफ़ कीजिए, AI अभी जवाब नहीं दे पाया। कृपया थोड़ी देर में फिर कोशिश करें।"
 }

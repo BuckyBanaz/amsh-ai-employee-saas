@@ -43,5 +43,7 @@
   "persona_is_ai": "Ik ben een AI-receptioniste voor {business_name}. Ik kan u helpen met afspraken en vragen. Als u liever met een medewerker spreekt, kan ik u doorverbinden. Hoe kan ik u helpen?",
   "out_of_scope_redirect": "Ik ben gespecialiseerd in afspraken, diensten, artsenschema's en algemene kliniekinformatie. Hoe kan ik u helpen?",
   "unclear_speech_repeat": "Sorry, ik heb dat niet goed verstaan. Kunt u dat herhalen?",
-  "ambiguous_clarification": "Kunt u verduidelijken welke afspraak of welk detail u wilt wijzigen?"
+  "ambiguous_clarification": "Kunt u verduidelijken welke afspraak of welk detail u wilt wijzigen?",
+  "llm_down_chat": "Sorry, ik heb op dit moment een probleem. Probeer het over een minuut opnieuw, of bel de praktijk rechtstreeks.",
+  "llm_down_test": "Sorry, de AI kon nu niet antwoorden. Probeer het zo meteen opnieuw."
 }

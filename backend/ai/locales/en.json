@@ -43,5 +43,7 @@
   "persona_is_ai": "I am an AI receptionist for {business_name}. I can help you schedule appointments, check doctor availability, or answer clinic questions. If you prefer to speak to a person, I can connect you to the front desk. How can I assist you?",
   "out_of_scope_redirect": "I specialize in clinic appointments, services, doctor schedules, and clinic information. How can I assist you with the clinic today?",
   "unclear_speech_repeat": "Sorry, I didn't quite catch that. Could you please repeat that?",
-  "ambiguous_clarification": "Could you please clarify which appointment or detail you would like to change?"
+  "ambiguous_clarification": "Could you please clarify which appointment or detail you would like to change?",
+  "llm_down_chat": "Sorry, I am having trouble right now. Please try again in a minute, or call the clinic directly.",
+  "llm_down_test": "Sorry, the AI could not answer just now. Please try again in a moment."
 }

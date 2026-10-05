@@ -43,5 +43,7 @@
   "persona_is_ai": "Soy una recepcionista con inteligencia artificial para {business_name}. Puedo ayudarle a programar citas o responder dudas. Si prefiere hablar con una persona, puedo transferirle. ¿Cómo le ayudo?",
   "out_of_scope_redirect": "Me especializo en citas de la clínica, servicios, horarios médicos e información general. ¿Cómo puedo ayudarle con respecto a la clínica?",
   "unclear_speech_repeat": "Disculpe, no le escuché bien. ¿Podría repetirlo, por favor?",
-  "ambiguous_clarification": "¿Podría aclarar qué cita o detalle desea modificar?"
+  "ambiguous_clarification": "¿Podría aclarar qué cita o detalle desea modificar?",
+  "llm_down_chat": "Lo siento, ahora mismo tengo un problema. Inténtelo de nuevo en un minuto o llame directamente a la clínica.",
+  "llm_down_test": "Lo siento, la IA no ha podido responder ahora. Inténtelo de nuevo en un momento."
 }
