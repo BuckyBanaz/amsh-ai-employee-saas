@@ -21,9 +21,10 @@ export function CallStreamsTable({ items, loading: propLoading }: CallStreamsTab
       return;
     }
 
-    DashboardController.getCalls(undefined, { limit: 5 })
+    DashboardController.getCalls(undefined, { limit: 12 })
       .then((data) => {
-        setCalls(data || []);
+        const realOnly = (data || []).filter((c) => !c.is_test).slice(0, 5);
+        setCalls(realOnly);
       })
       .catch((err) => {
         console.error('Failed to load call stream:', err);

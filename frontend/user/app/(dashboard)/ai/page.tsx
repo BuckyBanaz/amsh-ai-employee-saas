@@ -33,7 +33,7 @@ function AIPageContent() {
     return (
       <div className="animate-in fade-in duration-300 flex flex-col h-full w-full">
         <AIStudioWorkbench onBack={() => setViewMode('settings')} />
-        <TestPlaygroundModal isOpen={isTestOpen} onClose={() => setIsTestOpen(false)} />
+        {isTestOpen && <TestPlaygroundModal isOpen={isTestOpen} onClose={() => setIsTestOpen(false)} />}
       </div>
     );
   }
@@ -45,7 +45,7 @@ function AIPageContent() {
         onSwitchWorkbench={() => setViewMode('workbench')}
       />
       <AITabs activeTab={activeTab} setActiveTab={setActiveTab} />
-      <TestPlaygroundModal isOpen={isTestOpen} onClose={() => setIsTestOpen(false)} />
+      {isTestOpen && <TestPlaygroundModal isOpen={isTestOpen} onClose={() => setIsTestOpen(false)} />}
       
       <div className="flex-1">
         {activeTab === 'Overview' && <OverviewTab />}

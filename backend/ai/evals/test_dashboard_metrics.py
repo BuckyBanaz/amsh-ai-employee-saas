@@ -99,6 +99,23 @@ class Metrics(unittest.TestCase):
         self.assertIsNone(dm.trend(5, 0, "yesterday"))
         self.assertEqual(dm.trend(3, 4, "yesterday"), "-25% from yesterday")
 
+    def test_playground_and_studio_test_calls_are_excluded_from_metrics(self):
+        with self.factory() as db:
+            # 2 real calls
+            self.call(db, 0, 9)
+            self.call(db, 0, 10)
+            # 3 playground/studio test calls
+            db.add_all([
+                Call(id="test_call_1", business_id=self.biz, caller_number="+91999", outcome="resolved", started_at=at(0, 9), duration_seconds=60),
+                Call(id="studio_abc2", business_id=self.biz, caller_number="+91888", outcome="resolved", started_at=at(0, 10), duration_seconds=45),
+                Call(id="sim_call_3", business_id=self.biz, caller_number="+91777", outcome="resolved", started_at=at(0, 11), duration_seconds=30),
+            ])
+            db.commit()
+        m = self.run_metrics()["metrics"]
+        # Only the 2 real calls are counted; the 3 test calls are skipped
+        self.assertEqual(m["total_calls"], 2)
+
+
 
 class Endpoint(unittest.TestCase):
     def test_members_only_and_shape(self):

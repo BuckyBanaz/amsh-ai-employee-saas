@@ -11,8 +11,8 @@ import { ASSET_BASE } from '../../utils/api_endpoints';
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-  const [businessName, setBusinessName] = useState<string>('My Business');
-  const [initials, setInitials] = useState<string>('BO');
+  const [businessName, setBusinessName] = useState<string>('');
+  const [initials, setInitials] = useState<string>('');
   const [logo, setLogo] = useState<string | null>(null);
 
   React.useEffect(() => {
@@ -76,14 +76,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-gray-600 truncate max-w-[120px] sm:max-w-[180px]">
-              {businessName}
-            </span>
+            {!mounted || !businessName ? (
+              <span className="inline-block w-20 h-3.5 bg-gray-200 animate-pulse rounded" />
+            ) : (
+              <span className="text-xs font-semibold text-gray-600 truncate max-w-[120px] sm:max-w-[180px]">
+                {businessName}
+              </span>
+            )}
             {mounted && logo ? (
               <img src={logo} alt="Logo" className="w-7 h-7 rounded-full object-cover border border-gray-200" />
             ) : (
               <div className="w-7 h-7 rounded-full bg-[#E0E7FF] text-[#0066FF] flex items-center justify-center text-xs font-bold">
-                {initials}
+                {initials || 'A'}
               </div>
             )}
           </div>

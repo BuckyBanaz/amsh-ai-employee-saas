@@ -12,6 +12,8 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Respon
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+import httpx
+
 from backend.ai.realtime.twilio.call_control import build_base_url, to_ws_url
 from backend.ai.tools.common.send_sms import SendSmsTool
 from backend.ai.tools.framework.base import ToolContext
@@ -138,18 +140,16 @@ async def trigger_test_call(payload: CallMeRequest, db: Session = Depends(get_db
     phone = payload.phone_number.strip().replace(" ", "").replace("-", "")
     if not _PHONE.match(phone):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Enter a phone number with country code, like +919876543210")
-    ratelimit.check("call-me-user", user.id, 5, 3600)
-    ratelimit.check("call-me-number", phone, 2, 3600)
+    ratelimit.check("call-me-user", user.id, 20, 3600)
+    ratelimit.check("call-me-number", phone, 20, 3600)
     logger.info(f"[VOICE CALL-ME] {user.id} requested an outbound test call")
 
     # A business user always tests their own business; only platform admins may name another one.
     business_id = payload.business_id if user.scope == "platform" else user.business_id
 
-    if exotel_client.is_configured():
+    # 1. Indian numbers (+91): Route through Exotel to avoid TRAI / international carrier blocking
+    if phone.startswith("+91") and exotel_client.is_configured():
         try:
-            # Embed business_id in the callback URL so the Exotel incoming webhook
-            # always routes to the correct tenant regardless of which Exotel DID
-            # the call lands on.
             base_url = build_base_url()
             callback_url = f"{base_url}/api/voice/exotel/incoming"
             params = []
@@ -161,12 +161,72 @@ async def trigger_test_call(payload: CallMeRequest, db: Session = Depends(get_db
                 callback_url = f"{callback_url}?{'&'.join(params)}"
 
             res = await exotel_client.create_outbound_call(phone, callback_url=callback_url)
-            if "error" in res:
+            if "error" not in res:
+                call_sid = res.get("Call", {}).get("Sid") or "exotel_call"
                 return {
-                    "success": False,
+                    "success": True,
                     "provider": "exotel",
-                    "message": f"Exotel error: {res.get('error')}",
+                    "call_sid": call_sid,
+                    "from_number": exotel_client.caller_id,
+                    "message": f"Calling your phone {phone} from {exotel_client.caller_id}. Please pick up!",
                 }
+            logger.warning(f"[VOICE CALL-ME] Exotel returned error: {res.get('error')}, falling back to Twilio if available")
+        except Exception as e:
+            logger.error(f"[VOICE CALL-ME] Exotel failed: {e}")
+
+    # 2. Twilio Gateway (for international numbers or when Twilio is active)
+    settings = get_settings()
+    if settings.TWILIO_ACCOUNT_SID and settings.TWILIO_AUTH_TOKEN and settings.TWILIO_PHONE_NUMBER:
+        try:
+            base_url = build_base_url()
+            twiml = (
+                '<?xml version="1.0" encoding="UTF-8"?>'
+                f'<Response><Connect><Stream url="{to_ws_url(base_url)}/media-stream/{business_id}">'
+                f'<Parameter name="caller_number" value="{phone}"/>'
+                f'<Parameter name="token" value="{create_stream_token(business_id)}"/>'
+                '</Stream></Connect></Response>'
+            )
+            url = f"https://api.twilio.com/2010-04-01/Accounts/{settings.TWILIO_ACCOUNT_SID}/Calls.json"
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.post(
+                    url,
+                    auth=(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN),
+                    data={
+                        "To": phone,
+                        "From": settings.TWILIO_PHONE_NUMBER,
+                        "Twiml": twiml,
+                    },
+                )
+                if resp.status_code in (200, 201):
+                    call_sid = resp.json().get("sid", "twilio_call")
+                    return {
+                        "success": True,
+                        "provider": "twilio",
+                        "call_sid": call_sid,
+                        "from_number": settings.TWILIO_PHONE_NUMBER,
+                        "message": f"Calling your phone {phone} from {settings.TWILIO_PHONE_NUMBER}. Please pick up!",
+                    }
+                else:
+                    err_msg = resp.json().get("message", resp.text)
+                    logger.error(f"[VOICE CALL-ME] Twilio error: {err_msg}")
+                    return {"success": False, "provider": "twilio", "message": f"Twilio error: {err_msg}"}
+        except Exception as e:
+            logger.error(f"[VOICE CALL-ME] Twilio call failed: {e}")
+            return {"success": False, "message": str(e)}
+
+    # 3. Fallback to Exotel for other numbers if configured
+    if exotel_client.is_configured():
+        try:
+            base_url = build_base_url()
+            callback_url = f"{base_url}/api/voice/exotel/incoming"
+            params = []
+            if business_id:
+                params.append(f"business_id={business_id}&bsig={sign_business_route(business_id)}")
+            if params:
+                callback_url = f"{callback_url}?{'&'.join(params)}"
+            res = await exotel_client.create_outbound_call(phone, callback_url=callback_url)
+            if "error" in res:
+                return {"success": False, "provider": "exotel", "message": f"Exotel error: {res.get('error')}"}
             call_sid = res.get("Call", {}).get("Sid") or "exotel_call"
             return {
                 "success": True,
@@ -176,7 +236,7 @@ async def trigger_test_call(payload: CallMeRequest, db: Session = Depends(get_db
                 "message": f"Calling your phone {phone} from {exotel_client.caller_id}. Please pick up!",
             }
         except Exception as e:
-            logger.error(f"[VOICE CALL-ME] Failed to place call: {e}")
+            logger.error(f"[VOICE CALL-ME] Exotel fallback failed: {e}")
             return {"success": False, "message": str(e)}
 
     return {

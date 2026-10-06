@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { STRINGS } from '../../../utils/strings/en';
 import { StorageService } from '../../../services/storage.service';
 import { PolicyAcceptance } from '../../../components/policies/PolicyAcceptance';
+import { WHATSAPP_ENABLED } from '../../../utils/features';
 
 export default function ReviewOnboardingPage() {
   const router = useRouter();
@@ -50,8 +51,9 @@ export default function ReviewOnboardingPage() {
 
   // 7. Telephony & WhatsApp Integrations
   const [telephonyNumber, setTelephonyNumber] = useState('');
+  const [telephonyConnected, setTelephonyConnected] = useState(false);
   const [whatsappNumber, setWhatsappNumber] = useState('');
-  const [whatsappConnected, setWhatsappConnected] = useState(true);
+  const [whatsappConnected, setWhatsappConnected] = useState(false);
 
   // Load all actual entered data from localStorage
   useEffect(() => {
@@ -148,26 +150,27 @@ export default function ReviewOnboardingPage() {
       });
 
       // 7. Integrations
+      const isTelConn = localStorage.getItem('onboarding_telephony_connected') === 'true';
       const savedTelephony = localStorage.getItem('onboarding_telephony_phone');
+      setTelephonyConnected(isTelConn);
       if (savedTelephony) {
         setTelephonyNumber(savedTelephony);
       } else if (bPhone) {
         setTelephonyNumber(bPhone);
       } else {
-        setTelephonyNumber(bCountry === 'India' ? '+91 80472 84627' : '+1 (656) 254-7488');
+        setTelephonyNumber(bCountry === 'India' ? '+91 95138 86363' : '+1 (660) 243-5493');
       }
 
+      const isWaConn = localStorage.getItem('onboarding_whatsapp_connected') === 'true';
       const savedWa = localStorage.getItem('onboarding_whatsapp_phone');
-      if (savedWa) {
+      setWhatsappConnected(isWaConn);
+      if (isWaConn && savedWa) {
         setWhatsappNumber(savedWa);
-      } else if (bPhone) {
-        setWhatsappNumber(bPhone);
+      } else if (isWaConn) {
+        setWhatsappNumber(bPhone || '+91 89014 14107');
       } else {
-        setWhatsappNumber('+91 89014 14107');
+        setWhatsappNumber('');
       }
-
-      const isWaConn = localStorage.getItem('onboarding_whatsapp_connected');
-      if (isWaConn !== null) setWhatsappConnected(isWaConn === 'true');
     } catch (e) {
       console.error('Failed to load review data from localStorage:', e);
     }
@@ -425,9 +428,17 @@ export default function ReviewOnboardingPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             
             {/* Telephony Channel */}
-            <div className="p-3 bg-blue-50/50 rounded-xl border border-blue-100 flex items-center justify-between">
+            <div className={`p-3 rounded-xl border flex items-center justify-between ${
+              telephonyConnected 
+                ? 'bg-blue-50/50 border-blue-100' 
+                : 'bg-gray-50/60 border-gray-200'
+            }`}>
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-blue-100 text-[#0066FF] flex items-center justify-center">
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                  telephonyConnected 
+                    ? 'bg-blue-100 text-[#0066FF]' 
+                    : 'bg-gray-200 text-gray-500'
+                }`}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
                     <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
                   </svg>
@@ -436,29 +447,49 @@ export default function ReviewOnboardingPage() {
                   <h4 className="text-xs font-bold text-gray-900">
                     {isIndia ? 'Exotel Indian Voice Line' : 'Twilio Voice Line'}
                   </h4>
-                  <p className="text-[11px] font-mono text-gray-600 font-semibold">{telephonyNumber}</p>
+                  <p className="text-[11px] font-mono text-gray-600 font-semibold">
+                    {telephonyConnected ? telephonyNumber : 'Line not provisioned yet'}
+                  </p>
                 </div>
               </div>
-              <span className="bg-[#E6FBF3] text-[#10B981] text-[9px] font-extrabold px-2 py-0.5 rounded uppercase">
-                Active Line
+              <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded uppercase ${
+                telephonyConnected 
+                  ? 'bg-[#E6FBF3] text-[#10B981]' 
+                  : 'bg-gray-100 text-gray-500 border border-gray-200'
+              }`}>
+                {telephonyConnected ? 'Active Line' : 'Not Connected'}
               </span>
             </div>
 
             {/* WhatsApp Business Channel */}
-            <div className="p-3 bg-emerald-50/50 rounded-xl border border-emerald-100 flex items-center justify-between">
+            <div className={`p-3 rounded-xl border flex items-center justify-between ${
+              whatsappConnected 
+                ? 'bg-emerald-50/50 border-emerald-100' 
+                : 'bg-gray-50/60 border-gray-200'
+            }`}>
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-emerald-100 text-[#128C7E] flex items-center justify-center">
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                  whatsappConnected 
+                    ? 'bg-emerald-100 text-[#128C7E]' 
+                    : 'bg-gray-200 text-gray-500'
+                }`}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
                     <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
                   </svg>
                 </div>
                 <div>
                   <h4 className="text-xs font-bold text-gray-900">WhatsApp Business Cards</h4>
-                  <p className="text-[11px] font-mono text-gray-600 font-semibold">{whatsappNumber}</p>
+                  <p className="text-[11px] font-mono text-gray-600 font-semibold">
+                    {!WHATSAPP_ENABLED ? 'Coming soon' : whatsappConnected ? whatsappNumber : 'Not Linked (Optional)'}
+                  </p>
                 </div>
               </div>
-              <span className="bg-[#E6FBF3] text-[#10B981] text-[9px] font-extrabold px-2 py-0.5 rounded uppercase">
-                Ready
+              <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded uppercase ${
+                whatsappConnected 
+                  ? 'bg-[#E6FBF3] text-[#10B981]' 
+                  : 'bg-gray-100 text-gray-500 border border-gray-200'
+              }`}>
+                {!WHATSAPP_ENABLED ? 'Coming soon' : whatsappConnected ? 'Ready' : 'Not Connected'}
               </span>
             </div>
 

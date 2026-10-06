@@ -20,7 +20,7 @@ from backend.server.database.models.service import Service
 from backend.server.database.session import SessionLocal
 
 BUSINESS_NAME = "Sanjeevani Clinic"
-EXOTEL_NUMBER = os.getenv("EXOTEL_NUMBER", "08047284627")
+EXOTEL_NUMBER = os.getenv("EXOTEL_NUMBER", "09513886363")
 HINDI_VOICE_ID = os.getenv("CARTESIA_HINDI_VOICE_ID") or None
 
 SERVICES = [

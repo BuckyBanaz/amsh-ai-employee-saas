@@ -10,40 +10,40 @@ interface AnalyticsKPIsProps {
 export function AnalyticsKPIs({ data, loading = false }: AnalyticsKPIsProps) {
   const defaultKPIs: AnalyticsKPIsData = {
     total_calls: {
-      value: '1,247',
-      trend: '↑ 12% vs last month',
+      value: '0',
+      trend: 'No earlier data',
       is_positive: true,
-      sparkline: [35, 48, 62, 55, 78, 92],
+      sparkline: [0, 0, 0, 0, 0, 0],
     },
     ai_answer_rate: {
-      value: '92%',
-      trend: '↑ 4% vs last month',
+      value: '0%',
+      trend: 'No earlier data',
       is_positive: true,
-      sparkline: [82, 85, 87, 86, 89, 92],
+      sparkline: [0, 0, 0, 0, 0, 0],
     },
     ai_resolution_rate: {
-      value: '84%',
-      trend: '↑ 8% vs last month',
+      value: '0%',
+      trend: 'No earlier data',
       is_positive: true,
-      sparkline: [65, 70, 74, 76, 80, 84],
+      sparkline: [0, 0, 0, 0, 0, 0],
     },
     appointments_booked: {
-      value: '342',
-      trend: '↑ 23% vs last month',
+      value: '0',
+      trend: 'No earlier data',
       is_positive: true,
-      sparkline: [20, 38, 52, 65, 80, 100],
+      sparkline: [0, 0, 0, 0, 0, 0],
     },
     conversion_rate: {
-      value: '27%',
-      trend: '↑ 3% vs last month',
+      value: '0%',
+      trend: 'No earlier data',
       is_positive: true,
-      sparkline: [18, 20, 22, 23, 25, 27],
+      sparkline: [0, 0, 0, 0, 0, 0],
     },
     avg_call_duration: {
-      value: '02:15',
-      trend: '↓ 14% vs last month',
+      value: '00:00',
+      trend: 'No earlier data',
       is_positive: true,
-      sparkline: [85, 76, 68, 60, 54, 45],
+      sparkline: [0, 0, 0, 0, 0, 0],
     },
   };
 

@@ -9,7 +9,7 @@ export function CallHandlingTab() {
   const content = STRINGS.DASHBOARD.COMPONENTS.AI_TABS_CONTENT.CALL_HANDLING;
   const phone = content.PHONE_NUMBER;
 
-  const [aiNumber, setAiNumber] = useState('+91 80472 84627');
+  const [aiNumber, setAiNumber] = useState('+91 95138 86363');
   const [greeting, setGreeting] = useState(content.GREETING.DEFAULT);
   const [recordCalls, setRecordCalls] = useState(true);
   const [transcribeCalls, setTranscribeCalls] = useState(true);
@@ -24,12 +24,24 @@ export function CallHandlingTab() {
   useEffect(() => {
     const savedAiLine = typeof window !== 'undefined' ? localStorage.getItem('onboarding_telephony_phone') : null;
     const business = StorageService.getBusiness();
+    const formatPhone = (num: string) => {
+      if (!num) return num;
+      const clean = num.replace(/\D/g, '');
+      if (clean === '16602435493' || clean === '6602435493') return '+1 (660) 243-5493';
+      if (clean === '16562547488' || clean === '6562547488') return '+1 (656) 254-7488';
+      if (clean === '919513886363' || clean === '9513886363' || clean === '09513886363') return '+91 95138 86363';
+      if (clean === '918047284627' || clean === '08047284627') return '+91 80472 84627';
+      return num;
+    };
+
     if (savedAiLine && savedAiLine !== business?.business_phone) {
-      setAiNumber(savedAiLine);
+      setAiNumber(formatPhone(savedAiLine));
+    } else if (business?.business_phone) {
+      setAiNumber(formatPhone(business.business_phone));
     } else if (business?.country === 'India' || business?.currency === 'INR') {
-      setAiNumber('+91 80472 84627');
+      setAiNumber('+91 95138 86363');
     } else {
-      setAiNumber('+1 (656) 254-7488');
+      setAiNumber('+1 (660) 243-5493');
     }
 
     DashboardController.getAgent()

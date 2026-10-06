@@ -3,6 +3,10 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { STRINGS } from '../../../utils/strings/en';
+import { WHATSAPP_ENABLED } from '../../../utils/features';
+import { ApiService } from '../../../services/api.service';
+import { API_ENDPOINTS } from '../../../utils/api_endpoints';
+import { resolveBusinessId } from '../../../hooks/useWhatsappEmbeddedSignup';
 
 interface IntegrationItem {
   id: string;
@@ -25,6 +29,9 @@ export default function IntegrationsOnboardingPage() {
   const [waDetails, setWaDetails] = useState('');
 
   const [calendarConnected, setCalendarConnected] = useState(false);
+  const [calendarEmail, setCalendarEmail] = useState('');
+  const [calendarBusy, setCalendarBusy] = useState(false);
+  const [calendarError, setCalendarError] = useState('');
   const [outlookConnected, setOutlookConnected] = useState(false);
   const [meetConnected, setMeetConnected] = useState(false);
   const [stripeConnected, setStripeConnected] = useState(false);
@@ -68,7 +75,6 @@ export default function IntegrationsOnboardingPage() {
       }
 
       // 3. Calendar & additional integrations
-      setCalendarConnected(localStorage.getItem('onboarding_calendar_connected') === 'true');
       setOutlookConnected(localStorage.getItem('onboarding_outlook_connected') === 'true');
       setMeetConnected(localStorage.getItem('onboarding_meet_connected') === 'true');
       setStripeConnected(localStorage.getItem('onboarding_stripe_connected') === 'true');
@@ -77,16 +83,51 @@ export default function IntegrationsOnboardingPage() {
     }
   }, []);
 
+  // Google Calendar state comes from the backend (real OAuth), not localStorage
+  React.useEffect(() => {
+    const result = new URLSearchParams(window.location.search).get('google');
+    if (result === 'error') setCalendarError('Google sign-in did not complete. Please try again.');
+    resolveBusinessId()
+      .then((id) => (id ? ApiService.get<any[]>(API_ENDPOINTS.INTEGRATIONS.LIST(id)) : []))
+      .then((list) => {
+        const g = list.find((i) => i.provider === 'google_calendar');
+        setCalendarConnected(g?.status === 'connected');
+        setCalendarEmail(g?.config?.email || '');
+      })
+      .catch(() => setCalendarConnected(false));
+  }, []);
+
+  const handleGoogleCalendar = async () => {
+    setCalendarError('');
+    setCalendarBusy(true);
+    try {
+      const id = await resolveBusinessId();
+      if (!id) throw new Error('Business not found. Complete the Business step first.');
+      if (calendarConnected) {
+        await ApiService.post(API_ENDPOINTS.INTEGRATIONS.DISCONNECT(id, 'google_calendar'), {});
+        setCalendarConnected(false);
+        setCalendarEmail('');
+      } else {
+        const { url } = await ApiService.get<{ url: string }>(API_ENDPOINTS.INTEGRATIONS.GOOGLE_AUTH_URL(id));
+        window.location.href = url;
+        return;
+      }
+    } catch (err: any) {
+      setCalendarError(err?.message || 'Google Calendar request failed.');
+    }
+    setCalendarBusy(false);
+  };
+
   const isIndia = businessCountry === 'India';
 
-  const integrations: IntegrationItem[] = [
+  const allIntegrations: IntegrationItem[] = [
     {
       id: 'google-calendar',
       provider: 'google_calendar',
       name: 'Google Calendar',
       description: 'Sync appointments with Google Calendar automatically.',
       connected: calendarConnected,
-      details: calendarConnected ? 'Primary Business Calendar (Auto-sync)' : undefined,
+      details: calendarConnected ? (calendarEmail ? `${calendarEmail} (Auto-sync)` : 'Primary Calendar (Auto-sync)') : undefined,
       icon: (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#0066FF]">
           <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
@@ -116,7 +157,7 @@ export default function IntegrationsOnboardingPage() {
       provider: 'whatsapp',
       name: 'WhatsApp Business Channel',
       description: 'Send instant booking cards, Google Maps location, & 2-hr visit reminders.',
-      connected: waConnected,
+      connected: WHATSAPP_ENABLED && waConnected,
       details: waConnected ? (waDetails || 'Connected') : undefined,
       icon: (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#10B981]">
@@ -165,7 +206,11 @@ export default function IntegrationsOnboardingPage() {
     },
   ];
 
+  const integrations = allIntegrations;
+  const isComingSoon = (i: IntegrationItem) => i.id === 'whatsapp' && !WHATSAPP_ENABLED;
+
   const handleCardClick = (integration: IntegrationItem) => {
+    if (isComingSoon(integration)) return;
     if (integration.id === 'twilio') {
       router.push('/onboarding/integrations/twilio');
       return;
@@ -175,9 +220,7 @@ export default function IntegrationsOnboardingPage() {
       return;
     }
     if (integration.id === 'google-calendar') {
-      const next = !calendarConnected;
-      setCalendarConnected(next);
-      localStorage.setItem('onboarding_calendar_connected', String(next));
+      handleGoogleCalendar();
       return;
     }
     if (integration.id === 'outlook') {
@@ -226,6 +269,11 @@ export default function IntegrationsOnboardingPage() {
                 }`}>
                   {integration.icon}
                 </div>
+                {isComingSoon(integration) && (
+                  <span className="bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-bold px-2 py-0.5 rounded">
+                    Coming soon
+                  </span>
+                )}
                 {integration.connected && (
                   <span className="bg-[#E6FBF3] text-[#10B981] text-[10px] font-bold px-2 py-0.5 rounded">
                     {STRINGS.ONBOARDING.INTEGRATIONS.STATUS_CONNECTED}
@@ -236,6 +284,9 @@ export default function IntegrationsOnboardingPage() {
               <div>
                 <h3 className="text-xs font-bold text-gray-900 mb-0.5">{integration.name}</h3>
                 <p className="text-[11px] text-gray-500 leading-relaxed">{integration.description}</p>
+                {integration.id === 'google-calendar' && calendarError && (
+                  <p className="text-[10px] text-red-600 mt-1">{calendarError}</p>
+                )}
                 {integration.connected && integration.details && (
                   <p className={`text-[10px] font-semibold mt-1.5 px-2 py-0.5 rounded inline-block ${
                     integration.id === 'whatsapp' 
@@ -252,7 +303,8 @@ export default function IntegrationsOnboardingPage() {
               <button 
                 type="button" 
                 onClick={() => handleCardClick(integration)}
-                className={`w-full py-1.5 rounded-lg font-semibold text-xs transition-colors cursor-pointer flex items-center justify-center gap-1 ${
+                disabled={isComingSoon(integration)}
+                className={`w-full py-1.5 rounded-lg font-semibold text-xs transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 flex items-center justify-center gap-1 ${
                   integration.connected
                     ? 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'
                     : (integration.id === 'whatsapp'
@@ -260,7 +312,9 @@ export default function IntegrationsOnboardingPage() {
                         : 'bg-[#0066FF] text-white hover:bg-[#0052cc]')
                 }`}
               >
-                {integration.id === 'whatsapp' ? (
+                {isComingSoon(integration) ? (
+                  'Coming soon'
+                ) : integration.id === 'whatsapp' ? (
                   integration.connected ? 'Manage WhatsApp Business' : (
                     <>
                       <span>Setup WhatsApp Business</span>
@@ -274,6 +328,8 @@ export default function IntegrationsOnboardingPage() {
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
                     </>
                   )
+                ) : integration.id === 'google-calendar' ? (
+                  calendarBusy ? 'Please wait…' : calendarConnected ? 'Disconnect' : 'Connect Google Calendar'
                 ) : (
                   integration.connected ? STRINGS.ONBOARDING.INTEGRATIONS.BTN_MANAGE : STRINGS.ONBOARDING.INTEGRATIONS.BTN_CONNECT
                 )}

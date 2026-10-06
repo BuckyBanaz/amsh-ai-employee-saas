@@ -66,7 +66,7 @@ function simulateReply(userText: string): string {
   if (/(hour|open|close|time|sunday)/.test(t)) {
     return "We are open Monday to Saturday, 9:00 AM to 7:00 PM, and Sundays 10 AM to 2 PM. How can I assist you further?";
   }
-  return "Namaste! I have noted that. Could you tell me a little more so I can assist you accurately?";
+  return "Thank you for the information. Could you tell me a little more so I can assist you accurately?";
 }
 
 export function TestPlaygroundModal({ isOpen, onClose }: TestPlaygroundModalProps) {
@@ -95,11 +95,13 @@ export function TestPlaygroundModal({ isOpen, onClose }: TestPlaygroundModalProp
   const [isMicListening, setIsMicListening] = useState(false);
   const [isAISpeaking, setIsAISpeaking] = useState(false);
   const [interimSpeech, setInterimSpeech] = useState('');
-  const [selectedAccent, setSelectedAccent] = useState('hi-IN');
+  const [selectedAccent, setSelectedAccent] = useState('en-US');
   const [isMuted, setIsMuted] = useState(false);
   const [micSupported, setMicSupported] = useState(true);
 
   // Active Agent configuration
+  const [isAgentLoading, setIsAgentLoading] = useState(true);
+  const [businessInfo, setBusinessInfo] = useState<any>(null);
   const [agentConfig, setAgentConfig] = useState<AgentItem | null>(null);
   const [selectedVoice, setSelectedVoice] = useState<VoiceOption>(AVAILABLE_VOICES[0]);
   const [isVoicePickerOpen, setIsVoicePickerOpen] = useState(false);
@@ -152,9 +154,17 @@ export function TestPlaygroundModal({ isOpen, onClose }: TestPlaygroundModalProp
   // Load Agent Settings
   useEffect(() => {
     if (isOpen) {
-      DashboardController.getAgent()
-        .then((agent) => {
+      setIsAgentLoading(true);
+      Promise.all([
+        DashboardController.getAgent().catch(() => null),
+        DashboardController.getBusinessInfo().catch(() => null),
+      ])
+        .then(([agent, business]) => {
           setAgentConfig(agent);
+          setBusinessInfo(business);
+          const bCountry = (business?.country || '').toLowerCase();
+          const isIndia = bCountry.includes('india') || bCountry.includes('+91');
+
           // 1. Prioritize exact accent saved in DB
           if (agent?.config?.accent) {
             setSelectedAccent(agent.config.accent);
@@ -168,26 +178,37 @@ export function TestPlaygroundModal({ isOpen, onClose }: TestPlaygroundModalProp
             else if (lang.includes('es')) setSelectedAccent('es-ES');
             else if (lang.includes('de')) setSelectedAccent('de-DE');
             else if (lang.includes('nl')) setSelectedAccent('nl-NL');
-            else setSelectedAccent('en-IN');
+            else setSelectedAccent(isIndia ? 'en-IN' : 'en-US');
+          } else {
+            setSelectedAccent(isIndia ? 'en-IN' : 'en-US');
           }
 
           // 2. Prioritize exact voice saved in DB
+          let voiceFound = false;
           if (agent?.voice_model) {
             const found = AVAILABLE_VOICES.find((v) => v.voice_id === agent.voice_model);
-            if (found) setSelectedVoice(found);
+            if (found) { setSelectedVoice(found); voiceFound = true; }
           } else if (agent?.config?.tts_provider?.voice_id) {
             const found = AVAILABLE_VOICES.find(
               (v) => v.voice_id === agent.config?.tts_provider?.voice_id
             );
-            if (found) setSelectedVoice(found);
+            if (found) { setSelectedVoice(found); voiceFound = true; }
           } else if (agent?.config?.tts_provider?.voice_name) {
             const found = AVAILABLE_VOICES.find(
-              (v) => v.name.toLowerCase() === agent.config?.tts_provider?.voice_name?.toLowerCase()
+              (v) => v.name.toLowerCase() === agent?.config?.tts_provider?.voice_name?.toLowerCase()
             );
-            if (found) setSelectedVoice(found);
+            if (found) { setSelectedVoice(found); voiceFound = true; }
+          }
+
+          if (!voiceFound) {
+            const fallbackVoice = isIndia
+              ? AVAILABLE_VOICES.find((v) => v.voice_id === 'f8f5f1b2-f02d-4d8e-a40d-fd850a487b3d') || AVAILABLE_VOICES[0]
+              : AVAILABLE_VOICES.find((v) => v.voice_id === '79a125e8-cd45-4c13-8a67-188112f4dd22') || AVAILABLE_VOICES[0];
+            setSelectedVoice(fallbackVoice);
           }
         })
-        .catch((err) => console.warn('Failed to load agent config for playground:', err));
+        .catch((err) => console.warn('Failed to load agent config for playground:', err))
+        .finally(() => setIsAgentLoading(false));
 
       if (typeof window !== 'undefined') {
         const hasRecog = !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
@@ -663,9 +684,13 @@ export function TestPlaygroundModal({ isOpen, onClose }: TestPlaygroundModalProp
     const newCallId = 'webcall_' + Math.random().toString(36).slice(2, 9);
     setCurrentCallId(newCallId);
 
-    const greeting =
-      agentConfig?.greeting_message ||
-      'Namaste! Welcome to our clinic. I am your AI receptionist. How can I help you today?';
+    const isIndia = (businessInfo?.country || '').toLowerCase().includes('india') || false;
+    const clinicName = businessInfo?.name || 'our clinic';
+    const defaultGreeting = isIndia
+      ? `Namaste! Welcome to ${clinicName}. I am your AI receptionist. How can I help you today?`
+      : `Hello, welcome to ${clinicName}. I am your AI receptionist. How may I help you today?`;
+
+    const greeting = agentConfig?.greeting_message || defaultGreeting;
 
     setLiveMessages([{ speaker: 'AI', text: greeting, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }]);
 
@@ -694,15 +719,17 @@ export function TestPlaygroundModal({ isOpen, onClose }: TestPlaygroundModalProp
     callPhaseRef.current = 'dialing';
     setCallSeconds(0);
     setLiveMessages([]);
-    setDialStatusMsg(`Calling ${phoneNumber} via Exotel carrier...`);
+    setDialStatusMsg(`Calling ${phoneNumber}...`);
 
-    const newCallId = 'test_call_' + Math.random().toString(36).slice(2, 9);
-    setCurrentCallId(newCallId);
+    let realCallId = 'test_call_' + Math.random().toString(36).slice(2, 9);
 
     try {
       const res = await DashboardController.triggerTestCall(phoneNumber.trim());
       if (res?.success) {
-        setDialStatusMsg(`Calling ${phoneNumber} from ${res.from_number || '08047284627'}. Pick up to speak with AI.`);
+        if (res.call_sid) {
+          realCallId = res.call_sid;
+        }
+        setDialStatusMsg(`Calling ${phoneNumber} from ${res.from_number || '09513886363'}. Pick up to speak with AI.`);
       } else {
         setDialStatusMsg(res?.message || 'Outbound call initiated.');
       }
@@ -711,17 +738,57 @@ export function TestPlaygroundModal({ isOpen, onClose }: TestPlaygroundModalProp
       setDialStatusMsg(`Calling ${phoneNumber}. (Or talk directly in Web Voice Call mode)`);
     }
 
-    const greeting =
-      agentConfig?.greeting_message ||
-      'Namaste! Welcome to our clinic. I am your AI receptionist. How can I help you today?';
+    setCurrentCallId(realCallId);
+
+    const isIndia = (businessInfo?.country || '').toLowerCase().includes('india') || false;
+    const clinicName = businessInfo?.name || 'our clinic';
+    const defaultGreeting = isIndia
+      ? `Namaste! Welcome to ${clinicName}. I am your AI receptionist. How can I help you today?`
+      : `Hello, welcome to ${clinicName}. I am your AI receptionist. How may I help you today?`;
+
+    const greeting = agentConfig?.greeting_message || defaultGreeting;
 
     dialTimeoutRef.current = setTimeout(() => {
       setCallPhase('connected');
       callPhaseRef.current = 'connected';
       setLiveMessages([{ speaker: 'AI', text: greeting, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }]);
-      playSpeech(greeting, 0);
+      // NOTE: During live phone calls, audio streams directly to the phone handset, never through laptop speakers!
     }, 2500);
   };
+
+  // Poll live transcript from backend when a real phone call is active
+  useEffect(() => {
+    if (channel !== 'phone_exotel' || callPhase !== 'connected' || !currentCallId) return;
+
+    let cancelled = false;
+    const interval = setInterval(async () => {
+      try {
+        const detail = await DashboardController.getCallDetail(currentCallId);
+        if (cancelled) return;
+        if (detail?.messages && detail.messages.length > 0) {
+          setLiveMessages(
+            detail.messages.map((m: any) => ({
+              speaker: m.speaker === 'caller' || m.speaker === 'user' ? 'User' : 'AI',
+              text: m.text,
+              timestamp: m.created_at ? new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : undefined,
+            }))
+          );
+        }
+        if (detail?.outcome && detail.outcome !== 'live') {
+          setCallPhase('ended');
+          callPhaseRef.current = 'ended';
+          setDialStatusMsg('Phone call ended.');
+        }
+      } catch (err) {
+        console.debug('Polling live phone call:', err);
+      }
+    }, 2000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [channel, callPhase, currentCallId]);
 
   // Hang-up bookkeeping on the server: attach the recording (if any) and stop the call showing as "live" forever.
   const finalizeCallOnServer = async (callId: string, recorder: CallRecorder | null) => {
@@ -1102,7 +1169,7 @@ export function TestPlaygroundModal({ isOpen, onClose }: TestPlaygroundModalProp
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                       <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
                     </svg>
-                    Phone (Exotel)
+                    Phone Call
                   </button>
                 </div>
 
@@ -1350,7 +1417,7 @@ export function TestPlaygroundModal({ isOpen, onClose }: TestPlaygroundModalProp
                 <div className="px-3 py-1.5 bg-gray-50 border border-gray-100 rounded-xl flex items-center justify-between text-[11px] text-gray-600 shadow-2xs">
                   <div className="truncate flex items-center gap-1.5">
                     <span className="text-gray-400 font-bold uppercase text-[9.5px]">Voice:</span>
-                    <span className="font-semibold text-gray-800">{agentConfig?.config?.tts_provider?.voice_name || selectedVoice?.name || 'Kiara'}</span>
+                    <span className="font-semibold text-gray-800">{agentConfig?.config?.tts_provider?.voice_name || selectedVoice?.name || (isAgentLoading ? 'Loading...' : 'Neural Voice')}</span>
                   </div>
                   <span className="text-gray-300">•</span>
                   <div className="truncate flex items-center gap-1.5">
@@ -1529,7 +1596,7 @@ export function TestPlaygroundModal({ isOpen, onClose }: TestPlaygroundModalProp
                             {item.timestamp && <span className="text-[9.5px] font-normal text-gray-400">{item.timestamp}</span>}
                           </span>
 
-                          {item.speaker === 'AI' && (
+                          {item.speaker === 'AI' && channel !== 'phone_exotel' && (
                             <button
                               type="button"
                               onClick={() => playSpeech(item.text, idx)}
@@ -1572,49 +1639,78 @@ export function TestPlaygroundModal({ isOpen, onClose }: TestPlaygroundModalProp
                   </div>
                 </div>
 
-                {/* Bottom Input: Text input + Dictation Mic + Send */}
-                <div className="flex items-center gap-2 mt-1">
-                  <div className="relative flex-1 flex items-center">
-                    <input
-                      type="text"
-                      value={chatDraft}
-                      onChange={(e) => setChatDraft(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') sendChat();
-                      }}
-                      placeholder="Type a message or speak into mic..."
-                      className="w-full pl-3 pr-8 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#0066FF]"
-                    />
+                {/* Bottom Input: Live Phone Status OR Text input + Dictation Mic + Send */}
+                {channel === 'phone_exotel' ? (
+                  <div className="mt-1">
+                    {callPhase === 'connected' ? (
+                      <div className="flex items-center justify-between p-2 rounded-lg bg-blue-50/90 border border-blue-200 text-blue-900 text-[11px] font-medium w-full">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                          <span>Live call in progress on <strong>{phoneNumber}</strong>. Speak on your phone — transcript updates above.</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={endCall}
+                          className="px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-[10.5px] font-bold cursor-pointer transition-colors"
+                        >
+                          End Call
+                        </button>
+                      </div>
+                    ) : callPhase === 'dialing' ? (
+                      <div className="p-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-[11.5px] font-medium w-full flex items-center gap-2">
+                        <div className="w-3.5 h-3.5 border-2 border-amber-600 border-t-transparent rounded-full animate-spin"></div>
+                        <span>Calling {phoneNumber}... Pick up your phone to speak with the AI receptionist.</span>
+                      </div>
+                    ) : (
+                      <div className="p-2 rounded-lg bg-gray-50 border border-gray-200 text-gray-500 text-[11.5px] text-center w-full">
+                        Select &quot;Phone Call&quot; on the left and click &quot;Call My Mobile&quot; to test.
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 mt-1">
+                    <div className="relative flex-1 flex items-center">
+                      <input
+                        type="text"
+                        value={chatDraft}
+                        onChange={(e) => setChatDraft(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') sendChat();
+                        }}
+                        placeholder="Type a message or speak into mic..."
+                        className="w-full pl-3 pr-8 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#0066FF]"
+                      />
+                      <button
+                        type="button"
+                        onClick={triggerChatDictation}
+                        className={`absolute right-1.5 p-1 rounded-md transition-colors cursor-pointer ${
+                          isMicListening
+                            ? 'text-red-500 bg-red-50 animate-pulse'
+                            : 'text-gray-400 hover:text-[#0066FF]'
+                        }`}
+                        title={isMicListening ? 'Listening... click to stop' : 'Click to dictate message'}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                          <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                          <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                          <line x1="12" y1="19" x2="12" y2="23"></line>
+                          <line x1="8" y1="23" x2="16" y2="23"></line>
+                        </svg>
+                      </button>
+                    </div>
                     <button
-                      type="button"
-                      onClick={triggerChatDictation}
-                      className={`absolute right-1.5 p-1 rounded-md transition-colors cursor-pointer ${
-                        isMicListening
-                          ? 'text-red-500 bg-red-50 animate-pulse'
-                          : 'text-gray-400 hover:text-[#0066FF]'
-                      }`}
-                      title={isMicListening ? 'Listening... click to stop' : 'Click to dictate message'}
+                      onClick={() => sendChat()}
+                      disabled={!chatDraft.trim()}
+                      className="px-3 py-1.5 bg-[#0066FF] hover:bg-[#0052cc] disabled:opacity-50 text-white rounded-lg text-xs font-bold shadow-sm transition-colors cursor-pointer flex items-center gap-1"
                     >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
-                        <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-                        <line x1="12" y1="19" x2="12" y2="23"></line>
-                        <line x1="8" y1="23" x2="16" y2="23"></line>
+                      <span>Send</span>
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <line x1="22" y1="2" x2="11" y2="13"></line>
+                        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
                       </svg>
                     </button>
                   </div>
-                  <button
-                    onClick={() => sendChat()}
-                    disabled={!chatDraft.trim()}
-                    className="px-3 py-1.5 bg-[#0066FF] hover:bg-[#0052cc] disabled:opacity-50 text-white rounded-lg text-xs font-bold shadow-sm transition-colors cursor-pointer flex items-center gap-1"
-                  >
-                    <span>Send</span>
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                      <line x1="22" y1="2" x2="11" y2="13"></line>
-                      <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-                    </svg>
-                  </button>
-                </div>
+                )}
               </>
             )}
           </div>

@@ -52,8 +52,14 @@ export function RecentAIConversations({ items, loading: parentLoading = false }:
   useEffect(() => {
     if (items) return;
     let cancelled = false;
-    DashboardController.getCalls(undefined, { limit: 4 })
-      .then((rows) => { if (!cancelled) setLoaded(rows.map(toItem)); })
+    DashboardController.getCalls(undefined, { limit: 12 })
+      .then((rows) => {
+        if (!cancelled) {
+          // Only show real caller conversations on the dashboard summary (test calls are kept in /calls & /conversations)
+          const realCalls = (rows || []).filter((r) => !r.is_test).slice(0, 4);
+          setLoaded(realCalls.map(toItem));
+        }
+      })
       .catch(() => { if (!cancelled) setLoaded([]); });
     return () => { cancelled = true; };
   }, [items]);

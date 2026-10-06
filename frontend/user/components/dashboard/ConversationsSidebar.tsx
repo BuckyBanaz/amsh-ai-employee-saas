@@ -99,13 +99,25 @@ export function ConversationsSidebar({
                   }`}
                 >
                   <div className="flex justify-between items-start mb-1">
-                    <h3 className={`text-xs font-extrabold truncate pr-2 ${isSelected ? 'text-[#0066FF]' : 'text-gray-900'}`}>
-                      {title}
-                    </h3>
+                    <div className="flex items-center gap-1.5 min-w-0 pr-2">
+                      <h3 className={`text-xs font-extrabold truncate ${isSelected ? 'text-[#0066FF]' : 'text-gray-900'}`}>
+                        {title}
+                      </h3>
+                      {call.is_test && (
+                        <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-black uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200 shrink-0 shadow-2xs">
+                          Test Call
+                        </span>
+                      )}
+                    </div>
                     <span className="text-[10px] font-semibold text-gray-400 shrink-0">{timeStr}</span>
                   </div>
                   
                   <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                    {call.is_test && (
+                      <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-semibold bg-amber-100/60 text-amber-800">
+                        Playground
+                      </span>
+                    )}
                     <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-semibold bg-gray-100 text-gray-600">
                       {call.intent || 'General Inbound'}
                     </span>
@@ -119,7 +131,7 @@ export function ConversationsSidebar({
                         Transferred
                       </span>
                     )}
-                    {call.outcome === 'completed' && (
+                    {(call.outcome === 'completed' || call.outcome === 'resolved') && (
                       <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-bold bg-blue-50 text-[#0066FF]">
                         Resolved
                       </span>

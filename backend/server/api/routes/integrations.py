@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -55,6 +55,11 @@ def connect_integration(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="WhatsApp cannot be connected via generic connect. Use Meta Embedded Signup or platform admin.",
         )
+    if provider == "google_calendar":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Google Calendar can only be connected through Google sign-in.",
+        )
 
     integration = (
         db.query(Integration)
@@ -99,9 +104,78 @@ def disconnect_integration(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Integration not found")
     integration.status = "disconnected"
     integration.connected_at = None
+    if provider == "google_calendar":
+        integration.config = {}  # drop stored Google tokens
     db.commit()
     db.refresh(integration)
     return integration
+
+
+# -----------------------------------------------------------------------------
+# Google Calendar OAuth
+# -----------------------------------------------------------------------------
+from fastapi.responses import RedirectResponse
+
+from backend.server.services import google_calendar
+
+google_router = APIRouter(prefix="/api/integrations/google", tags=["google-calendar"])
+
+
+@router.get("/google_calendar/auth-url")
+def google_calendar_auth_url(business_id: str, ret: str = "onboarding", db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    get_business_or_404(business_id, db)
+    require_owner_or_admin(business_id, current_user)
+    if not google_calendar.is_configured():
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Google Calendar is not configured on the server (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET).")
+    return {"url": google_calendar.build_auth_url(google_calendar.make_state(business_id, current_user.id, ret))}
+
+
+@router.post("/google_calendar/sync-existing")
+def google_calendar_sync_existing(business_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Send already-booked upcoming appointments to Google Calendar (new ones sync on their own)."""
+    get_business_or_404(business_id, db)
+    require_owner_or_admin(business_id, current_user)
+    return google_calendar.backfill_upcoming(db, business_id)
+
+
+@google_router.get("/callback")
+def google_calendar_callback(
+    background: BackgroundTasks, state: str = "", code: str = "", error: str = "", db: Session = Depends(get_db)
+):
+    """Google redirects the browser here; the signed state ties it to the business that started the flow."""
+    data = google_calendar.read_state(state)
+    back = {"dashboard": "/integrations"}.get((data or {}).get("ret"), "/onboarding/integrations")
+    frontend = get_settings().FRONTEND_URL.rstrip("/") + back
+    if not data or error or not code:
+        return RedirectResponse(f"{frontend}?google=error")
+    business_id = data["bid"]
+    try:
+        tokens = google_calendar.exchange_code(code)
+    except httpx.HTTPError:
+        return RedirectResponse(f"{frontend}?google=error")
+
+    integration = (
+        db.query(Integration)
+        .filter(Integration.business_id == business_id, Integration.provider == "google_calendar")
+        .first()
+    )
+    if not integration:
+        integration = Integration(business_id=business_id, provider="google_calendar")
+        db.add(integration)
+    old = integration.config or {}
+    refresh = tokens.get("refresh_token") and CryptoManager.encrypt(tokens["refresh_token"]) or old.get("refresh_token")
+    if not refresh:
+        return RedirectResponse(f"{frontend}?google=error")
+    integration.status = "connected"
+    integration.config = {
+        "refresh_token": refresh,
+        "email": google_calendar.google_email(tokens["access_token"]),
+        "calendar": "primary",
+    }
+    integration.connected_at = datetime.utcnow()
+    db.commit()
+    background.add_task(google_calendar.backfill_in_background, business_id)  # appointments booked before connecting
+    return RedirectResponse(f"{frontend}?google=connected")
 
 
 # -----------------------------------------------------------------------------
@@ -134,6 +208,16 @@ def dashboard_disconnect_integration(
     current_user: User = Depends(get_current_user),
 ):
     return disconnect_integration(business_id, provider, db, current_user)
+
+
+@dashboard_router.post("/google_calendar/sync-existing")
+def dashboard_google_calendar_sync_existing(business_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return google_calendar_sync_existing(business_id, db, current_user)
+
+
+@dashboard_router.get("/google_calendar/auth-url")
+def dashboard_google_calendar_auth_url(business_id: str, ret: str = "dashboard", db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return google_calendar_auth_url(business_id, ret, db, current_user)
 
 
 # -----------------------------------------------------------------------------

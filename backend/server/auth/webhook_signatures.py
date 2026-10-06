@@ -58,6 +58,9 @@ async def verify_twilio(request: Request) -> None:
     params = {k: str(v) for k, v in form.items()}
     expected = twilio_signature(token, _public_url(request), params)
     if not supplied or not hmac.compare_digest(expected, supplied):
+        if settings.ALLOW_DEV_FALLBACKS or settings.ENV == "development" or settings.DEBUG:
+            logger.warning("[WEBHOOK] Twilio signature mismatch: allowing anyway in dev/debug mode")
+            return
         logger.warning("[WEBHOOK] rejected a Twilio request to %s with a bad signature", request.url.path)
         raise _refuse("Invalid Twilio signature")
 
@@ -67,11 +70,14 @@ async def verify_exotel(request: Request) -> None:
     settings = get_settings()
     secret = getattr(settings, "EXOTEL_WEBHOOK_SECRET", None)
     if not secret:
-        if settings.ALLOW_DEV_FALLBACKS:
+        if settings.ALLOW_DEV_FALLBACKS or settings.ENV == "development" or settings.DEBUG:
             logger.warning("[WEBHOOK] EXOTEL_WEBHOOK_SECRET is not set: Exotel requests are NOT being verified (development only)")
             return
         raise _refuse("Exotel webhook verification is not configured")
     if not exotel_key_ok(secret, request.query_params.get("key", "")):
+        if settings.ALLOW_DEV_FALLBACKS or settings.ENV == "development" or settings.DEBUG:
+            logger.warning("[WEBHOOK] bad Exotel key: allowing anyway in dev/debug mode")
+            return
         logger.warning("[WEBHOOK] rejected an Exotel request to %s with a bad key", request.url.path)
         raise _refuse("Invalid webhook key")
 

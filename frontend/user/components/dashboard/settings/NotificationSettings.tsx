@@ -1,6 +1,7 @@
 "use client";
 import React, { useEffect, useState } from 'react';
 import { DashboardController, AgentItem } from '../../../controllers/dashboard.controller';
+import { WHATSAPP_ENABLED } from '../../../utils/features';
 
 const EVENTS: { id: string; label: string }[] = [
   { id: 'booking', label: 'A new appointment is booked' },
@@ -110,7 +111,7 @@ export function NotificationSettings() {
 
   return (
     <div className="space-y-3 max-w-4xl pb-6">
-      <Card title="Appointment reminders" desc="Message patients before their visit so fewer forget. Sent by SMS; WhatsApp needs a template approved by Meta.">
+      <Card title="Appointment reminders" desc="Message patients before their visit so fewer forget. Sent by SMS.">
         <div className="flex items-center justify-between mb-3">
           <div className="text-xs font-semibold text-gray-800">Send reminders</div>
           <Toggle checked={reminders} onChange={() => setReminders(!reminders)} label="Send reminders" />
@@ -124,14 +125,18 @@ export function NotificationSettings() {
               ))}
             </select>
           </div>
-          <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">WhatsApp template (optional)</label>
-            <input value={template} onChange={(e) => setTemplate(e.target.value)} placeholder="appointment_reminder" className={INPUT} />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">Template language</label>
-            <input value={language} onChange={(e) => setLanguage(e.target.value)} placeholder="en" className={INPUT} />
-          </div>
+          {WHATSAPP_ENABLED && (
+            <>
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">WhatsApp template (optional)</label>
+                <input value={template} onChange={(e) => setTemplate(e.target.value)} placeholder="appointment_reminder" className={INPUT} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Template language</label>
+                <input value={language} onChange={(e) => setLanguage(e.target.value)} placeholder="en" className={INPUT} />
+              </div>
+            </>
+          )}
         </div>
         <p className="text-[11px] text-gray-400 mt-2">
           Reminders also need to be enabled on the AMSh server by your administrator. The template takes three values: patient name, clinic name, date and time.

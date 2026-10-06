@@ -23,14 +23,14 @@ class RazorpayGateway:
         key_id = settings.RAZORPAY_KEY_ID or settings.RAZORPAY_API_KEY
         return {
             "key_id": key_id or "rzp_test_placeholder",
-            "currency": "INR",
+            "currency": "USD",
             "enabled": bool(key_id),
         }
 
     @staticmethod
     async def create_order(
         amount: float,
-        currency: str = "INR",
+        currency: str = "USD",
         plan_id: str = "starter",
         cycle: str = "monthly",
         business_id: Optional[str] = None
@@ -46,26 +46,23 @@ class RazorpayGateway:
                 auth = (key_id, key_secret)
                 receipt_id = f"rcpt_{uuid.uuid4().hex[:12]}"
                 
-                # Check currency: standard Indian Razorpay accounts support INR
-                chosen_currency = currency
+                # Keep original currency (e.g. USD) so international cards are accepted natively;
+                # fallback to INR only if the Razorpay merchant account refuses the currency.
+                chosen_currency = (currency or "USD").upper()
                 chosen_amount = amount
-                # If USD and using an Indian account, prepare INR conversion if needed
-                if currency.upper() == "USD":
-                    # Many Indian Razorpay accounts only accept INR
-                    chosen_currency = "INR"
-                    chosen_amount = round(amount * 85.0, 2)
 
-                amount_in_paise = int(round(chosen_amount * 100))
+                amount_in_subunits = int(round(chosen_amount * 100))
 
                 payload = {
-                    "amount": amount_in_paise,
+                    "amount": amount_in_subunits,
                     "currency": chosen_currency,
                     "receipt": receipt_id,
                     "notes": {
                         "plan_id": plan_id,
                         "cycle": cycle,
                         "business_id": business_id or "onboarding",
-                        "original_usd": str(amount)
+                        "original_currency": str(currency),
+                        "original_amount": str(amount),
                     }
                 }
                 async with httpx.AsyncClient(timeout=10.0) as client:
@@ -74,6 +71,18 @@ class RazorpayGateway:
                         auth=auth,
                         json=payload
                     )
+                    if response.status_code not in (200, 201) and chosen_currency != "INR":
+                        chosen_currency = "INR"
+                        chosen_amount = round(amount * 85.0, 2)
+                        payload["currency"] = "INR"
+                        payload["amount"] = int(round(chosen_amount * 100))
+                        payload["notes"]["fallback_from"] = str(currency)
+                        response = await client.post(
+                            "https://api.razorpay.com/v1/orders",
+                            auth=auth,
+                            json=payload
+                        )
+
                     if response.status_code in (200, 201):
                         data = response.json()
                         return {

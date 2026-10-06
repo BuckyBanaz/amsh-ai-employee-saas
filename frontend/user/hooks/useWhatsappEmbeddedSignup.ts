@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiService } from '../services/api.service';
 import { StorageService } from '../services/storage.service';
 import { API_ENDPOINTS } from '../utils/api_endpoints';
+import { WHATSAPP_ENABLED } from '../utils/features';
 
 const META_APP_ID = process.env.NEXT_PUBLIC_META_APP_ID || '2495665704244136';
 const META_WA_CONFIG_ID = process.env.NEXT_PUBLIC_META_WA_CONFIG_ID || '1654545732766079';
@@ -49,6 +50,7 @@ export function useWhatsappEmbeddedSignup() {
 
   // Load current connection state from the backend
   useEffect(() => {
+    if (!WHATSAPP_ENABLED) { setStatus('idle'); return; }
     resolveBusinessId()
       .then((businessId) => (businessId ? ApiService.get<any[]>(API_ENDPOINTS.INTEGRATIONS.LIST(businessId)) : []))
       .then((list) => {
@@ -64,6 +66,7 @@ export function useWhatsappEmbeddedSignup() {
   }, []);
 
   useEffect(() => {
+    if (!WHATSAPP_ENABLED) return; // do not pull the Facebook SDK in while WhatsApp is hidden
     if (window.FB) {
       setSdkReady(true);
       return;

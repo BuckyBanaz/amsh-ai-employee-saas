@@ -15,6 +15,7 @@ from backend.server.common.channels import channel_color, channel_label, channel
 from backend.server.database.models.business import Business
 from backend.server.database.models.call import Call
 from backend.server.database.models.transaction import Transaction
+from backend.server.services.cost_tracking import is_test_call
 
 VOLUME_BUCKETS = (0, 3, 6, 9, 12, 15, 18, 21)  # 3-hour windows covering the whole day: the AI answers around the clock
 SPARK_DAYS = 6
@@ -57,9 +58,11 @@ def compute(db: Session, business: Business, now: Optional[datetime] = None) -> 
     first_day = today - timedelta(days=SPARK_DAYS - 1)
     since = datetime.combine(first_day - timedelta(days=SPARK_DAYS), datetime.min.time(), tzinfo=tz).astimezone(timezone.utc)  # enough history for trends
 
-    calls = [c for c in db.scalars(select(Call).where(Call.business_id == business.id, Call.started_at >= since)).all()]
+    raw_calls = [c for c in db.scalars(select(Call).where(Call.business_id == business.id, Call.started_at >= since)).all()]
+    # Playground/studio test calls are excluded from dashboard totals so metrics reflect real patient interactions
+    calls = [c for c in raw_calls if not is_test_call(c.id)]
     txs = db.scalars(select(Transaction).where(Transaction.business_id == business.id)).all()
-    appointments = [t for t in txs if t.type == "appointment"]
+    appointments = [t for t in txs if t.type == "appointment" and not is_test_call(t.call_id)]
 
     def local_day(dt: Optional[datetime]):
         return _aware(dt).astimezone(tz).date() if dt else None

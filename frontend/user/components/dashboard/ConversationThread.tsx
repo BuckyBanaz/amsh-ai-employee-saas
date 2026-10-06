@@ -47,7 +47,14 @@ export function ConversationThread({ call, loading }: ConversationThreadProps) {
       {/* Thread Header */}
       <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between flex-shrink-0 bg-white z-10">
         <div>
-          <h2 className="text-sm font-extrabold text-gray-900 tracking-tight">{callerTitle}</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-extrabold text-gray-900 tracking-tight">{callerTitle}</h2>
+            {call.is_test && (
+              <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200 shadow-2xs">
+                Test Call (Playground)
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-2 mt-0.5 text-xs text-gray-500 font-medium">
             <span>{call.caller_number}</span>
             <span className="w-1 h-1 rounded-full bg-gray-300"></span>
@@ -58,9 +65,20 @@ export function ConversationThread({ call, loading }: ConversationThreadProps) {
                 <span>{new Date(call.started_at).toLocaleDateString()}</span>
               </>
             )}
+            {call.is_test && (
+              <>
+                <span className="w-1 h-1 rounded-full bg-gray-300"></span>
+                <span className="text-amber-600 font-semibold text-[11px]">Playground Mode</span>
+              </>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          {call.is_test && (
+            <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-amber-500/10 text-amber-700 border border-amber-300/60">
+              TEST MODE
+            </span>
+          )}
           <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-[#F0F7FF] text-[#0066FF] border border-blue-100">
             {call.intent || 'Inbound'}
           </span>

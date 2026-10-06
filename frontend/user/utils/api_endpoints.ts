@@ -89,7 +89,11 @@ export const API_ENDPOINTS = {
   },
   INTEGRATIONS: {
     LIST: (businessId: string) => `${BASE_URL}/onboarding/businesses/${businessId}/integrations`,
+    DASHBOARD_LIST: (businessId: string) => `${BASE_URL}/businesses/${businessId}/integrations`,
     CONNECT: (businessId: string, provider: string) => `${BASE_URL}/onboarding/businesses/${businessId}/integrations/${provider}/connect`,
+    GOOGLE_AUTH_URL: (businessId: string) => `${BASE_URL}/businesses/${businessId}/integrations/google_calendar/auth-url`,
+    GOOGLE_SYNC: (businessId: string) => `${BASE_URL}/businesses/${businessId}/integrations/google_calendar/sync-existing`,
+    DISCONNECT: (businessId: string, provider: string) => `${BASE_URL}/onboarding/businesses/${businessId}/integrations/${provider}/disconnect`,
     WHATSAPP_EMBEDDED_SIGNUP: (businessId: string) => `${BASE_URL}/onboarding/businesses/${businessId}/integrations/whatsapp/embedded-signup`,
     WHATSAPP_TEST_MESSAGE: (businessId: string) => `${BASE_URL}/onboarding/businesses/${businessId}/integrations/whatsapp/test-message`,
   },

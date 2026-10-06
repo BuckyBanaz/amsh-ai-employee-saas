@@ -84,7 +84,11 @@ export function AIBanner({
             </div>
             <div>
               <div className="flex items-baseline gap-1">
-                <span className="text-sm sm:text-base font-black leading-none">{loading ? '...' : calls}</span>
+                {loading ? (
+                  <span className="inline-block w-8 h-4 bg-white/25 animate-pulse rounded" />
+                ) : (
+                  <span className="text-sm sm:text-base font-black leading-none">{calls}</span>
+                )}
                 <span className="text-[10px] font-bold text-blue-100">Calls Handled</span>
               </div>
               {callsTrend && <span className="text-[9px] font-bold text-emerald-300 flex items-center gap-0.5 mt-0.5">{callsTrend}</span>}
@@ -103,7 +107,11 @@ export function AIBanner({
             </div>
             <div>
               <div className="flex items-baseline gap-1">
-                <span className="text-sm sm:text-base font-black leading-none">{loading ? '...' : appointments}</span>
+                {loading ? (
+                  <span className="inline-block w-8 h-4 bg-white/25 animate-pulse rounded" />
+                ) : (
+                  <span className="text-sm sm:text-base font-black leading-none">{appointments}</span>
+                )}
                 <span className="text-[10px] font-bold text-blue-100">Appointments Booked</span>
               </div>
               {appointmentsTrend && <span className="text-[9px] font-bold text-emerald-300 flex items-center gap-0.5 mt-0.5">{appointmentsTrend}</span>}
@@ -119,7 +127,11 @@ export function AIBanner({
             </div>
             <div>
               <div className="flex items-baseline gap-1">
-                <span className="text-sm sm:text-base font-black leading-none">{loading ? '...' : (resolutionRate ?? '—')}</span>
+                {loading ? (
+                  <span className="inline-block w-8 h-4 bg-white/25 animate-pulse rounded" />
+                ) : (
+                  <span className="text-sm sm:text-base font-black leading-none">{resolutionRate ?? '—'}</span>
+                )}
                 <span className="text-[10px] font-bold text-blue-100">Resolution Rate</span>
               </div>
               {resolutionTrend && <span className="text-[9px] font-bold text-emerald-300 flex items-center gap-0.5 mt-0.5">{resolutionTrend}</span>}

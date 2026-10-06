@@ -118,7 +118,6 @@ export function PricingTiers({
         { key: 'call_recording', label: 'Call Recording' },
         { key: 'multi_language', label: 'Multi-language AI' },
         { key: 'calendar_sync', label: 'Calendar Sync' },
-        { key: 'whatsapp', label: 'WhatsApp Channel' },
         { key: 'advanced_analytics', label: 'Advanced Analytics' },
       ],
       overageText: 'Overage $0.18/min · $0.015/msg · $0.4/GB'
@@ -146,7 +145,6 @@ export function PricingTiers({
         { key: 'advanced_analytics', label: 'Advanced Analytics' },
         { key: 'calendar_sync', label: 'Calendar Sync' },
         { key: 'payments_integration', label: 'Payments' },
-        { key: 'whatsapp', label: 'WhatsApp Channel' },
         { key: 'priority_support', label: 'Priority Support' },
       ],
       overageText: 'Overage $0.15/min · $0.012/msg · $0.3/GB'

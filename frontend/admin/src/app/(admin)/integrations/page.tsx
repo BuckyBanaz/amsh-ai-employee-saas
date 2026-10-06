@@ -5,8 +5,8 @@ import { ProviderLogo } from '../../../components/admin/ProviderLogo';
 import { SmtpConfigDialog } from '../../../components/admin/SmtpConfigDialog';
 import { CredentialsDialog } from '../../../components/admin/CredentialsDialog';
 
-type Category = 'All' | 'Voice' | 'AI' | 'Messaging' | 'Email' | 'Payments';
-const CATEGORIES: Category[] = ['All', 'Voice', 'AI', 'Messaging', 'Email', 'Payments'];
+type Category = 'All' | 'Voice' | 'AI' | 'Messaging' | 'Calendar' | 'Email' | 'Payments';
+const CATEGORIES: Category[] = ['All', 'Voice', 'AI', 'Messaging', 'Calendar', 'Email', 'Payments'];
 
 type ViewMode = 'table' | 'cards';
 

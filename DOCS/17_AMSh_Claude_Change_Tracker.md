@@ -8,6 +8,15 @@ Status legend: `DONE` / `IN PROGRESS` / `PLANNED` / `BLOCKED`
 
 ---
 
+### Entry 83 - Phone Call audio isolation in Playground & Telephony Barge-in/Event-Loop Fix (2026-10-06) - DONE
+- **Playground Phone Call Audio Isolation**: When using "Phone Call" mode in `TestPlaygroundModal.tsx`, browser audio synthesis (`playSpeech`) is suppressed so the laptop speakers never play audio aloud; the UI functions as a live transcript monitor while the audio conversation occurs exclusively on the telephone handset.
+- **Real Phone Call Transcript Polling**: `startExotelCall` now correctly stores the returned provider `call_sid` and polls `DashboardController.getCallDetail(call_sid)` every 2 seconds, streaming real turn-by-turn messages into the conversation stream. Live status banner replaces the chat input bar during connected phone calls.
+- **Telephony Greeting Protection (Grace Period)**: In `backend/ai/realtime/twilio/gateway.py`, added a 1.5-second initial grace period to the VAD barge-in detector so line-connection clicks and carrier audio spikes upon picking up the phone do not prematurely trigger `[BARGE-IN] Cleared Twilio audio buffer` and silence the greeting.
+- **Event-Loop Safety for Provider HTTP Clients**: `pooled_http_client` in `backend/ai/llm/client.py` and `backend/ai/engine/agent/llm_backend.py` is now keyed by running event loop (`asyncio.get_running_loop()`), preventing `RuntimeError: <asyncio.locks.Event> is bound to a different event loop` across worker reloads.
+- **Fallback Overhaul Across User App**: Shimmer skeletons implemented in place of hardcoded clinic strings, keeping Demo clinic and Mayo Clinic tenants cleanly isolated.
+
+---
+
 ### Entry 82 - LLM-first replies, every-language fallbacks, latency, live landing demo (2026-10-05) - DONE
 - No fixed sentences while the model is up: transfers, emergencies, a failed transfer and a twice-blocked reply are worded by the LLM (`spoken_line` in `engine_notes.json`), with the language pack's line only when the model fails or is slow (2.5 s; 1.5 s for emergencies). The transfer is still decided by code.
 - Model-down fallbacks exist in all 7 offered languages: legacy templates added for Arabic, German and French; WhatsApp and playground "could not answer" lines localised; `test_language_coverage` fails on any missing key or placeholder.
@@ -636,3 +645,190 @@ Run it: `python -m backend.ai.evals.runner` (`--live`, `--only persona,safety`, 
   - Direct GET to `/v1/models` inside container returns `200 OK`.
   - All 15 tenant hardening tests pass (`Ran 15 tests in 19.906s. OK`).
   - All 305 agent core tests pass cleanly (`Ran 305 tests. OK (skipped=1)`).
+
+### Entry 85 - Onboarding Review Screen WhatsApp & Telephony Dynamic Connection State (2026-10-05)
+- **Problem**:
+  - On the review screen (`/onboarding/review`), the WhatsApp channel card was hardcoded to show `Ready` with the clinic's landline phone number even when WhatsApp was never connected or linked in `/onboarding/integrations`.
+  - `whatsappConnected` state defaulted to `true` in `review/page.tsx`, and `whatsapp/page.tsx` was saving `businessPhone` into `onboarding_whatsapp_phone` even when `metaStatus !== 'connected'`.
+- **Implementation**:
+  - **Review Screen State (`frontend/user/app/onboarding/review/page.tsx`)**:
+    - Changed default `whatsappConnected` and `telephonyConnected` to `false`.
+    - Checked `localStorage.getItem('onboarding_whatsapp_connected') === 'true'` before enabling WhatsApp card.
+    - If WhatsApp is not linked, card displays `Not Linked (Optional)` with neutral styling and a gray `NOT CONNECTED` badge instead of the green `READY` badge.
+    - If Telephony is not linked, displays `Line not provisioned yet` with `NOT CONNECTED` badge.
+  - **WhatsApp Setup Page (`frontend/user/app/onboarding/integrations/whatsapp/page.tsx`)**:
+    - Only stores `onboarding_whatsapp_phone` if Meta Embedded Signup is actually connected (`metaStatus === 'connected'`), otherwise cleanly removes it.
+- **Verification**:
+  - Verified UI rendering logic matches actual integration connection status in `localStorage`.
+
+### Entry 86 - Checkout Proration Fix for Onboarding ($199 vs $179) (2026-10-05)
+- **Problem**:
+  - On the checkout screen, the order summary correctly showed `$199` for the Professional plan, but when initiating Razorpay checkout, the order was priced at `$179`.
+  - In `backend/server/api/routes/billing.py`, `compute_charge` deducted a $20 proration discount because new businesses default to `plan = 'starter'` ($20) in the DB column upon creation, incorrectly treating onboarding as an upgrade from Starter to Professional ($199 - $20 = $179).
+- **Implementation**:
+  - In `backend/server/api/routes/billing.py`'s `compute_charge`, added a guard: if `biz.status != 'active'`, the business is in onboarding and has not paid for any plan yet. Proration is bypassed and the full plan price (`$199`) is charged.
+- **Verification**:
+  - `compute_charge` tested via python for Mayo Clinic returns `(199.0, False, None, 0.0)`.
+  - Tested `RazorpayGateway.create_order` producing a native `$199.00` order (`amount: 19900`, `currency: 'USD'`).
+
+### Entry 87 - Razorpay Checkout Domestic INR (₹) Currency Switch (2026-10-06)
+- **Problem**:
+  - Razorpay checkout failed or hung on "Authenticating Payment..." with `$199` (USD).
+  - The user's Razorpay merchant account only supports domestic Indian payments; international card processing is under review (`error_reason: international_transaction_not_allowed`).
+  - USD orders in Razorpay restrict payment methods strictly to international credit/debit cards, blocking domestic Indian cards, UPI (GPay, PhonePe, Paytm, QR code), Netbanking, and Wallets.
+- **Implementation**:
+  - **Database Plans & Business Currency (`PostgreSQL`)**:
+    - Updated active plans (`starter`, `professional`, `business`) currency from `USD` to `INR`. Professional is now ₹199 (19,900 paise).
+    - Updated onboarding business currency to `INR`.
+  - **Razorpay Gateway (`backend/server/billing/razorpay_gateway.py`)**:
+    - Defaulted `chosen_currency` strictly to `INR` so orders are created in Indian Rupees.
+  - **Billing API & Migration (`backend/server/api/routes/billing.py` & `backend/migrations/versions/0004_plans.py`)**:
+    - Updated default fallback currency in billing status to `INR`.
+    - Updated migration seed currency for new deployments to `INR`.
+- **Verification**:
+  - Tested `RazorpayGateway.create_order` directly with Razorpay API: returned `success: True`, `order_id: 'order_TkWBUGVLo6X006'`, `amount: 19900` (₹199), `currency: 'INR'`.
+  - `GET /api/plans` returns plans with `currency: "INR"`.
+  - All 15 tenant hardening tests passed (`Ran 15 tests in 17.019s. OK`).
+  - All 305 agent core tests passed (`Ran 305 tests in 59.434s. OK (skipped=1)`).
+
+### Entry 88 - Revert Pricing & Gateway Currency to USD for Global Checkout (2026-10-06)
+- **Problem**:
+  - After validating the INR test payment flow, user requested to switch standard platform pricing back to USD (`$199`, `$399`, etc.) for global client readiness while waiting for Razorpay international card review approval.
+- **Implementation**:
+  - **Database Plans & Business Currency (`PostgreSQL`)**:
+    - Reverted active catalog plans (`starter`, `professional`, `business`) and clinic currency to `USD`.
+  - **Razorpay Gateway (`backend/server/billing/razorpay_gateway.py`)**:
+    - Reverted default currency to `USD` in `get_public_config` and `create_order`.
+  - **Billing API & Migration (`backend/server/api/routes/billing.py` & `backend/migrations/versions/0004_plans.py`)**:
+    - Reverted default fallback currency in billing status to `USD`.
+    - Reverted migration seed currency in `0004_plans.py` to `USD`.
+- **Verification**:
+  - Tested `RazorpayGateway.create_order`: created live order with `currency: 'USD'`, `amount: 19900` ($199.00), `order_id: 'order_TkWnCdGcraf2Az'`.
+  - `GET /api/plans` returns catalog plans with `currency: "USD"`.
+
+### Entry 89 - Appointment Scheduling Dynamic Google Calendar Sync & Management (2026-10-06)
+- **Problem**:
+  - In `frontend/user/components/dashboard/ai-tabs/AppointmentsTab.tsx`, the Google Calendar status card was completely static with hardcoded text `"Google Calendar Linked"` and `"Synced 2 minutes ago"`.
+  - The `"Manage Sync"` button simply linked to `/appointments` (the appointments table) rather than syncing or managing Google Calendar.
+  - Users clicking `"Manage Sync"` found it did not sync their appointments and took them to the wrong page.
+- **Implementation**:
+  - **Dynamic Connection State (`frontend/user/components/dashboard/ai-tabs/AppointmentsTab.tsx`)**:
+    - Fetches live tenant integrations on mount using `DashboardController.getIntegrations()`.
+    - Detects whether Google Calendar is connected and displays the connected account email (e.g. `amshaiemployee@gmail.com`).
+    - If not connected, displays `"Google Calendar Not Connected"` and `"Connect Calendar"` button leading to `/integrations`.
+  - **Live "Sync Now" Button**:
+    - Replaced the dead `/appointments` link with an active **`Sync Now`** button (`handleSyncNow`).
+    - Calls `DashboardController.syncGoogleCalendar()` (`POST /api/businesses/{business_id}/integrations/google_calendar/sync-existing`).
+    - Features active spinning loader and feedback toast reporting the exact number of upcoming appointments synced to Google Calendar.
+  - **API & Backend Routes (`backend/server/api/routes/integrations.py` & `api_endpoints.ts`)**:
+    - Mounted `google_calendar/sync-existing` and `google_calendar/auth-url` onto `dashboard_router` so tenant dashboard requests are authorized and routed cleanly.
+- **Verification**:
+  - `npx tsc --noEmit` passed with 0 errors.
+  - Ran tenant hardening suite: `Ran 15 tests in 23.590s. OK`.
+
+### Entry 90 - Fix AppointmentsTab Runtime TypeError for Integrations (2026-10-06)
+- **Problem**:
+  - User encountered `Runtime TypeError: DashboardController.getIntegrations is not a function` at `AppointmentsTab.tsx (24:27)` due to Turbopack stale module evaluation / object binding during hot reload.
+- **Root Cause & Fix**:
+  - **`frontend/user/controllers/dashboard.controller.ts`**:
+    - Added explicit named exports `export const getIntegrations` and `export const syncGoogleCalendar` bound to `DashboardController`.
+  - **`frontend/user/components/dashboard/ai-tabs/AppointmentsTab.tsx`**:
+    - Safeguarded integrations retrieval via `fetchIntegrationsList()`: checks if `DashboardController.getIntegrations` exists, with seamless fallback to `ApiService.get(API_ENDPOINTS.INTEGRATIONS.DASHBOARD_LIST(bId))` and empty array fallback.
+    - Safeguarded `handleSyncNow()` with similar fallback to `ApiService.post(API_ENDPOINTS.INTEGRATIONS.GOOGLE_SYNC(bId))`.
+    - Eliminates any runtime TypeError during HMR or stale module cache.
+
+### Entry 91 - Telephony Gateway Alignment & Outbound Call Support (Twilio & Exotel) (2026-10-06)
+- **Problem**:
+  - In `TestPlaygroundModal.tsx`, the tab had a hardcoded vendor label `Phone (Exotel)`, causing confusion because the clinic's assigned virtual number (`+1 (656) 254-7488`) is from Twilio.
+  - Furthermore, `backend/server/api/routes/voice.py` (`/api/voice/call-me`) only supported Exotel for outbound test calls and lacked Twilio support.
+- **Root Cause & Fix**:
+  - **`frontend/user/components/dashboard/TestPlaygroundModal.tsx`**:
+    - Renamed tab from `Phone (Exotel)` to `Phone Call`.
+    - Simplified dialing message to `Calling ${phoneNumber}...`.
+  - **`backend/server/api/routes/voice.py`**:
+    - Added full Twilio outbound calling support with live media-stream TwiML bridging.
+    - Implemented smart dual-routing: routes `+91` Indian mobile numbers via Exotel (`08047284627`) to bypass TRAI international call blocks, and routes international/US numbers (or Exotel fallback) via Twilio (`+16562547488`).
+
+### Entry 92 - Country-Aware Voice & Regional Accent Restoration (`VoiceTab.tsx`) (2026-10-06)
+- **Problem**:
+  - For US/Global clinics (e.g. "Mayo Clinic - Rochester, United States"), the Voice tab showed `Kiara (Indian English (upbeat))` and `Indian English (en-IN)` selected by default, ignoring the user's onboarding choice or American English locality.
+- **Root Cause & Fix**:
+  - **`frontend/user/components/dashboard/ai-tabs/VoiceTab.tsx`**:
+    - Previously, when `primary_language` was `'en'`, the fallback ladder unconditionally executed `else setSelectedAccentCode('en-IN')` without checking the business's country.
+    - Updated fallback to inspect `business.country`: if country is US/Global, default accent is `en-US` (American English) and default voice is `Skylar` (American).
+    - Also added onboarding localStorage fallback checking `onboarding_ai_receptionist` to restore the exact voice selected during onboarding if DB `voice_model` is unpopulated or default.
+
+### Entry 93 - Isolate Playground Test Calls from Dashboard Analytics & Metrics (2026-10-06)
+- **Problem**:
+  - Playground/studio test calls were inflating the clinic's production dashboard metrics: displaying "2 Calls Handled", "Total Calls Today: 2", and "100% Resolution Rate" before any real patient called.
+  - User requested: skip/exclude test calls from dashboard metrics and volume, while keeping them available in Call Logs (`/calls`) and AI Conversations (`/conversations`) for auditing and recording playback.
+- **Root Cause & Fix**:
+  - **`backend/server/services/dashboard_metrics.py`**:
+    - Imported `is_test_call` (`_TEST_PREFIXES`: `studio_`, `webcall_`, `sim_`, `test_call_`) and filtered `calls` and `appointments` to only include live production calls.
+    - Test calls no longer pollute `total_calls`, `calls_today`, `performance`, or `call_volume`.
+  - **`backend/server/api/routes/analytics.py`**:
+    - Filtered out `TEST_CALL_PREFIXES` in analytics `call_filter`.
+  - **`frontend/user/components/dashboard/RecentAIConversations.tsx` & `CallStreamsTable.tsx` & `AIOperationsList.tsx`**:
+    - Filtered out `c.is_test` from dashboard recent activity widgets so dashboard widgets only display real caller interactions.
+  - **Call Logs (`/calls`) & AI Conversations (`/conversations`)**:
+    - Retained full access to all test calls with audio player and transcript so staff can test and review calls anytime.
+### Entry 94 - Assign Twilio Line (+16602435493) to Mayo Clinic Rochester (2026-10-06)
+- **Problem**:
+  - User requested assigning real Twilio phone number `+16602435493` to "Mayo Clinic – Rochester".
+  - Mayo Clinic in the database had no assigned `phone_numbers` row, causing inbound calls to miss dedicated routing and outbound/Twilio webhook calls to lack proper tenant association.
+  - In addition, frontend fallbacks and `.env` had the placeholder number `+1 (656) 254-7488`.
+- **Root Cause & Fix**:
+  - **Database (`businesses` & `phone_numbers`)**:
+    - Updated `Mayo Clinic – Rochester` (`692603a3-3506-4f00-b2ba-3570d3387436`): set `business_phone = '+16602435493'`.
+    - Created dedicated active routing row in `phone_numbers`: `PhoneNumber(business_id=mayo.id, number='+16602435493', mode='dedicated', status='active')`.
+    - Verified `resolve_business` in `backend/server/services/number_routing.py` matches inbound calls to `+16602435493` directly to Mayo Clinic with `number match`.
+  - **Configuration (`.env` & `docker-compose`)**:
+    - Updated `TWILIO_PHONE_NUMBER=+16602435493` in `.env`.
+    - Recreated container `saas-api-1` to load new configuration.
+  - **Frontend (`AIHeader.tsx`, `CallHandlingTab.tsx`, `review/page.tsx`)**:
+    - Added phone number formatter (`formatPhone`) to render `+16602435493` neatly as `+1 (660) 243-5493`.
+    - Prefer `business.business_phone` and refresh from `DashboardController.getBusinessInfo()`.
+    - Updated US/International defaults to `+1 (660) 243-5493`.
+  - **Verification**:
+    - Verified all 305 tests in `backend.ai.evals.test_agent_core` pass with zero regressions.
+
+### Entry 95 - Assign Exotel Line (09513886363) to Demo Clinic (2026-10-06)
+- **Problem**:
+  - User requested setting `09513886363` for "Demo clinic".
+  - "Demo clinic" previously had the user's mobile number (`+918901414107`) stored as its assigned virtual number in the database.
+  - The fallback Indian telephony trunk across Exotel client and frontend headers was previously pointing to `08047284627`.
+- **Root Cause & Fix**:
+  - **Database (`businesses` & `phone_numbers`)**:
+    - Updated `Demo clinic` (`703b13dc-3d6b-4052-806f-04bceb1e5aa9`): set `business_phone = '+919513886363'`.
+    - Updated active dedicated row in `phone_numbers`: `number = '+919513886363'`.
+    - Tested `resolve_business` in `backend/server/services/number_routing.py` for `09513886363`, `+919513886363`, and `9513886363`: all match `Demo clinic` via `number match`.
+  - **Configuration (`.env` & `docker-compose`)**:
+    - `EXOTEL_PHONE_NUMBER=09513886363` and account credentials (`techycodex2`) in `.env`.
+    - Recreated `saas-api-1` container to reload Exotel configuration (`exotel_client.caller_id = '09513886363'`).
+    - Updated fallback caller ID in `backend/ai/realtime/exotel/client.py` and `backend/scripts/seed_indian_clinic.py`.
+  - **Frontend (`AIHeader.tsx`, `CallHandlingTab.tsx`, `TestPlaygroundModal.tsx`, `review/page.tsx`)**:
+    - Added formatter recognition for `9513886363` (`+91 95138 86363`).
+    - Set default Indian phone state to `+91 95138 86363`.
+    - Updated outbound call fallback caller ID in `TestPlaygroundModal.tsx` to `09513886363`.
+  - **Verification**:
+    - Ran `test_dashboard_metrics.py` (7 tests pass, 0 regressions).
+
+
+### Entry 97 - Telephony Greeting Barge-In Buffer Clearance Fix (2026-10-06)
+- **Problem**:
+  - Live phone test call to `+918901414107` connected via Twilio, but caller experienced dead silence: AI was cut off after 1-2 words.
+  - Server logs showed: `2026-10-06 09:50:17,964 [TTS OUT] frames=440 text='Hello, welcome to Mayo Clinic. I am your...'` followed 430ms later by `2026-10-06 09:50:18,394 [BARGE-IN] Cleared Twilio audio buffer`.
+- **Root Cause & Fix**:
+  - **Premature `_is_greeting = False`**:
+    - `_speak_turn(greeting)` streams TTS frames over WebSocket asynchronously at ~5ms intervals (~2.2s for 440 frames).
+    - However, 440 frames represent 8.8 seconds of telephony audio playing in real-time on Twilio.
+    - When `_speak_turn` returned, `finally: self._is_greeting = False` executed immediately, while Twilio was still playing second 2.2 of the greeting.
+    - Deepgram or line activity at second 2.6 triggered `SpeechStarted`. Because `_is_greeting` was already `False`, `handle_caller_speech` sent `{"event": "clear"}` to Twilio, flushing the remaining 6.6 seconds of greeting audio.
+  - **Telephony-Aware Greeting Protection (`gateway.py`)**:
+    - Added `self._greeting_until` (tracked via `barge_in.playback_until`) and `self._greeting_mark` (Twilio mark event tracking).
+    - Defined `is_greeting_active` property checking if greeting frames are either streaming or still actively playing out on telephony line.
+    - Guarded both `handle_media` and `_on_caller_speech_started` with `not self.is_greeting_active`, completely preventing connection noise or early VAD triggers from purging the greeting buffer.
+    - Updated `mark` event handler in `twilio_media_stream` to clear `_greeting_until` as soon as Twilio echoes the greeting mark.
+    - Updated `_handle_transcript` to wait for greeting playback completion if the caller spoke an utterance during the greeting, preventing AI speech collision.
+  - **Rate Limit Adjustment (`voice.py`)**:
+    - Increased `call-me-user` and `call-me-number` hourly test limits from 2 to 20 to allow continuous telephony testing without 429 blocks.

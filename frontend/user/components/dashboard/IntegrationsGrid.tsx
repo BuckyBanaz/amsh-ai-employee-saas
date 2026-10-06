@@ -2,9 +2,11 @@
 import React, { useState, useEffect } from 'react';
 
 import { STRINGS } from '../../utils/strings/en';
-import { useWhatsappEmbeddedSignup } from '../../hooks/useWhatsappEmbeddedSignup';
+import { WHATSAPP_ENABLED } from '../../utils/features';
+import { resolveBusinessId, useWhatsappEmbeddedSignup } from '../../hooks/useWhatsappEmbeddedSignup';
 import { StorageService } from '../../services/storage.service';
-import { BASE_URL } from '../../utils/api_endpoints';
+import { BASE_URL, API_ENDPOINTS } from '../../utils/api_endpoints';
+import { ApiService } from '../../services/api.service';
 
 interface TenantIntegration {
   id: string;
@@ -211,7 +213,13 @@ export function IntegrationsGrid({ filter = 'All Integrations' }: { filter?: str
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<{ success: boolean; message: string } | null>(null);
 
-  const businessId = typeof window !== 'undefined' ? (StorageService.getBusinessId() || 'biz-default') : 'biz-default';
+  // localStorage can be empty (other origin / first load): fall back to asking the backend
+  const [businessId, setBusinessId] = useState<string>(
+    typeof window !== 'undefined' ? (StorageService.getBusinessId() || '') : ''
+  );
+  useEffect(() => {
+    if (!businessId) resolveBusinessId().then((id) => id && setBusinessId(id));
+  }, [businessId]);
 
   const fetchIntegrations = async () => {
     try {
@@ -234,11 +242,27 @@ export function IntegrationsGrid({ filter = 'All Integrations' }: { filter?: str
   };
 
   useEffect(() => {
+    if (!businessId) return;
     fetchIntegrations();
   }, [businessId, wa.status]);
 
+  // Google Calendar uses real Google sign-in, not the manual form
+  const startGoogleCalendar = async () => {
+    try {
+      const { url } = await ApiService.get<{ url: string }>(`${API_ENDPOINTS.INTEGRATIONS.GOOGLE_AUTH_URL(businessId)}?ret=dashboard`);
+      window.location.href = url;
+    } catch (err: any) {
+      alert(err?.message || 'Could not start Google sign-in.');
+    }
+  };
+
   const handleOpenModal = (item: any) => {
     const existing = tenantIntegrations.find((ti) => ti.provider === item.providerKey);
+    if (item.providerKey === 'google_calendar') {
+      if (existing?.status === 'connected') handleDisconnect('google_calendar');
+      else startGoogleCalendar();
+      return;
+    }
     setActiveModalItem(item);
     setFeedback(null);
     if (existing?.config) {
@@ -349,7 +373,8 @@ export function IntegrationsGrid({ filter = 'All Integrations' }: { filter?: str
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 pb-6">
         {filtered.map((item) => {
           const connectedRecord = tenantIntegrations.find((ti) => ti.provider === item.providerKey && ti.status === 'connected');
-          const isConnected = !!connectedRecord || (item.id === 'whatsapp' && wa.status === 'connected');
+          const comingSoon = !WHATSAPP_ENABLED && item.id === 'whatsapp';
+          const isConnected = !comingSoon && (!!connectedRecord || (item.id === 'whatsapp' && wa.status === 'connected'));
 
           return (
             <div
@@ -372,7 +397,7 @@ export function IntegrationsGrid({ filter = 'All Integrations' }: { filter?: str
                             isConnected ? 'text-emerald-600' : 'text-gray-400'
                           }`}
                         >
-                          {isConnected ? 'Connected' : 'Not Connected'}
+                          {isConnected ? 'Connected' : comingSoon ? 'Coming soon' : 'Not Connected'}
                         </span>
                         <span className="text-gray-300">·</span>
                         <span className="text-[10px] font-semibold text-gray-400">
@@ -382,7 +407,11 @@ export function IntegrationsGrid({ filter = 'All Integrations' }: { filter?: str
                     </div>
                   </div>
 
-                  {item.isWhatsappSpecial && !isConnected ? (
+                  {comingSoon ? (
+                    <span className="px-3 py-1 rounded-lg text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 cursor-default">
+                      Coming soon
+                    </span>
+                  ) : item.isWhatsappSpecial && !isConnected ? (
                     <button
                       type="button"
                       onClick={wa.connect}
@@ -401,7 +430,7 @@ export function IntegrationsGrid({ filter = 'All Integrations' }: { filter?: str
                           : 'bg-[#0066FF] text-white hover:bg-blue-600 shadow-xs'
                       }`}
                     >
-                      {isConnected ? 'Manage' : 'Connect'}
+                      {item.providerKey === 'google_calendar' && isConnected ? 'Disconnect' : isConnected ? 'Manage' : 'Connect'}
                     </button>
                   )}
                 </div>

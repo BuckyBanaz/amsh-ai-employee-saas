@@ -16,6 +16,7 @@ from backend.server.database.models.call import Call
 from backend.server.database.models.transaction import Transaction
 from backend.server.database.models.user import User
 from backend.server.database.session import get_db
+from backend.server.services.cost_tracking import TEST_CALL_PREFIXES
 
 router = APIRouter(prefix="/api/businesses/{business_id}/analytics", tags=["analytics"])
 
@@ -46,8 +47,9 @@ def get_analytics_summary(
         start_date = now - timedelta(days=30)
         date_range_label = f"{(now - timedelta(days=30)).strftime('%b %d')} – {now.strftime('%b %d, %Y')}"
 
-    # Base conditions
-    call_filter = and_(Call.business_id == business_id, Call.started_at >= start_date)
+    # Base conditions (skip studio/playground test calls)
+    test_filter = and_(*[~Call.id.startswith(p) for p in TEST_CALL_PREFIXES])
+    call_filter = and_(Call.business_id == business_id, Call.started_at >= start_date, test_filter)
     tx_filter = and_(Transaction.business_id == business_id, Transaction.created_at >= start_date)
 
     # 1. Total Calls

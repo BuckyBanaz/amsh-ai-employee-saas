@@ -4,10 +4,16 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ApiService } from '../../../../services/api.service';
 import { API_ENDPOINTS } from '../../../../utils/api_endpoints';
+import { WHATSAPP_ENABLED } from '../../../../utils/features';
 import { useWhatsappEmbeddedSignup, getActiveBusinessId } from '../../../../hooks/useWhatsappEmbeddedSignup';
 
 export default function WhatsappSetupPage() {
   const router = useRouter();
+
+  // Hidden until launch: see utils/features.ts
+  useEffect(() => {
+    if (!WHATSAPP_ENABLED) router.replace('/onboarding/integrations');
+  }, [router]);
 
   // Mode: Turnkey Managed Gateway (Instant 0-friction) vs Custom Meta Credentials
   const [activeTab, setActiveTab] = useState<'turnkey' | 'custom'>('turnkey');
@@ -92,9 +98,14 @@ export default function WhatsappSetupPage() {
     setIsSaving(true);
 
     try {
-      localStorage.setItem('onboarding_whatsapp_connected', metaStatus === 'connected' ? 'true' : 'false');
-      localStorage.setItem('onboarding_whatsapp_phone', businessPhone);
-      const mode = metaStatus === 'connected' ? 'embedded_signup' : activeTab === 'turnkey' ? 'turnkey_cloud' : 'custom_waba';
+      const isConnected = metaStatus === 'connected';
+      localStorage.setItem('onboarding_whatsapp_connected', isConnected ? 'true' : 'false');
+      if (isConnected) {
+        localStorage.setItem('onboarding_whatsapp_phone', businessPhone);
+      } else {
+        localStorage.removeItem('onboarding_whatsapp_phone');
+      }
+      const mode = isConnected ? 'embedded_signup' : activeTab === 'turnkey' ? 'turnkey_cloud' : 'custom_waba';
       localStorage.setItem('onboarding_whatsapp_mode', mode);
       localStorage.setItem('onboarding_whatsapp_admin_alert', adminAlertPhone);
       localStorage.setItem('onboarding_whatsapp_instant_cards', enableInstantCards ? 'true' : 'false');
@@ -136,8 +147,8 @@ export default function WhatsappSetupPage() {
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-base font-bold text-gray-900 tracking-tight">WhatsApp Business Channel</h1>
-              <span className="bg-emerald-100 text-emerald-800 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase border border-emerald-200">
-                Ready to Send
+              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase border ${metaStatus === 'connected' ? 'bg-emerald-100 text-emerald-800 border-emerald-200' : 'bg-amber-100 text-amber-800 border-amber-200'}`}>
+                {metaStatus === 'connected' ? 'Ready to Send' : 'Not Connected'}
               </span>
             </div>
             <p className="text-[11px] text-gray-500">
@@ -147,10 +158,17 @@ export default function WhatsappSetupPage() {
         </div>
 
         <div className="flex items-center gap-2 self-start sm:self-center">
-          <span className="bg-emerald-50 text-emerald-700 border border-emerald-300 text-[10px] font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1.5 shadow-2xs">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            Channel Active &amp; Ready
-          </span>
+          {metaStatus === 'connected' ? (
+            <span className="bg-emerald-50 text-emerald-700 border border-emerald-300 text-[10px] font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1.5 shadow-2xs">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              Channel Active &amp; Ready
+            </span>
+          ) : (
+            <span className="bg-amber-50 text-amber-700 border border-amber-300 text-[10px] font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1.5 shadow-2xs">
+              <span className="w-2 h-2 rounded-full bg-amber-500" />
+              Connect with Facebook to activate
+            </span>
+          )}
         </div>
       </div>
 
@@ -301,7 +319,7 @@ export default function WhatsappSetupPage() {
               <button
                 type="button"
                 onClick={handleSendTestMessage}
-                disabled={testSent}
+                disabled={testSent || metaStatus !== 'connected' || !adminAlertPhone}
                 className="px-3.5 py-1.5 text-xs font-bold text-[#128C7E] bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
               >
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">

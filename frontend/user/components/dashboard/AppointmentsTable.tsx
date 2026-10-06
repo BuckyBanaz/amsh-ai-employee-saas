@@ -112,41 +112,59 @@ export function AppointmentsTable({ items, loading: propLoading }: AppointmentsT
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {!loading && displayList.length === 0 && (
+              {loading ? (
+                Array.from({ length: 4 }).map((_, i) => (
+                  <tr key={i} className="animate-pulse">
+                    <td className="px-3.5 py-3"><div className="h-3 w-12 bg-gray-200 rounded" /></td>
+                    <td className="px-3.5 py-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-full bg-gray-200 shrink-0" />
+                        <div className="h-3 w-24 bg-gray-200 rounded" />
+                      </div>
+                    </td>
+                    <td className="px-3.5 py-3"><div className="h-3 w-20 bg-gray-200 rounded" /></td>
+                    <td className="px-3.5 py-3"><div className="h-3 w-20 bg-gray-200 rounded" /></td>
+                    <td className="px-3.5 py-3"><div className="h-5 w-16 bg-gray-200 rounded-full" /></td>
+                    <td className="px-3.5 py-3"><div className="h-5 w-16 bg-gray-200 rounded-full" /></td>
+                    <td className="px-3.5 py-3 text-right"><div className="h-3 w-6 bg-gray-200 rounded ml-auto" /></td>
+                  </tr>
+                ))
+              ) : displayList.length === 0 ? (
                 <tr><td colSpan={7} className="px-3.5 py-8 text-center text-xs text-gray-500">No appointments yet. Bookings made by the AI or your team will appear here.</td></tr>
+              ) : (
+                displayList.map((appt) => (
+                  <tr key={appt.id} className="hover:bg-gray-50/50 transition-colors">
+                    <td className="px-3.5 py-2 text-xs font-bold text-gray-900 whitespace-nowrap">
+                      {appt.preferred_time || '—'}
+                    </td>
+                    <td className="px-3.5 py-2 whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        <span className="w-6 h-6 rounded-full bg-blue-100/80 text-[#0066FF] flex items-center justify-center font-bold text-[9px] shrink-0">
+                          {getInitials(appt.customer_name)}
+                        </span>
+                        <span className="text-xs font-bold text-gray-800">{appt.customer_name}</span>
+                      </div>
+                    </td>
+                    <td className="px-3.5 py-2 text-xs text-gray-600 font-medium whitespace-nowrap">
+                      {appt.service_name || 'Consultation'}
+                    </td>
+                    <td className="px-3.5 py-2 text-xs text-gray-600 font-medium whitespace-nowrap">
+                      {appt.doctor_name || 'Unassigned'}
+                    </td>
+                    <td className="px-3.5 py-2 whitespace-nowrap">
+                      {getStatusBadge(appt.status)}
+                    </td>
+                    <td className="px-3.5 py-2 whitespace-nowrap">
+                      <ChannelBadge channel={channelOfAppointment(appt)} label={appt.channel_label} />
+                    </td>
+                    <td className="px-3.5 py-2 text-right whitespace-nowrap">
+                      <button className="text-gray-400 hover:text-gray-700 p-0.5 rounded-md transition-colors cursor-pointer font-bold text-sm leading-none">
+                        ···
+                      </button>
+                    </td>
+                  </tr>
+                ))
               )}
-              {displayList.map((appt) => (
-                <tr key={appt.id} className="hover:bg-gray-50/50 transition-colors">
-                  <td className="px-3.5 py-2 text-xs font-bold text-gray-900 whitespace-nowrap">
-                    {appt.preferred_time || '—'}
-                  </td>
-                  <td className="px-3.5 py-2 whitespace-nowrap">
-                    <div className="flex items-center gap-2">
-                      <span className="w-6 h-6 rounded-full bg-blue-100/80 text-[#0066FF] flex items-center justify-center font-bold text-[9px] shrink-0">
-                        {getInitials(appt.customer_name)}
-                      </span>
-                      <span className="text-xs font-bold text-gray-800">{appt.customer_name}</span>
-                    </div>
-                  </td>
-                  <td className="px-3.5 py-2 text-xs text-gray-600 font-medium whitespace-nowrap">
-                    {appt.service_name || 'Dental Checkup'}
-                  </td>
-                  <td className="px-3.5 py-2 text-xs text-gray-600 font-medium whitespace-nowrap">
-                    {appt.doctor_name || 'Unassigned'}
-                  </td>
-                  <td className="px-3.5 py-2 whitespace-nowrap">
-                    {getStatusBadge(appt.status)}
-                  </td>
-                  <td className="px-3.5 py-2 whitespace-nowrap">
-                    <ChannelBadge channel={channelOfAppointment(appt)} label={appt.channel_label} />
-                  </td>
-                  <td className="px-3.5 py-2 text-right whitespace-nowrap">
-                    <button className="text-gray-400 hover:text-gray-700 p-0.5 rounded-md transition-colors cursor-pointer font-bold text-sm leading-none">
-                      ···
-                    </button>
-                  </td>
-                </tr>
-              ))}
             </tbody>
           </table>
         </div>

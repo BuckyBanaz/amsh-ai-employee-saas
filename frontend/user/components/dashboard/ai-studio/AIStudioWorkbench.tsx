@@ -10,6 +10,7 @@ import { isEchoOfAI, isRealInterruption } from '../../../utils/voice_echo';
 import { ChooseVoiceModal, VoiceOption, AVAILABLE_VOICES } from './ChooseVoiceModal';
 import { withPreviewToken } from '../../../services/voice_preview.service';
 import { TestModeBanner, TestAction } from '../TestModeBanner';
+import { ShimmerBlock, FormSkeleton, ChatThreadSkeleton } from '../../common/ShimmerSkeleton';
 
 const HeroOrb = dynamic(() => import('../../landing/HeroOrb'), {
   ssr: false,
@@ -64,7 +65,8 @@ const ACCENT_GROUPS = [
 
 export function AIStudioWorkbench({ onBack, onSave }: AIStudioWorkbenchProps) {
   // Agent configuration state
-  const [agentName, setAgentName] = useState('AMSh Receptionist');
+  const [isAgentLoading, setIsAgentLoading] = useState(true);
+  const [agentName, setAgentName] = useState('');
   const [isEditingName, setIsEditingName] = useState(false);
   // The model list is fetched live from the server (Groq + Gemini APIs); nothing here is hard-coded.
   const [model, setModel] = useState('');
@@ -72,11 +74,9 @@ export function AIStudioWorkbench({ onBack, onSave }: AIStudioWorkbenchProps) {
   const [llmDefault, setLlmDefault] = useState('');
   const [llmMessage, setLlmMessage] = useState('Loading models…');
   const [selectedVoice, setSelectedVoice] = useState<VoiceOption>(AVAILABLE_VOICES[0]);
-  const [selectedAccentCode, setSelectedAccentCode] = useState('hi-IN');
+  const [selectedAccentCode, setSelectedAccentCode] = useState('en-US');
   const [emotion, setEmotion] = useState('Empathetic & Calm');
-  const [welcomeMessage, setWelcomeMessage] = useState(
-    'Namaste! Welcome to our clinic. I am your AI receptionist. How can I help you today?'
-  );
+  const [welcomeMessage, setWelcomeMessage] = useState('');
   const [systemPrompt, setSystemPrompt] = useState(
     'You are a professional, HIPAA-compliant medical receptionist. Greet callers warmly, offer open appointment slots, confirm patient name and contact number, and answer clinic FAQs accurately. For medical emergencies, advise immediate emergency care.'
   );
@@ -147,12 +147,24 @@ export function AIStudioWorkbench({ onBack, onSave }: AIStudioWorkbenchProps) {
   }, []);
 
   // Load existing agent configuration from Database Server
+  // Fetch agent configuration and business details from database
   useEffect(() => {
-    DashboardController.getAgent()
-      .then((agent) => {
+    setIsAgentLoading(true);
+    Promise.all([
+      DashboardController.getAgent().catch(() => null),
+      DashboardController.getBusinessInfo().catch(() => null),
+    ])
+      .then(([agent, business]) => {
+        const bCountry = (business?.country || '').toLowerCase();
+        const isIndia = bCountry.includes('india') || bCountry.includes('+91');
+        const clinicName = business?.name || 'our clinic';
+        const defaultGreeting = isIndia
+          ? `Namaste! Welcome to ${clinicName}. I am your AI receptionist. How can I help you today?`
+          : `Hello, welcome to ${clinicName}. I am your AI receptionist. How may I help you today?`;
+
         if (agent) {
           if (agent.name) setAgentName(agent.name);
-          if (agent.greeting_message) setWelcomeMessage(agent.greeting_message);
+          setWelcomeMessage(agent.greeting_message || defaultGreeting);
           if (agent.config?.personality) setEmotion(agent.config.personality);
           if (agent.config?.model) setModel(agent.config.model);
           if (agent.config?.compliance) setComplianceInfo(agent.config.compliance);
@@ -163,19 +175,27 @@ export function AIStudioWorkbench({ onBack, onSave }: AIStudioWorkbenchProps) {
           }
 
           // 1. Restore exact saved voice from DB
+          let voiceFound = false;
           if (agent.voice_model) {
             const found = AVAILABLE_VOICES.find((v) => v.voice_id === agent.voice_model);
-            if (found) setSelectedVoice(found);
+            if (found) { setSelectedVoice(found); voiceFound = true; }
           } else if (agent.config?.tts_provider?.voice_id) {
             const found = AVAILABLE_VOICES.find(
               (v) => v.voice_id === agent.config?.tts_provider?.voice_id
             );
-            if (found) setSelectedVoice(found);
+            if (found) { setSelectedVoice(found); voiceFound = true; }
           } else if (agent.config?.tts_provider?.voice_name) {
             const found = AVAILABLE_VOICES.find(
               (v) => v.name.toLowerCase() === agent.config?.tts_provider?.voice_name?.toLowerCase()
             );
-            if (found) setSelectedVoice(found);
+            if (found) { setSelectedVoice(found); voiceFound = true; }
+          }
+
+          if (!voiceFound) {
+            const fallbackVoice = isIndia
+              ? AVAILABLE_VOICES.find((v) => v.voice_id === 'f8f5f1b2-f02d-4d8e-a40d-fd850a487b3d') || AVAILABLE_VOICES[0]
+              : AVAILABLE_VOICES.find((v) => v.voice_id === '79a125e8-cd45-4c13-8a67-188112f4dd22') || AVAILABLE_VOICES[0];
+            setSelectedVoice(fallbackVoice);
           }
 
           // 2. Restore exact saved accent from DB
@@ -193,11 +213,22 @@ export function AIStudioWorkbench({ onBack, onSave }: AIStudioWorkbenchProps) {
             else if (lang.includes('nl')) setSelectedAccentCode('nl-NL');
             else if (lang.includes('fr')) setSelectedAccentCode('fr-FR');
             else if (lang.includes('ar')) setSelectedAccentCode('ar-SA');
-            else setSelectedAccentCode('en-IN');
+            else setSelectedAccentCode(isIndia ? 'en-IN' : 'en-US');
+          } else {
+            setSelectedAccentCode(isIndia ? 'en-IN' : 'en-US');
           }
+        } else {
+          setAgentName(clinicName ? `${clinicName} Receptionist` : 'AI Receptionist');
+          setWelcomeMessage(defaultGreeting);
+          const fallbackVoice = isIndia
+            ? AVAILABLE_VOICES.find((v) => v.voice_id === 'f8f5f1b2-f02d-4d8e-a40d-fd850a487b3d') || AVAILABLE_VOICES[0]
+            : AVAILABLE_VOICES.find((v) => v.voice_id === '79a125e8-cd45-4c13-8a67-188112f4dd22') || AVAILABLE_VOICES[0];
+          setSelectedVoice(fallbackVoice);
+          setSelectedAccentCode(isIndia ? 'en-IN' : 'en-US');
         }
       })
-      .catch((err) => console.warn('Failed to load agent for studio:', err));
+      .catch((err) => console.warn('Failed to load agent for studio:', err))
+      .finally(() => setIsAgentLoading(false));
   }, []);
 
   // Save Agent Configuration into Database Server
@@ -781,6 +812,36 @@ export function AIStudioWorkbench({ onBack, onSave }: AIStudioWorkbenchProps) {
 
   const activeVoice = selectedVoice || AVAILABLE_VOICES[0];
   const activeAccent = ACCENT_GROUPS.flatMap((g) => g.accents).find((a) => a.code === selectedAccentCode) || ACCENT_GROUPS[0].accents[0];
+
+  if (isAgentLoading) {
+    return (
+      <div className="flex flex-col h-full w-full bg-slate-50/50 min-h-screen p-6">
+        <div className="max-w-6xl mx-auto w-full space-y-6">
+          <div className="flex items-center justify-between bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+            <div className="flex items-center gap-3">
+              <ShimmerBlock className="w-10 h-10 rounded-xl" />
+              <div className="space-y-1.5">
+                <ShimmerBlock className="h-4 w-40 rounded-md" />
+                <ShimmerBlock className="h-2.5 w-60 rounded-md opacity-60" />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <ShimmerBlock className="h-9 w-24 rounded-xl" />
+              <ShimmerBlock className="h-9 w-28 rounded-xl" />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <div className="lg:col-span-7 space-y-6">
+              <FormSkeleton title="Loading AI Studio Persona & Prompts..." />
+            </div>
+            <div className="lg:col-span-5 space-y-6">
+              <ChatThreadSkeleton />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-full w-full bg-slate-50/50 min-h-screen text-slate-800">

@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from backend.server.common.channels import channel_of
 from backend.server.database.models.transaction import Transaction
 from backend.server.database.models.service import Service
+from backend.server.services import google_calendar
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +77,7 @@ class ClinicWriteOperations:
             db.commit()
             db.refresh(transaction)
             logger.info("Successfully stored appointment %s in PostgreSQL for %s", booking_id, patient_name)
+            google_calendar.sync_appointment(db, business_id, transaction)
 
             # Trigger Instant Confirmation SMS if phone provided and source is voice receptionist
             if phone_number and source == "ai_voice_receptionist":
@@ -156,6 +158,8 @@ class ClinicWriteOperations:
         tx.details = current_details
         db.commit()
         db.refresh(tx)
+        google_calendar.sync_appointment(db, business_id, tx)
+        current_details = dict(tx.details or {})
 
         return {
             "id": tx.id,
@@ -198,6 +202,7 @@ class ClinicWriteOperations:
         ).first()
         if not tx:
             return False
+        google_calendar.sync_appointment(db, business_id, tx, deleted=True)
         db.delete(tx)
         db.commit()
         return True

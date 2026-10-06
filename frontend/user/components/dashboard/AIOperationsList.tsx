@@ -8,10 +8,11 @@ export function AIOperationsList() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    DashboardController.getCalls(undefined, { limit: 6 })
+    DashboardController.getCalls(undefined, { limit: 12 })
       .then((calls: CallLogItem[]) => {
-        if (calls && calls.length > 0) {
-          const ops = calls.map((c) => {
+        const realCalls = (calls || []).filter((c) => !c.is_test).slice(0, 6);
+        if (realCalls && realCalls.length > 0) {
+          const ops = realCalls.map((c) => {
             const timeStr = c.started_at
               ? new Date(c.started_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
               : 'Recent';
@@ -24,11 +25,11 @@ export function AIOperationsList() {
           });
           setOperations(ops);
         } else {
-          setOperations(STRINGS.DASHBOARD.COMPONENTS.AI_OPERATIONS.LIST);
+          setOperations([]);
         }
       })
       .catch(() => {
-        setOperations(STRINGS.DASHBOARD.COMPONENTS.AI_OPERATIONS.LIST);
+        setOperations([]);
       })
       .finally(() => setLoading(false));
   }, []);
@@ -45,7 +46,21 @@ export function AIOperationsList() {
         <div className="absolute left-[3px] top-1.5 bottom-1.5 w-px bg-gray-100"></div>
 
         {loading ? (
-          <div className="p-4 text-center text-xs text-gray-400">Loading live operations...</div>
+          <div className="space-y-3 p-3">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-2.5 animate-pulse pl-5">
+                <div className="w-1.5 h-1.5 rounded-full bg-gray-200 shrink-0" />
+                <div className="space-y-1 flex-1">
+                  <div className="h-2 w-12 bg-gray-200 rounded" />
+                  <div className="h-3 w-full max-w-[180px] bg-gray-200 rounded" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : operations.length === 0 ? (
+          <div className="py-8 px-4 text-center text-xs text-gray-400 my-auto">
+            No live AI actions recorded yet. Inbound calls handled by your receptionist will appear here.
+          </div>
         ) : (
           <div className="space-y-3">
             {operations.map((op, idx) => (

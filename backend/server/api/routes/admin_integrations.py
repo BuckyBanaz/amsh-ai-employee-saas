@@ -126,6 +126,20 @@ def _ping_whatsapp() -> Tuple[bool, str]:
                          headers={"Authorization": f"Bearer {_setting('META_WHATSAPP_TOKEN')}"}), "Meta WhatsApp")
 
 
+def _ping_google_calendar() -> Tuple[bool, str]:
+    """Validates the OAuth client without touching any user: a bogus code is rejected with invalid_grant when the client id/secret are right, invalid_client when they are not."""
+    r = httpx.post("https://oauth2.googleapis.com/token", timeout=PING_TIMEOUT_SECONDS, data={
+        "code": "amsh-health-check", "client_id": _setting("GOOGLE_CLIENT_ID"), "client_secret": _setting("GOOGLE_CLIENT_SECRET"),
+        "redirect_uri": _setting("GOOGLE_REDIRECT_URI") or "http://localhost:8010/api/integrations/google/callback", "grant_type": "authorization_code",
+    })
+    error = (r.json() or {}).get("error") if r.headers.get("content-type", "").startswith("application/json") else None
+    if error == "invalid_grant":
+        return True, "Google accepted the OAuth client id and secret"
+    if error == "invalid_client":
+        return False, "Google rejected the OAuth client id or secret"
+    return _verdict(r, "Google OAuth")
+
+
 def _check_email() -> Dict[str, Any]:
     """Platform email: the SMTP the superadmin saved in the portal (login test, nothing is sent), else Resend from .env."""
     smtp = platform_smtp.load_settings()
@@ -173,6 +187,7 @@ PROVIDERS: Dict[str, Tuple[str, str, List[Any], Callable[[], Tuple[bool, str]]]]
     "cartesia": ("Cartesia Sonic Voice", "Voice", ["CARTESIA_API_KEY"], _ping_cartesia),
     "elevenlabs": ("ElevenLabs Voice", "Voice", ["ELEVENLABS_API_KEY"], _ping_elevenlabs),
     "whatsapp": ("Meta WhatsApp Cloud API", "Messaging", ["META_WHATSAPP_TOKEN"], _ping_whatsapp),
+    "google_calendar": ("Google Calendar (OAuth)", "Calendar", ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"], _ping_google_calendar),
     "platform_smtp": ("Platform Email (SMTP)", "Email", ["RESEND_API_KEY"], _ping_resend),
     "razorpay": ("Razorpay Billing Gateway", "Payments", [("RAZORPAY_KEY_ID", "RAZORPAY_API_KEY"), ("RAZORPAY_KEY_SECRET", "RAZORPAY_SECRET_KEY")], _ping_razorpay),
     "stripe": ("Stripe Card Gateway", "Payments", ["STRIPE_SECRET_KEY"], _ping_stripe),

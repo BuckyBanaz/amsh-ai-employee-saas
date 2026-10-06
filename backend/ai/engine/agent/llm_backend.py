@@ -330,10 +330,7 @@ class GeminiChatBackend(OpenAICompatBackend):
         return getattr(get_settings(), "GEMINI_API_KEY", None)
 
     def client(self) -> httpx.AsyncClient:
-        global _gemini_client
-        if _gemini_client is None:
-            _gemini_client = pooled_http_client(timeout=10.0)  # long keep-alive: no TLS handshake per turn
-        return _gemini_client
+        return pooled_http_client(timeout=10.0)  # long keep-alive: no TLS handshake per turn
 
     # Gemini 3 validates a thought_signature on every function call in the history. Calls the model made itself carry the
     # real one (echoed back); calls made by another provider (Groq) get Google's documented "skip validation" marker.

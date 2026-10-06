@@ -3,26 +3,39 @@ Groq LLM Client.
 Ultra-low latency LLM inference using LLaMA-3.1-8B-Instant for intent and slot extraction.
 """
 
+import asyncio
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 import httpx
 
-from backend.ai.engine.conversation.spoken_numbers import spoken_to_digits
 from backend.server.common.config import get_settings
 
 logger = logging.getLogger(__name__)
+
+_pooled_clients: Dict[Tuple[Any, float], httpx.AsyncClient] = {}
 
 
 def pooled_http_client(timeout: float) -> httpx.AsyncClient:
     """A long-lived client for a voice provider. httpx closes idle pooled connections after 5 s by default, which is
     shorter than one caller utterance, so each turn re-did TCP+TLS (one or two extra round trips, worst from India to
-    US-hosted APIs). Keeping them open (PROVIDER_KEEPALIVE_SECONDS) lets the next turn reuse the warm connection."""
+    US-hosted APIs). Keeping them open (PROVIDER_KEEPALIVE_SECONDS) lets the next turn reuse the warm connection.
+    Keyed by running event loop to prevent 'is bound to a different event loop' errors across worker threads or reloads."""
     keepalive = float(getattr(get_settings(), "PROVIDER_KEEPALIVE_SECONDS", 120.0) or 5.0)
-    return httpx.AsyncClient(
-        timeout=timeout,
-        limits=httpx.Limits(max_connections=100, max_keepalive_connections=20, keepalive_expiry=keepalive),
-    )
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+    key = (loop, timeout)
+    client = _pooled_clients.get(key)
+    if client is None or client.is_closed:
+        client = httpx.AsyncClient(
+            timeout=timeout,
+            limits=httpx.Limits(max_connections=100, max_keepalive_connections=20, keepalive_expiry=keepalive),
+        )
+        if loop is not None:
+            _pooled_clients[key] = client
+    return client
 
 
 def reasoning_params(model: str) -> Dict[str, Any]:
@@ -38,8 +51,15 @@ class GroqLLMClient:
         self.api_key = getattr(self.settings, "GROQ_API_KEY", "")
         self.model = getattr(self.settings, "GROQ_MODEL", None) or "openai/gpt-oss-20b"
         self.api_url = "https://api.groq.com/openai/v1/chat/completions"
-        # Reused across calls: skips a TLS handshake (~100-200ms) per turn, as long as the connection stays pooled.
-        self._client = pooled_http_client(timeout=4.0)
+        self._override_client: Optional[httpx.AsyncClient] = None
+
+    @property
+    def _client(self) -> httpx.AsyncClient:
+        return self._override_client or pooled_http_client(timeout=4.0)
+
+    @_client.setter
+    def _client(self, value: httpx.AsyncClient) -> None:
+        self._override_client = value
 
     async def warm(self) -> None:
         """Open (or keep open) the pooled HTTPS connection to Groq so the next turn's completion skips TCP+TLS setup.
@@ -139,6 +159,7 @@ Respond ONLY with valid JSON in this exact structure:
             slots["patient_name"] = user_utterance.strip()
 
         # Extract phone: e.g. 555-987-6543 or +1555... or 10 digits
+        from backend.ai.engine.conversation.spoken_numbers import spoken_to_digits
         spoken_digits = spoken_to_digits(user_utterance)
         phone_match = re.search(r"(\+?\d[\d\-\s]{7,}\d)", user_utterance)
         if len(spoken_digits) >= 7:

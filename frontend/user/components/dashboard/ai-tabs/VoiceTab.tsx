@@ -78,8 +78,11 @@ export function VoiceTab() {
         if (agent) {
           if (agent.voice_provider) setProvider(agent.voice_provider);
 
-          // 1. Restore exact saved voice from DB
+          // 1. Restore exact saved voice from DB (or onboarding choice / country default)
           const ttsCfg = agent.config?.tts_provider || {};
+          const bCountry = (business?.country || '').toLowerCase();
+          const isIndiaBiz = bCountry.includes('india') || bCountry.includes('+91');
+
           if (agent.voice_model && agent.voice_model !== 'default') {
             setSelectedVoiceId(agent.voice_model);
           } else if (ttsCfg.voice_id) {
@@ -89,9 +92,34 @@ export function VoiceTab() {
               (v) => v.name.toLowerCase() === ttsCfg.voice_name.toLowerCase()
             );
             if (found) setSelectedVoiceId(found.voice_id);
+          } else {
+            // Check onboarding choice from localStorage if DB agent voice_model was default
+            let resolvedFromOnboarding = false;
+            try {
+              const rawOnboarding = localStorage.getItem('onboarding_ai_receptionist');
+              if (rawOnboarding) {
+                const parsed = JSON.parse(rawOnboarding);
+                if (parsed.selectedVoice) {
+                  const match = AVAILABLE_VOICES.find(v => v.voice_id === parsed.selectedVoice || v.id === parsed.selectedVoice);
+                  if (match) {
+                    setSelectedVoiceId(match.voice_id);
+                    resolvedFromOnboarding = true;
+                  }
+                }
+              }
+            } catch (e) {}
+
+            if (!resolvedFromOnboarding) {
+              // Default to American Skylar for US/Global businesses, Kiara for India
+              setSelectedVoiceId(
+                isIndiaBiz
+                  ? 'f8f5f1b2-f02d-4d8e-a40d-fd850a487b3d' // Kiara (Indian)
+                  : 'db6b0ed5-d5d3-463d-ae85-518a07d3c2b4' // Skylar (American)
+              );
+            }
           }
 
-          // 2. Restore exact saved accent from DB
+          // 2. Restore exact saved accent from DB (or country-aware default)
           if (agent.config?.accent) {
             setSelectedAccentCode(agent.config.accent);
           } else if (agent.config?.stt?.language) {
@@ -104,7 +132,9 @@ export function VoiceTab() {
             else if (lang.includes('es')) setSelectedAccentCode('es-ES');
             else if (lang.includes('de')) setSelectedAccentCode('de-DE');
             else if (lang.includes('nl')) setSelectedAccentCode('nl-NL');
-            else setSelectedAccentCode('en-IN');
+            else if (isIndiaBiz) setSelectedAccentCode('en-IN');
+            else if (bCountry.includes('uk') || bCountry.includes('united kingdom') || bCountry.includes('britain')) setSelectedAccentCode('en-GB');
+            else setSelectedAccentCode('en-US'); // Default to American English for US & Global clinics
           }
 
           // 3. Sliders

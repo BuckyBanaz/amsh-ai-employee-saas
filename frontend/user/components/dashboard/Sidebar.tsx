@@ -179,19 +179,29 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
         </div>
 
         <div className="w-full flex items-center justify-between px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-md">
-          <div className="flex items-center gap-2 min-w-0 pr-1">
-            {mounted && businessLogo ? (
-              <img src={businessLogo} alt="Logo" className="w-6 h-6 rounded object-cover shrink-0 border border-gray-200" />
-            ) : (
-              <div className="w-6 h-6 rounded bg-blue-50 text-[#0066FF] flex items-center justify-center text-[11px] font-bold shrink-0">
-                {businessName.charAt(0) || 'B'}
+          {!mounted || !business ? (
+            <div className="flex items-center gap-2 min-w-0 pr-1 animate-pulse">
+              <div className="w-6 h-6 rounded bg-gray-200 shrink-0" />
+              <div className="space-y-1">
+                <div className="h-3 w-20 bg-gray-200 rounded" />
+                <div className="h-2 w-14 bg-gray-200 rounded" />
               </div>
-            )}
-            <div className="min-w-0">
-              <h3 className="text-xs font-bold text-gray-900 leading-tight truncate">{businessName}</h3>
-              <p className="text-[10px] text-gray-500 font-medium truncate">{businessLocation}</p>
             </div>
-          </div>
+          ) : (
+            <div className="flex items-center gap-2 min-w-0 pr-1">
+              {businessLogo ? (
+                <img src={businessLogo} alt="Logo" className="w-6 h-6 rounded object-cover shrink-0 border border-gray-200" />
+              ) : (
+                <div className="w-6 h-6 rounded bg-blue-50 text-[#0066FF] flex items-center justify-center text-[11px] font-bold shrink-0">
+                  {businessName.charAt(0) || 'B'}
+                </div>
+              )}
+              <div className="min-w-0">
+                <h3 className="text-xs font-bold text-gray-900 leading-tight truncate">{businessName}</h3>
+                <p className="text-[10px] text-gray-500 font-medium truncate">{businessLocation}</p>
+              </div>
+            </div>
+          )}
           <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 shrink-0" title="Active"></span>
         </div>
       </div>
@@ -242,15 +252,25 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
       {/* Bottom Profile */}
       <div className="p-3 border-t border-gray-100 mt-auto">
         <div className="flex items-center justify-between p-1.5 rounded-md hover:bg-gray-50 transition-colors">
-          <div className="flex items-center gap-2.5 min-w-0 flex-1">
-            <div className="w-7 h-7 rounded-full bg-[#F0F7FF] text-[#0066FF] flex items-center justify-center font-bold text-xs shrink-0">
-              {userInitials}
+          {!mounted || !user ? (
+            <div className="flex items-center gap-2.5 min-w-0 flex-1 animate-pulse">
+              <div className="w-7 h-7 rounded-full bg-gray-200 shrink-0" />
+              <div className="flex-1 space-y-1">
+                <div className="h-3 w-20 bg-gray-200 rounded" />
+                <div className="h-2 w-28 bg-gray-200 rounded" />
+              </div>
             </div>
-            <div className="flex-1 overflow-hidden">
-              <h2 className="text-xs font-bold text-gray-900 truncate">{userName}</h2>
-              <p className="text-[10px] text-gray-500 truncate">{userEmail}</p>
+          ) : (
+            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+              <div className="w-7 h-7 rounded-full bg-[#F0F7FF] text-[#0066FF] flex items-center justify-center font-bold text-xs shrink-0">
+                {userInitials}
+              </div>
+              <div className="flex-1 overflow-hidden">
+                <h2 className="text-xs font-bold text-gray-900 truncate">{userName}</h2>
+                <p className="text-[10px] text-gray-500 truncate">{userEmail}</p>
+              </div>
             </div>
-          </div>
+          )}
           <button
             onClick={handleLogout}
             title="Log out"

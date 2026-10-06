@@ -104,6 +104,11 @@ class Settings(BaseSettings):
     META_APP_SECRET: str | None = None
     META_GRAPH_VERSION: str = "v23.0"
 
+    # Google Calendar OAuth (Google Cloud Console -> Credentials -> OAuth client, type "Web application")
+    GOOGLE_CLIENT_ID: str | None = None
+    GOOGLE_CLIENT_SECRET: str | None = None
+    GOOGLE_REDIRECT_URI: str = "http://localhost:8010/api/integrations/google/callback"  # must match the console exactly
+
     # Razorpay Payments
     RAZORPAY_KEY_ID: str | None = None
     RAZORPAY_KEY_SECRET: str | None = None

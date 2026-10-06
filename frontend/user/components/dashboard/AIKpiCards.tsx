@@ -1,6 +1,7 @@
 "use client";
 import React, { useEffect, useState } from 'react';
 import { DashboardController, DashboardMetrics } from '../../controllers/dashboard.controller';
+import { KpiGridSkeleton } from '../common/ShimmerSkeleton';
 
 export function AIKpiCards() {
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
@@ -17,8 +18,16 @@ export function AIKpiCards() {
       .finally(() => setLoading(false));
   }, []);
 
+  if (loading) {
+    return (
+      <div className="mb-4">
+        <KpiGridSkeleton />
+      </div>
+    );
+  }
+
   // Everything comes from the server's real numbers; a figure it cannot compute yet shows a dash.
-  const dash = (v: string | null | undefined) => (loading ? '...' : v ?? '—');
+  const dash = (v: string | null | undefined) => (v ?? '—');
   const cards = [
     { title: 'Calls Today', value: loading ? '...' : (metrics?.total_calls ?? 0), subtext: metrics?.calls_trend ?? 'No earlier day to compare', isGood: !metrics?.calls_trend?.startsWith('-') },
     { title: 'AI Resolution Rate', value: dash(metrics?.resolution_rate), subtext: metrics ? `${metrics.transferred_calls} handed to staff today` : '', isGood: true },

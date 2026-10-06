@@ -85,6 +85,8 @@ def compute_charge(db: Session, target_plan: Plan, full_amount: float, cycle: st
     if not business_id:
         return full_amount, False, None, 0.0
     biz = db.query(Business).filter(Business.id == business_id).first()
+    if not biz or biz.status != "active":
+        return full_amount, False, None, 0.0
     current_plan = find_by_key(db, biz.plan) if biz and biz.plan else None
     if not current_plan or current_plan.key.lower() == target_plan.key.lower():
         return full_amount, False, None, 0.0

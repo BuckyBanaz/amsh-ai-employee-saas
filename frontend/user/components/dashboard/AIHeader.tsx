@@ -10,22 +10,42 @@ interface AIHeaderProps {
 }
 
 export function AIHeader({ onTestClick, onSwitchWorkbench }: AIHeaderProps = {}) {
-  const [phoneNumber, setPhoneNumber] = useState('+91 80472 84627');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [isOnline, setIsOnline] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
-  const [userInitials, setUserInitials] = useState('AM');
+  const [userInitials, setUserInitials] = useState('');
 
   useEffect(() => {
     const savedAiLine = typeof window !== 'undefined' ? localStorage.getItem('onboarding_telephony_phone') : null;
     const business = StorageService.getBusiness();
 
+    const formatPhone = (num: string) => {
+      if (!num) return num;
+      const clean = num.replace(/\D/g, '');
+      if (clean === '16602435493' || clean === '6602435493') return '+1 (660) 243-5493';
+      if (clean === '16562547488' || clean === '6562547488') return '+1 (656) 254-7488';
+      if (clean === '919513886363' || clean === '9513886363' || clean === '09513886363') return '+91 95138 86363';
+      if (clean === '918047284627' || clean === '08047284627') return '+91 80472 84627';
+      return num;
+    };
+
     if (savedAiLine) {
-      setPhoneNumber(savedAiLine);
-    } else if (business?.country === 'India' || business?.currency === 'INR') {
-      setPhoneNumber('+91 80472 84627');
-    } else {
-      setPhoneNumber('+1 (656) 254-7488');
+      setPhoneNumber(formatPhone(savedAiLine));
+    } else if (business?.business_phone) {
+      setPhoneNumber(formatPhone(business.business_phone));
     }
+
+    DashboardController.getBusinessInfo()
+      .then((b) => {
+        if (b?.business_phone) {
+          setPhoneNumber(formatPhone(b.business_phone));
+        } else if (b?.country === 'India' || b?.currency === 'INR') {
+          setPhoneNumber('+91 95138 86363');
+        } else if (b) {
+          setPhoneNumber('+1 (660) 243-5493');
+        }
+      })
+      .catch(() => {});
     const user = StorageService.getUser();
     if (user?.name) {
       const parts = user.name.trim().split(' ');
@@ -83,7 +103,11 @@ export function AIHeader({ onTestClick, onSwitchWorkbench }: AIHeaderProps = {})
         {/* AI Phone Line */}
         <div className="hidden md:flex items-center gap-2 px-2.5 py-1.5 border border-gray-200 bg-white rounded-lg shadow-2xs whitespace-nowrap">
           <span className="text-[10px] text-gray-400 font-semibold">AI Line</span>
-          <span className="text-xs font-mono font-bold text-gray-900 tracking-tight">{phoneNumber}</span>
+          {phoneNumber ? (
+            <span className="text-xs font-mono font-bold text-gray-900 tracking-tight">{phoneNumber}</span>
+          ) : (
+            <span className="inline-block w-24 h-3.5 bg-gray-200 animate-pulse rounded align-middle" />
+          )}
         </div>
 
         {/* Status Indicator */}

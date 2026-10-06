@@ -58,10 +58,10 @@ from backend.server.database.session import get_db
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["voice"])
-vad = SimpleVAD()
-# Energy-VAD barge-in needs this many consecutive voiced 20 ms frames (60 ms). The AI is now interruptible for its whole
-# playback (not only while frames are being sent), so a single click or line-noise spike must not cut it off.
-BARGE_IN_MIN_VOICED_FRAMES = 3
+vad = SimpleVAD(energy_threshold=900)
+# Energy-VAD barge-in needs this many consecutive voiced 20 ms frames (100 ms). The AI is interruptible for its whole
+# playback, but must not be cut off by microphone rustle, breath or mobile carrier line clicks.
+BARGE_IN_MIN_VOICED_FRAMES = 5
 
 _WATCHDOG_LINES = {
     "en": {
@@ -113,9 +113,21 @@ class CallSession:
         self._silence_prompted = False
         self._busy = False
         self._watchdog_task: Optional[asyncio.Task] = None
+        self._is_greeting: bool = False
+        self._greeting_until: float = 0.0
+        self._greeting_mark: Optional[str] = None
         self._voiced_frames = 0  # consecutive loud inbound frames while the AI is audible (VAD barge-in debounce)
         self._turn_no = 0  # numbering for the per-turn [LATENCY] log
         self._last_warm = 0.0  # monotonic time provider connections were last warmed (see _warm_providers)
+
+    @property
+    def is_greeting_active(self) -> bool:
+        """True while the opening greeting is either actively streaming or still playing out on telephony line."""
+        if getattr(self, "_is_greeting", False):
+            return True
+        if getattr(self, "_greeting_until", 0.0) > time.monotonic():
+            return True
+        return False
 
     async def start(self, stream_sid: str, call_id: str, caller_number: str) -> None:
         self.stream_sid = stream_sid
@@ -185,7 +197,17 @@ class CallSession:
         self._bg_tasks.add(prewarm)
         prewarm.add_done_callback(self._bg_tasks.discard)
 
-        await self._speak_turn(greeting)
+        self._is_greeting = True
+        try:
+            await self._speak_turn(greeting)
+        finally:
+            self._is_greeting = False
+            self._greeting_until = self.barge_in.playback_until
+            self._greeting_mark = self.barge_in._last_mark
+            logger.info(
+                f"[GREETING] Sent greeting to telephony. Audio playing until +{max(0.0, self._greeting_until - time.monotonic()):.2f}s "
+                f"(mark={self._greeting_mark})"
+            )
 
     async def _connect_stt(self, call_id: str) -> None:
         assert self.stt is not None
@@ -201,7 +223,8 @@ class CallSession:
             await self.stt.send_audio(base64.b64decode(payload_b64))
         # Fast energy-based VAD as a low-latency barge-in trigger, ahead of
         # Deepgram's SpeechStarted event which carries ~endpointing delay.
-        if self.barge_in.is_speaking and vad.is_speech(payload_b64, pcm=self.pcm):
+        # GREETING PROTECTION: Never allow early telephony pickup/line-noise to kill the opening greeting!
+        if not self.is_greeting_active and self.barge_in.is_speaking and vad.is_speech(payload_b64, pcm=self.pcm):
             self._voiced_frames += 1
             if self._voiced_frames >= BARGE_IN_MIN_VOICED_FRAMES:
                 self._voiced_frames = 0
@@ -210,7 +233,10 @@ class CallSession:
             self._voiced_frames = 0
 
     async def _on_caller_speech_started(self) -> None:
-        await self.barge_in.handle_caller_speech(self.websocket, self.stream_sid)
+        if not self.is_greeting_active:
+            await self.barge_in.handle_caller_speech(self.websocket, self.stream_sid)
+        else:
+            logger.debug("[BARGE-IN] Ignored speech_started during active greeting playback")
         # LATENCY: the caller is talking, so the LLM/TTS requests are a second or two away. Make sure their
         # pooled HTTPS connections are open now instead of paying TCP+TLS after the caller stops.
         self._warm_providers()
@@ -286,6 +312,13 @@ class CallSession:
     async def _handle_transcript(self, transcript: str) -> None:
         if not self.state_machine:
             return
+
+        # If caller spoke while greeting was still audible, wait for greeting audio to complete playing
+        # so AI does not talk over its own greeting or queue conflicting audio.
+        if self.is_greeting_active:
+            logger.info(f"[TRANSCRIPT] Waiting for greeting to finish before answering: {transcript!r}")
+            while self.is_greeting_active:
+                await asyncio.sleep(0.1)
 
         print(f"\n==================== [LIVE CALL] ====================", flush=True)
         print(f"📞 CALL SID: {self.call_id}", flush=True)
@@ -607,7 +640,11 @@ async def twilio_media_stream(websocket: WebSocket, business_id: str) -> None:
                     break
 
             elif event_type == "mark":  # Twilio/Exotel: the audio before this mark has finished playing
-                session.barge_in.on_mark((data.get("mark") or {}).get("name"))
+                mark_name = (data.get("mark") or {}).get("name")
+                session.barge_in.on_mark(mark_name)
+                if mark_name and mark_name == getattr(session, "_greeting_mark", None):
+                    session._greeting_until = 0.0
+                    logger.info(f"[GREETING] Telephony completed playing greeting (echoed mark={mark_name})")
 
             elif event_type in ("stop", "closed", "hangup"):
                 logger.info(f"[WS GATEWAY] Call ended {session.call_id}")

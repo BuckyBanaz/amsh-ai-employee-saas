@@ -521,6 +521,18 @@ export const DashboardController = {
     return ApiService.get<{ url: string }>(API_ENDPOINTS.CALENDAR.FEED(bId));
   },
 
+  /** List connected integrations for this business. */
+  async getIntegrations(businessId?: string): Promise<any[]> {
+    const bId = this.getEffectiveBusinessId(businessId);
+    return ApiService.get<any[]>(API_ENDPOINTS.INTEGRATIONS.DASHBOARD_LIST(bId));
+  },
+
+  /** Manually trigger Google Calendar sync for upcoming appointments. */
+  async syncGoogleCalendar(businessId?: string): Promise<{ synced: number; skipped: number }> {
+    const bId = this.getEffectiveBusinessId(businessId);
+    return ApiService.post<{ synced: number; skipped: number }>(API_ENDPOINTS.INTEGRATIONS.GOOGLE_SYNC(bId), {});
+  },
+
   async updateAgent(payload: Partial<AgentItem>, businessId?: string): Promise<AgentItem> {
     const bId = this.getEffectiveBusinessId(businessId);
     return ApiService.patch<AgentItem>(API_ENDPOINTS.AGENTS.UPDATE(bId), payload);
@@ -615,24 +627,34 @@ export const DashboardController = {
 
   /** Attach the recording of a browser test call (caller mic + AI voice) so it can be played back in /calls. */
   async uploadCallRecording(callId: string, blob: Blob, businessId?: string): Promise<{ stored: boolean; recording_url?: string; reason?: string }> {
-    const bId = this.getEffectiveBusinessId(businessId);
-    const ext = blob.type.includes('ogg') ? 'ogg' : blob.type.includes('mp4') ? 'mp4' : 'webm';
-    const form = new FormData();
-    form.append('file', blob, `call.${ext}`);
-    const token = StorageService.getToken();
-    const res = await fetch(API_ENDPOINTS.CALLS.RECORDING(bId, callId), {
-      method: 'POST',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-      body: form,
-    });
-    if (!res.ok) throw new Error(`Recording upload failed (${res.status})`);
-    return res.json();
+    try {
+      const bId = this.getEffectiveBusinessId(businessId);
+      const ext = blob.type.includes('ogg') ? 'ogg' : blob.type.includes('mp4') ? 'mp4' : 'webm';
+      const form = new FormData();
+      form.append('file', blob, `call.${ext}`);
+      const token = StorageService.getToken();
+      const res = await fetch(API_ENDPOINTS.CALLS.RECORDING(bId, callId), {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: form,
+      });
+      if (!res.ok) return { stored: false, reason: `Upload status ${res.status}` };
+      return res.json();
+    } catch (err) {
+      console.warn('[RECORDER] Recording upload failed:', err);
+      return { stored: false, reason: 'Upload error' };
+    }
   },
 
   /** Tell the server the tester hung up, so the call stops showing as live and gets its real duration. */
   async endSimulatedCall(callId: string, businessId?: string): Promise<void> {
-    const bId = this.getEffectiveBusinessId(businessId);
-    await ApiService.post<any>(API_ENDPOINTS.CALLS.END(bId, callId), {});
+    try {
+      const bId = this.getEffectiveBusinessId(businessId);
+      await ApiService.post<any>(API_ENDPOINTS.CALLS.END(bId, callId), {});
+    } catch (err) {
+      // If the call never existed on the server (e.g. outbound call aborted or failed), safely ignore
+      console.warn('[CALL] endSimulatedCall ignored:', err);
+    }
   },
 
   async transcribeAudio(audioBlob: Blob): Promise<{ transcript: string }> {
@@ -708,4 +730,8 @@ export const DashboardController = {
     return ApiService.post<void>(`${BASE_URL}/businesses/${bId}/notifications/mark-read`, {});
   },
 };
+
+export const getIntegrations = (businessId?: string) => DashboardController.getIntegrations(businessId);
+export const syncGoogleCalendar = (businessId?: string) => DashboardController.syncGoogleCalendar(businessId);
+
 

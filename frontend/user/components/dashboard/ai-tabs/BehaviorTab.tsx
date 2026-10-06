@@ -7,7 +7,7 @@ import { FormSkeleton } from '../../common/ShimmerSkeleton';
 export function BehaviorTab() {
   const content = STRINGS.DASHBOARD.COMPONENTS.AI_TABS_CONTENT.BEHAVIOR;
   
-  const [agentName, setAgentName] = useState('Sarah');
+  const [agentName, setAgentName] = useState('');
   const [prompt, setPrompt] = useState(content.PROMPT.DEFAULT);
   const [complianceInfo, setComplianceInfo] = useState<any>(null);
   const [temperature, setTemperature] = useState(20);
@@ -26,7 +26,7 @@ export function BehaviorTab() {
     { id: 'services', name: 'Explain services', enabled: true },
     { id: 'hours', name: 'Explain opening hours', enabled: true },
     { id: 'transfer', name: 'Transfer to human', enabled: true },
-    { id: 'messages', name: 'Send appointment details by WhatsApp / SMS', enabled: true },
+    { id: 'messages', name: 'Send appointment details by SMS', enabled: true },
   ]);
 
   useEffect(() => {
@@ -121,7 +121,7 @@ export function BehaviorTab() {
               value={agentName}
               onChange={(e) => setAgentName(e.target.value)}
               className="w-full sm:w-80 border border-gray-200 rounded-lg px-3 py-2 text-xs font-semibold text-gray-900 focus:outline-none focus:border-[#0066FF] focus:ring-1 focus:ring-[#0066FF]"
-              placeholder="e.g. Sarah"
+              placeholder="e.g. AI Receptionist"
             />
             <p className="text-[10px] text-gray-400 mt-1">The persona name your AI receptionist introduces itself with to callers.</p>
           </div>

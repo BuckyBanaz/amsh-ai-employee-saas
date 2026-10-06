@@ -65,9 +65,13 @@ export function MetricCard({
       {/* Main Content: Value + Sparkline */}
       <div className="flex items-end justify-between gap-2 mt-0.5">
         <div>
-          <span className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight leading-none">
-            {value}
-          </span>
+          {value === '...' ? (
+            <span className="inline-block h-6 w-16 bg-gray-200 animate-pulse rounded my-0.5" />
+          ) : (
+            <span className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight leading-none">
+              {value}
+            </span>
+          )}
           <div className="flex items-center gap-1 mt-1.5 min-h-[14px]">
             {trendText ? (
               <span className={`${trendText.startsWith('-') ? 'text-red-500' : 'text-emerald-500'} font-bold text-[10px] sm:text-[11px]`}>{trendText}</span>

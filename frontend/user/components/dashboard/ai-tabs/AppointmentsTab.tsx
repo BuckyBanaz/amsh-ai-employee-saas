@@ -2,6 +2,9 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { DashboardController, AgentItem } from '../../../controllers/dashboard.controller';
+import { ApiService } from '../../../services/api.service';
+import { StorageService } from '../../../services/storage.service';
+import { API_ENDPOINTS } from '../../../utils/api_endpoints';
 import { FormSkeleton } from '../../common/ShimmerSkeleton';
 
 export function AppointmentsTab() {
@@ -10,13 +13,35 @@ export function AppointmentsTab() {
   const [allowCancel, setAllowCancel] = useState(true);
   const [allowReschedule, setAllowReschedule] = useState(true);
 
+  const [gcalIntegration, setGcalIntegration] = useState<any | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
+
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  const fetchIntegrationsList = async (): Promise<any[]> => {
+    try {
+      if (typeof (DashboardController as any)?.getIntegrations === 'function') {
+        return await (DashboardController as any).getIntegrations();
+      }
+      const bId = StorageService.getBusinessId();
+      if (bId) {
+        return await ApiService.get<any[]>(API_ENDPOINTS.INTEGRATIONS.DASHBOARD_LIST(bId));
+      }
+    } catch (err) {
+      console.warn('Failed to load integrations list:', err);
+    }
+    return [];
+  };
+
   useEffect(() => {
-    DashboardController.getAgent()
-      .then((agent: AgentItem) => {
+    Promise.all([
+      DashboardController.getAgent().catch(() => null),
+      fetchIntegrationsList(),
+    ])
+      .then(([agent, integrations]) => {
         if (agent) {
           const limits = agent.config?.limits || {};
           if (limits.buffer_minutes) setBufferMinutes(limits.buffer_minutes);
@@ -26,10 +51,41 @@ export function AppointmentsTab() {
           if (toggles.allow_cancel !== undefined) setAllowCancel(toggles.allow_cancel);
           if (toggles.allow_reschedule !== undefined) setAllowReschedule(toggles.allow_reschedule);
         }
+        if (Array.isArray(integrations)) {
+          const found = integrations.find(
+            (i: any) => i.provider === 'google_calendar' && i.status === 'connected'
+          );
+          setGcalIntegration(found || null);
+        }
       })
-      .catch((err) => console.warn('Failed to load appointment rules:', err))
+      .catch((err) => console.warn('Failed to load appointment rules or integrations:', err))
       .finally(() => setLoading(false));
   }, []);
+
+  const handleSyncNow = async () => {
+    try {
+      setIsSyncing(true);
+      setSyncFeedback(null);
+      let res: { synced: number; skipped: number };
+      if (typeof (DashboardController as any)?.syncGoogleCalendar === 'function') {
+        res = await (DashboardController as any).syncGoogleCalendar();
+      } else {
+        const bId = StorageService.getBusinessId() || '';
+        res = await ApiService.post<{ synced: number; skipped: number }>(
+          API_ENDPOINTS.INTEGRATIONS.GOOGLE_SYNC(bId),
+          {}
+        );
+      }
+      setSyncFeedback(`Successfully synced ${res.synced} upcoming appointment(s) to Google Calendar.`);
+      setTimeout(() => setSyncFeedback(null), 5000);
+    } catch (err: any) {
+      console.error('Failed to sync Google Calendar:', err);
+      setSyncFeedback(err?.message || 'Failed to sync with Google Calendar.');
+      setTimeout(() => setSyncFeedback(null), 5000);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const handleSave = async () => {
     try {
@@ -62,6 +118,9 @@ export function AppointmentsTab() {
     return <FormSkeleton title="Loading appointment scheduling rules..." />;
   }
 
+  const isConnected = !!gcalIntegration;
+  const connectedEmail = gcalIntegration?.config?.email || '';
+
   return (
     <div className="animate-in fade-in duration-500 bg-white border border-gray-100 rounded-xl p-6 shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
       <div className="max-w-4xl">
@@ -78,9 +137,13 @@ export function AppointmentsTab() {
         <div className="space-y-6">
           
           {/* Calendar Status Card */}
-          <div className="bg-[#F0F7FF] border border-[#0066FF]/20 rounded-xl p-4 flex items-center justify-between gap-4">
+          <div className={`border rounded-xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 transition-all ${
+            isConnected ? 'bg-[#F0F7FF] border-[#0066FF]/20' : 'bg-gray-50 border-gray-200'
+          }`}>
             <div className="flex items-center gap-3.5">
-              <div className="w-10 h-10 rounded-xl bg-[#0066FF] flex items-center justify-center text-white shrink-0 shadow-xs">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0 shadow-xs ${
+                isConnected ? 'bg-[#0066FF]' : 'bg-gray-400'
+              }`}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
                   <line x1="16" y1="2" x2="16" y2="6"></line>
@@ -89,17 +152,60 @@ export function AppointmentsTab() {
                 </svg>
               </div>
               <div>
-                <div className="text-xs font-bold text-gray-900">Google Calendar Linked</div>
-                <div className="text-[11px] text-[#0066FF] font-medium">Synced 2 minutes ago</div>
+                <div className="text-xs font-bold text-gray-900">
+                  {isConnected ? 'Google Calendar Connected' : 'Google Calendar Not Connected'}
+                </div>
+                <div className={`text-[11px] font-medium ${isConnected ? 'text-[#0066FF]' : 'text-gray-500'}`}>
+                  {isConnected 
+                    ? (connectedEmail ? `Account: ${connectedEmail}` : 'Sync active')
+                    : 'Connect to auto-sync bookings to your calendar'}
+                </div>
               </div>
             </div>
-            <Link
-              href="/appointments"
-              className="px-4 py-2 border border-gray-200 bg-white rounded-lg text-xs font-semibold text-gray-700 shadow-2xs hover:bg-gray-50 transition-colors whitespace-nowrap cursor-pointer"
-            >
-              Manage Sync
-            </Link>
+
+            <div className="flex items-center gap-2 self-end sm:self-center">
+              {isConnected && (
+                <button
+                  type="button"
+                  onClick={handleSyncNow}
+                  disabled={isSyncing}
+                  className="px-4 py-2 border border-[#0066FF] bg-[#0066FF] text-white rounded-lg text-xs font-semibold shadow-2xs hover:bg-[#0052cc] transition-colors whitespace-nowrap cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {isSyncing ? (
+                    <>
+                      <div className="w-3 h-3 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
+                      <span>Syncing...</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+                      </svg>
+                      <span>Sync Now</span>
+                    </>
+                  )}
+                </button>
+              )}
+
+              <Link
+                href="/integrations"
+                className="px-4 py-2 border border-gray-200 bg-white rounded-lg text-xs font-semibold text-gray-700 shadow-2xs hover:bg-gray-50 transition-colors whitespace-nowrap cursor-pointer"
+              >
+                {isConnected ? 'Manage Integration' : 'Connect Calendar'}
+              </Link>
+            </div>
           </div>
+
+          {/* Sync Feedback Toast */}
+          {syncFeedback && (
+            <div className={`text-xs p-3 rounded-lg border flex items-center gap-2 animate-in fade-in ${
+              syncFeedback.startsWith('Successfully')
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                : 'bg-amber-50 text-amber-700 border-amber-200'
+            }`}>
+              <span>{syncFeedback}</span>
+            </div>
+          )}
 
           {/* Limits */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-1">

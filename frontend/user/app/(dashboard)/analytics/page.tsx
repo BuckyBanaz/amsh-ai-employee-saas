@@ -53,7 +53,7 @@ export default function AnalyticsPage() {
       <AnalyticsHeader
         selectedPeriod={period}
         onPeriodChange={(newPeriod) => setPeriod(newPeriod)}
-        dateRangeLabel={data?.date_range_label || 'Sep 21, 2026 – Oct 20, 2026'}
+        dateRangeLabel={data?.date_range_label || (loading ? 'Loading period...' : 'Last 30 Days')}
         onExport={handleExport}
       />
 
