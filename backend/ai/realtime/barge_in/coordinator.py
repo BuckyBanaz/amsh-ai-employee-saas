@@ -62,7 +62,7 @@ class BargeInCoordinator:
         if name and name == self._last_mark:
             self.playback_until = min(self.playback_until, self._clock())
 
-    async def handle_caller_speech(self, websocket: WebSocket, stream_sid: Optional[str]) -> None:
+    async def handle_caller_speech(self, websocket: WebSocket, stream_sid: Optional[str], pcm: bool = False) -> None:
         """Called when STT/VAD detects the caller has started talking. Only
         acts if the AI is audible — otherwise this is just normal caller
         speech with nothing to interrupt."""
@@ -77,7 +77,12 @@ class BargeInCoordinator:
             task.cancel()
 
         try:
-            await websocket.send_text(json.dumps({"event": "clear", "streamSid": stream_sid, "stream_sid": stream_sid}))
-            logger.info("[BARGE-IN] Cleared Twilio audio buffer")
+            clear_msg = {"event": "clear"}
+            if pcm:
+                clear_msg["stream_sid"] = stream_sid
+            else:
+                clear_msg["streamSid"] = stream_sid
+            await websocket.send_text(json.dumps(clear_msg))
+            logger.info("[BARGE-IN] Cleared telephony audio buffer")
         except Exception as e:
             logger.warning(f"[BARGE-IN] Failed to send clear event: {e}")

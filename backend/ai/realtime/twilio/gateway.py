@@ -197,6 +197,9 @@ class CallSession:
         self._bg_tasks.add(prewarm)
         prewarm.add_done_callback(self._bg_tasks.discard)
 
+        # Natural human pickup window: give the user 0.8s to bring the handset to their ear
+        await asyncio.sleep(0.8)
+
         self._is_greeting = True
         try:
             await self._speak_turn(greeting)
@@ -228,13 +231,13 @@ class CallSession:
             self._voiced_frames += 1
             if self._voiced_frames >= BARGE_IN_MIN_VOICED_FRAMES:
                 self._voiced_frames = 0
-                await self.barge_in.handle_caller_speech(self.websocket, self.stream_sid)
+                await self.barge_in.handle_caller_speech(self.websocket, self.stream_sid, pcm=self.pcm)
         else:
             self._voiced_frames = 0
 
     async def _on_caller_speech_started(self) -> None:
         if not self.is_greeting_active:
-            await self.barge_in.handle_caller_speech(self.websocket, self.stream_sid)
+            await self.barge_in.handle_caller_speech(self.websocket, self.stream_sid, pcm=self.pcm)
         else:
             logger.debug("[BARGE-IN] Ignored speech_started during active greeting playback")
         # LATENCY: the caller is talking, so the LLM/TTS requests are a second or two away. Make sure their
@@ -313,12 +316,13 @@ class CallSession:
         if not self.state_machine:
             return
 
-        # If caller spoke while greeting was still audible, wait for greeting audio to complete playing
-        # so AI does not talk over its own greeting or queue conflicting audio.
+        # If caller already spoke (e.g. "Hello?", "Hi"), immediately interrupt the greeting
+        # and answer the caller directly instead of making them wait for a scripted greeting!
         if self.is_greeting_active:
-            logger.info(f"[TRANSCRIPT] Waiting for greeting to finish before answering: {transcript!r}")
-            while self.is_greeting_active:
-                await asyncio.sleep(0.1)
+            logger.info(f"[TRANSCRIPT] Caller spoke ({transcript!r}) during greeting: interrupting greeting to answer caller")
+            self._greeting_until = 0.0
+            self._is_greeting = False
+            await self.barge_in.handle_caller_speech(self.websocket, self.stream_sid, pcm=self.pcm)
 
         print(f"\n==================== [LIVE CALL] ====================", flush=True)
         print(f"📞 CALL SID: {self.call_id}", flush=True)
@@ -534,30 +538,30 @@ class CallSession:
         async for frame_b64 in frames:
             sent += 1
             # LATENCY: frames go out as soon as TTS bytes arrive (no whole-sentence buffering). Mark the first one.
-            await self.websocket.send_text(
-                json.dumps(
-                    {
-                        "event": "media",
-                        "streamSid": self.stream_sid,
-                        "stream_sid": self.stream_sid,
-                        "media": {"payload": frame_b64},
-                    }
-                )
-            )
+            media_msg: Dict[str, Any] = {
+                "event": "media",
+                "media": {"payload": frame_b64},
+            }
+            if self.pcm:
+                media_msg["stream_sid"] = self.stream_sid
+            else:
+                media_msg["streamSid"] = self.stream_sid
+            await self.websocket.send_text(json.dumps(media_msg))
             self.barge_in.audio_sent(FRAME_DURATION_S)  # keeps the AI interruptible until this frame has played
             if sent == 1:
                 latency.mark("first_audio_sent_to_telephony", chars=len(text))
             # Yield to event loop without sleeping 20ms to keep telephony jitter buffer full
             await asyncio.sleep(0.005)
         logger.info(f"[TTS OUT] call={self.call_id} frames={sent} text={text[:40]!r}")
-        await self.websocket.send_text(
-            json.dumps({
-                "event": "mark",
-                "streamSid": self.stream_sid,
-                "stream_sid": self.stream_sid,
-                "mark": {"name": self.barge_in.next_mark()}  # echoed by Twilio once played (see on_mark)
-            })
-        )
+        mark_msg: Dict[str, Any] = {
+            "event": "mark",
+            "mark": {"name": self.barge_in.next_mark()},  # echoed by Twilio once played (see on_mark)
+        }
+        if self.pcm:
+            mark_msg["stream_sid"] = self.stream_sid
+        else:
+            mark_msg["streamSid"] = self.stream_sid
+        await self.websocket.send_text(json.dumps(mark_msg))
 
     async def stop(self) -> None:
         if self._watchdog_task:

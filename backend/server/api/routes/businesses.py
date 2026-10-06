@@ -69,7 +69,7 @@ class BusinessUpdate(BaseModel):
     postal_code: str | None = None
     timezone: str | None = None
     currency: str | None = None
-    working_hours: dict | None = None
+    working_hours: dict | list | None = None
     status: str | None = None
     plan: str | None = None
 
@@ -92,7 +92,7 @@ class BusinessOut(BaseModel):
     currency: str
     plan: str
     status: str
-    working_hours: dict
+    working_hours: dict | list | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
