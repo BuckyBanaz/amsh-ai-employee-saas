@@ -342,8 +342,10 @@ export const DashboardController = {
     try {
       const bId = this.getEffectiveBusinessId(businessId);
       return await ApiService.get<CallLogItem>(API_ENDPOINTS.CALLS.GET(bId, callId));
-    } catch (err) {
-      console.warn(`[getCallDetail] Call ${callId} not found or failed to load:`, err);
+    } catch (err: any) {
+      if (err?.message && !err.message.includes('not found') && !err.message.includes('404')) {
+        console.warn(`[getCallDetail] Call ${callId} failed to load:`, err);
+      }
       return null;
     }
   },
@@ -651,9 +653,11 @@ export const DashboardController = {
     try {
       const bId = this.getEffectiveBusinessId(businessId);
       await ApiService.post<any>(API_ENDPOINTS.CALLS.END(bId, callId), {});
-    } catch (err) {
-      // If the call never existed on the server (e.g. outbound call aborted or failed), safely ignore
-      console.warn('[CALL] endSimulatedCall ignored:', err);
+    } catch (err: any) {
+      // If the call never existed on the server (e.g. test call ended early), safely ignore without noisy console logs
+      if (err?.message && !err.message.includes('not found') && !err.message.includes('404')) {
+        console.warn('[CALL] endSimulatedCall ignored:', err);
+      }
     }
   },
 

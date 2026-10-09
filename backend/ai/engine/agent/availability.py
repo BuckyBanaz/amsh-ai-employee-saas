@@ -28,8 +28,40 @@ class Availability:
     ranges: List[Tuple[time, time]] = field(default_factory=list)
 
 
-def day_ranges(working_hours: Optional[Dict[str, Any]], d: date) -> Availability:
-    """Open ranges for `d`. Accepts {"Monday": [{"start": "09:00", "end": "17:00"}]} or "9 AM - 5 PM" strings."""
+def normalize_working_hours(working_hours: Any) -> Dict[str, Any]:
+    """Normalize working hours from whatever format (dict, list of DaySchedule, etc.) into a consistent dict."""
+    if not working_hours:
+        return {}
+    if isinstance(working_hours, dict):
+        return working_hours
+    if isinstance(working_hours, list):
+        norm: Dict[str, Any] = {}
+        for entry in working_hours:
+            if isinstance(entry, dict):
+                day = entry.get("day") or entry.get("name")
+                if not day:
+                    continue
+                if entry.get("active") is False or entry.get("is_open") is False:
+                    norm[str(day)] = []
+                    continue
+                ranges = entry.get("ranges")
+                if ranges is not None:
+                    norm[str(day)] = ranges
+                elif entry.get("open") or entry.get("start"):
+                    start = entry.get("start") or entry.get("open")
+                    end = entry.get("end") or entry.get("close")
+                    norm[str(day)] = [{"start": start, "end": end}] if start and end else []
+                elif entry.get("hours"):
+                    norm[str(day)] = entry.get("hours")
+                else:
+                    norm[str(day)] = []
+        return norm
+    return {}
+
+
+def day_ranges(working_hours: Optional[Any], d: date) -> Availability:
+    """Open ranges for `d`. Accepts {"Monday": [{"start": "09:00", "end": "17:00"}]} or "9 AM - 5 PM" strings or list schedules."""
+    working_hours = normalize_working_hours(working_hours)
     if not working_hours or not isinstance(working_hours, dict):
         return Availability(configured=False)
     by_key = {str(k).strip().lower(): v for k, v in working_hours.items()}

@@ -104,13 +104,16 @@ export default function TwilioSetupPage() {
     fetchNumbers(selectedCountry, areaCode);
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
+    const chosenNumber = telephonyMode === 'forwarding' ? (existingPhone || selectedNumber) : selectedNumber;
+    const provider = isIndia ? 'exotel' : 'twilio';
+
     try {
       localStorage.setItem('onboarding_telephony_connected', 'true');
-      localStorage.setItem('onboarding_telephony_phone', selectedNumber);
-      localStorage.setItem('onboarding_telephony_provider', isIndia ? 'exotel' : 'twilio');
+      localStorage.setItem('onboarding_telephony_phone', chosenNumber);
+      localStorage.setItem('onboarding_telephony_provider', provider);
       localStorage.setItem('onboarding_telephony_escalation', humanTransferPhone);
 
       try {
@@ -121,13 +124,44 @@ export default function TwilioSetupPage() {
       } catch (err) {
         console.error('Error syncing transfer phone to agent settings:', err);
       }
+
+      // Sync to backend DB if businessId is available
+      const businessId =
+        localStorage.getItem('onboarding_business_id') ||
+        localStorage.getItem('business_id') ||
+        (() => {
+          try {
+            const raw = localStorage.getItem('business');
+            return raw ? JSON.parse(raw)?.id : null;
+          } catch {
+            return null;
+          }
+        })();
+
+      const token = localStorage.getItem('access_token') || localStorage.getItem('token');
+      if (businessId && chosenNumber) {
+        await fetch(`${BASE_URL}/telephony/assign`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            business_id: businessId,
+            number: chosenNumber,
+            provider,
+            mode: telephonyMode === 'forwarding' ? 'forwarding' : 'dedicated',
+            forwarded_from: telephonyMode === 'forwarding' ? existingPhone : undefined,
+          }),
+        }).catch((err) => console.warn('Failed to assign telephony number to DB:', err));
+      }
     } catch (err) {
       console.error('Error saving telephony settings:', err);
     }
     setTimeout(() => {
       setIsSaving(false);
       router.push('/onboarding/integrations');
-    }, 600);
+    }, 400);
   };
 
   return (

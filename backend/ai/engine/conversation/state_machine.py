@@ -1,4 +1,4 @@
-﻿"""
+"""
 Deterministic State Machine.
 Orchestrates conversation transitions, slot filling, tool routing,
 and guardrails validation in pure deterministic Python code.
@@ -369,22 +369,6 @@ class ConversationStateMachine:
             )
             return {"bot_response": msg, "state": self.current_state.value}
 
-        # 1d. Ambiguous or Unclear Queries ("Potato helicopter", "Woh wala kal kar dena")
-        if nlu_category == "ambiguous_unclear" or confidence < 0.40:
-            if extracted_intent == "clarification_needed" or is_ambiguous:
-                msg = t(self.language, "ambiguous_clarification")
-            else:
-                msg = t(self.language, "unclear_speech_repeat")
-            self.turns.append(
-                Turn(
-                    sequence=self.sequence,
-                    user_transcript=user_transcript,
-                    bot_response=msg,
-                    intent="unclear",
-                    extracted_slots=dict(self.collected_slots),
-                )
-            )
-            return {"bot_response": msg, "state": self.current_state.value}
 
         # 1e. In-flow question about available services: answer from DB catalog
         if _SERVICES_QUESTION.search(user_transcript):
@@ -424,12 +408,20 @@ class ConversationStateMachine:
             )
             return {"bot_response": msg, "state": self.current_state.value}
 
-        # 1g. Small talk greeting handling ("Hi, how are you?", "Hello")
+        # 1g. Small talk greeting handling ("Hi, how are you?", "Hello") — checked BEFORE ambiguous_unclear so
+        # a casual "hello?" from the caller never triggers the wrong clarification prompt.
         if _SMALL_TALK_GREETING.search(user_transcript.strip()):
             if "how are you" in user_transcript.lower() or "kaise" in user_transcript.lower():
                 msg = t(self.language, "smalltalk_how_are_you")
             else:
                 msg = t(self.language, "smalltalk_hello")
+            # If we're mid-slot-collection, append the re-ask so the call doesn't stall.
+            if self.current_intent and self.last_asked_slot:
+                for slot in self.current_intent.slots:
+                    if slot.name == self.last_asked_slot:
+                        re_ask = t(self.language, slot.prompt_key) if slot.prompt_key else (slot.prompt or t(self.language, "ask_slot_generic", slot=slot.name))
+                        msg = f"{msg} {re_ask}"
+                        break
             self.turns.append(
                 Turn(
                     sequence=self.sequence,
@@ -440,6 +432,40 @@ class ConversationStateMachine:
                 )
             )
             return {"bot_response": msg, "state": self.current_state.value}
+
+        # 1d. Ambiguous or Unclear Queries ("Potato helicopter", "Woh wala kal kar dena")
+        if nlu_category == "ambiguous_unclear" or confidence < 0.40:
+            # Mid-slot-collection: re-ask the active slot instead of the generic clarification prompt.
+            # This handles line blips, "Hello?" check-ins, and any short noise Deepgram transcribed.
+            if self.current_intent and self.last_asked_slot:
+                for slot in self.current_intent.slots:
+                    if slot.name == self.last_asked_slot:
+                        bot_prompt = t(self.language, slot.prompt_key) if slot.prompt_key else (slot.prompt or t(self.language, "ask_slot_generic", slot=slot.name))
+                        self.turns.append(
+                            Turn(
+                                sequence=self.sequence,
+                                user_transcript=user_transcript,
+                                bot_response=bot_prompt,
+                                intent=self.current_intent.name,
+                                extracted_slots=dict(self.collected_slots),
+                            )
+                        )
+                        return {"bot_response": bot_prompt, "state": self.current_state.value}
+            if extracted_intent == "clarification_needed" or is_ambiguous:
+                msg = t(self.language, "ambiguous_clarification")
+            else:
+                msg = t(self.language, "unclear_speech_repeat")
+            self.turns.append(
+                Turn(
+                    sequence=self.sequence,
+                    user_transcript=user_transcript,
+                    bot_response=msg,
+                    intent="unclear",
+                    extracted_slots=dict(self.collected_slots),
+                )
+            )
+            return {"bot_response": msg, "state": self.current_state.value}
+
 
         # 1h. Knowledge / Clinic FAQ Category (Answers verified knowledge without breaking slot collection!)
         if nlu_category == "knowledge" or extracted_intent == "clinic_faq":

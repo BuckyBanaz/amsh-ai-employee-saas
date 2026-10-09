@@ -227,8 +227,8 @@ export function VoiceTab() {
   };
 
   // Play Speech Preview with vertical-tailored dialogue
-  const handlePlayPreview = (voice: VoiceOption, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handlePlayPreview = (voice: VoiceOption, e?: React.MouseEvent) => {
+    e?.stopPropagation();
 
     if (playingVoiceId === voice.voice_id) {
       if (audioRef.current) {
@@ -247,7 +247,7 @@ export function VoiceTab() {
     const langPrefix = selectedAccentCode.slice(0, 2);
     const previewUrl = `${API_ENDPOINTS.VOICE.PREVIEW}?voice_id=${encodeURIComponent(
       voice.voice_id
-    )}&text=${encodeURIComponent(sampleText)}&language=${encodeURIComponent(langPrefix)}`;
+    )}&text=${encodeURIComponent(sampleText)}&language=${encodeURIComponent(langPrefix)}&speed=${speed}`;
     const audio = new Audio(withPreviewToken(previewUrl));
     audioRef.current = audio;
 
@@ -633,22 +633,52 @@ export function VoiceTab() {
             <div className="flex items-center justify-between mb-2">
               <label className="text-xs font-bold text-gray-700">Speaking Pace / Speed</label>
               <span className="text-xs font-bold text-[#0066FF] bg-blue-50 px-2 py-0.5 rounded-md border border-blue-100">
-                {speed.toFixed(1)}x
+                {speed.toFixed(2)}x
               </span>
             </div>
             <input
               type="range"
-              min="0.5"
+              min="0.6"
               max="1.5"
-              step="0.1"
+              step="0.05"
               value={speed}
               onChange={(e) => setSpeed(parseFloat(e.target.value))}
               className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-[#0066FF]"
             />
             <div className="flex justify-between mt-1.5 text-[11px] text-gray-400 font-medium">
-              <span>0.5x (Deliberate)</span>
+              <span>0.6x (Deliberate)</span>
               <span>1.0x (Standard)</span>
               <span>1.5x (Brisk)</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 mt-3">
+              {[
+                { label: 'Slow', value: 0.8 },
+                { label: 'Normal', value: 1.0 },
+                { label: 'Fast', value: 1.2 },
+              ].map((preset) => (
+                <button
+                  key={preset.label}
+                  type="button"
+                  onClick={() => setSpeed(preset.value)}
+                  className={`px-3 py-1 rounded-lg text-[11px] font-bold border cursor-pointer transition-all ${
+                    Math.abs(speed - preset.value) < 0.01
+                      ? 'bg-[#0066FF] text-white border-[#0066FF]'
+                      : 'bg-white text-gray-700 border-gray-200 hover:border-[#0066FF]'
+                  }`}
+                >
+                  {preset.label} ({preset.value.toFixed(1)}x)
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => {
+                  const v = AVAILABLE_VOICES.find((x) => x.voice_id === selectedVoiceId) || AVAILABLE_VOICES[0];
+                  handlePlayPreview(v);
+                }}
+                className="px-3 py-1 rounded-lg text-[11px] font-bold border border-gray-200 bg-gray-50 text-gray-800 hover:border-[#0066FF] cursor-pointer"
+              >
+                {playingVoiceId === selectedVoiceId ? 'Stop' : '▶ Test this speed'}
+              </button>
             </div>
           </div>
 

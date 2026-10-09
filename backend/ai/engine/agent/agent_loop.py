@@ -23,6 +23,7 @@ from backend.ai.engine.agent.fillers import choose_backchannel, wait_text
 from backend.ai.engine.agent.language_layer import LanguageLayer
 from backend.ai.lexicon import language_pack
 from backend.ai.verticals.context import resolve_business_context
+from backend.ai.engine.agent.controller import CallState, SentenceDeduper
 from backend.ai.engine.agent.progress import booking_note
 from backend.ai.engine.agent.hindi import caller_is_leaving, has_devanagari, language_escalation, looks_english, match_speaker_gender, normalize as normalize_hindi, requested_language
 from backend.ai.engine.agent.validator import is_affirmative
@@ -294,6 +295,7 @@ class AgentEngine:
         self._last_filler_turn = -99
         self._prefetched: Dict[Any, float] = {}  # day -> when its open times were last read ahead of the model (latency)
         self._wait_spoken = False
+        self._stop_turn = False  # request_stop(): the caller spoke over the running turn; checked between stream events
         self._ack_used: set = set()  # acknowledgement words ("sure", "got it"...) already said this turn, see _speech
         self.channel = channel  # "voice" (phone call, playground) or "chat" (WhatsApp text)
         self.emotion = EmotionState()  # the caller's mood and how the voice should react (agent/emotion.py)
@@ -305,6 +307,10 @@ class AgentEngine:
         self.auto_detect_language = auto_detect_language
         self._devanagari_turn = False  # the caller's latest message is in Devanagari (speech-to-text output)
         self.facts = facts
+        # What is already known about this call and what to ask next, kept in code (agent/controller.py); the model only words it.
+        self.ctrl = CallState(services=list(getattr(facts, 'services', None) or []))
+        self._dup = SentenceDeduper()  # per turn: the same sentence twice (retries, second tool round) is spoken once
+        self._asked_slots: set = set()  # per turn: what we have already asked the caller for (one question per turn)
         self.vertical_config = vertical_config
         self.backend = backend
         self._meter_backend(backend, business_id, call_id)
@@ -383,6 +389,12 @@ class AgentEngine:
         assert final is not None
         return final
 
+    def request_stop(self) -> None:
+        """The caller spoke over this turn. Cooperative: the turn stops streaming and speaking at its next checkpoint, never
+        starts a new tool round, and never abandons a tool already running (a half-finished booking would be missing from
+        history). The turn is still committed, with only what was actually produced, so the next turn sees the truth."""
+        self._stop_turn = True
+
     async def turn_events(self, utterance: str, stream: bool = True) -> AsyncIterator[Dict[str, Any]]:
         """Yields {"type": "sentence", "text"} as replies form, then {"type": "done", "turn": AgentTurn}."""
         started = time.perf_counter()
@@ -391,6 +403,9 @@ class AgentEngine:
         self._reply_started = False
         self._wait_spoken = False
         self._ack_used = set()
+        self._stop_turn = False
+        self._dup = SentenceDeduper()
+        self._asked_slots = set()
         asked = requested_language(utterance) or requested_language(normalize_hindi(utterance))
         if asked:
             self.language_pref = asked  # remembered for the rest of the call, until they ask for another language
@@ -403,6 +418,8 @@ class AgentEngine:
         self.toolbox.last_utterance = roman
         self.toolbox.said.append(roman)
         self.toolbox.language = self.active_language or "en"
+        self.ctrl.observe(utterance, self.now_fn().date(), language=self.active_language, emotion=self.emotion.mood,
+                          calling_number_ok=self.toolbox.caller_number_ok)
         self._raw_said.append(utterance)
         first_ms: Optional[int] = None
         spoken: List[str] = []
@@ -456,6 +473,16 @@ class AgentEngine:
             yield {"type": "done", "turn": self._result(reply, started, tools=[{"tool": "transfer_to_human", "via": "safety_gate"}], first_ms=elapsed())}
             return
 
+        # 1b. The caller is only buying time ("ruko...", "wait", "ek second"): a nod, not the whole questionnaire again, and no LLM call.
+        if self.ctrl.is_hesitation(utterance):
+            nod = self._speech("जी, बताइए, मैं सुन रही हूँ।" if (self._devanagari_turn or self._expects_hindi() or self.lang.active) else "Sure, take your time.")
+            group.append({"role": "assistant", "content": nod})
+            self._turns.append(group)  # remembered, but it is not a proposal: the pending question stays what a "yes" answers
+            first_ms = elapsed()
+            yield self._sentence_event(nod)
+            yield {"type": "done", "turn": self._result(nod, started, tools=[], first_ms=first_ms)}
+            return
+
         # 2. LLM + tool rounds (with the day the caller named already looked up)
         if prefetched := await self._prefetch(roman, utterance):
             group.extend(prefetched)
@@ -465,8 +492,13 @@ class AgentEngine:
         guard_notes: List[str] = []  # one-shot corrections after the grounding guard blocked an invented time
         round_no = 0
         lang_state = {"retried": False}  # the wrong-language guard corrects once per turn, then lets the reply through
+        repeat_state = {"retried": False}  # same for asking again what the caller already told us
+        multi_state = {"retried": False}  # and for asking several things in one sentence
         try:
             while round_no <= MAX_TOOL_ROUNDS:
+                if self._stop_turn:  # interrupted before this model round: do not spend a request on a reply nobody will hear
+                    reply = " ".join(spoken)
+                    break
                 use_tools = round_no < MAX_TOOL_ROUNDS
                 messages = self._messages(group) + [{"role": "system", "content": n} for n in guard_notes]
                 tools = self.tools if use_tools else []
@@ -481,10 +513,20 @@ class AgentEngine:
                         return False
                     bad = ungrounded(sentence, messages_for_guard())
                     claim = unbacked_claim(sentence, self.toolbox.succeeded)
+                    if not multi_state["retried"] and len(more := self.ctrl.slots_asked(sentence)) > 1:
+                        invented.append("multi:" + ",".join(sorted(more)))
+                        return False
+                    if not repeat_state["retried"] and not tool_refused() and (again := self.ctrl.repeat_ask(sentence)):
+                        invented.append(f"repeat:{again}")
+                        return False
                     invented.extend(bad)
                     if claim:
                         invented.append(f"claim:{claim}")
                     return not bad and not claim
+
+                def tool_refused() -> bool:
+                    """A tool turned a value down this turn (bad name, taken slot...): asking for it again is then correct."""
+                    return any(m.get("role") == "tool" and '"ok": false' in str(m.get("content")) for m in group)
 
                 def messages_for_guard() -> List[Dict[str, Any]]:
                     return self._messages(group)
@@ -496,15 +538,19 @@ class AgentEngine:
                     event_stream = self.backend.chat_stream(messages, tools)
                     try:
                         async for ev in event_stream:
+                            if self._stop_turn:
+                                break
                             if ev["type"] == "text":
                                 for sentence in splitter.feed(ev["delta"]):
+                                    if self._stop_turn:
+                                        break
                                     sentence = self._speech(sentence)
                                     if not sentence:
                                         continue
                                     if not check(sentence):
                                         break
                                     sentence = self._dedupe_ack(sentence)
-                                    if not sentence:
+                                    if not sentence or self._dup.is_dup(sentence) or self._second_ask(sentence):
                                         continue
                                     for out in one_q.feed(sentence):
                                         first_ms = first_ms if first_ms is not None else elapsed()
@@ -517,9 +563,9 @@ class AgentEngine:
                                 content, calls = ev["content"] or "", ev["tool_calls"]
                     finally:
                         close = getattr(event_stream, "aclose", None)
-                        if close and invented:
+                        if close and (invented or self._stop_turn):
                             await close()
-                    tail = [] if invented else splitter.flush()
+                    tail = [] if (invented or self._stop_turn) else splitter.flush()
                 else:
                     resp = await self.backend.chat(messages, tools)
                     content, calls = resp["content"] or "", resp["tool_calls"]
@@ -527,26 +573,46 @@ class AgentEngine:
                     tail = [] if (calls or not text) else splitter.feed(text + " ") + splitter.flush()
 
                 for sentence in tail:
+                    if self._stop_turn:
+                        break
                     sentence = self._speech(sentence)
                     if not sentence:
                         continue
                     if not check(sentence):
                         break
                     sentence = self._dedupe_ack(sentence)
-                    if not sentence:
+                    if not sentence or self._dup.is_dup(sentence) or self._second_ask(sentence):
                         continue
                     for out in one_q.feed(sentence):
                         first_ms = first_ms if first_ms is not None else elapsed()
                         event = self._sentence_event(out)
                         spoken.append(event["text"])
                         yield event
-                if not invented:
+                if not invented and not self._stop_turn:
                     for out in one_q.flush():  # a trailing question is released once nothing newer replaces it
                         first_ms = first_ms if first_ms is not None else elapsed()
                         event = self._sentence_event(out)
                         spoken.append(event["text"])
                         yield event
 
+                if multis := [x[6:] for x in invented if x.startswith("multi:")]:
+                    invented[:] = [x for x in invented if not x.startswith("multi:")]
+                    if not invented:  # asked for several things in one sentence: regenerate once, one question only
+                        logger.warning("Guard blocked a multi-question sentence: %s", multis)
+                        multi_state["retried"] = True
+                        if spoken:
+                            guard_notes.append(_NO_REGREET_NOTE)
+                        guard_notes.append(self.ctrl.multi_correction(",".join(multis).split(",")))
+                        continue
+                if repeats := [x[7:] for x in invented if x.startswith("repeat:")]:
+                    invented[:] = [x for x in invented if not x.startswith("repeat:")]
+                    if not invented:  # only a repeated question was blocked: regenerate once with the known facts spelled out
+                        logger.warning("Guard blocked a repeated question: %s", repeats)
+                        repeat_state["retried"] = True
+                        if spoken:
+                            guard_notes.append(_NO_REGREET_NOTE)
+                        guard_notes.append(self.ctrl.repeat_correction(repeats))
+                        continue
                 if invented and all(x == "lang:hi" for x in invented):
                     logger.warning("Guard blocked an English reply to a Hindi-speaking caller")
                     lang_state["retried"] = True
@@ -578,6 +644,9 @@ class AgentEngine:
                     guard_notes.append(" ".join(notes))
                     continue  # same round: regenerate with the correction; nothing wrong was spoken
 
+                if self._stop_turn:  # tool calls the model asked for but nothing started: drop them, history stays consistent
+                    reply = " ".join(spoken)
+                    break
                 if calls and use_tools:
                     if self.fillers_on and not spoken and not any(c["name"] in ("end_call", "transfer_to_human") for c in calls):
                         # Say something now: the next model call takes a moment and silence sounds like a dropped call.
@@ -608,7 +677,9 @@ class AgentEngine:
             logger.warning("Agent LLM unavailable: %s", e)
             degraded, error = True, str(e)[:160]
 
-        if not reply.strip():
+        if self._stop_turn and not degraded:
+            reply = reply.strip() or "…"  # history records only what was produced; "…" keeps the message list valid
+        elif not reply.strip():
             reply = _scripted(_FALLBACK, "fallback", self.active_language)
             first_ms = first_ms if first_ms is not None else elapsed()
             if not spoken and not degraded:  # when degraded the caller decides (e.g. fall back to another engine)
@@ -633,6 +704,18 @@ class AgentEngine:
         if len(calls) > 1 and all(c["name"] in PARALLEL_SAFE_TOOLS for c in calls):
             return list(await asyncio.gather(*(one(c) for c in calls)))
         return [await one(c) for c in calls]
+
+    def _second_ask(self, sentence: str) -> bool:
+        """One question per turn: once this reply has asked for something, a sentence asking for a different thing is dropped
+        (the first ask stays; the caller is never handed a list of everything still missing)."""
+        asked = self.ctrl.slots_asked(sentence)
+        if not asked:
+            return False
+        if self._asked_slots and not asked <= self._asked_slots:
+            logger.info("Dropped a second question in the same turn: %s (already asked %s)", sorted(asked), sorted(self._asked_slots))
+            return True
+        self._asked_slots |= asked
+        return False
 
     def _offered_calling_number(self) -> bool:
         """Did our last reply propose using the number the caller is calling from?"""
@@ -814,6 +897,9 @@ class AgentEngine:
             messages.append({"role": "system", "content": self._mood_note})
         if note := booking_note(self._raw_said, self.toolbox.succeeded, self.now_fn().date()):
             messages.append({"role": "system", "content": note})  # a half-finished booking must survive small talk
+        self.ctrl.observe_tools(self.toolbox.calls, self.toolbox.succeeded)
+        if note := self.ctrl.note():  # what is already known, and the one thing to ask next (right after the static prompt, so the
+            messages.insert(1, {"role": "system", "content": note})  # trailing notes and tool results stay the last messages)
         return messages
 
     def _commit(self, group: List[Dict[str, Any]]) -> None:
@@ -821,6 +907,7 @@ class AgentEngine:
         last = group[-1]
         if last.get("role") == "assistant" and last.get("content"):
             self.toolbox.last_assistant = last["content"]  # what a caller's next "yes" would be agreeing to
+            self.ctrl.observe_reply(last["content"])
 
     def _result(self, reply: str, started: float, tools: List[Dict[str, Any]], first_ms: Optional[int], degraded: bool = False, error: Optional[str] = None) -> AgentTurn:
         if (not self.toolbox.pending and not degraded and "?" not in reply and "end_call" not in self.toolbox.disabled_tools

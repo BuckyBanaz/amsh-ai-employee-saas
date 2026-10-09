@@ -342,6 +342,114 @@ class GatewayTurn(unittest.TestCase):
         run(go())
         return heard
 
+    def test_a_caller_speaking_during_a_turn_never_runs_two_turns_at_once(self):
+        """The STT reader is not blocked by a running turn; the single worker answers what piled up as one utterance."""
+        session, _ = self._session(ScriptedBackend())
+        state = {"running": 0, "max": 0, "heard": []}
+
+        async def handle(text):
+            state["running"] += 1
+            state["max"] = max(state["max"], state["running"])
+            state["heard"].append(text)
+            await asyncio.sleep(0.15)
+            state["running"] -= 1
+
+        session._handle_transcript = handle
+
+        async def go():
+            class STT:
+                async def events(inner):
+                    yield self._transcript_event("first")
+                    await asyncio.sleep(0.03)
+                    yield self._transcript_event("second")
+                    await asyncio.sleep(0.02)
+                    yield self._transcript_event("third")
+            session.stt = STT()
+            await session._consume_stt_events()
+        run(go())
+        self.assertEqual(state["max"], 1)
+        self.assertEqual(state["heard"], ["first", "second third"])
+        self.assertFalse(session._busy)
+
+    def test_a_stopped_turn_stops_speaking_and_commits_only_what_was_said(self):
+        engine, _ = make_engine(ScriptedBackend(reply("First sentence is here. Second sentence is here. Third sentence is here.")))
+        engine.early_chunking = False
+
+        async def go():
+            events = []
+            async for ev in engine.turn_events("hello"):
+                events.append(ev)
+                if ev["type"] == "sentence":
+                    engine.request_stop()  # the caller spoke over the first sentence
+            return events
+        events = run(go())
+        self.assertEqual([e["type"] for e in events], ["sentence", "done"])
+        self.assertEqual(engine._turns[-1][-1]["content"], events[0]["text"])
+
+    def test_stop_never_abandons_a_running_tool_or_starts_another_round(self):
+        backend = ScriptedBackend(call("check_availability", date="2030-01-01"))  # a 2nd LLM call would raise
+        engine, _ = make_engine(backend)
+        original = engine._run_tools
+
+        async def stopping(calls):
+            engine.request_stop()  # the caller interrupts while the tool is running
+            return await original(calls)
+        engine._run_tools = stopping
+
+        async def go():
+            return [ev async for ev in engine.turn_events("is the doctor free sometime")]
+        events = run(go())
+        self.assertEqual(events[-1]["type"], "done")
+        self.assertEqual([m["role"] for m in engine._turns[-1]], ["user", "assistant", "tool", "assistant"])  # the tool result is in history
+
+    def test_the_watchdog_never_prompts_a_caller_who_is_talking(self):
+        from backend.ai.realtime.twilio import gateway
+
+        session, _ = self._session(ScriptedBackend())
+        said = []
+
+        async def speak(text, *a, **kw):
+            said.append(text)
+            return True
+        session._speak_turn = speak
+        old_min, gateway.MIN_SILENCE_TIMEOUT_S = gateway.MIN_SILENCE_TIMEOUT_S, 1
+        session.agent_settings = {"silence_timeout_seconds": 1, "language": "en"}
+        session.last_activity = time.monotonic() - 100
+
+        async def go(caller_talks):
+            task = asyncio.create_task(session._watchdog())
+            end = time.monotonic() + 3.2
+            while time.monotonic() < end:
+                if caller_talks:
+                    session._last_caller_voice = time.monotonic()  # STT words / voiced audio keep arriving
+                await asyncio.sleep(0.2)
+            session.should_close = True
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+        try:
+            run(go(True))
+            self.assertEqual(said, [])
+            session.should_close = False
+            session._silence_prompted = False
+            session._last_caller_voice = 0.0
+            run(go(False))
+            self.assertGreaterEqual(len(said), 1)  # a genuinely silent line is still prompted
+        finally:
+            gateway.MIN_SILENCE_TIMEOUT_S = old_min
+
+    def test_the_barge_in_grace_window_starts_with_the_response_not_each_sentence(self):
+        session, _ = self._session(ScriptedBackend(), tts_chunks=10)
+
+        async def go():
+            await session._speak_turn("first sentence")
+            first_onset = session._speak_started_at
+            self.assertTrue(session.barge_in.is_speaking)  # the first sentence is still playing at the caller's end
+            await asyncio.sleep(0.05)
+            await session._speak_turn("second sentence")
+            return first_onset, session._speak_started_at
+        first, second = run(go())
+        self.assertEqual(first, second)
+
     def test_a_long_utterance_is_one_turn_not_two(self):
         """Deepgram finalises long speech in pieces (is_final without speech_final); answering each piece would cut in."""
         part = dict(self._transcript_event("I want to book an appointment"), speech_final=False)

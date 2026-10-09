@@ -18,18 +18,26 @@ from backend.ai.verticals.context import BusinessContext
 from backend.ai.engine.agent.validator import BusinessFacts
 
 
+from backend.ai.engine.agent.availability import normalize_working_hours
+
+
 def _pack() -> Dict[str, Any]:
     return load_prompts("receptionist")
 
 
-def _hours_text(working_hours: Dict[str, Any]) -> str:
+def _hours_text(working_hours: Any) -> str:
     hours = _pack()["hours"]
+    working_hours = normalize_working_hours(working_hours)
     if not working_hours:
         return hours["not_configured"]
     parts = []
     for day, ranges in working_hours.items():
         if isinstance(ranges, list) and ranges:
-            spans = ", ".join(hours["span"].format(start=r.get("start"), end=r.get("end")) for r in ranges if isinstance(r, dict))
+            spans = ", ".join(
+                hours["span"].format(start=r.get("start") or r.get("open"), end=r.get("end") or r.get("close"))
+                for r in ranges
+                if isinstance(r, dict)
+            )
             parts.append(hours["day"].format(day=day[:3], spans=spans))
         elif isinstance(ranges, str) and ranges:
             parts.append(hours["day"].format(day=day[:3], spans=ranges))

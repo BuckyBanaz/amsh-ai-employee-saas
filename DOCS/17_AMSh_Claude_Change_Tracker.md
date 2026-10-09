@@ -198,6 +198,8 @@ Details: `DOCS/07_AMSh_Latency_Optimization_Strategy.md` section 6.
 | 75 | **Spend and profit (Usage & Limits).** Admin page rebuilt on real data: spend per tool, per clinic and per day, revenue (cash collected), profit and margin, trial burn, testing spend, clinics near plan limits, editable rate card (super admin; edits reprice history). LLM tokens are metered per clinic (`usage_events`, migration 0010; streamed replies are estimated at about 4 characters per token and marked "est."); calls, transcripts and `message_log` supply the rest. Default prices are estimates, not invoices. **Not tracked:** post-call analysis, previews, WhatsApp fees, number rental. Profit is per platform and per clinic, not per tool (revenue is earned by a plan) | DONE | `spend.py`, `cost_tracking.py`, `admin_spend.py`, `spend.py` (model), `0010`, `usage/page.tsx`, `llm_backend.py`, `test_spend.py` |
 | 76 | **Testing folder.** `testing/`: API smoke on the real app from an empty SQLite database (migrations run; 35 checks), browser end to end of both apps with real login forms (18 checks, 8 screenshots), `run_all.sh`, `REPORT.md`; CI runs the smoke. Found and fixed: an empty spend chart that every other check missed, a test that silently skipped its assertion, a pluralisation slip. 451 offline tests green | DONE | `testing/`, `.github/workflows/ci.yml` |
 | 77 | **Policy and privacy management.** Admin **Policies & Privacy** page: policy documents (Terms, Privacy, DPAs, BAA...) scoped by region (`*`, country, or framework DPDP / GDPR / HIPAA) and vertical, with versions, draft then publish, archive, "must accept again" per version, and who accepted what (version, business, time, IP). Starter drafts (never auto-published; they say they are not legal advice). **AI privacy rules** by region: the privacy instruction in the AI's prompt and the recording notice (English, Hindi) are editable; built-ins stay when nothing is saved. **At onboarding:** sign-up needs the Terms and Privacy accepted once they are published; the review step shows the owner what applies, what the AI will do for their region (framework, emergency numbers, privacy instruction, recording notice) and blocks the next step until accepted; a trial or payment is refused server-side until then (before any money moves); a new version that asks again shows a dashboard banner. Public `/legal/<key>` pages. **The AI now says a recording notice at the start of calls from a business that records** (live and playground) unless the region's rule turns it off. Migration 0011. **Not done:** retention enforcement (text only), lawyer-reviewed policy text, per-vertical rules in the admin form (the API supports them), acceptance by staff other than owner/admin | DONE | `policies.py` (service, routes, admin routes, model), `0011`, `prompt_builder.py`, `facts.py`, `gateway.py`, `billing.py`, `auth.py`, admin `policies/`, user `legal/`, `PolicyAcceptance.tsx`, `PolicyBanner.tsx`, `test_policies.py` |
+| 78 | **Live telephony (Twilio/Exotel) switched to LLM Agent primary.** Telephony gateways are transport only (`/media-stream/{business_id}`). `AgentRuntime.create` defaults `force_agent=True` and `resolve_mode` defaults to `llm_agent` so live calls run the exact same LLM streaming agent as WebRTC playground instead of defaulting to legacy state machine. `_handle_agent_turn` keeps call on agent with polite recovery hold line on turn exceptions instead of dumping caller into disconnected regex state machine. State machine `_SMALL_TALK_GREETING` check reordered and mid-collection ambiguous handling re-asks active slot. | DONE | `gateway.py`, `runtime.py`, `state_machine.py` |
+| 79 | **Telephony multi-tenant number isolation & Business hours 7-day normalization.** (1) Fixed BusinessSettings operating hours only showing Monday: normalized schedule across all 7 days (Monday to Sunday) whether stored as dict or array. (2) Fixed Demo Clinic vs Mayo Clinic number crossover: `/call-me` uses target `payload.business_id` and checks that business's assigned carrier (`PhoneNumber` / `Agent.config`), added `/api/telephony/assign` to persist onboarding phone number directly to database, and added `Business.business_phone` fallback in `number_routing.py` to prevent cross-tenant routing. | DONE | `BusinessSettings.tsx`, `voice.py`, `integrations.py`, `number_routing.py`, `twilio/page.tsx` |
 
 **Known live issue:** Groq on-demand limit is 8,000 tokens/min; the agent uses ~1.6k tokens per turn, so fast conversations get a 429 and that turn falls back to the legacy engine's template (robotic). Needs a paid tier.
 
@@ -830,5 +832,86 @@ Run it: `python -m backend.ai.evals.runner` (`--live`, `--only persona,safety`, 
     - Guarded both `handle_media` and `_on_caller_speech_started` with `not self.is_greeting_active`, completely preventing connection noise or early VAD triggers from purging the greeting buffer.
     - Updated `mark` event handler in `twilio_media_stream` to clear `_greeting_until` as soon as Twilio echoes the greeting mark.
     - Updated `_handle_transcript` to wait for greeting playback completion if the caller spoke an utterance during the greeting, preventing AI speech collision.
-  - **Rate Limit Adjustment (`voice.py`)**:
-    - Increased `call-me-user` and `call-me-number` hourly test limits from 2 to 20 to allow continuous telephony testing without 429 blocks.
+
+### Entry 98 - Default LLM Agent Telephony, Tenant Routing, Business Hours & Test Call Cleanup (2026-10-06)
+- **Problem**:
+  - Live phone calls were running the legacy state machine with rigid template fallbacks ("Please clarify which appointment...") instead of conversational streaming LLM Agent.
+  - Multi-tenant routing mismatch: calls intended for Demo Clinic (+91/Exotel) were crossing over to Mayo Clinic (+1/Twilio) due to unassigned virtual numbers and hardcoded session business IDs.
+  - Business Settings UI only rendered Monday's working hours instead of all 7 days of the week.
+  - Ending simulated test calls in AI Studio produced `endSimulatedCall ignored: Error: Call log not found` in browser console due to 404 response on unpersisted calls.
+  - Cartesia TTS reported HTTP 402 Insufficient credits.
+- **Root Cause & Fix**:
+  - **LLM Agent Telephony Default (`backend/ai/engine/agent/runtime.py` & `gateway.py`)**:
+    - Changed default `resolve_mode` to `"llm_agent"` and set `force_agent: bool = True` in `AgentRuntime.create`.
+    - Added error handling and polite hold lines in `_handle_agent_turn` rather than dumping into legacy state machine.
+  - **Multi-Tenant Number & Provider Routing (`voice.py`, `integrations.py`, `number_routing.py`)**:
+    - Updated `/api/voice/call-me` to use caller payload `business_id` and query matching `PhoneNumber` / provider.
+    - Added `POST /api/telephony/assign` in `integrations.py` to persist virtual numbers into `phone_numbers`, `Business.business_phone`, and `Agent.config`.
+    - Updated onboarding Twilio save handler in frontend to call `/api/telephony/assign`.
+    - Added secondary lookup for `Business.business_phone` in `resolve_business`.
+  - **Business Hours Normalization (`BusinessSettings.tsx`)**:
+    - Normalized `working_hours` across all 7 days (Monday through Sunday) regardless of dictionary or array backend shape.
+  - **Simulated Test Call Cleanup (`backend/server/api/routes/calls.py` & `dashboard.controller.ts`)**:
+    - Updated `end_simulated_call` in `calls.py` to return HTTP 200 `{ended: False, reason: "Test call not persisted..."}` for test calls (`studio_*`, `sim_*`) instead of raising HTTP 404.
+    - Silenced expected 404 / not found warnings in `DashboardController.endSimulatedCall`.
+  - **Cartesia TTS Credits**:
+    - Noted Cartesia account credit depletion (402 Payment Required); AI Studio gracefully falls back to browser `window.speechSynthesis`.
+
+### Entry 99 - Fix Working Hours List Format in Agent Prompt Builder & Availability (2026-10-06)
+- **Problem**:
+  - `POST /api/voice/simulate/stream` failed with 500 / broken stream, triggering `TypeError: Failed to fetch` at `simulateVoiceStream` in the AI Studio playground.
+  - Container stack trace: `AttributeError: 'list' object has no attribute 'items'` in `prompt_builder.py` line 30 `for day, ranges in working_hours.items():`.
+- **Root Cause & Fix**:
+  - `BusinessSettings.tsx` stores `working_hours` as a JSON array of `DaySchedule` objects (`[{day: "Monday", active: true, ranges: [...]}, ...]`), whereas `_hours_text` in `prompt_builder.py` and `day_ranges` in `availability.py` assumed `working_hours` was always a `dict` with `.items()`.
+  - Added `normalize_working_hours` in `backend/ai/engine/agent/availability.py`: seamlessly converts both list and dict formats into a clean day mapping (`{"Monday": [{"start": "09:00", "end": "13:00"}, ...], "Sunday": []}`).
+  - Updated `_hours_text` in `backend/ai/engine/agent/prompt_builder.py` to use `normalize_working_hours` and safely handle both ranges and open/close fields.
+  - Updated `load_facts` in `backend/ai/engine/agent/facts.py` to normalize `business.working_hours` before assigning to `BusinessFacts`.
+- **Verification**:
+### Entry 100 - Telephony Barge-In Echo Suppression & Self-Interruption Fix (2026-10-06)
+- **Problem**:
+  - On live phone calls, the AI would start speaking and get cut off after ~750ms ("I am Aria, the AI... [silence]"), despite logs showing a complete reply.
+  - Server logs confirmed `[BARGE-IN] Cleared telephony audio buffer` occurred within 700ms on every AI reply turn without the caller having spoken.
+- **Root Cause & Fix**:
+  - **Premature Deepgram `speech_started` Interruption**:
+    - `_on_caller_speech_started` previously called `await self.barge_in.handle_caller_speech(...)` directly.
+    - Deepgram's neural VAD fires `speech_started` on any inbound sound — including acoustic echo of the AI's own voice leaking from the caller's phone earpiece/speaker back into the mic.
+    - This resulted in the AI's own audio triggering an immediate buffer flush on Twilio, cutting the AI off mid-speech.
+  - **Grace Period & Debounce (`backend/ai/realtime/twilio/gateway.py`)**:
+    - Removed `handle_caller_speech` from `_on_caller_speech_started`: `speech_started` now only pre-warms LLM/TTS pools.
+    - Added `BARGE_IN_GRACE_PERIOD_S = 1.0`: barge-in is disabled during the first 1.0 second of playback to allow the mobile device's acoustic echo cancellation (AEC) to converge without self-interrupting.
+    - Added `is_barge_in_allowed` property checking greeting state and the 1.0s speech grace period.
+    - Increased `BARGE_IN_MIN_VOICED_FRAMES` from 8 (160ms) to 20 (400ms) for energy VAD so ambient noise/line clicks cannot clear the buffer.
+    - Added transcript-based barge-in in `_consume_stt_events`: when actual spoken words are recognized from the caller during AI playback outside the grace period, it reliably interrupts playback.
+### Entry 101 - Outbound Call Record Persistence & Polling 404 Fix (2026-10-06)
+- **Problem**:
+  - TestPlaygroundModal showed recurring browser console errors: `[API Error] .../calls/CA...: Error: Call log not found` and `[getCallDetail] Call CA... not found or failed to load`.
+  - Temporary `TypeError: Failed to fetch` errors occurred when frontend polled endpoints while the backend container was reloading.
+- **Root Cause & Fix**:
+  - **Immediate Call Record Creation (`backend/server/api/routes/voice.py`)**:
+    - When `/api/voice/call-me` dials an outbound call via Exotel or Twilio, `record_call_start` is now called immediately as soon as the `call_sid` is received from the provider.
+    - The `Call` row exists in the database from the very first second of dialing, so subsequent modal polling receives HTTP 200 `live` status instead of 404.
+  - **Connecting Call Fallback (`backend/server/api/routes/calls.py`)**:
+    - In `get_call_detail`, if a freshly placed test call (`CA...`, `exotel_...`, `studio_...`) is queried before its row is committed, the endpoint returns a valid pending object (`outcome: "live"`) instead of raising HTTP 404.
+  - **Dashboard Controller Error Silencing (`controllers/dashboard.controller.ts`)**:
+    - Silenced expected 404 / not found warnings in `getCallDetail`.
+- **Verification**:
+  - Live container verified: `GET /api/businesses/.../calls/CA...` returned HTTP 200 OK continuously without errors.
+  - Confirmed `CONVERSATION ENGINE: llm_agent` active on live calls and greeting played to completion.
+### Entry 102 - Voice Turn Pipeline: Head-of-Line Blocking, Empty-Utterance Turns, Conversation Controller (2026-10-08)
+- **Measured first** (38 real turns from the `[LATENCY]` logs): clean turns were 0.7-1.1 s to first audio, bad turns 3-10 s. STT and TTS were not the bottleneck. Two causes: (1) Groq on-demand 429s forced fallback rounds (groq -> gpt-oss-120b -> gemini); (2) `pre_llm_processing` grew to 5-8 s because the STT consumer awaited each turn inline, so the next utterance sat in the queue behind the previous turn's tail.
+- **Bug found**: the earlier word-level barge-in edit removed the `is_final` condition, so every interim transcript started a turn with an empty utterance (the `transcript_words: 0, speech_final: False` turns), producing extra/duplicate answers. Interim words now only interrupt; they never start a turn, and an empty utterance never reaches the LLM.
+- **Changes**:
+  - `gateway.py`: STT reader and a single turn worker (`_enqueue_turn`, `_turn_worker_loop`); utterances queued behind a running turn are merged into one; a new final stops the running turn only when the normal barge-in rule allows it; one TTS stream per call (`_tts_lock`); stale sentences of an old turn are discarded (turn-id + generation check); hold lines respect the generation; the turn-log DB write runs in the background and `stop()` waits for it; `queue_wait_ms` / `merged_utterances` added to the latency log.
+  - `agent_loop.py` / `runtime.py`: cooperative `request_stop()` (stop streaming, never start another tool round, never abandon a running tool; the turn commits only what was produced) instead of draining the whole model reply after a barge-in.
+  - New `engine/agent/controller.py` (`CallState`, `SentenceDeduper`): name/phone/service/date/time/intent/language/mood tracked in code, one "next needed" item, a short-reply hint, a guard that regenerates once instead of re-asking something the caller already gave (not for date/time, and not after a tool refused a value), and within-turn dedupe of near-identical sentences. Notes live in `prompts/engine_notes.json` (`controller_note`, `repeat_note`).
+  - `.env`: `LLM_PROVIDERS=gemini,groq,groq:openai/gpt-oss-120b,groq:qwen/qwen3.8-27b` (testing without a paid Groq tier; Groq stays as fallback).
+- **Verification**: unit tests added for non-overlapping turns, merged utterances, stop semantics (tool kept in history, no extra LLM round), the controller and the dedupe. Not yet verified on a real phone call. Two older tests still fail independently (`test_llm_outage_hands_the_turn_back_to_the_state_machine`, `test_resolve_mode_prefers_tenant_and_defaults_to_legacy`).
+### Entry 103 - Real-Call Fixes: Silence Watchdog, Barge-In Grace, One Question Per Turn, Hesitation (2026-10-08)
+- **Source**: bugs heard in a recorded test call, each checked against the code before fixing.
+- **Fixes**:
+  - `gateway.py` watchdog: "are you still there?" no longer fires while the caller is talking (`_last_caller_voice`, fed by STT words including interim ones, speech-start events and voiced audio while the AI is silent), and the silence timeout is at least 10 s (`MIN_SILENCE_TIMEOUT_S`) whatever the tab says.
+  - `gateway.py` barge-in: grace window 1.0 s -> 0.4 s and measured from the start of a response, not reset for every sentence (it used to block interruption for the first second of each sentence); voiced-frame debounce 20 -> 15 frames.
+  - One question per turn, enforced in code: the call-state note now says "CURRENT REQUIREMENT: ask only for X"; a sentence that asks for several things (e.g. "name and phone", "time and service") is regenerated once; a second, different ask later in the same reply is dropped. Hindi imperative asks ("बता दीजिए") now count as questions.
+  - Hesitation ("रुको मेरे को ना", "wait", "ek second", "hmm"): answered with a one-line nod, no LLM call, and the pending question stays what a later "yes" answers. Anything that carries a request, service, name, day or time still goes to the model.
+  - Prompt: booking order is now service, date, time, name, phone (text length kept under the 8000-char cap).
+- **Tests**: watchdog does not prompt a talking caller, grace window per response, hesitation vs real question, multi-ask regeneration, second-ask drop. Not yet verified on a live call.

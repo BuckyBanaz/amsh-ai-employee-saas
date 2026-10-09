@@ -47,6 +47,17 @@ def resolve_business(db: Session, dialed: Optional[str], forwarded_from: Optiona
         if len(hits) > 1:
             logger.error("[ROUTING] %s ends in %s is assigned to %d businesses: refusing the call", field, key[-4:], len(hits))
             return None, "ambiguous"
+
+    # Secondary check: match on Business.business_phone if phone_numbers had no assignment
+    for value in (forwarded_from, dialed):
+        key = number_key(value)
+        if not key:
+            continue
+        biz_rows = list(db.scalars(select(Business).where(Business.business_phone.isnot(None))).all())
+        matching = [b for b in biz_rows if number_key(b.business_phone) == key]
+        if len(matching) == 1:
+            return matching[0], "business_phone match"
+
     return None, "no match"
 
 

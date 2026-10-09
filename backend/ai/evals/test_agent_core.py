@@ -753,7 +753,7 @@ class GroundingGuard(unittest.TestCase):
         engine, _ = make_engine(backend)
 
         async def collect():
-            return [e async for e in engine.turn_events("hmm", stream=True)]
+            return [e async for e in engine.turn_events("what slots do you have", stream=True)]
 
         events = run(collect())
         spoken = " ".join(e["text"] for e in events if e["type"] == "sentence")
@@ -921,7 +921,7 @@ class BehaviorSettings(unittest.TestCase):
 
         self.assertEqual(resolve_speed(65, "Crisp & Professional"), 1.3)  # the slider stores x*50
         self.assertEqual(resolve_speed(1.2, None), 1.2)
-        self.assertEqual(resolve_speed(50, "Energetic & Fast"), 1.15)  # untouched slider (1.0x): personality decides
+        self.assertEqual(resolve_speed(50, "Energetic & Fast"), 1.0)  # owner explicitly chose 1.0x: respected
         self.assertEqual(resolve_speed(None, "Empathetic & Calm"), 0.95)
         self.assertEqual(resolve_speed(None, None), 1.05)  # never flat by default
         self.assertEqual(resolve_speed(500, None), 1.5)  # clamped
@@ -1971,7 +1971,7 @@ class RememberedLanguage(unittest.TestCase):
             self.assertIsNone(ask(said), said)
 
     def test_request_is_remembered_on_every_later_turn_until_changed(self):
-        backend = ScriptedBackend(reply("Ji zaroor."), reply("Aapka naam?"), reply("Sure, English."))
+        backend = ScriptedBackend(reply("Ji zaroor."), reply("Theek hai, bataiye kya madad karu."), reply("Sure, English."))
         engine, _ = make_engine(backend)
         run(engine.turn("can we talk in hindi"))
         run(engine.turn("my name is Parikshit Verma"))  # English words again: the model would tend to drift back
@@ -4689,3 +4689,104 @@ class TextHelpers(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ConversationController(unittest.TestCase):
+    """agent/controller.py: what is known, what is next, no repeated questions, no doubled sentences."""
+
+    def _state(self, said, services=("Dental Cleaning", "General Checkup")):
+        from backend.ai.engine.agent.controller import CallState
+
+        st = CallState(services=list(services))
+        for text in said:
+            st.observe(text, date(2026, 10, 8))
+        return st
+
+    def test_it_asks_only_for_what_is_missing(self):
+        st = self._state(["I want to book an appointment", "My name is Parikshit"])
+        self.assertEqual(st.caller_name, "Parikshit")
+        self.assertEqual(st.next_needed(), "service")
+        st = self._state(["book an appointment", "my name is Parikshit", "a dental cleaning", "tomorrow at 4 pm"])
+        self.assertEqual(st.service, "Dental Cleaning")
+        self.assertEqual(st.next_needed(), "phone")
+        self.assertIn("Parikshit", st.note())
+
+    def test_a_question_word_is_not_taken_as_a_name(self):
+        self.assertIsNone(self._state(["mera naam kya hai"]).caller_name)
+        self.assertIsNone(self._state(["I am calling about an appointment"]).caller_name)
+        self.assertEqual(self._state(["main Rohan bol raha hoon"]).caller_name, "Rohan")
+
+    def test_asking_again_for_a_known_slot_is_caught_but_a_read_back_is_not(self):
+        st = self._state(["book an appointment", "my name is Parikshit"])
+        self.assertEqual(st.repeat_ask("Sure. What is your name?"), "name")
+        self.assertEqual(st.repeat_ask("आपका नाम बताइए।"), "name")
+        self.assertIsNone(st.repeat_ask("Is your name Parikshit?"))
+        self.assertIsNone(st.repeat_ask("Which service would you like?"))
+        self.assertIsNone(st.repeat_ask("Thank you, Parikshit."))  # not a question
+
+    def test_the_same_question_in_other_words_is_spoken_once(self):
+        from backend.ai.engine.agent.controller import SentenceDeduper
+
+        d = SentenceDeduper()
+        self.assertFalse(d.is_dup("आपका नाम बताइए।"))
+        self.assertTrue(d.is_dup("कृपया अपना नाम बताइए।"))
+        self.assertFalse(d.is_dup("Which day works for you?"))
+        self.assertFalse(d.is_dup("Which time works for you?"))
+
+    def test_the_agent_regenerates_once_instead_of_asking_the_name_twice(self):
+        backend = ScriptedBackend(reply("Thanks. What is your name?"), reply("Thanks Parikshit. Which service would you like?"))
+        engine, _ = make_engine(backend)
+
+        async def go():
+            return [e["text"] for e in [ev async for ev in engine.turn_events("my name is Parikshit and I want an appointment")] if e["type"] == "sentence"]
+        spoken = run(go())
+        self.assertEqual(len(backend.seen), 2)
+        self.assertTrue(any("already given" in str(m.get("content")) for m in backend.seen[1]["messages"] if m["role"] == "system"))
+        self.assertFalse(any("your name" in x for x in spoken))  # the repeated question never reached the caller
+        self.assertIn("Which service would you like?", spoken)
+
+    def test_a_refused_value_may_be_asked_for_again(self):
+        backend = ScriptedBackend(call("book_appointment", patient_name="@@", service_name="x", date="2030-01-01", time="10:00", phone_number="1"), reply("Sorry, could you repeat your name?"))
+        engine, _ = make_engine(backend)
+        run(engine.turn("my name is Parikshit, book me for 1 January 2030 at 10 am"))
+        self.assertEqual(len(backend.seen), 2)  # no extra regeneration after the tool turned the value down
+
+    def test_a_pause_gets_a_nod_not_the_questionnaire(self):
+        backend = ScriptedBackend()  # any LLM call would raise: a hesitation must not cost one
+        engine, _ = make_engine(backend)
+
+        async def go(text):
+            return [e["text"] for e in [ev async for ev in engine.turn_events(text)] if e["type"] == "sentence"]
+        for text in ("रुको मेरे को ना", "wait a second", "ek minute", "hmm"):
+            out = run(go(text))
+            self.assertEqual(len(out), 1, text)
+            self.assertNotIn("?", out[0])
+        self.assertEqual(backend.seen, [])
+
+    def test_a_real_question_that_starts_like_a_pause_still_reaches_the_model(self):
+        for text in ("just wanted to ask about your timings", "one more thing, do you take insurance"):
+            backend = ScriptedBackend(reply("We take most plans."))
+            engine, _ = make_engine(backend)
+            run(engine.turn(text))
+            self.assertEqual(len(backend.seen), 1, text)
+
+    def test_several_questions_in_one_reply_become_one(self):
+        dump = "हमारे पास सुबह 9:00 बजे से दोपहर 3:00 बजे तक स्लॉट्स हैं। कृपया अपना पूरा नाम और फोन नंबर भी बता दीजिए। क्या आप मुझे बता सकते हैं कि आप किस समय आना चाहेंगे और कौन सी सर्विस लेना चाहते हैं?"
+        backend = ScriptedBackend(reply(dump), reply("Kaun si service chahiye aapko?"))
+        engine, _ = make_engine(backend)
+
+        async def go():
+            return [e["text"] for e in [ev async for ev in engine.turn_events("kal ki appointment chahiye")] if e["type"] == "sentence"]
+        spoken = run(go())
+        self.assertEqual(len(backend.seen), 2)  # regenerated once with the one-question correction
+        asked = [x for x in spoken if "?" in x or "बता" in x]
+        self.assertLessEqual(len(asked), 1, spoken)
+
+    def test_a_second_different_ask_in_the_same_turn_is_dropped(self):
+        backend = ScriptedBackend(reply("Which service would you like? And what is your name?"))
+        engine, _ = make_engine(backend)
+
+        async def go():
+            return [e["text"] for e in [ev async for ev in engine.turn_events("I need an appointment")] if e["type"] == "sentence"]
+        spoken = run(go())
+        self.assertEqual(len([x for x in spoken if "?" in x]), 1, spoken)

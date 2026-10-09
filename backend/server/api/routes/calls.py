@@ -158,6 +158,28 @@ def get_call_detail(
     )
     call = db.scalar(stmt)
     if not call:
+        if call_id.startswith(("CA", "exotel_", "studio_", "sim_")):
+            now_iso = datetime.now(timezone.utc).isoformat()
+            return {
+                "id": call_id,
+                "is_test": True,
+                "sentiment": "neutral",
+                "action_items": [],
+                "channel": "phone",
+                "business_id": business_id,
+                "caller_number": "",
+                "caller_name": "Connecting...",
+                "intent": None,
+                "outcome": "live",
+                "summary": "Call dialing or connecting...",
+                "analyzed": False,
+                "duration_seconds": 0,
+                "latency_ms": 180,
+                "recording_url": None,
+                "started_at": now_iso,
+                "ended_at": None,
+                "messages": [],
+            }
         raise HTTPException(status_code=404, detail="Call log not found")
 
     return _format_call(call, include_messages=True)
@@ -224,6 +246,8 @@ def end_simulated_call(
     require_membership(business_id, current_user)
     call = db.scalar(select(Call).where(Call.id == call_id, Call.business_id == business_id))
     if not call:
+        if is_test_call(call_id):
+            return {"ended": False, "reason": "Test call not persisted or already cleaned up"}
         raise HTTPException(status_code=404, detail="Call log not found")
     if call.outcome != "live":
         return {"ended": False, "outcome": call.outcome}

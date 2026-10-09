@@ -49,8 +49,8 @@ def normalize_speed(raw: Any) -> Optional[float]:
 
 
 def resolve_speed(raw_speed: Any, personality: Optional[str]) -> float:
-    """Owner's explicit speed wins; otherwise the personality's default; otherwise a slightly brisk default."""
+    """Owner's explicit speed always wins (including 1.0x); otherwise the personality's default; otherwise a slightly brisk default."""
     explicit = normalize_speed(raw_speed)
-    if explicit is not None and explicit != 1.0:  # 1.0 is the slider's untouched position, not a decision
+    if explicit is not None:
         return explicit
     return PERSONALITY_SPEED.get((personality or "").strip().lower(), DEFAULT_SPEED)

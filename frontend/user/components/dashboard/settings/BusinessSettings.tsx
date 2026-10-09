@@ -94,8 +94,74 @@ export function BusinessSettings({ focusDangerZone }: { focusDangerZone?: boolea
         } else if (savedLocalLogo) {
           setLogoPreview(savedLocalLogo);
         }
-        if (b.working_hours && typeof b.working_hours === 'object' && Array.isArray(b.working_hours)) {
-          setSchedule(b.working_hours);
+        if (b.working_hours) {
+          const daysOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+          const existingMap = new Map<string, any>();
+
+          if (Array.isArray(b.working_hours)) {
+            (b.working_hours as any[]).forEach((item: any) => {
+              if (item && item.day) {
+                existingMap.set(String(item.day).trim().toLowerCase(), item);
+              }
+            });
+          } else if (typeof b.working_hours === 'object') {
+            Object.entries(b.working_hours).forEach(([k, v]) => {
+              existingMap.set(String(k).trim().toLowerCase(), v);
+            });
+          }
+
+          const normalized: DaySchedule[] = daysOrder.map((dayName) => {
+            const raw = existingMap.get(dayName.toLowerCase());
+            const fallback = defaultSchedule.find((d) => d.day.toLowerCase() === dayName.toLowerCase()) || {
+              day: dayName,
+              active: false,
+              ranges: [],
+            };
+
+            if (!raw) {
+              return fallback;
+            }
+
+            let ranges: { start: string; end: string }[] = [];
+            let active = false;
+
+            if (Array.isArray(raw)) {
+              ranges = raw
+                .map((r: any) => {
+                  if (typeof r === 'string') {
+                    const [s, e] = r.split('-');
+                    return { start: s?.trim() || '09:00', end: e?.trim() || '17:00' };
+                  }
+                  if (r && typeof r === 'object') {
+                    return { start: r.start || '09:00', end: r.end || '17:00' };
+                  }
+                  return null;
+                })
+                .filter(Boolean) as { start: string; end: string }[];
+              active = ranges.length > 0;
+            } else if (typeof raw === 'object' && raw !== null) {
+              if (Array.isArray(raw.ranges)) {
+                ranges = raw.ranges.map((r: any) => ({
+                  start: r.start || '09:00',
+                  end: r.end || '17:00',
+                }));
+                active = raw.active !== undefined ? !!raw.active : ranges.length > 0;
+              } else if (raw.start && raw.end) {
+                ranges = [{ start: raw.start, end: raw.end }];
+                active = raw.active !== undefined ? !!raw.active : true;
+              } else {
+                active = !!raw.active;
+              }
+            }
+
+            return {
+              day: dayName,
+              active: active || (dayName !== 'Sunday' && ranges.length > 0),
+              ranges: ranges.length > 0 ? ranges : (active ? fallback.ranges : []),
+            };
+          });
+
+          setSchedule(normalized);
         }
       })
       .catch((err) => {
@@ -692,7 +758,7 @@ export function BusinessSettings({ focusDangerZone }: { focusDangerZone?: boolea
               <div className="flex-1 flex flex-wrap items-center gap-2">
                 {item.active ? (
                   <>
-                    {item.ranges.map((range, idx) => (
+                    {(item.ranges ?? []).map((range, idx) => (
                       <div key={idx} className="flex items-center gap-1.5 bg-gray-50 px-2 py-1 rounded-md border border-gray-200">
                         {idx > 0 && <span className="text-[10px] text-gray-400 font-bold mr-0.5">&amp;</span>}
                         <input
@@ -708,7 +774,7 @@ export function BusinessSettings({ focusDangerZone }: { focusDangerZone?: boolea
                           onChange={(e) => updateRange(item.day, idx, 'end', e.target.value)}
                           className="text-xs text-gray-900 bg-transparent focus:outline-none font-medium cursor-pointer"
                         />
-                        {item.ranges.length > 1 && (
+                        {(item.ranges ?? []).length > 1 && (
                           <button
                             type="button"
                             onClick={() => removeRange(item.day, idx)}

@@ -7,7 +7,7 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 from sqlalchemy.orm import Session
 
 from backend.ai.verticals.errors import MissingContextError
-from backend.ai.engine.agent.availability import DEFAULT_SLOT_MINUTES
+from backend.ai.engine.agent.availability import DEFAULT_SLOT_MINUTES, normalize_working_hours
 from backend.ai.engine.agent.validator import BusinessFacts
 from backend.ai.speech.tts.voice_meta import voice_gender
 from backend.ai.speech.tts.voice_profile import resolve_speed
@@ -125,7 +125,7 @@ def load_facts(db: Session, business_id: str) -> BusinessFacts:
     return BusinessFacts(
         name=business.name,
         timezone=(business.timezone or "").strip(),
-        working_hours=business.working_hours or {},
+        working_hours=normalize_working_hours(business.working_hours),
         services=[s.title for s in services],
         doctors=clinical,
         address=business.address or "",

@@ -144,11 +144,29 @@ async def trigger_test_call(payload: CallMeRequest, db: Session = Depends(get_db
     ratelimit.check("call-me-number", phone, 20, 3600)
     logger.info(f"[VOICE CALL-ME] {user.id} requested an outbound test call")
 
-    # A business user always tests their own business; only platform admins may name another one.
-    business_id = payload.business_id if user.scope == "platform" else user.business_id
+    # Use requested business_id if provided (e.g. testing Demo Clinic vs Mayo Clinic), else fallback to user.business_id
+    business_id = payload.business_id or user.business_id
+    biz = db.get(Business, business_id)
+    if not biz:
+        business_id = user.business_id
+        biz = db.get(Business, business_id)
 
-    # 1. Indian numbers (+91): Route through Exotel to avoid TRAI / international carrier blocking
-    if phone.startswith("+91") and exotel_client.is_configured():
+    # Check business assigned line and provider settings
+    from backend.server.database.models.phone_number import PhoneNumber
+    from backend.server.database.models.agent import Agent
+    pn = db.query(PhoneNumber).filter(PhoneNumber.business_id == business_id).first()
+    agent = db.query(Agent).filter(Agent.business_id == business_id).first()
+    agent_cfg = (agent.config or {}) if agent else {}
+    biz_provider = (agent_cfg.get("telephony_provider") or "").lower()
+
+    biz_uses_exotel = (
+        biz_provider == "exotel"
+        or (biz and "india" in (biz.country or "").lower())
+        or phone.startswith("+91")
+    )
+
+    # 1. Route through Exotel if business/destination is configured for Exotel
+    if biz_uses_exotel and exotel_client.is_configured():
         try:
             base_url = build_base_url()
             callback_url = f"{base_url}/api/voice/exotel/incoming"
@@ -160,15 +178,18 @@ async def trigger_test_call(payload: CallMeRequest, db: Session = Depends(get_db
             if params:
                 callback_url = f"{callback_url}?{'&'.join(params)}"
 
+            from_line = (pn.number if pn and pn.number else None) or exotel_client.caller_id
             res = await exotel_client.create_outbound_call(phone, callback_url=callback_url)
             if "error" not in res:
                 call_sid = res.get("Call", {}).get("Sid") or "exotel_call"
+                from backend.server.services.call_recorder import record_call_start
+                record_call_start(call_sid, business_id, phone, caller_name="Test Caller", greeting="Connecting outbound call...")
                 return {
                     "success": True,
                     "provider": "exotel",
                     "call_sid": call_sid,
-                    "from_number": exotel_client.caller_id,
-                    "message": f"Calling your phone {phone} from {exotel_client.caller_id}. Please pick up!",
+                    "from_number": from_line,
+                    "message": f"Calling your phone {phone} from {from_line} for {biz.name if biz else 'your business'}. Please pick up!",
                 }
             logger.warning(f"[VOICE CALL-ME] Exotel returned error: {res.get('error')}, falling back to Twilio if available")
         except Exception as e:
@@ -187,24 +208,27 @@ async def trigger_test_call(payload: CallMeRequest, db: Session = Depends(get_db
                 '</Stream></Connect></Response>'
             )
             url = f"https://api.twilio.com/2010-04-01/Accounts/{settings.TWILIO_ACCOUNT_SID}/Calls.json"
+            from_twilio_line = (pn.number if pn and pn.number and not pn.number.startswith("+91") else None) or settings.TWILIO_PHONE_NUMBER
             async with httpx.AsyncClient(timeout=10.0) as client:
                 resp = await client.post(
                     url,
                     auth=(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN),
                     data={
                         "To": phone,
-                        "From": settings.TWILIO_PHONE_NUMBER,
+                        "From": from_twilio_line,
                         "Twiml": twiml,
                     },
                 )
                 if resp.status_code in (200, 201):
                     call_sid = resp.json().get("sid", "twilio_call")
+                    from backend.server.services.call_recorder import record_call_start
+                    record_call_start(call_sid, business_id, phone, caller_name="Test Caller", greeting="Connecting outbound call...")
                     return {
                         "success": True,
                         "provider": "twilio",
                         "call_sid": call_sid,
-                        "from_number": settings.TWILIO_PHONE_NUMBER,
-                        "message": f"Calling your phone {phone} from {settings.TWILIO_PHONE_NUMBER}. Please pick up!",
+                        "from_number": from_twilio_line,
+                        "message": f"Calling your phone {phone} from {from_twilio_line} for {biz.name if biz else 'your business'}. Please pick up!",
                     }
                 else:
                     err_msg = resp.json().get("message", resp.text)
@@ -228,6 +252,8 @@ async def trigger_test_call(payload: CallMeRequest, db: Session = Depends(get_db
             if "error" in res:
                 return {"success": False, "provider": "exotel", "message": f"Exotel error: {res.get('error')}"}
             call_sid = res.get("Call", {}).get("Sid") or "exotel_call"
+            from backend.server.services.call_recorder import record_call_start
+            record_call_start(call_sid, business_id, phone, caller_name="Test Caller", greeting="Connecting outbound call...")
             return {
                 "success": True,
                 "provider": "exotel",

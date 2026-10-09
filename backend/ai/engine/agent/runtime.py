@@ -21,11 +21,11 @@ SpeakFn = Callable[..., Awaitable[Optional[bool]]]  # (text, emotion=None)  # re
 
 
 def resolve_mode(tenant_override: Optional[str], global_default: Optional[str]) -> str:
-    """Tenant override beats the global setting; anything unrecognised means the safe legacy engine."""
+    """Tenant override beats the global setting; default is llm_agent."""
     for candidate in (tenant_override, global_default):
         if candidate and candidate.lower() in MODES:
             return candidate.lower()
-    return "state_machine"
+    return "llm_agent"
 
 
 @dataclass
@@ -52,16 +52,16 @@ class AgentRuntime:
         greeting: Optional[str],
         language: Optional[str] = None,
         voice_id: Optional[str] = None,
-        force_agent: bool = False,
+        force_agent: bool = True,
         channel: str = "voice",
         sandbox: Optional[Any] = None,
     ) -> Optional["AgentRuntime"]:
-        """Returns None when this tenant runs the legacy engine (the common case: no extra cost or risk)."""
+        """Creates the LLM Agent runtime. Defaults to force_agent=True so live calls and simulation both use the LLM agent."""
         from backend.server.common.config import get_settings
         from backend.server.database.session import SessionLocal
 
         facts, profile = await asyncio.to_thread(load_all, SessionLocal, business_id, voice_id)
-        mode = resolve_mode(profile.engine, getattr(get_settings(), "CONVERSATION_ENGINE", None))
+        mode = resolve_mode(profile.engine, getattr(get_settings(), "CONVERSATION_ENGINE", "llm_agent"))
         if mode == "state_machine":
             if not force_agent:
                 return None
@@ -101,7 +101,8 @@ class AgentRuntime:
 
     async def run_turn(self, transcript: str, speak: SpeakFn) -> TurnRun:
         """Speaks each sentence as soon as the model finishes it. After a barge-in the remaining sentences are
-        dropped, but the model turn is still drained so the engine's history stays consistent."""
+        dropped and the engine is asked to stop at its next safe checkpoint (see AgentEngine.request_stop); the turn is
+        still committed, so the engine's history stays consistent."""
         queue: asyncio.Queue = asyncio.Queue()
 
         async def produce() -> None:
@@ -125,6 +126,7 @@ class AgentRuntime:
                     extra = {"emotion": event["emotion"]} if event.get("emotion") else {}
                     if await speak(event.get("tts_text") or event["text"], **extra) is False:
                         interrupted = True
+                        self.engine.request_stop()  # stop generating for a caller who is no longer listening (no more drain)
                 elif event["type"] == "done":
                     return TurnRun(event["turn"], spoken_any, interrupted)
                 elif event["type"] == "error":

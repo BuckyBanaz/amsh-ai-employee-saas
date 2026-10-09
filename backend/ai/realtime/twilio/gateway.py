@@ -58,10 +58,12 @@ from backend.server.database.session import get_db
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["voice"])
-vad = SimpleVAD(energy_threshold=900)
-# Energy-VAD barge-in needs this many consecutive voiced 20 ms frames (100 ms). The AI is interruptible for its whole
-# playback, but must not be cut off by microphone rustle, breath or mobile carrier line clicks.
-BARGE_IN_MIN_VOICED_FRAMES = 5
+vad = SimpleVAD(energy_threshold=1400)
+# Energy-VAD barge-in debounce: 20 consecutive voiced 20 ms frames (400 ms) of sustained speech.
+# Prevents phone line acoustic echo, breath, and background clicks from cutting off the AI.
+BARGE_IN_MIN_VOICED_FRAMES = 15
+BARGE_IN_GRACE_PERIOD_S = 0.4  # grace window after the AI starts speaking (device echo cancellation settling); measured from the response onset, not each sentence
+MIN_SILENCE_TIMEOUT_S = 10  # "are you still there?" never earlier than this on a phone line, whatever the tab says
 
 _WATCHDOG_LINES = {
     "en": {
@@ -117,7 +119,13 @@ class CallSession:
         self._greeting_until: float = 0.0
         self._greeting_mark: Optional[str] = None
         self._voiced_frames = 0  # consecutive loud inbound frames while the AI is audible (VAD barge-in debounce)
+        self._speak_started_at = 0.0  # monotonic timestamp when AI began speaking current turn
         self._turn_no = 0  # numbering for the per-turn [LATENCY] log
+        self._last_caller_voice = 0.0  # monotonic time of the last sign the caller is talking (STT words, speech start, voiced audio)
+        self._turn_inbox: List[Dict[str, Any]] = []  # finished caller utterances waiting for the (single) turn worker
+        self._turn_worker: Optional[asyncio.Task] = None
+        self._tts_lock = asyncio.Lock()  # ONE active spoken response per call: two streams must never write audio at once
+        self._persist_tasks: set = set()  # turn-log DB writes in flight (awaited in stop())
         self._last_warm = 0.0  # monotonic time provider connections were last warmed (see _warm_providers)
 
     @property
@@ -128,6 +136,15 @@ class CallSession:
         if getattr(self, "_greeting_until", 0.0) > time.monotonic():
             return True
         return False
+
+    @property
+    def is_barge_in_allowed(self) -> bool:
+        """True only if greeting has finished AND 1.0s grace period has elapsed since AI speech onset."""
+        if self.is_greeting_active:
+            return False
+        if time.monotonic() - getattr(self, "_speak_started_at", 0.0) < BARGE_IN_GRACE_PERIOD_S:
+            return False
+        return True
 
     async def start(self, stream_sid: str, call_id: str, caller_number: str) -> None:
         self.stream_sid = stream_sid
@@ -162,7 +179,9 @@ class CallSession:
         greeting = await asyncio.to_thread(policy_service.greeting_for, self.business_id, greeting, self.agent_settings.get("language"))  # recording notice where the region asks for it
         try:
             self.agent_rt = await AgentRuntime.create(
-                self.business_id, call_id, self.caller_number, vertical_cfg, greeting, self.agent_settings.get("language")
+                self.business_id, call_id, self.caller_number, vertical_cfg, greeting,
+                self.agent_settings.get("language"),
+                force_agent=True,  # live calls always use the LLM agent (same as the playground)
             )
         except Exception as e:  # the agent is optional: any setup failure keeps the call on the legacy engine
             logger.warning(f"[AGENT] init failed, using state machine: {e}")
@@ -224,24 +243,24 @@ class CallSession:
     async def handle_media(self, payload_b64: str) -> None:
         if self.stt:
             await self.stt.send_audio(base64.b64decode(payload_b64))
-        # Fast energy-based VAD as a low-latency barge-in trigger, ahead of
-        # Deepgram's SpeechStarted event which carries ~endpointing delay.
-        # GREETING PROTECTION: Never allow early telephony pickup/line-noise to kill the opening greeting!
-        if not self.is_greeting_active and self.barge_in.is_speaking and vad.is_speech(payload_b64, pcm=self.pcm):
+        # Fast energy-based VAD as a low-latency barge-in trigger.
+        # Debounced: requires 20 frames (400ms) of sustained energy and blocks during 1.0s grace period.
+        voiced = vad.is_speech(payload_b64, pcm=self.pcm)
+        if voiced and not self.barge_in.is_speaking:  # (while we speak, loud audio may be our own echo)
+            self._last_caller_voice = time.monotonic()
+        if self.is_barge_in_allowed and self.barge_in.is_speaking and voiced:
             self._voiced_frames += 1
             if self._voiced_frames >= BARGE_IN_MIN_VOICED_FRAMES:
                 self._voiced_frames = 0
+                logger.info(f"[BARGE-IN] Sustained caller speech ({BARGE_IN_MIN_VOICED_FRAMES} frames) on call {self.call_id}: interrupting playback")
                 await self.barge_in.handle_caller_speech(self.websocket, self.stream_sid, pcm=self.pcm)
         else:
             self._voiced_frames = 0
 
     async def _on_caller_speech_started(self) -> None:
-        if not self.is_greeting_active:
-            await self.barge_in.handle_caller_speech(self.websocket, self.stream_sid, pcm=self.pcm)
-        else:
-            logger.debug("[BARGE-IN] Ignored speech_started during active greeting playback")
-        # LATENCY: the caller is talking, so the LLM/TTS requests are a second or two away. Make sure their
-        # pooled HTTPS connections are open now instead of paying TCP+TLS after the caller stops.
+        # Pre-warm LLM & TTS connection pools while caller begins speaking;
+        # do NOT flush the audio buffer on raw VAD to prevent acoustic echo self-interruption.
+        self._last_caller_voice = time.monotonic()
         self._warm_providers()
 
     async def _consume_stt_events(self) -> None:
@@ -252,34 +271,89 @@ class CallSession:
         assert self.stt is not None
         pending: List[str] = []
         last: Optional[Dict[str, Any]] = None
-        async for event in self.stt.events():
-            if event["type"] == "speech_started":  # only queued when no on_speech_started hook is set
-                await self._on_caller_speech_started()
-                continue
-            if event["type"] == "transcript" and event.get("is_final") and event.get("text", "").strip():
-                pending.append(event["text"].strip())
-                last = event
-                if not event.get("speech_final"):
+        try:
+            async for event in self.stt.events():
+                if event["type"] == "speech_started":  # only queued when no on_speech_started hook is set
+                    await self._on_caller_speech_started()
                     continue
-            elif not (event["type"] == "utterance_end" and pending):
-                continue
-            utterance = " ".join(pending)
-            # word timing from the last segment; arrival = when the turn was actually closed (the UtteranceEnd, if that closed it)
-            final_event = dict(last or event, text=utterance, received_at=event.get("received_at") or (last or {}).get("received_at"))
-            pending, last = [], None
-            self._busy = True  # we are thinking/answering: the watchdog must not call this silence
-            tracker = self._new_turn_tracker(final_event)
-            token = latency.start_turn(tracker)
-            try:
-                await self._handle_transcript(utterance)
-            finally:
-                latency.end_turn(token)
+                if event["type"] == "transcript" and event.get("text", "").strip():
+                    self._last_caller_voice = time.monotonic()  # words, even interim ones: the caller is talking, the watchdog must wait
+                    # Actual spoken words from caller: interrupt AI if playing outside grace period
+                    if self.barge_in.is_speaking and self.is_barge_in_allowed:
+                        logger.info(f"[BARGE-IN] Caller interrupted AI with words ({event.get('text')!r}): clearing playback")
+                        await self.barge_in.handle_caller_speech(self.websocket, self.stream_sid, pcm=self.pcm)
+                    if not event.get("is_final"):
+                        continue  # interim words may interrupt (above) but never start a turn: that was an empty-utterance LLM turn
+                    pending.append(event["text"].strip())
+                    last = event
+                    if not event.get("speech_final"):
+                        continue
+                elif not (event["type"] == "utterance_end" and pending):
+                    continue
+                utterance = " ".join(pending)
+                # word timing from the last segment; arrival = when the turn was actually closed (the UtteranceEnd, if that closed it)
+                final_event = dict(last or event, text=utterance, received_at=event.get("received_at") or (last or {}).get("received_at"))
+                pending, last = [], None
+                self._enqueue_turn(final_event)
+                await asyncio.sleep(0)  # an idle worker picks the turn up now, so back-to-back utterances stay separate turns
+        finally:
+            worker = self._turn_worker
+            if worker is not None and not worker.done():
                 try:
-                    tracker.report()
-                except Exception as e:  # measurement must never break a call
-                    logger.debug("latency report failed: %s", e)
-                self._busy = False
-                self.last_activity = time.monotonic()
+                    await worker  # the stream ended (or was cancelled): let the answer being given finish
+                except asyncio.CancelledError:
+                    worker.cancel()
+                    raise
+
+    def _enqueue_turn(self, final_event: Dict[str, Any]) -> None:
+        """The STT reader never waits for a turn: a caller who speaks again while we are still answering must be heard at
+        once (word-level barge-in), not after our last sentence. Exactly one worker answers, in order."""
+        if not (final_event.get("text") or "").strip():
+            return  # nothing was said: never spend an LLM turn on silence
+        self._busy = True  # we are thinking/answering: the watchdog must not call this silence
+        if self._turn_worker is not None and not self._turn_worker.done():
+            # Caller spoke over a turn that is still running. Same rule as the audio barge-in (greeting and grace period
+            # protect us from echoes and "mm-hm"): stop that turn at its next safe point; this utterance is answered next.
+            if self.is_barge_in_allowed:
+                self._interrupt_active_turn()
+        self._turn_inbox.append(final_event)
+        if self._turn_worker is None or self._turn_worker.done():
+            self._turn_worker = asyncio.create_task(self._turn_worker_loop())
+
+    def _interrupt_active_turn(self) -> None:
+        self.barge_in.generation += 1  # every speak() of the running turn checks this: nothing from it is spoken any more
+        engine = getattr(self.agent_rt, "engine", None)
+        if engine is not None:
+            engine.request_stop()  # stop streaming the LLM and never start another tool round; running tools finish
+
+    async def _turn_worker_loop(self) -> None:
+        try:
+            while self._turn_inbox:
+                batch, self._turn_inbox = self._turn_inbox, []
+                # Utterances that piled up while the previous turn ran are one thought: answer them once, not one by one.
+                final_event = dict(batch[-1], text=" ".join(e["text"] for e in batch if e.get("text")))
+                received = final_event.get("received_at")
+                tracker = self._new_turn_tracker(final_event)
+                tracker.info.update({
+                    "queue_wait_ms": round((time.monotonic() - received) * 1000, 1) if received else None,
+                    "merged_utterances": len(batch),
+                })
+                token = latency.start_turn(tracker)
+                try:
+                    await self._handle_transcript(final_event["text"])
+                except asyncio.CancelledError:
+                    raise
+                except Exception as e:  # one failed turn must not end the worker: the next utterance still gets answered
+                    logger.error(f"[TURN] call={self.call_id} turn={self._turn_no} failed: {e}", exc_info=True)
+                finally:
+                    latency.end_turn(token)
+                    try:
+                        tracker.report()
+                    except Exception as e:  # measurement must never break a call
+                        logger.debug("latency report failed: %s", e)
+                    self.last_activity = time.monotonic()
+        finally:
+            self._busy = bool(self._turn_inbox)
 
     def _new_turn_tracker(self, event: Dict[str, Any]) -> latency.TurnLatency:
         """Per-utterance latency tracker. Origin = the caller's estimated end of speech (Deepgram word timing), clamped to
@@ -408,11 +482,14 @@ class CallSession:
         rt = self.agent_rt
         assert rt is not None and self.state_machine is not None
         generation = self.barge_in.generation
+        turn_id = self._turn_no
 
         async def speak(text: str, **extra: Any) -> bool:
             # A barge-in anywhere in this turn (even between sentences, while earlier audio was still playing) stops
-            # every later sentence of the turn, not just the one being sent at that moment.
-            if self.barge_in.generation != generation:
+            # every later sentence of the turn, not just the one being sent at that moment. Only the active turn may speak:
+            # a response that outlived its turn is discarded here, whatever it arrives with.
+            if self.barge_in.generation != generation or self._turn_no != turn_id:
+                logger.info(f"[TURN] call={self.call_id} discarded a stale sentence of turn {turn_id} (active turn {self._turn_no})")
                 return False
             played = await self._speak_turn(text, **extra)
             return played is not False and self.barge_in.generation == generation
@@ -420,15 +497,52 @@ class CallSession:
         try:
             run = await rt.run_turn(transcript, speak)
         except Exception as e:
-            logger.warning(f"[AGENT] turn failed, falling back to state machine: {e}")
-            return False
+            logger.error(f"[AGENT] turn execution failed: {e}", exc_info=True)
+            lang = getattr(self.state_machine, "language", "en") if self.state_machine else "en"
+            hold_line = (
+                "I apologize, I had a brief connection issue. Could you please say that again?"
+                if lang == "en" else
+                "Maaf kijiye, connection mein thodi dikkat aayi. Kya aap dobara bol sakte hain?"
+            )
+            if self.barge_in.generation == generation:  # a newer caller turn is already waiting: do not talk over it
+                await self._speak_turn(hold_line)
+            if self.state_machine:
+                self.state_machine.sequence += 1
+                await asyncio.to_thread(
+                    record_call_turn,
+                    call_id=self.call_id,
+                    user_transcript=transcript,
+                    bot_response=hold_line,
+                    turn_sequence=self.state_machine.sequence,
+                )
+            return True
         turn = run.turn
         tracker = latency.current()
         if tracker is not None:
             tracker.info.update({"interrupted": run.interrupted, "llm": turn.provider})
         if turn.degraded and not run.spoken_any:
-            logger.warning(f"[AGENT] LLM unavailable ({turn.error}); using state machine for this turn")
-            return False
+            # LLM is down / rate-limited and said nothing yet — speak a polite hold line so the
+            # caller isn't left in silence, then return True (handled) to avoid the confusing state
+            # machine fallback path which would give a completely wrong response.
+            lang = getattr(self.state_machine, "language", "en") if self.state_machine else "en"
+            hold_line = (
+                "I'm sorry, I'm having a brief connection issue. Please bear with me for just a moment."
+                if lang == "en" else
+                "Maaf kijiye, thodi si technical dikkat aa gayi hai. Ek pal ruke."
+            )
+            logger.warning(f"[AGENT] LLM unavailable ({turn.error}); speaking hold line instead of state machine fallback")
+            if self.barge_in.generation == generation:
+                await self._speak_turn(hold_line)
+            # Record it so the call log is honest about what the caller heard
+            self.state_machine.sequence += 1
+            await asyncio.to_thread(
+                record_call_turn,
+                call_id=self.call_id,
+                user_transcript=transcript,
+                bot_response=hold_line,
+                turn_sequence=self.state_machine.sequence,
+            )
+            return True
 
         tools = [t.get("tool") for t in turn.tools]
         print(f"🤖 AI RECEPTIONIST (agent): \"{turn.reply}\" | tools={tools} | {turn.latency_ms}ms (first sentence {turn.first_sentence_ms}ms) | llm={turn.provider}", flush=True)
@@ -439,13 +553,16 @@ class CallSession:
             name = (call.get("args") or {}).get("patient_name")
             if name:
                 self.state_machine.collected_slots["patient_name"] = name
-        await asyncio.to_thread(
+        # The sequence is already assigned, so the log write need not delay the next turn; stop() waits for it.
+        persist = asyncio.create_task(asyncio.to_thread(
             record_call_turn,
             call_id=self.call_id,
             user_transcript=transcript,
             bot_response=turn.reply,
             turn_sequence=self.state_machine.sequence,
-        )
+        ))
+        self._persist_tasks.add(persist)
+        persist.add_done_callback(self._persist_tasks.discard)
         if turn.transferred:
             self.state_machine.current_state = CallState.ESCALATED
             if turn.transfer_twiml and self.call_id:
@@ -461,23 +578,28 @@ class CallSession:
         """Runs TTS playback as its own task so a barge-in can cancel just the
         playback without killing the STT consumer loop awaiting it.
         Returns False if the caller interrupted (barge-in), True if every frame was handed to telephony."""
-        start = self.barge_in.generation
-        speak_task = asyncio.create_task(self._stream_tts(text, emotion))
-        self.barge_in.mark_speaking(speak_task)
-        try:
-            await speak_task
-            return self.barge_in.generation == start
-        except asyncio.CancelledError:
-            logger.info(f"[TWILIO WS] Playback interrupted (barge-in) for call {self.call_id}")
-            return False
-        finally:
-            self.barge_in.mark_done()
-            self.last_activity = time.monotonic()  # silence is measured from the end of our own speech
+        async with self._tts_lock:
+            if not self.barge_in.is_speaking:  # a later sentence of the same response keeps the response's onset: no new grace window
+                self._speak_started_at = time.monotonic()
+            start = self.barge_in.generation
+            speak_task = asyncio.create_task(self._stream_tts(text, emotion))
+            self.barge_in.mark_speaking(speak_task)
+            try:
+                await speak_task
+                return self.barge_in.generation == start
+            except asyncio.CancelledError:
+                logger.info(f"[TWILIO WS] Playback interrupted (barge-in) for call {self.call_id}")
+                return False
+            finally:
+                self.barge_in.mark_done()
+                self.last_activity = time.monotonic()  # silence is measured from the end of our own speech
 
     async def _watchdog(self) -> None:
         """Enforces the Call Handling tab: after `silence_timeout_seconds` of quiet ask "are you still there?",
         after another timeout say goodbye; after `max_duration_minutes` wrap the call up politely."""
         silence = int(self.agent_settings.get("silence_timeout_seconds") or 0)
+        if silence:
+            silence = max(silence, MIN_SILENCE_TIMEOUT_S)
         limit = int(self.agent_settings.get("max_duration_minutes") or 0) * 60
         if not silence and not limit:
             return
@@ -490,7 +612,7 @@ class CallSession:
                     continue
                 now = time.monotonic()
                 # Silence starts when our audio finishes playing at the caller's end, not when we finished sending it.
-                quiet_since = max(self.last_activity, self.barge_in.playback_until)
+                quiet_since = max(self.last_activity, self.barge_in.playback_until, self._last_caller_voice)
                 if limit and now - self.call_started > limit:
                     await self._speak_turn(say["limit"])
                     self.should_close = True
@@ -570,8 +692,13 @@ class CallSession:
             self._stt_connect_task.cancel()
         if self._stt_task:
             self._stt_task.cancel()
+        if self._turn_worker and not self._turn_worker.done():
+            self._turn_worker.cancel()
         if self.stt:
             await self.stt.close()
+        pending_writes = [t for t in self._persist_tasks if not t.done()]
+        if pending_writes:  # turn log writes still in flight: the call summary must see every turn
+            await asyncio.wait(pending_writes, timeout=5)
         if self.call_id and self.state_machine:
             try:
                 intent_name = self.state_machine.current_intent.name if self.state_machine.current_intent else None

@@ -8,7 +8,10 @@ from sqlalchemy.orm import Session
 
 from backend.server.api.routes._shared import get_business_or_404, require_membership, require_owner_or_admin
 from backend.server.auth.security import get_current_user
+from backend.server.database.models.agent import Agent
+from backend.server.database.models.business import Business
 from backend.server.database.models.integration import Integration
+from backend.server.database.models.phone_number import PhoneNumber
 from backend.server.database.models.user import User
 from backend.server.database.session import get_db
 
@@ -512,6 +515,66 @@ async def get_available_telephony_numbers(
             ),
         ],
     )
+
+
+class TelephonyAssignRequest(BaseModel):
+    business_id: str
+    number: str
+    provider: str | None = "exotel"
+    mode: str | None = "dedicated"
+    forwarded_from: str | None = None
+
+
+@telephony_router.post("/assign")
+def assign_telephony_number(
+    payload: TelephonyAssignRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Assign an AI telephony phone number to a business so incoming calls route directly to its AI Receptionist."""
+    biz = db.get(Business, payload.business_id)
+    if not biz:
+        raise HTTPException(status_code=404, detail="Business not found")
+    if user.scope != "platform" and user.business_id != biz.id:
+        raise HTTPException(status_code=403, detail="Not authorized for this business")
+
+    clean_num = payload.number.strip()
+    # Check if a PhoneNumber row exists for this business
+    pn = db.query(PhoneNumber).filter(PhoneNumber.business_id == biz.id).first()
+    if pn:
+        pn.number = clean_num
+        pn.status = "active"
+        pn.mode = payload.mode or "dedicated"
+        if payload.forwarded_from:
+            pn.forwarded_from = payload.forwarded_from
+    else:
+        existing = db.query(PhoneNumber).filter(PhoneNumber.number == clean_num).first()
+        if existing:
+            existing.business_id = biz.id
+            existing.status = "active"
+            pn = existing
+        else:
+            pn = PhoneNumber(
+                business_id=biz.id,
+                number=clean_num,
+                mode=payload.mode or "dedicated",
+                forwarded_from=payload.forwarded_from,
+                status="active",
+            )
+            db.add(pn)
+
+    # Persist on Business.business_phone and Agent.config
+    biz.business_phone = clean_num
+    agent = db.query(Agent).filter(Agent.business_id == biz.id).first()
+    if agent:
+        cfg = dict(agent.config or {})
+        cfg["telephony_provider"] = payload.provider or ("exotel" if "IN" in (biz.country or "").upper() or clean_num.startswith("+91") else "twilio")
+        cfg["telephony_number"] = clean_num
+        agent.config = cfg
+
+    db.commit()
+    return {"success": True, "business_id": biz.id, "number": clean_num, "provider": payload.provider}
+
 
 
 # -----------------------------------------------------------------------------
