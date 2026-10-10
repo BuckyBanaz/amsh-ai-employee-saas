@@ -641,7 +641,17 @@ export const STRINGS = {
       SERVICES: {
         TITLE: "Services",
         SUBTITLE: "Configure dental services handled by your clinic's AI Receptionist.",
-        ADD_BTN: "Add Service"
+        ADD_BTN: "Add Service",
+        SUGGESTIONS: {
+          TITLE: "Your website lists more services",
+          BODY: "Callers hear about these from your website, but the AI receptionist can only book services in this list. Add the ones you offer so the AI can take appointments for them.",
+          ADD: "Add",
+          ADD_ALL_HINT: "Set the duration and price, then save.",
+          FROM: "Found on",
+          SHOW_MORE: "Show all",
+          SHOW_LESS: "Show less",
+          HIDE: "Hide"
+        }
       },
       TEAM: {
         TITLE: "Team & Permissions",

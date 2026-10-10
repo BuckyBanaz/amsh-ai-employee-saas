@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { CallLogItem } from '../../controllers/dashboard.controller';
+import { CallLogItem, DashboardController } from '../../controllers/dashboard.controller';
 import { CallDetailSkeleton } from '../common/ShimmerSkeleton';
 
 interface CallDetailPanelProps {
@@ -23,17 +23,39 @@ export function CallDetailPanel({ call, loading = false }: CallDetailPanelProps)
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [audioFailed, setAudioFailed] = useState(false);
   const [takenOver, setTakenOver] = useState(false);
+  const [isTakingOver, setIsTakingOver] = useState(false);
+  const [takeoverTarget, setTakeoverTarget] = useState<string | null>(null);
+  const [takeoverError, setTakeoverError] = useState<string | null>(null);
 
   useEffect(() => {
     setIsPlaying(false);
     setCurrentTime(0);
     setAudioFailed(false);
     setTakenOver(false);
+    setIsTakingOver(false);
+    setTakeoverTarget(null);
+    setTakeoverError(null);
     if (audioRef.current) {
       audioRef.current.currentTime = 0;
       audioRef.current.pause();
     }
   }, [call?.id]);
+
+  const handleTakeOver = async () => {
+    if (!call?.id) return;
+    setIsTakingOver(true);
+    setTakeoverError(null);
+    try {
+      const res = await DashboardController.takeOverCall(call.id, call.business_id);
+      setTakenOver(true);
+      setTakeoverTarget(res.transferred_to || 'Staff Line');
+    } catch (err: any) {
+      console.error('[TAKEOVER] Failed:', err);
+      setTakeoverError(err?.message || 'Failed to take over call. Please try again.');
+    } finally {
+      setIsTakingOver(false);
+    }
+  };
 
   const togglePlay = () => {
     if (!audioRef.current) return;
@@ -121,10 +143,10 @@ export function CallDetailPanel({ call, loading = false }: CallDetailPanelProps)
     call.channel === 'whatsapp'
       ? 'WhatsApp Voice Note'
       : call.is_test
-      ? 'AI Studio WebRTC Stream'
-      : call.caller_number?.startsWith('+91')
-      ? 'Exotel Telephony Stream'
-      : 'Twilio Voice Stream';
+        ? 'AI Studio WebRTC Stream'
+        : call.caller_number?.startsWith('+91')
+          ? 'Exotel Telephony Stream'
+          : 'Twilio Voice Stream';
 
   return (
     <div className="w-full bg-white border border-[#E2E8F0] rounded-xl shadow-xs flex flex-col max-h-[calc(100vh-5.5rem)] overflow-hidden">
@@ -154,13 +176,12 @@ export function CallDetailPanel({ call, loading = false }: CallDetailPanelProps)
               </span>
             ) : (
               <span
-                className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
-                  call.outcome?.toLowerCase() === 'booked' || call.outcome?.toLowerCase() === 'resolved'
+                className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${call.outcome?.toLowerCase() === 'booked' || call.outcome?.toLowerCase() === 'resolved'
                     ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                     : call.outcome?.toLowerCase() === 'transferred'
-                    ? 'bg-amber-50 text-amber-700 border-amber-200'
-                    : 'bg-blue-50 text-[#0066FF] border-blue-200'
-                }`}
+                      ? 'bg-amber-50 text-amber-700 border-amber-200'
+                      : 'bg-blue-50 text-[#0066FF] border-blue-200'
+                  }`}
               >
                 {call.outcome || 'RESOLVED'}
               </span>
@@ -178,24 +199,41 @@ export function CallDetailPanel({ call, loading = false }: CallDetailPanelProps)
               </p>
             </div>
             {takenOver ? (
-              <div className="p-2 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center gap-2">
+              <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center gap-2">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-600 shrink-0">
                   <polyline points="20 6 9 17 4 12"></polyline>
                 </svg>
-                <span className="text-[11px] font-bold text-emerald-800">
-                  You&apos;re connected — AI has transferred the audio stream to your line.
-                </span>
+                <div className="text-[11px] font-bold text-emerald-800">
+                  <span>Connected! AI silenced — call handed over to staff line: </span>
+                  <span className="font-extrabold underline ml-1">{takeoverTarget}</span>
+                </div>
               </div>
             ) : (
-              <button
-                onClick={() => setTakenOver(true)}
-                className="w-full flex items-center justify-center gap-2 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold shadow-xs transition-colors cursor-pointer"
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
-                </svg>
-                Take Over Call
-              </button>
+              <div className="space-y-1.5">
+                <button
+                  type="button"
+                  onClick={handleTakeOver}
+                  disabled={isTakingOver}
+                  className="w-full flex items-center justify-center gap-2 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white rounded-lg text-xs font-bold shadow-xs transition-colors cursor-pointer"
+                >
+                  {isTakingOver ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Transferring call to staff line...</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                      </svg>
+                      <span>Take Over Call Now</span>
+                    </>
+                  )}
+                </button>
+                {takeoverError && (
+                  <p className="text-[10px] text-red-600 font-medium text-center">{takeoverError}</p>
+                )}
+              </div>
             )}
           </div>
         )}
@@ -208,13 +246,12 @@ export function CallDetailPanel({ call, loading = false }: CallDetailPanelProps)
             </span>
             {call.sentiment && (
               <span
-                className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border capitalize ${
-                  call.sentiment === 'positive'
+                className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border capitalize ${call.sentiment === 'positive'
                     ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
                     : call.sentiment === 'negative'
-                    ? 'text-red-700 bg-red-50 border-red-200'
-                    : 'text-gray-600 bg-white border-gray-200'
-                }`}
+                      ? 'text-red-700 bg-red-50 border-red-200'
+                      : 'text-gray-600 bg-white border-gray-200'
+                  }`}
               >
                 {call.sentiment}
               </span>
@@ -257,11 +294,10 @@ export function CallDetailPanel({ call, loading = false }: CallDetailPanelProps)
             <button
               onClick={hasAudio ? togglePlay : undefined}
               disabled={!hasAudio}
-              className={`w-8 h-8 rounded-full flex items-center justify-center text-white shadow-xs transition-colors shrink-0 ${
-                hasAudio
+              className={`w-8 h-8 rounded-full flex items-center justify-center text-white shadow-xs transition-colors shrink-0 ${hasAudio
                   ? 'bg-[#0066FF] hover:bg-[#0052cc] cursor-pointer'
                   : 'bg-gray-300 cursor-not-allowed opacity-60'
-              }`}
+                }`}
               title={isPlaying ? 'Pause' : 'Play Audio Stream'}
             >
               {isPlaying ? (
@@ -303,9 +339,8 @@ export function CallDetailPanel({ call, loading = false }: CallDetailPanelProps)
                   return (
                     <div
                       key={i}
-                      className={`flex-1 rounded-sm transition-colors duration-150 ${
-                        isPlayed ? 'bg-[#0066FF]' : 'bg-[#E2E8F0]'
-                      }`}
+                      className={`flex-1 rounded-sm transition-colors duration-150 ${isPlayed ? 'bg-[#0066FF]' : 'bg-[#E2E8F0]'
+                        }`}
                       style={{ height: `${h}px` }}
                     />
                   );
@@ -359,23 +394,21 @@ export function CallDetailPanel({ call, loading = false }: CallDetailPanelProps)
                   (item as any).speaker === 'AI' ||
                   (item as any).role === 'ai';
                 const speakerName = isAI
-                  ? 'Aura AI (AI Receptionist)'
+                  ? 'AMSh Ai (AI Receptionist)'
                   : call.caller_name || 'Caller';
                 const textContent = item.content || (item as any).text;
 
                 return (
                   <div
                     key={item.id || idx}
-                    className={`p-2.5 rounded-lg text-[12px] leading-relaxed border ${
-                      isAI
+                    className={`p-2.5 rounded-lg text-[12px] leading-relaxed border ${isAI
                         ? 'bg-[#EFF6FF] border-[#BFDBFE]/60 text-[#0F172A]'
                         : 'bg-gray-50 border-[#E2E8F0] text-[#0F172A]'
-                    }`}
+                      }`}
                   >
                     <span
-                      className={`font-bold mb-1 flex items-center gap-1.5 ${
-                        isAI ? 'text-[#0066FF]' : 'text-[#475569]'
-                      }`}
+                      className={`font-bold mb-1 flex items-center gap-1.5 ${isAI ? 'text-[#0066FF]' : 'text-[#475569]'
+                        }`}
                     >
                       {speakerName}:
                     </span>

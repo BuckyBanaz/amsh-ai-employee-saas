@@ -16,14 +16,16 @@ class SimpleVAD:
     def __init__(self, energy_threshold: int = 400) -> None:
         self.energy_threshold = energy_threshold
 
-    def is_speech(self, payload_base64: str, pcm: bool = False) -> bool:
-        """Determines if the inbound audio packet contains human speech."""
+    def rms(self, payload_base64: str, pcm: bool = False) -> int:
+        """Root-mean-square energy of one inbound frame (0 if it cannot be decoded)."""
         try:
             raw_bytes = base64.b64decode(payload_base64)
             # Exotel sends linear PCM16 already; Twilio sends mulaw
             pcm_bytes = raw_bytes if pcm else audioop.ulaw2lin(raw_bytes, 2)
-            # Calculate root-mean-square energy
-            rms = audioop.rms(pcm_bytes, 2)
-            return rms > self.energy_threshold
+            return audioop.rms(pcm_bytes, 2)
         except Exception:
-            return False
+            return 0
+
+    def is_speech(self, payload_base64: str, pcm: bool = False) -> bool:
+        """Determines if the inbound audio packet contains human speech."""
+        return self.rms(payload_base64, pcm=pcm) > self.energy_threshold

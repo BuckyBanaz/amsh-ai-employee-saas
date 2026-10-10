@@ -17,7 +17,7 @@ import asyncio
 import json
 import logging
 import time
-from typing import Callable, Optional
+from typing import Any, Callable, Dict, Optional
 
 from fastapi import WebSocket
 
@@ -62,17 +62,18 @@ class BargeInCoordinator:
         if name and name == self._last_mark:
             self.playback_until = min(self.playback_until, self._clock())
 
-    async def handle_caller_speech(self, websocket: WebSocket, stream_sid: Optional[str], pcm: bool = False) -> None:
+    async def handle_caller_speech(self, websocket: WebSocket, stream_sid: Optional[str], pcm: bool = False) -> Optional[Dict[str, Any]]:
         """Called when STT/VAD detects the caller has started talking. Only
         acts if the AI is audible — otherwise this is just normal caller
-        speech with nothing to interrupt."""
+        speech with nothing to interrupt. Returns what was cancelled (for the barge-in diagnostics), or None."""
         if not self.is_speaking:
-            return
+            return None
 
         self.generation += 1
         self.playback_until = 0.0
         task = self._speaking_task
         self._speaking_task = None
+        result: Dict[str, Any] = {"generation": self.generation, "tts_task_cancelled": bool(task and not task.done()), "clear_sent": False}
         if task:
             task.cancel()
 
@@ -83,6 +84,8 @@ class BargeInCoordinator:
             else:
                 clear_msg["streamSid"] = stream_sid
             await websocket.send_text(json.dumps(clear_msg))
+            result["clear_sent"] = True
             logger.info("[BARGE-IN] Cleared telephony audio buffer")
         except Exception as e:
             logger.warning(f"[BARGE-IN] Failed to send clear event: {e}")
+        return result

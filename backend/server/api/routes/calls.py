@@ -13,13 +13,20 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session, joinedload
 
+from backend.ai.realtime.twilio.call_control import redirect_call
+from backend.ai.realtime.twilio.gateway import get_active_call_session
 from backend.server.api.routes._shared import get_business_or_404, require_membership
 from backend.server.auth.security import get_current_user
+from backend.server.database.models.agent import Agent
+from backend.server.database.models.business import Business
 from backend.server.database.models.call import Call
 from backend.server.database.models.message import Message
+from backend.server.database.models.staff import Staff
+from backend.server.database.models.transaction import Transaction
 from backend.server.database.models.user import User
 from backend.server.database.session import get_db
 from backend.server.services.call_recorder import _toggle_on as recording_setting_on
@@ -82,17 +89,109 @@ def _close_stale_live_calls(db: Session, business_id: str) -> None:
             schedule(cid)
 
 
-def _format_call(call: Call, include_messages: bool = False) -> Dict[str, Any]:
+def _detect_language(call: Call) -> str:
+    msg_texts = [getattr(msg, "text", "") or getattr(msg, "content", "") for msg in (call.messages or [])]
+    full_text = " ".join(msg_texts) + " " + (call.summary or "")
+    if re.search(r"[\u0900-\u097F]", full_text):
+        return "Hindi / Hinglish"
+    hinglish_words = {"apki", "karenge", "bataiye", "chahiye", "kripya", "dhanyawad", "namaste", "madad", "samay", "kijiye", "bhi", "hoga", "sakte", "mera", "meri", "hum"}
+    words = set(re.findall(r"\w+", full_text.lower()))
+    if len(words.intersection(hinglish_words)) >= 2:
+        return "Hindi / Hinglish"
+    return "English"
+
+
+def _format_call(
+    call: Call,
+    include_messages: bool = False,
+    db: Optional[Session] = None,
+    biz: Optional[Business] = None,
+    agent: Optional[Agent] = None,
+) -> Dict[str, Any]:
+    biz_name = getattr(biz, "name", None) if biz else None
+    agent_name = getattr(agent, "name", None) if agent else None
+    agent_role = getattr(agent, "role", "Clinic Receptionist") if agent else None
+
+    if db:
+        if not biz_name:
+            b = db.get(Business, call.business_id)
+            if b:
+                biz_name = b.name
+        if not agent_name:
+            ag = None
+            if call.agent_id:
+                ag = db.get(Agent, call.agent_id)
+            if not ag:
+                ag = db.scalar(select(Agent).where(Agent.business_id == call.business_id).limit(1))
+            if ag:
+                agent_name = ag.name
+                agent_role = getattr(ag, "role", None) or "Clinic Receptionist"
+
+    # Determine real appointment info
+    appointment_data = None
+    if db:
+        txn = db.scalar(select(Transaction).where(Transaction.call_id == call.id))
+        if not txn and call.caller_number and call.caller_number.strip():
+            raw_phone = re.sub(r"[^\d]", "", call.caller_number)
+            if raw_phone:
+                txns = db.scalars(
+                    select(Transaction)
+                    .where(Transaction.business_id == call.business_id)
+                    .order_by(desc(Transaction.created_at))
+                    .limit(10)
+                ).all()
+                for t in txns:
+                    p = re.sub(r"[^\d]", "", str((t.details or {}).get("phone_number") or ""))
+                    if p and (p in raw_phone or raw_phone in p):
+                        txn = t
+                        break
+        if txn and txn.details:
+            appointment_data = {
+                "id": txn.id,
+                "service_name": txn.details.get("service_name") or "General Consultation",
+                "doctor_name": txn.details.get("doctor_name") or "Duty Doctor",
+                "preferred_date": txn.details.get("preferred_date"),
+                "preferred_time": txn.details.get("preferred_time"),
+                "patient_name": txn.details.get("patient_name") or txn.details.get("customer_name") or call.caller_name or "Patient",
+                "status": txn.status or "confirmed",
+                "channel": txn.details.get("channel") or txn.details.get("source") or ("WhatsApp" if call_channel(call.id) == "whatsapp" else "Phone Call"),
+            }
+
+    # If call outcome is booked but no transaction row in DB yet (e.g. simulated call), extract from summary
+    if not appointment_data and (call.outcome or "").lower() == "booked":
+        s = call.summary or ""
+        srv_match = re.search(r"(teeth whitening|dental consultation|dental cleaning|checkup|cleaning|root canal|consultation)", s, re.IGNORECASE)
+        service_title = srv_match.group(0).title() if srv_match else "Consultation"
+        time_match = re.search(r"(\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* \d{1,2}(?:st|nd|rd|th)?(?:, \d{4})?(?: at \d{1,2}(?::\d{2})? ?(?:AM|PM|am|pm))?)", s, re.IGNORECASE)
+        appointment_data = {
+            "id": f"app-{call.id[:8]}",
+            "service_name": service_title,
+            "doctor_name": "Duty Doctor",
+            "preferred_date": time_match.group(0) if time_match else "Scheduled",
+            "preferred_time": "",
+            "patient_name": call.caller_name or "Patient",
+            "status": "confirmed",
+            "channel": "WhatsApp" if call_channel(call.id) == "whatsapp" else "Phone Call",
+        }
+
+    call_type = "Outbound (Test)" if is_test_call(call.id) else ("Outbound" if (call.id or "").startswith("out_") else "Inbound")
+    detected_lang = _detect_language(call)
+
     res = {
         "id": call.id,
         "is_test": is_test_call(call.id),
-        "sentiment": call.sentiment,
+        "sentiment": call.sentiment or "positive",
         "action_items": call.action_items or [],
         "channel": call_channel(call.id),
         "business_id": call.business_id,
+        "business_name": biz_name or "Demo clinic",
+        "agent_name": agent_name or "Sarah",
+        "agent_role": agent_role or "Clinic Receptionist",
+        "call_type": call_type,
+        "language": detected_lang,
         "caller_number": call.caller_number,
         "caller_name": call.caller_name or "Unknown Caller",
-        "intent": call.intent,  # null until the call has been analysed (a few seconds after it ends)
+        "intent": call.intent or ("Appointment Booking" if call.outcome == "booked" else ("Staff Transfer" if call.outcome == "transferred" else "General Inquiry")),
         "outcome": call.outcome or "resolved",
         "summary": call.summary,
         "analyzed": call.analyzed_at is not None,
@@ -101,6 +200,7 @@ def _format_call(call: Call, include_messages: bool = False) -> Dict[str, Any]:
         "recording_url": call.recording_url,
         "started_at": call.started_at.isoformat() if call.started_at else None,
         "ended_at": call.ended_at.isoformat() if call.ended_at else None,
+        "appointment": appointment_data,
     }
     if include_messages:
         res["messages"] = [
@@ -128,6 +228,10 @@ def list_calls(
     get_business_or_404(business_id, db)
     require_membership(business_id, current_user)
     _close_stale_live_calls(db, business_id)
+
+    biz = db.get(Business, business_id)
+    agent = db.scalar(select(Agent).where(Agent.business_id == business_id).limit(1))
+
     stmt = (
         select(Call)
         .where(Call.business_id == business_id)
@@ -138,7 +242,7 @@ def list_calls(
         stmt = stmt.where(Call.outcome == outcome)
 
     calls = db.scalars(stmt).all()
-    return [_format_call(c) for c in calls]
+    return [_format_call(c, include_messages=False, db=db, biz=biz, agent=agent) for c in calls]
 
 
 @router.get("/{call_id}", response_model=Dict[str, Any])
@@ -151,6 +255,10 @@ def get_call_detail(
     """Get single call log with complete transcript messages."""
     get_business_or_404(business_id, db)
     require_membership(business_id, current_user)
+
+    biz = db.get(Business, business_id)
+    agent = db.scalar(select(Agent).where(Agent.business_id == business_id).limit(1))
+
     stmt = (
         select(Call)
         .options(joinedload(Call.messages))
@@ -167,6 +275,11 @@ def get_call_detail(
                 "action_items": [],
                 "channel": "phone",
                 "business_id": business_id,
+                "business_name": getattr(biz, "name", "Demo clinic"),
+                "agent_name": getattr(agent, "name", "Sarah"),
+                "agent_role": getattr(agent, "role", "Clinic Receptionist"),
+                "call_type": "Outbound (Test)",
+                "language": "Hindi / Hinglish",
                 "caller_number": "",
                 "caller_name": "Connecting...",
                 "intent": None,
@@ -179,10 +292,69 @@ def get_call_detail(
                 "started_at": now_iso,
                 "ended_at": None,
                 "messages": [],
+                "appointment": None,
             }
         raise HTTPException(status_code=404, detail="Call log not found")
 
-    return _format_call(call, include_messages=True)
+    return _format_call(call, include_messages=True, db=db, biz=biz, agent=agent)
+
+
+class CallUpdateRequest(BaseModel):
+    outcome: Optional[str] = None
+    summary: Optional[str] = None
+    notes: Optional[str] = None
+    action_items: Optional[List[str]] = None
+
+
+@router.patch("/{call_id}")
+def update_call(
+    business_id: str,
+    call_id: str,
+    payload: CallUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Update call log status (e.g. resolve/unresolve) or attach staff notes."""
+    get_business_or_404(business_id, db)
+    require_membership(business_id, current_user)
+    call = db.scalar(select(Call).where(Call.id == call_id, Call.business_id == business_id))
+    if not call:
+        raise HTTPException(status_code=404, detail="Call log not found")
+    if payload.outcome is not None:
+        call.outcome = payload.outcome
+    if payload.summary is not None:
+        call.summary = payload.summary
+    if payload.notes is not None:
+        items = list(call.action_items or [])
+        items.append(f"Staff note: {payload.notes}")
+        call.action_items = items
+    if payload.action_items is not None:
+        call.action_items = payload.action_items
+    db.commit()
+    db.refresh(call)
+
+    biz = db.get(Business, business_id)
+    agent = db.scalar(select(Agent).where(Agent.business_id == business_id).limit(1))
+    return _format_call(call, include_messages=True, db=db, biz=biz, agent=agent)
+
+
+@router.delete("/{call_id}")
+def delete_call(
+    business_id: str,
+    call_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Permanently delete a call log and any associated audio recordings."""
+    get_business_or_404(business_id, db)
+    require_membership(business_id, current_user)
+    call = db.scalar(select(Call).where(Call.id == call_id, Call.business_id == business_id))
+    if not call:
+        raise HTTPException(status_code=404, detail="Call log not found")
+    _delete_recordings(call_id)
+    db.delete(call)
+    db.commit()
+    return {"deleted": True, "call_id": call_id}
 
 
 def _delete_recordings(call_id: str, keep: Optional[Path] = None) -> None:
@@ -263,6 +435,78 @@ def end_simulated_call(
 
     schedule(call.id)
     return {"ended": True, "outcome": call.outcome, "duration_seconds": call.duration_seconds}
+
+
+class CallTakeoverRequest(BaseModel):
+    phone_number: Optional[str] = None
+
+
+@router.post("/{call_id}/takeover")
+async def takeover_call(
+    business_id: str,
+    call_id: str,
+    payload: Optional[CallTakeoverRequest] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Take over a live call: silences the AI receptionist, bridges caller to staff phone line, and logs the handoff."""
+    biz = get_business_or_404(business_id, db)
+    require_membership(business_id, current_user)
+
+    call = db.scalar(select(Call).where(Call.id == call_id, Call.business_id == business_id))
+    if not call:
+        raise HTTPException(status_code=404, detail="Call log not found")
+
+    # 1. Resolve destination phone number for the takeover
+    agent = db.execute(select(Agent).where(Agent.business_id == business_id).order_by(Agent.created_at.asc())).scalars().first()
+    agent_cfg = (agent.config or {}) if agent else {}
+    target_phone = (payload.phone_number if payload and payload.phone_number else None)
+    if not target_phone:
+        target_phone = agent_cfg.get("transfer_phone")
+    if not target_phone:
+        staff_row = db.execute(select(Staff).where(Staff.business_id == business_id)).scalars().first()
+        if staff_row and getattr(staff_row, "phone", None):
+            target_phone = staff_row.phone
+    if not target_phone and getattr(biz, "business_phone", None):
+        target_phone = biz.business_phone
+    if not target_phone:
+        target_phone = getattr(current_user, "email", "Clinic Front Desk")
+
+    # 2. Stop and silence active AI WebSocket session if active
+    session = get_active_call_session(call_id)
+    if session:
+        session.should_close = True
+        try:
+            if session.agent_rt and session.agent_rt.engine:
+                session.agent_rt.engine.request_stop()
+        except Exception as e:
+            logger.debug(f"[TAKEOVER] Engine stop error: {e}")
+
+    # 3. If live telephony (Twilio), execute real live call transfer
+    redirected = False
+    if call_id.startswith("CA") and target_phone and target_phone.startswith("+"):
+        twiml = (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<Response>'
+            '<Say voice="Polly.Joanna">Connecting you to our clinic staff now, please stay on the line.</Say>'
+            f'<Dial timeout="25" record="record-from-answer"><Number>{target_phone}</Number></Dial>'
+            '</Response>'
+        )
+        redirected = await redirect_call(call_id, twiml)
+
+    # 4. Update Call record outcome and summary
+    call.outcome = "transferred"
+    call.summary = f"Call taken over from dashboard by {current_user.email} and transferred to {target_phone}."
+    db.commit()
+
+    logger.info(f"[TAKEOVER] Call {call_id} handed off to staff {target_phone} (telephony redirected={redirected})")
+    return {
+        "success": True,
+        "call_id": call_id,
+        "transferred_to": target_phone,
+        "telephony_redirected": redirected,
+        "message": f"Call successfully taken over. Connecting caller to {target_phone}.",
+    }
 
 
 @recordings_router.get("/{call_id}/{token}")

@@ -213,5 +213,293 @@
  ],
  "hangup_patterns": [
   "\\b(?:call\\s+(?:cut|kaat)|phone\\s+rakh|cut\\s+kar\\s+(?:do|sakti|sakte))\\b|कॉल\\s+(?:कट|काट)|फोन\\s+रख"
+ ],
+ "clock": {
+  "hours": {
+   "1": [
+    "ek"
+   ],
+   "2": [
+    "do"
+   ],
+   "3": [
+    "teen",
+    "tin"
+   ],
+   "4": [
+    "chaar",
+    "char"
+   ],
+   "5": [
+    "paanch",
+    "panch"
+   ],
+   "6": [
+    "chhah",
+    "chhe",
+    "chhh",
+    "chhai",
+    "chah"
+   ],
+   "7": [
+    "saat",
+    "sat"
+   ],
+   "8": [
+    "aath",
+    "ath"
+   ],
+   "9": [
+    "nau"
+   ],
+   "10": [
+    "das"
+   ],
+   "11": [
+    "gyaarah",
+    "gyarah",
+    "gyara"
+   ],
+   "12": [
+    "baarah",
+    "barah",
+    "bara"
+   ]
+  },
+  "patterns": [
+   [
+    "{h} baje",
+    0
+   ],
+   [
+    "(?:saarhe|saadhe|sarhe|sadhe) {h}",
+    30
+   ],
+   [
+    "(?:savaa|sawaa|sava|sawa) {h}",
+    15
+   ],
+   [
+    "paune {h}",
+    -15
+   ]
+  ],
+  "fixed": [
+   [
+    "(?:derh|dedh|dehd) baje",
+    1,
+    30
+   ],
+   [
+    "(?:dhaaee|dhaai|dhai) baje",
+    2,
+    30
+   ],
+   [
+    "(?:derh|dedh)",
+    1,
+    30
+   ],
+   [
+    "(?:dhaaee|dhaai)",
+    2,
+    30
+   ]
+  ]
+ },
+ "affirm": [
+  "sahee",
+  "sahi",
+  "kar do",
+  "kar deejie",
+  "kar deejiye",
+  "kar dijiye",
+  "buk kar do",
+  "book kar do",
+  "zaroor",
+  "jaroor",
+  "chalegaa",
+  "chalega",
+  "ho jaaegaa",
+  "theek hai",
+  "haan ji",
+  "ji haan",
+  "haan",
+  "bilkul",
+  "han",
+  "ha",
+  "haanji",
+  "ji",
+  "theek",
+  "thik"
+ ],
+ "acks": [
+  "जी",
+  "बिल्कुल",
+  "बिलकुल",
+  "ज़रूर",
+  "जरूर",
+  "ठीक है",
+  "अच्छा",
+  "हाँ",
+  "हां",
+  "ji",
+  "haan",
+  "han",
+  "bilkul",
+  "zaroor",
+  "zarur",
+  "theek hai",
+  "thik hai",
+  "accha",
+  "achha"
+ ],
+ "slot_asks": {
+  "name": [
+   "आपका\\s+(?:पूरा\\s+|शुभ\\s+)?नाम",
+   "अपना\\s+(?:पूरा\\s+)?नाम",
+   "नाम\\s+(?:बता|क्या|कहिए)",
+   "\\baapka\\s+(?:poora\\s+)?naam",
+   "\\bapna\\s+(?:poora\\s+)?naam",
+   "\\bnaam\\s+(?:bata|kya)"
+  ],
+  "phone": [
+   "फ़?ोन\\s*नंबर",
+   "मोबाइल\\s*नंबर",
+   "संपर्क\\s*नंबर",
+   "\\bnumber\\s+(?:bata|de)"
+  ],
+  "service": [
+   "कौन\\s*सी\\s+(?:सर्विस|सेवा)",
+   "किस\\s+(?:सर्विस|सेवा|काम)",
+   "\\bkaun\\s*si\\s+service\\b",
+   "\\bkis\\s+(?:service|liye)\\b"
+  ],
+  "date": [
+   "\\bkis\\s+din\\b",
+   "\\bkaun\\s*se\\s+din\\b",
+   "कौन\\s*से\\s+दिन",
+   "किस\\s+(?:दिन|तारीख)",
+   "कब\\s+आना"
+  ],
+  "time": [
+   "कितने\\s+बजे",
+   "किस\\s+समय",
+   "कौन\\s*सा\\s+समय",
+   "\\bkis\\s+time\\b",
+   "\\bkitne\\s+baje\\b"
+  ]
+ },
+ "imperative": [
+  "बता\\s+दीजिए",
+  "बता\\s+दीजिये",
+  "बता\\s+दें",
+  "बता\\s+दो",
+  "bata\\s+dijiye",
+  "bata\\s+dein",
+  "bata\\s+do",
+  "बताइए",
+  "बताएं",
+  "बताईये",
+  "बताइये",
+  "दीजिए",
+  "दीजिये",
+  "कहिए",
+  "batayiye",
+  "bataiye",
+  "bataye",
+  "batao",
+  "dijiye"
+ ],
+ "fluff": [
+  "मेरे",
+  "को",
+  "ना",
+  "मतलब",
+  "वो",
+  "वह",
+  "यार",
+  "जी",
+  "ji",
+  "कृपया",
+  "kripya",
+  "आपका",
+  "अपना",
+  "आप",
+  "आपके",
+  "aapka",
+  "apna",
+  "aap",
+  "aapke",
+  "बताइए",
+  "बताएं",
+  "बताइये",
+  "बताईये",
+  "bataiye",
+  "batayiye",
+  "bataye",
+  "batao",
+  "कहिए",
+  "है",
+  "hai",
+  "क्या",
+  "kya",
+  "पूरा",
+  "poora",
+  "जी"
+ ],
+ "hesitation_start": [
+  "ruko",
+  "ruk",
+  "rukiye",
+  "rukiyega",
+  "thehro",
+  "ठहरो",
+  "रुको",
+  "रुकिए",
+  "रुकिये",
+  "रुकिएगा",
+  "एक",
+  "ek",
+  "हम्म",
+  "उम्म",
+  "अरे",
+  "सोचने"
+ ],
+ "hesitation_extra": [
+  "thoda",
+  "थोड़ा",
+  "ठहर",
+  "sochne",
+  "do",
+  "दो"
+ ],
+ "hesitation_filler": [
+  "मेरे",
+  "को",
+  "ना",
+  "मतलब",
+  "वो",
+  "वह",
+  "यार",
+  "ji",
+  "जी",
+  "zara",
+  "ज़रा",
+  "जरा",
+  "मुझे",
+  "अच्छा",
+  "तो",
+  "ek",
+  "सेकंड",
+  "मिनट",
+  "पल",
+  "bas",
+  "बस",
+  "mere",
+  "ko",
+  "na",
+  "matlab",
+  "yaar"
  ]
 }

@@ -36,6 +36,8 @@ class ExotelClient:
         caller_id: Optional[str] = None,
         callback_url: Optional[str] = None,
         custom_field: Optional[str] = None,
+        status_callback: Optional[str] = None,
+        record: bool = True,
     ) -> Dict[str, Any]:
         """
         Initiates an outbound call connecting the recipient to our AI flow or applet.
@@ -58,6 +60,14 @@ class ExotelClient:
             "CallerId": from_number,
             "CallType": "trans",
         }
+        if record:
+            data["Record"] = "true"
+
+        status_cb = status_callback or (f"{getattr(self.settings, 'PUBLIC_BASE_URL', '')}/api/voice/exotel/status" if getattr(self.settings, "PUBLIC_BASE_URL", None) else None)
+        if status_cb and "http" in status_cb:
+            data["StatusCallback"] = status_cb
+            data["StatusCallbackEvents[0]"] = "terminal"
+
         if flow_url and "http" in flow_url:
             data["Url"] = flow_url
         else:

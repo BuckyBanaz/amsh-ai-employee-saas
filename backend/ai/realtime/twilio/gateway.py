@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 
 from backend.ai.engine.agent.fillers import wait_text
 from backend.ai.engine.agent.facts import load_vertical_name
+from backend.ai.speech.stt.deepgram import ENDPOINTING_MS
 from backend.ai.speech.stt.language import resolve_stt_language
 from backend.ai.verticals.errors import MissingContextError
 from backend.ai.engine.conversation.state_machine import ConversationStateMachine, load_agent_settings, load_business_context, load_tone
@@ -35,6 +36,7 @@ from backend.ai.memory.session_memory import session_memory
 from backend.ai.realtime import latency
 from backend.ai.realtime.audio.mulaw import FRAME_BYTES, FRAME_DURATION_S, PCM_FRAME_BYTES, frame_stream
 from backend.ai.realtime.barge_in.coordinator import BargeInCoordinator
+from backend.ai.realtime.barge_in.monitor import BargeInMonitor
 from backend.ai.realtime.twilio.call_control import redirect_call
 from backend.server.auth.security import get_current_user
 from backend.server.auth.webhook_signatures import stream_token_ok
@@ -61,7 +63,6 @@ router = APIRouter(tags=["voice"])
 vad = SimpleVAD(energy_threshold=1400)
 # Energy-VAD barge-in debounce: 20 consecutive voiced 20 ms frames (400 ms) of sustained speech.
 # Prevents phone line acoustic echo, breath, and background clicks from cutting off the AI.
-BARGE_IN_MIN_VOICED_FRAMES = 15
 BARGE_IN_GRACE_PERIOD_S = 0.4  # grace window after the AI starts speaking (device echo cancellation settling); measured from the response onset, not each sentence
 MIN_SILENCE_TIMEOUT_S = 10  # "are you still there?" never earlier than this on a phone line, whatever the tab says
 
@@ -87,6 +88,14 @@ class VoiceSimulateRequest(BaseModel):
     voice_id: Optional[str] = None  # the voice the playground user picked (persona gender and audio prefetch follow it)
 
 
+ACTIVE_CALL_SESSIONS: Dict[str, "CallSession"] = {}
+
+
+def get_active_call_session(call_id: str) -> Optional["CallSession"]:
+    """Returns the active in-memory CallSession for a live call if connected via WebSocket."""
+    return ACTIVE_CALL_SESSIONS.get(call_id)
+
+
 class CallSession:
     """Per-call realtime state for one Twilio Media Stream WebSocket connection."""
 
@@ -101,6 +110,7 @@ class CallSession:
         self.state_machine: Optional[ConversationStateMachine] = None
         self.stt: Optional[DeepgramLiveConnection] = None
         self.barge_in = BargeInCoordinator()
+        self.barge_monitor = BargeInMonitor()  # per-call calibrated energy barge-in + [BARGE-IN DIAG] logs
         self._stt_task: Optional[asyncio.Task] = None
         self._stt_connect_task: Optional[asyncio.Task] = None
         self.should_close = False
@@ -118,7 +128,6 @@ class CallSession:
         self._is_greeting: bool = False
         self._greeting_until: float = 0.0
         self._greeting_mark: Optional[str] = None
-        self._voiced_frames = 0  # consecutive loud inbound frames while the AI is audible (VAD barge-in debounce)
         self._speak_started_at = 0.0  # monotonic timestamp when AI began speaking current turn
         self._turn_no = 0  # numbering for the per-turn [LATENCY] log
         self._last_caller_voice = 0.0  # monotonic time of the last sign the caller is talking (STT words, speech start, voiced audio)
@@ -138,17 +147,31 @@ class CallSession:
         return False
 
     @property
-    def is_barge_in_allowed(self) -> bool:
-        """True only if greeting has finished AND 1.0s grace period has elapsed since AI speech onset."""
+    def barge_in_block_reason(self) -> Optional[str]:
+        """Why the caller cannot interrupt right now: "greeting", "grace" (echo-cancellation settling after our speech
+        starts), or None when barge-in is allowed."""
         if self.is_greeting_active:
-            return False
+            return "greeting"
         if time.monotonic() - getattr(self, "_speak_started_at", 0.0) < BARGE_IN_GRACE_PERIOD_S:
-            return False
-        return True
+            return "grace"
+        return None
+
+    @property
+    def is_barge_in_allowed(self) -> bool:
+        """True only if greeting has finished AND the grace period has elapsed since AI speech onset."""
+        return self.barge_in_block_reason is None
+
+    async def _barge_in(self, path: str) -> None:
+        """The caller is talking over us: stop playback, clear Twilio's queue, invalidate the rest of the turn (generation),
+        and log what was cancelled and how long it took."""
+        result = await self.barge_in.handle_caller_speech(self.websocket, self.stream_sid, pcm=self.pcm)
+        self.barge_monitor.fired(path, result, turn=self._turn_no, generation=self.barge_in.generation)
 
     async def start(self, stream_sid: str, call_id: str, caller_number: str) -> None:
         self.stream_sid = stream_sid
         self.call_id = call_id
+        self.barge_monitor.call_id = call_id
+        ACTIVE_CALL_SESSIONS[call_id] = self
         if caller_number:
             self.caller_number = caller_number
 
@@ -243,19 +266,15 @@ class CallSession:
     async def handle_media(self, payload_b64: str) -> None:
         if self.stt:
             await self.stt.send_audio(base64.b64decode(payload_b64))
-        # Fast energy-based VAD as a low-latency barge-in trigger.
-        # Debounced: requires 20 frames (400ms) of sustained energy and blocks during 1.0s grace period.
-        voiced = vad.is_speech(payload_b64, pcm=self.pcm)
-        if voiced and not self.barge_in.is_speaking:  # (while we speak, loud audio may be our own echo)
+        # Fast energy-based barge-in. The threshold is calibrated on this call's own caller and echo levels (see
+        # barge_in/monitor.py); greeting and grace window still block it, and their audio is what measures the echo.
+        rms = vad.rms(payload_b64, pcm=self.pcm)
+        audible = self.barge_in.is_speaking
+        if rms > vad.energy_threshold and not audible:  # (while we speak, loud audio may be our own echo)
             self._last_caller_voice = time.monotonic()
-        if self.is_barge_in_allowed and self.barge_in.is_speaking and voiced:
-            self._voiced_frames += 1
-            if self._voiced_frames >= BARGE_IN_MIN_VOICED_FRAMES:
-                self._voiced_frames = 0
-                logger.info(f"[BARGE-IN] Sustained caller speech ({BARGE_IN_MIN_VOICED_FRAMES} frames) on call {self.call_id}: interrupting playback")
-                await self.barge_in.handle_caller_speech(self.websocket, self.stream_sid, pcm=self.pcm)
-        else:
-            self._voiced_frames = 0
+        if self.barge_monitor.frame(rms, audible=audible, blocked=self.barge_in_block_reason if audible else None):
+            logger.info(f"[BARGE-IN] Caller speech over playback (energy) on call {self.call_id}: interrupting")
+            await self._barge_in("vad")
 
     async def _on_caller_speech_started(self) -> None:
         # Pre-warm LLM & TTS connection pools while caller begins speaking;
@@ -279,9 +298,12 @@ class CallSession:
                 if event["type"] == "transcript" and event.get("text", "").strip():
                     self._last_caller_voice = time.monotonic()  # words, even interim ones: the caller is talking, the watchdog must wait
                     # Actual spoken words from caller: interrupt AI if playing outside grace period
-                    if self.barge_in.is_speaking and self.is_barge_in_allowed:
-                        logger.info(f"[BARGE-IN] Caller interrupted AI with words ({event.get('text')!r}): clearing playback")
-                        await self.barge_in.handle_caller_speech(self.websocket, self.stream_sid, pcm=self.pcm)
+                    if self.barge_in.is_speaking:
+                        blocked = self.barge_in_block_reason
+                        self.barge_monitor.words(blocked)
+                        if not blocked:
+                            logger.info(f"[BARGE-IN] Caller interrupted AI with words ({len(event['text'].split())} words): clearing playback")
+                            await self._barge_in("words")
                     if not event.get("is_final"):
                         continue  # interim words may interrupt (above) but never start a turn: that was an empty-utterance LLM turn
                     pending.append(event["text"].strip())
@@ -362,7 +384,9 @@ class CallSession:
         received = event.get("received_at") or time.monotonic()
         speech_end = event.get("speech_end_at")
         if speech_end is not None:
-            speech_end = min(speech_end, received)
+            # Deepgram only finalises after ENDPOINTING_MS of silence, so the caller cannot have stopped later than that; the word-timing
+            # estimate drifts ahead of the wall clock and would otherwise be clamped to "0 ms of endpointing" on every turn.
+            speech_end = min(speech_end, received - ENDPOINTING_MS / 1000)
         tracker = latency.TurnLatency(self.call_id, self._turn_no, origin=speech_end if speech_end is not None else received)
         if speech_end is not None:
             tracker.mark("speech_end", at=speech_end)
@@ -720,6 +744,7 @@ class CallSession:
             except Exception as e:
                 logger.error(f"[WS GATEWAY] Failed to persist call end for {self.call_id}: {e}")
         if self.call_id:
+            ACTIVE_CALL_SESSIONS.pop(self.call_id, None)
             session_memory.remove_session(self.call_id)
 
 

@@ -172,6 +172,7 @@ class CartesiaTTS:
         queue: asyncio.Queue = asyncio.Queue()
         self._ws_pending[context_id] = queue
         finished = False
+        first_marked = False
         try:
             try:
                 await ws.send(json.dumps(payload))
@@ -188,6 +189,9 @@ class CartesiaTTS:
                     finished = True
                     return
                 if msg.get("type") == "chunk" and msg.get("data"):
+                    if not first_marked:  # the live path: without this mark tts_ttfb / tts_to_telephony were always null
+                        latency.mark("tts_first_audio", cached=False, transport="ws")
+                        first_marked = True
                     yield base64.b64decode(msg["data"])
                 if msg.get("done"):
                     finished = True

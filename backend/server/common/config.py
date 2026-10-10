@@ -108,6 +108,11 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_ID: str | None = None
     GOOGLE_CLIENT_SECRET: str | None = None
     GOOGLE_REDIRECT_URI: str = "http://localhost:8010/api/integrations/google/callback"  # must match the console exactly
+    # Outlook / Microsoft 365 calendar (Azure portal -> App registrations -> New; "Accounts in any organizational directory
+    # and personal Microsoft accounts"; redirect URI type Web; add delegated Calendars.ReadWrite, User.Read, offline_access)
+    MICROSOFT_CLIENT_ID: str | None = None
+    MICROSOFT_CLIENT_SECRET: str | None = None
+    MICROSOFT_REDIRECT_URI: str = "http://localhost:8010/api/integrations/outlook/callback"  # must match the Azure app exactly
 
     # Razorpay Payments
     RAZORPAY_KEY_ID: str | None = None

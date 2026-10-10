@@ -3,7 +3,11 @@ a clock time in a draft reply must have come from the caller, a tool result, or 
 Anything else is an invented slot, and the reply is rewritten before the caller ever hears it."""
 
 import re
-from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
+from functools import lru_cache
+from typing import Any, Dict, Iterable, List, Optional, Pattern, Set, Tuple
+
+from backend.ai.engine.agent.hindi import normalize as normalize_hindi
+from backend.ai.lexicon import lexicon_languages, load_lexicon
 from backend.ai.prompts import load_prompts
 
 
@@ -44,6 +48,46 @@ def times_in(text: str, include_24h: bool = False) -> Set[Minute]:
     return found
 
 
+ClockRule = Tuple[Pattern[str], Optional[Dict[str, int]], Tuple[int, int]]
+
+
+@lru_cache(maxsize=None)
+def _clock_rules() -> Tuple[ClockRule, ...]:
+    """Spoken clock times from every language pack's "clock" data (ai/locales/lexicon/<code>.json). A caller who says
+    "बारह बजे", "half twaalf" or "الثانية عشرة والنصف" has given a time just as much as one who says "12 PM"."""
+    rules: List[ClockRule] = []
+    for code in lexicon_languages():
+        clock = load_lexicon(code).get("clock") or {}
+        words = {w.lower(): int(h) for h, ws in (clock.get("hours") or {}).items() for w in ws}
+        if words:
+            words.update({str(h): h for h in range(1, 13)})  # digits too: "12 baje", "12 uur", "a las 12"
+        if words:
+            # longest first, so "الثانية عشرة" (12) is read whole and not as "الثانية" (2)
+            alt = "|".join(re.escape(w) for w in sorted(words, key=len, reverse=True))
+            for template, offset in clock.get("patterns") or []:
+                rx = re.compile(r"(?<!\w)" + template.replace("{h}", f"(?P<h>{alt})") + r"(?!\w)", re.IGNORECASE)
+                rules.append((rx, words, (0, int(offset))))
+        for phrase, hour, minute in clock.get("fixed") or []:
+            rules.append((re.compile(r"(?<!\w)" + phrase + r"(?!\w)", re.IGNORECASE), None, (int(hour), int(minute))))
+    return tuple(rules)
+
+
+def spoken_clock_times(text: str) -> Set[Tuple[int, int]]:
+    """(hour 1-12, minute) for every clock time said in words, in any language with a pack. AM/PM is never implied."""
+    low = (text or "").lower()
+    hits: List[Tuple[int, int, Tuple[int, int], bool]] = []  # (start, end, time, has an offset / is a whole phrase)
+    for rx, words, (hour, minute) in _clock_rules():
+        for m in rx.finditer(low):
+            if words is None:
+                hits.append((m.start(), m.end(), (hour, minute), minute != 0))
+                continue
+            total = (words[m.group("h").lower()] * 60 + minute) % 720  # hour word + offset: "half twaalf" = 12:00 - 30 min
+            hits.append((m.start(), m.end(), (total // 60 or 12, total % 60), minute != 0))
+    # "साढ़े दस बजे" also matches the plain "{h} baje": the plain hour inside a more specific phrase is not a second time.
+    specific = [(s, e) for s, e, _, exact in hits if exact]
+    return {t for s, e, t, exact in hits if exact or not any(s < e2 and s2 < e for s2, e2 in specific)}
+
+
 def grounded_times(messages: Iterable[Dict[str, Any]]) -> Set[Minute]:
     """Times the model is allowed to say: from the system facts, anything the caller said, and tool results."""
     allowed: Set[Minute] = set()
@@ -53,6 +97,8 @@ def grounded_times(messages: Iterable[Dict[str, Any]]) -> Set[Minute]:
             allowed |= times_in(content, include_24h=True)
         elif role in ("user", "tool"):
             allowed |= times_in(content, include_24h=True)
+            if role == "user":  # "12 baje", "twelve o'clock", "half twaalf": the caller gave the hour, AM/PM is ours to say
+                allowed |= {(h % 12 + pm, m) for h, m in spoken_clock_times(normalize_hindi(content)) for pm in (0, 12)}
     return allowed
 
 

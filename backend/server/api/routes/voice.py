@@ -178,8 +178,9 @@ async def trigger_test_call(payload: CallMeRequest, db: Session = Depends(get_db
             if params:
                 callback_url = f"{callback_url}?{'&'.join(params)}"
 
+            status_callback = f"{base_url}/api/voice/exotel/status"
             from_line = (pn.number if pn and pn.number else None) or exotel_client.caller_id
-            res = await exotel_client.create_outbound_call(phone, callback_url=callback_url)
+            res = await exotel_client.create_outbound_call(phone, callback_url=callback_url, status_callback=status_callback, record=True)
             if "error" not in res:
                 call_sid = res.get("Call", {}).get("Sid") or "exotel_call"
                 from backend.server.services.call_recorder import record_call_start
@@ -217,6 +218,10 @@ async def trigger_test_call(payload: CallMeRequest, db: Session = Depends(get_db
                         "To": phone,
                         "From": from_twilio_line,
                         "Twiml": twiml,
+                        "Record": "true",
+                        "RecordingStatusCallback": f"{base_url}/api/voice/recording-status",
+                        "StatusCallback": f"{base_url}/api/voice/status",
+                        "StatusCallbackEvent": ["completed"],
                     },
                 )
                 if resp.status_code in (200, 201):

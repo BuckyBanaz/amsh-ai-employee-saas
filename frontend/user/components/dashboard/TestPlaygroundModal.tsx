@@ -767,11 +767,15 @@ export function TestPlaygroundModal({ isOpen, onClose }: TestPlaygroundModalProp
         if (cancelled) return;
         if (detail?.messages && detail.messages.length > 0) {
           setLiveMessages(
-            detail.messages.map((m: any) => ({
-              speaker: m.speaker === 'caller' || m.speaker === 'user' ? 'User' : 'AI',
-              text: m.text,
-              timestamp: m.created_at ? new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : undefined,
-            }))
+            detail.messages.map((m: any) => {
+              const isUser = m.role === 'user' || m.speaker === 'User' || m.speaker === 'caller' || m.speaker === 'user';
+              const text = m.content || m.text || '';
+              return {
+                speaker: isUser ? 'User' : 'AI',
+                text,
+                timestamp: m.created_at ? new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : undefined,
+              };
+            })
           );
         }
         if (detail?.outcome && detail.outcome !== 'live') {

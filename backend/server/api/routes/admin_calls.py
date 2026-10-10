@@ -171,7 +171,7 @@ def list_admin_calls(
                 continue
 
         agent = agents_by_id.get(c.agent_id) if c.agent_id else None
-        agent_name = agent.name if agent else "Aura AI"
+        agent_name = agent.name if agent else "AMSh Ai"
 
         # Transcript formatting
         transcript_turns = []

@@ -75,5 +75,179 @@
  ],
  "hangup_patterns": [
   "\\b(?:auflegen|aufh[äa]ngen|gespr[äa]ch\\s+beenden)\\b"
+ ],
+ "clock": {
+  "hours": {
+   "1": [
+    "eins",
+    "ein"
+   ],
+   "2": [
+    "zwei"
+   ],
+   "3": [
+    "drei"
+   ],
+   "4": [
+    "vier"
+   ],
+   "5": [
+    "fünf",
+    "fuenf"
+   ],
+   "6": [
+    "sechs"
+   ],
+   "7": [
+    "sieben"
+   ],
+   "8": [
+    "acht"
+   ],
+   "9": [
+    "neun"
+   ],
+   "10": [
+    "zehn"
+   ],
+   "11": [
+    "elf"
+   ],
+   "12": [
+    "zwölf",
+    "zwoelf"
+   ]
+  },
+  "patterns": [
+   [
+    "{h} uhr",
+    0
+   ],
+   [
+    "halb {h}",
+    -30
+   ],
+   [
+    "viertel nach {h}",
+    15
+   ],
+   [
+    "viertel vor {h}",
+    -15
+   ]
+  ],
+  "fixed": [
+   [
+    "mittag",
+    12,
+    0
+   ]
+  ]
+ },
+ "affirm": [
+  "ja",
+  "genau",
+  "stimmt",
+  "passt",
+  "richtig",
+  "gerne",
+  "in ordnung",
+  "einverstanden"
+ ],
+ "acks": [
+  "klar",
+  "gerne",
+  "natürlich",
+  "alles klar",
+  "gut",
+  "prima",
+  "super",
+  "genau"
+ ],
+ "slot_asks": {
+  "name": [
+   "\\b(?:Ihren|Ihr|Ihr\\s+vollst[äa]ndiger)\\s+Name\\b",
+   "\\bdarf\\s+ich\\s+(?:Ihren|Ihnen)\\s+Namen\\b",
+   "\\bwer\\s+spricht\\b"
+  ],
+  "phone": [
+   "\\bTelefonnummer\\b",
+   "\\bHandynummer\\b",
+   "\\bKontaktnummer\\b",
+   "\\bwelche\\s+Nummer\\b"
+  ],
+  "service": [
+   "\\bwelche\\s+Behandlung\\b",
+   "\\bwelche\\s+Leistung\\b",
+   "\\bwof[üu]r\\s+(?:m[öo]chten|brauchen)\\b"
+  ],
+  "date": [
+   "\\bwelcher\\s+Tag\\b",
+   "\\bwann\\s+m[öo]chten\\b",
+   "\\bwelches\\s+Datum\\b"
+  ],
+  "time": [
+   "\\bwelche\\s+Uhrzeit\\b",
+   "\\bwann\\s+(?:passt|m[öo]chten)\\b",
+   "\\bum\\s+wie\\s+viel\\s+Uhr\\b"
+  ]
+ },
+ "imperative": [
+  "\\bsagen\\s+Sie\\b",
+  "\\bnennen\\s+Sie\\b",
+  "\\bgeben\\s+Sie\\b",
+  "\\bbitte\\s+sagen\\b"
+ ],
+ "fluff": [
+  "bitte",
+  "gern",
+  "Sie",
+  "Ihr",
+  "Ihnen",
+  "der",
+  "die",
+  "das",
+  "ein",
+  "eine",
+  "können",
+  "könnte",
+  "würden",
+  "ich",
+  "mir",
+  "mich",
+  "sagen",
+  "nennen",
+  "geben",
+  "was",
+  "ist",
+  "sind",
+  "haben",
+  "ja",
+  "gut",
+  "okay",
+  "danke"
+ ],
+ "hesitation_start": [
+  "warten",
+  "moment",
+  "hmm",
+  "ähm",
+  "äh",
+  "einen"
+ ],
+ "hesitation_extra": [
+  "einen",
+  "kurz",
+  "bitte",
+  "nachdenken",
+  "noch"
+ ],
+ "hesitation_filler": [
+  "moment",
+  "sekunde",
+  "minute",
+  "bitte",
+  "kurz",
+  "einen"
  ]
 }

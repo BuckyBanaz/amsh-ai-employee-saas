@@ -5,7 +5,8 @@ the read-back -> caller-says-yes -> commit protocol for every write."""
 import re
 from dataclasses import dataclass, field
 from datetime import date, datetime
-from typing import Any, Dict, List, Optional, Tuple
+from functools import lru_cache
+from typing import Any, Dict, List, Optional, Pattern, Set, Tuple
 
 from backend.ai.engine.agent.availability import (
     DEFAULT_SLOT_MINUTES,
@@ -17,9 +18,10 @@ from backend.ai.engine.agent.availability import (
     open_slots,
 )
 from backend.ai.engine.agent.datetime_utils import dates_in, format_time, parse_date, parse_time, speak_date
-from backend.ai.engine.agent.grounding import times_in
+from backend.ai.engine.agent.grounding import spoken_clock_times, times_in
 from backend.ai.engine.agent.hindi import fuzzy_in, normalize as normalize_hindi
 from backend.ai.engine.conversation.spoken_numbers import spoken_to_digits
+from backend.ai.lexicon import lexicon_languages, load_lexicon
 
 
 @dataclass
@@ -245,6 +247,7 @@ def ground_booking(fields: Dict[str, Any], said: List[str], caller_number: str, 
         parse_time(s) == start
         or (start.hour, start.minute) in times_in(s)
         or re.search(rf"\b0?{h12}(?::{start.minute:02d})?\b", s.lower())
+        or (h12, start.minute) in spoken_clock_times(s)  # in words, any language: "बारह बजे", "half twaalf"
         for s in said
     )
     if not stated:
@@ -258,16 +261,22 @@ def describe(fields: Dict[str, Any], today: date) -> str:
     return f"{speak_date(fields['date'], today)} at {format_time(fields['time'])}{who}{svc}"
 
 
-_AFFIRM = re.compile(
-    r"^\W*(?:yes|yeah|yep|yup|sure|ok|okay|alright|fine|correct|right|perfect|great|done|please|go ahead|"
-    r"that works|sounds good|haan|han|ha|haanji|ji|theek|thik|bilkul|chalega)\b",
-    re.IGNORECASE,
-)
+
+@lru_cache(maxsize=None)
+def _pack_affirm() -> Optional[Pattern[str]]:
+    """A yes in any language pack's "affirm" list ("sahee hai", "ja, klopt", "oui", "sí", "نعم"), at the start of the reply."""
+    words = {w.lower() for code in lexicon_languages() for w in load_lexicon(code).get("affirm") or []}
+    if not words:
+        return None
+    alt = "|".join(re.escape(w) for w in sorted(words, key=len, reverse=True))
+    return re.compile(rf"^\W*(?:{alt})(?!\w)", re.IGNORECASE)
 
 
 def is_affirmative(text: Optional[str]) -> bool:
-    """The caller's reply starts with a yes ("yes please", "haan theek hai", "sounds good")."""
-    return bool(_AFFIRM.search(text or ""))
+    """The caller's reply starts with a yes ("yes please", "haan theek hai", "sounds good"), in any language with a pack."""
+    s = text or ""
+    pack = _pack_affirm()
+    return bool(pack and pack.search(s))
 
 
 _HUMAN_NOUN =r"(?:human|real\s+person|a\s+person|someone|somebody|staff|front\s*desk|receptionist|operator|representative|manager|insaan|aadmi|kisi)"

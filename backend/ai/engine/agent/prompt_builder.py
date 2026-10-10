@@ -133,6 +133,7 @@ def build_system_prompt(
     small_talk: bool = True,
     require_confirmation: bool = True,
     disabled: Optional[List[str]] = None,
+    transfers_on: bool = True,
     primary_language: Optional[str] = "en",
     languages: Optional[List[str]] = None,
     auto_detect_language: bool = True,
@@ -174,11 +175,15 @@ def build_system_prompt(
         open_now=BusinessHoursRule.describe(facts.working_hours, now),
         caller=caller_number or fp["unknown"],
     )
-    escalation = trigger_lines(triggers)
+    escalation = trigger_lines(triggers) if transfers_on else ""  # every escalation line hands the caller to a person
     if escalation:
         prompt += fp["escalation"].format(text=escalation)
     if disabled:
         prompt += fp["disabled"].format(items=fp["disabled_separator"].join(disabled))
+    if not transfers_on and channel != "chat":  # (chat has its own no-transfer line)
+        # Many rules and tool results say "offer the front desk": with transfers off that offer cannot be kept, and the
+        # caller who says yes is then told "sorry, I can't". This line overrides them.
+        prompt += fp["no_transfer"]
     from backend.ai.verticals.compliance import get_regional_compliance
     compliance = get_regional_compliance(
         vertical=facts.vertical,  # required: BusinessFacts has no default vertical

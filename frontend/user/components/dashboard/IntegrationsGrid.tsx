@@ -95,6 +95,18 @@ interface CatalogItem {
 
 const baseCatalog: CatalogItem[] = [
   {
+    id: 'outlook-calendar',
+    providerKey: 'outlook',
+    name: 'Outlook Calendar',
+    description: 'Put every AI-booked appointment into the Outlook or Microsoft 365 calendar, and move or remove it when it changes.',
+    iconType: 'calendar',
+    iconBg: 'bg-[#0078D4]/10',
+    iconColor: 'text-[#0078D4]',
+    category: 'Calendar',
+    badgeText: 'Microsoft Sign-in',
+    fields: [],
+  },
+  {
     id: 'google-calendar',
     providerKey: 'google_calendar',
     name: 'Google Calendar',
@@ -256,11 +268,26 @@ export function IntegrationsGrid({ filter = 'All Integrations' }: { filter?: str
     }
   };
 
+  // Outlook Calendar: Microsoft sign-in, same flow as Google
+  const startOutlookCalendar = async () => {
+    try {
+      const { url } = await ApiService.get<{ url: string }>(`${API_ENDPOINTS.INTEGRATIONS.OUTLOOK_AUTH_URL(businessId)}?ret=dashboard`);
+      window.location.href = url;
+    } catch (err: any) {
+      alert(err?.message || 'Could not start Microsoft sign-in.');
+    }
+  };
+
   const handleOpenModal = (item: any) => {
     const existing = tenantIntegrations.find((ti) => ti.provider === item.providerKey);
     if (item.providerKey === 'google_calendar') {
       if (existing?.status === 'connected') handleDisconnect('google_calendar');
       else startGoogleCalendar();
+      return;
+    }
+    if (item.providerKey === 'outlook') {
+      if (existing?.status === 'connected') handleDisconnect('outlook');
+      else startOutlookCalendar();
       return;
     }
     setActiveModalItem(item);
@@ -430,7 +457,7 @@ export function IntegrationsGrid({ filter = 'All Integrations' }: { filter?: str
                           : 'bg-[#0066FF] text-white hover:bg-blue-600 shadow-xs'
                       }`}
                     >
-                      {item.providerKey === 'google_calendar' && isConnected ? 'Disconnect' : isConnected ? 'Manage' : 'Connect'}
+                      {(item.providerKey === 'google_calendar' || item.providerKey === 'outlook') && isConnected ? 'Disconnect' : isConnected ? 'Manage' : 'Connect'}
                     </button>
                   )}
                 </div>

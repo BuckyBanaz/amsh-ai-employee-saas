@@ -16,11 +16,13 @@ Nothing here books, cancels or speaks anything. It only reads and reminds, like 
 import re
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Any, Dict, Iterable, List, Optional, Set
+from functools import lru_cache
+from typing import Any, Dict, Iterable, List, Optional, Pattern, Set, Tuple
 
 from backend.ai.engine.agent.datetime_utils import dates_in, parse_time
 from backend.ai.engine.agent.hindi import normalize
 from backend.ai.engine.agent.progress import _INTENT as BOOKING_INTENT
+from backend.ai.lexicon import lexicon_languages, load_lexicon
 from backend.ai.prompts import load_prompts
 
 SLOT_ORDER = ("service", "date", "time", "name", "phone")  # the order a booking is asked for, one item per turn
@@ -43,23 +45,38 @@ _NAME_WEAK = re.compile(r"(?:\bI\s*am|\bI'm|\bthis\s+is|\bmain|\bmai)\s+([A-Z][a
 _PHONE_DIGITS = re.compile(r"\d")
 _CHANGE = re.compile(r"cancel|reschedul|postpone|change\s+(my|the)\s+(appointment|slot|time|date)|radd|raddh|badal|आगे\s+बढ़ा|रद्द|बदल", re.IGNORECASE)
 
-# --- what a sentence of ours is asking for ------------------------------------------------------------------------
-_ASKS = {
-    "name": re.compile(r"\b(?:your|ur)\s+(?:full\s+|good\s+)?name\b|\bmay\s+i\s+(?:have|get|know)\b.*\bname\b|\bwho\s+am\s+i\s+speaking|आपका\s+(?:पूरा\s+|शुभ\s+)?नाम|अपना\s+(?:पूरा\s+)?नाम|नाम\s+(?:बता|क्या|कहिए)|\baapka\s+(?:poora\s+)?naam|\bapna\s+(?:poora\s+)?naam|\bnaam\s+(?:bata|kya)", re.IGNORECASE),
-    "phone": re.compile(r"\b(?:phone|mobile|contact|cell)\s*(?:number|no)\b|\bnumber\b.*\b(?:you|your|aap)\b|फ़?ोन\s*नंबर|मोबाइल\s*नंबर|संपर्क\s*नंबर|\b(?:phone|mobile)\s+(?:number|no)\b|\bnumber\s+(?:bata|de)", re.IGNORECASE),
-    "service": re.compile(r"\bwhich\s+(?:service|treatment|kind|type)\b|\bwhat\s+(?:service|treatment|kind|type)\b|\bwhat\b.*\b(?:visit|appointment)\s+for\b|कौन\s*सी\s+(?:सर्विस|सेवा)|किस\s+(?:सर्विस|सेवा|काम)|\bkaun\s*si\s+service\b|\bkis\s+(?:service|liye)\b", re.IGNORECASE),
-    "date": re.compile(r"\bwhich\s+(?:day|date)\b|\bwhat\s+(?:day|date)\b|\bwhen\s+would\s+you\b|\bkis\s+din\b|\bkaun\s*se\s+din\b|कौन\s*से\s+दिन|किस\s+(?:दिन|तारीख)|कब\s+आना", re.IGNORECASE),
-    "time": re.compile(r"\bwhat\s+time\b|\bwhich\s+time\b|\bpreferred\s+time\b|\bkis\s+time\b|\bkitne\s+baje\b|कितने\s+बजे|किस\s+समय|कौन\s*सा\s+समय", re.IGNORECASE),
-}
-_IMPERATIVE = re.compile(r"बता\s+दीजिए|बता\s+दीजिये|बता\s+दें|बता\s+दो|bata\s+dijiye|bata\s+dein|bata\s+do|बताइए|बताएं|बताईये|बताइये|दीजिए|दीजिये|कहिए|batayiye|bataiye|bataye|batao|dijiye|please\s+(?:tell|share|give|provide)|let\s+me\s+know", re.IGNORECASE)
+SLOTS = ("name", "phone", "service", "date", "time")
 
-# Words that carry no meaning for "is this the same question again" ("please tell me your name" == "name?").
-_FLUFF = {
-    "please", "kindly", "kripya", "कृपया", "your", "ur", "आपका", "अपना", "आप", "आपके", "aapka", "apna", "aap", "you", "the", "a", "an",
-    "can", "could", "would", "may", "i", "me", "ji", "जी", "बताइए", "बताएं", "बताइये", "बताईये", "bataiye", "batayiye", "bataye",
-    "batao", "tell", "share", "provide", "give", "kahiye", "कहिए", "है", "hai", "kya", "क्या", "to", "so", "and", "also", "full", "poora", "पूरा",
-    "what", "is", "are", "do", "does", "may", "have", "get", "know", "sure", "okay", "ok", "great", "thanks", "thank", "got", "it",
-}
+
+def _pack_strings(key: str) -> List[str]:
+    """Every language pack's list for `key` (ai/locales/lexicon/<code>.json). A caller may switch language mid-call, so all
+    packs count, never only the caller's current one."""
+    return [w for code in lexicon_languages() for w in (load_lexicon(code).get(key) or [])]
+
+
+@lru_cache(maxsize=None)
+def _asks() -> Dict[str, Optional[Pattern[str]]]:
+    """How a sentence of ours asks for each slot, from the packs' "slot_asks" (regex lists, one per language)."""
+    out: Dict[str, Optional[Pattern[str]]] = {}
+    for slot in SLOTS:
+        patterns = [p for code in lexicon_languages() for p in ((load_lexicon(code).get("slot_asks") or {}).get(slot) or [])]
+        out[slot] = re.compile("|".join(f"(?:{p})" for p in patterns), re.IGNORECASE) if patterns else None
+    return out
+
+
+@lru_cache(maxsize=None)
+def _imperative() -> Optional[Pattern[str]]:
+    """A request for the caller's information ("tell me", "bata do"): counts as asking even without a question mark."""
+    patterns = _pack_strings("imperative")
+    return re.compile("|".join(f"(?:{p})" for p in patterns), re.IGNORECASE) if patterns else None
+
+
+@lru_cache(maxsize=None)
+def _fluff() -> Set[str]:
+    """Politeness words that carry no meaning for "is this the same question again" ("please tell me your name" == "name?")."""
+    return {w.lower() for w in _pack_strings("fluff")}
+
+
 _WORD = re.compile(r"[\wऀ-ॿ]+", re.UNICODE)
 
 
@@ -71,17 +88,15 @@ def _multi_note() -> str:
     return load_prompts("engine_notes")["multi_note"]
 
 
-# A caller who is only buying time ("ruko...", "wait", "ek second", "hmm"): answer with a nod, never with the questionnaire.
-_HESITATION_START = {
-    "ruko", "ruk", "rukiye", "rukiyega", "ruko", "wait", "hold", "hmm", "hmmm", "um", "umm", "uh", "uhh", "ek", "one", "just", "let",
-    "thehro", "ठहरो", "रुको", "रुकिए", "रुकिये", "रुकिएगा", "एक", "हम्म", "उम्म", "अरे", "सोचने",
-}
-_HESITATION_EXTRA = {"a", "on", "me", "think", "moment", "the", "bit", "hang", "give", "thoda", "थोड़ा", "ठहर", "sochne", "do", "दो"}
-_HESITATION_FILLER = {"मेरे", "को", "ना", "मतलब", "वो", "वह", "यार", "ji", "जी", "zara", "ज़रा", "जरा", "please", "plz", "मुझे", "अच्छा", "तो", "ek", "second", "sec", "minute", "min", "moment", "सेकंड", "मिनट", "पल", "bas", "बस", "mere", "ko", "na", "matlab", "yaar"}
+@lru_cache(maxsize=None)
+def _hesitation() -> Tuple[Set[str], Set[str], Set[str]]:
+    """(start, extra, filler) word sets for a caller who is only buying time ("ruko...", "wait", "ek second", "hmm"), from the
+    packs' hesitation_* lists. Answered with a nod, never with the questionnaire."""
+    return (set(_pack_strings("hesitation_start")), set(_pack_strings("hesitation_extra")), set(_pack_strings("hesitation_filler")))
 
 
 def content_words(text: str) -> Set[str]:
-    return {w for w in (m.lower() for m in _WORD.findall(text or "")) if w not in _FLUFF}
+    return {w for w in (m.lower() for m in _WORD.findall(text or "")) if w not in _fluff()}
 
 
 def _repeat_note() -> str:
@@ -236,7 +251,8 @@ class CallState:
         words = [w.lower() for w in _WORD.findall(utterance or "")]
         if not words or len(words) > 5 or any(ch.isdigit() for ch in utterance):
             return False
-        allowed = _HESITATION_START | _HESITATION_FILLER | _HESITATION_EXTRA
+        start, extra, filler = _hesitation()
+        allowed = start | filler | extra
         if not all(w in allowed for w in words):  # "just wanted to ask about timings" is a real question, not a pause
             return False
         roman = normalize(utterance)
@@ -246,9 +262,15 @@ class CallState:
     def slots_asked(self, sentence: str) -> Set[str]:
         """Every slot this sentence asks the caller for ("your full name and phone number?" -> {name, phone})."""
         s = sentence or ""
-        if "?" not in s and "？" not in s and not _IMPERATIVE.search(s):
+        if "?" not in s and "？" not in s and not (_imperative() and _imperative().search(s)):
             return set()
-        return {slot for slot, rx in _ASKS.items() if rx.search(s)}
+        return {slot for slot, rx in _asks().items() if rx and rx.search(s)}
+
+    def separate_asks(self, sentence: str) -> Set[str]:
+        """The slots this sentence asks for as separate questions. "Which day and time suit you?" is one question (when), not
+        two: blocking it cost a second LLM round and stacked the regenerated reply on what was already said."""
+        asked = self.slots_asked(sentence)
+        return asked - {"time"} if {"date", "time"} <= asked else asked
 
     def multi_correction(self, slots: Iterable[str]) -> str:
         return _multi_note().format(slots=", ".join(sorted(set(slots))))
@@ -258,12 +280,12 @@ class CallState:
         """The slot this sentence asks the caller for again, if the caller already gave it. A sentence that says the known value
         back to the caller ("Is your name Rohan?") is a confirmation, not a repeat."""
         s = sentence or ""
-        if "?" not in s and "？" not in s and not _IMPERATIVE.search(s):
+        if "?" not in s and "？" not in s and not (_imperative() and _imperative().search(s)):
             return None
         known = self.known()
         low = s.lower()
-        for slot, rx in _ASKS.items():
-            if slot not in known or not rx.search(s):
+        for slot, rx in _asks().items():
+            if slot not in known or not rx or not rx.search(s):
                 continue
             value = known[slot].lower()
             if slot == "phone":

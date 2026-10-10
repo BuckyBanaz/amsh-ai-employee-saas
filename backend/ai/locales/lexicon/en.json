@@ -43,5 +43,235 @@
  ],
  "hangup_patterns": [
   "\\b(?:hang\\s*up|cut\\s+the\\s+call|end\\s+the\\s+call|disconnect\\s+the\\s+call)\\b"
+ ],
+ "clock": {
+  "hours": {
+   "1": [
+    "one"
+   ],
+   "2": [
+    "two"
+   ],
+   "3": [
+    "three"
+   ],
+   "4": [
+    "four"
+   ],
+   "5": [
+    "five"
+   ],
+   "6": [
+    "six"
+   ],
+   "7": [
+    "seven"
+   ],
+   "8": [
+    "eight"
+   ],
+   "9": [
+    "nine"
+   ],
+   "10": [
+    "ten"
+   ],
+   "11": [
+    "eleven"
+   ],
+   "12": [
+    "twelve"
+   ]
+  },
+  "patterns": [
+   [
+    "{h} o'?clock",
+    0
+   ],
+   [
+    "half past {h}",
+    30
+   ],
+   [
+    "quarter past {h}",
+    15
+   ],
+   [
+    "quarter to {h}",
+    -15
+   ],
+   [
+    "{h} thirty",
+    30
+   ],
+   [
+    "{h} fifteen",
+    15
+   ],
+   [
+    "{h} forty[ -]five",
+    45
+   ]
+  ],
+  "fixed": [
+   [
+    "noon",
+    12,
+    0
+   ],
+   [
+    "midday",
+    12,
+    0
+   ]
+  ]
+ },
+ "affirm": [
+  "yes",
+  "correct",
+  "that's right",
+  "that is right",
+  "sounds good",
+  "go ahead",
+  "please do",
+  "book it",
+  "confirm",
+  "yeah",
+  "yep",
+  "yup",
+  "sure",
+  "ok",
+  "okay",
+  "alright",
+  "fine",
+  "right",
+  "perfect",
+  "great",
+  "done",
+  "please",
+  "that works"
+ ],
+ "acks": [
+  "sure",
+  "great",
+  "okay",
+  "ok",
+  "alright",
+  "perfect",
+  "awesome",
+  "absolutely",
+  "got it",
+  "of course",
+  "no problem",
+  "right",
+  "cool",
+  "nice"
+ ],
+ "slot_asks": {
+  "name": [
+   "\\b(?:your|ur)\\s+(?:full\\s+|good\\s+)?name\\b",
+   "\\bmay\\s+i\\s+(?:have|get|know)\\b.*\\bname\\b",
+   "\\bwho\\s+am\\s+i\\s+speaking"
+  ],
+  "phone": [
+   "\\b(?:phone|mobile|contact|cell)\\s*(?:number|no)\\b",
+   "\\bnumber\\b.*\\b(?:you|your)\\b",
+   "\\b(?:phone|mobile)\\s+(?:number|no)\\b"
+  ],
+  "service": [
+   "\\bwhich\\s+(?:service|treatment|kind|type)\\b",
+   "\\bwhat\\s+(?:service|treatment|kind|type)\\b",
+   "\\bwhat\\b.*\\b(?:visit|appointment)\\s+for\\b"
+  ],
+  "date": [
+   "\\bwhich\\s+(?:day|date)\\b",
+   "\\bwhat\\s+(?:day|date)\\b",
+   "\\bwhen\\s+would\\s+you\\b"
+  ],
+  "time": [
+   "\\bwhat\\s+time\\b",
+   "\\bwhich\\s+time\\b",
+   "\\bpreferred\\s+time\\b"
+  ]
+ },
+ "imperative": [
+  "please\\s+(?:tell|share|give|provide)",
+  "let\\s+me\\s+know"
+ ],
+ "fluff": [
+  "please",
+  "kindly",
+  "your",
+  "ur",
+  "you",
+  "the",
+  "a",
+  "an",
+  "can",
+  "could",
+  "would",
+  "may",
+  "i",
+  "me",
+  "tell",
+  "share",
+  "provide",
+  "give",
+  "what",
+  "is",
+  "are",
+  "do",
+  "does",
+  "have",
+  "get",
+  "know",
+  "sure",
+  "okay",
+  "ok",
+  "great",
+  "thanks",
+  "thank",
+  "got",
+  "it",
+  "so",
+  "to",
+  "and",
+  "also",
+  "full",
+  "hai",
+  "is"
+ ],
+ "hesitation_start": [
+  "wait",
+  "hold",
+  "hmm",
+  "hmmm",
+  "um",
+  "umm",
+  "uh",
+  "uhh",
+  "one",
+  "just",
+  "let"
+ ],
+ "hesitation_extra": [
+  "a",
+  "on",
+  "me",
+  "think",
+  "moment",
+  "the",
+  "bit",
+  "hang",
+  "give"
+ ],
+ "hesitation_filler": [
+  "please",
+  "plz",
+  "second",
+  "sec",
+  "minute",
+  "min",
+  "moment"
  ]
 }

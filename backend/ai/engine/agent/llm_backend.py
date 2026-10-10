@@ -61,6 +61,10 @@ def parse_wait_seconds(text: str) -> Optional[float]:
     return total
 
 
+# Live first-token times seen for the default Gemini model: p90 ~1.5 s, worst ~2.4 s. Past this, the next provider answers.
+FIRST_TOKEN_TIMEOUT_S = 3.5
+
+
 class OpenAICompatBackend:
     """Shared machinery for OpenAI-style chat completions with tool calling."""
 
@@ -75,11 +79,15 @@ class OpenAICompatBackend:
         max_attempts: int = 3,
         max_retry_wait: float = 4.0,  # riding out a short rate-limit window beats switching persona mid-call
         temperature: Optional[float] = None,
+        first_token_timeout: Optional[float] = None,
     ) -> None:
         # Owner's "creativity" slider (Behavior tab, 0-1). Clamped: very high values break tool-call reliability.
         self.temperature = 0.5 if temperature is None else min(max(temperature, 0.1), 0.8)
         self.model = model or self.default_model()
         self.timeout = timeout
+        # Streaming only: give up if not even one token (text, reasoning or a tool-call fragment) arrived in this long, so
+        # the next provider answers. Set for every provider but the last in a chain; None = wait the full `timeout`.
+        self.first_token_timeout = first_token_timeout
         self.max_tokens = max_tokens
         self.max_attempts = max_attempts
         self.max_retry_wait = max_retry_wait  # live calls cannot wait long; evals raise this to ride out rate limits
@@ -206,37 +214,45 @@ class OpenAICompatBackend:
         latency.mark("llm_request_start", provider=self.provider, tools=bool(tools))
         first_token = first_content = False
         try:
-            async with self.client().stream(
-                "POST", self.api_url(), headers=headers, json=self._payload(messages, tools, stream=True), timeout=self.timeout
-            ) as resp:
-                if resp.status_code != 200:
-                    body = (await resp.aread()).decode("utf-8", "ignore")[:300]
-                    if resp.status_code == 400 and tools and _NO_TOOLS_RE.search(body):
-                        _NO_TOOLS.add((self.kind, self.model))
-                    retry = parse_wait_seconds(body) if resp.status_code == 429 else None
-                    raise LLMUnavailable(f"{self.provider}: HTTP {resp.status_code}: {body[:200]}", retry_after=retry, provider=self.provider)
-                async for line in resp.aiter_lines():
-                    delta = parse_sse_line(line)
-                    if delta is None:
-                        continue
-                    if not first_token and (delta.get("content") or delta.get("reasoning") or delta.get("tool_calls")):
-                        first_token = True
-                        latency.mark("llm_first_token", provider=self.provider)
-                    if delta.get("content"):
-                        if not first_content:
-                            first_content = True
-                            latency.mark("llm_first_content", provider=self.provider)
-                        text_parts.append(delta["content"])
-                        yield {"type": "text", "delta": delta["content"]}
-                    for tc in delta.get("tool_calls") or []:
-                        slot = acc.setdefault(tc.get("index", 0), {"id": None, "name": "", "arguments": "", "extra_content": None})
-                        slot["id"] = tc.get("id") or slot["id"]
-                        slot["extra_content"] = tc.get("extra_content") or slot["extra_content"]
-                        fn = tc.get("function") or {}
-                        slot["name"] += fn.get("name") or ""
-                        slot["arguments"] += fn.get("arguments") or ""
+            # Nothing is yielded before the first token, so abandoning the request inside this window is invisible to the caller.
+            async with asyncio.timeout(self.first_token_timeout) as first_token_deadline:
+                async with self.client().stream(
+                    "POST", self.api_url(), headers=headers, json=self._payload(messages, tools, stream=True), timeout=self.timeout
+                ) as resp:
+                    if resp.status_code != 200:
+                        body = (await resp.aread()).decode("utf-8", "ignore")[:300]
+                        if resp.status_code == 400 and tools and _NO_TOOLS_RE.search(body):
+                            _NO_TOOLS.add((self.kind, self.model))
+                        retry = parse_wait_seconds(body) if resp.status_code == 429 else None
+                        raise LLMUnavailable(f"{self.provider}: HTTP {resp.status_code}: {body[:200]}", retry_after=retry, provider=self.provider)
+                    async for line in resp.aiter_lines():
+                        delta = parse_sse_line(line)
+                        if delta is None:
+                            continue
+                        if not first_token and (delta.get("content") or delta.get("reasoning") or delta.get("tool_calls")):
+                            first_token = True
+                            first_token_deadline.reschedule(None)  # the model is answering: no deadline from here on
+                            latency.mark("llm_first_token", provider=self.provider)
+                        if delta.get("content"):
+                            if not first_content:
+                                first_content = True
+                                latency.mark("llm_first_content", provider=self.provider)
+                            text_parts.append(delta["content"])
+                            yield {"type": "text", "delta": delta["content"]}
+                        for tc in delta.get("tool_calls") or []:
+                            slot = acc.setdefault(tc.get("index", 0), {"id": None, "name": "", "arguments": "", "extra_content": None})
+                            slot["id"] = tc.get("id") or slot["id"]
+                            slot["extra_content"] = tc.get("extra_content") or slot["extra_content"]
+                            fn = tc.get("function") or {}
+                            slot["name"] += fn.get("name") or ""
+                            slot["arguments"] += fn.get("arguments") or ""
         except LLMUnavailable:
             raise
+        except TimeoutError as e:
+            if first_token:
+                raise LLMUnavailable(f"{self.provider}: TimeoutError: {e}", provider=self.provider) from e
+            # A stalled request (seen live: no response at all for 5.7 s). Short cooldown: it is usually a one-off.
+            raise LLMUnavailable(f"{self.provider}: no first token within {self.first_token_timeout}s", retry_after=10.0, provider=self.provider) from e
         except Exception as e:
             raise LLMUnavailable(f"{self.provider}: {type(e).__name__}: {e}", provider=self.provider) from e
         calls = [
@@ -455,6 +471,8 @@ def build_chat_backend(temperature: Optional[float] = None, preferred: Optional[
         return GroqChatBackend(temperature=temperature, **kwargs)
     if len(backends) > 1:  # the last one left standing may take a little longer to ride out a rate limit
         backends[-1].max_attempts, backends[-1].max_retry_wait = 3, 4.0
+        for b in backends[:-1]:  # a stalled provider must not leave the caller in silence while another could answer
+            b.first_token_timeout = FIRST_TOKEN_TIMEOUT_S
     return backends[0] if len(backends) == 1 else FallbackChatBackend(backends)
 
 

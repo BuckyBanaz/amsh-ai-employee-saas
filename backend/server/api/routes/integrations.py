@@ -63,6 +63,11 @@ def connect_integration(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Google Calendar can only be connected through Google sign-in.",
         )
+    if provider == "outlook":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Outlook Calendar can only be connected through Microsoft sign-in.",
+        )
 
     integration = (
         db.query(Integration)
@@ -107,8 +112,8 @@ def disconnect_integration(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Integration not found")
     integration.status = "disconnected"
     integration.connected_at = None
-    if provider == "google_calendar":
-        integration.config = {}  # drop stored Google tokens
+    if provider in ("google_calendar", "outlook"):
+        integration.config = {}  # drop stored calendar tokens
     db.commit()
     db.refresh(integration)
     return integration
@@ -182,6 +187,71 @@ def google_calendar_callback(
 
 
 # -----------------------------------------------------------------------------
+# Outlook / Microsoft 365 Calendar OAuth
+# -----------------------------------------------------------------------------
+from backend.server.services import outlook_calendar
+
+outlook_router = APIRouter(prefix="/api/integrations/outlook", tags=["outlook-calendar"])
+
+
+@router.get("/outlook/auth-url")
+def outlook_calendar_auth_url(business_id: str, ret: str = "onboarding", db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    get_business_or_404(business_id, db)
+    require_owner_or_admin(business_id, current_user)
+    if not outlook_calendar.is_configured():
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Outlook Calendar is not configured on the server (MICROSOFT_CLIENT_ID / MICROSOFT_CLIENT_SECRET).")
+    return {"url": outlook_calendar.build_auth_url(outlook_calendar.make_state(business_id, current_user.id, ret))}
+
+
+@router.post("/outlook/sync-existing")
+def outlook_calendar_sync_existing(business_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Send already-booked upcoming appointments to Outlook (new ones sync on their own)."""
+    get_business_or_404(business_id, db)
+    require_owner_or_admin(business_id, current_user)
+    return outlook_calendar.backfill_upcoming(db, business_id)
+
+
+@outlook_router.get("/callback")
+def outlook_calendar_callback(
+    background: BackgroundTasks, state: str = "", code: str = "", error: str = "", db: Session = Depends(get_db)
+):
+    """Microsoft redirects the browser here; the signed state ties it to the business that started the flow."""
+    data = outlook_calendar.read_state(state)
+    back = {"dashboard": "/integrations"}.get((data or {}).get("ret"), "/onboarding/integrations")
+    frontend = get_settings().FRONTEND_URL.rstrip("/") + back
+    if not data or error or not code:
+        return RedirectResponse(f"{frontend}?outlook=error")
+    business_id = data["bid"]
+    try:
+        tokens = outlook_calendar.exchange_code(code)
+    except httpx.HTTPError:
+        return RedirectResponse(f"{frontend}?outlook=error")
+
+    integration = (
+        db.query(Integration)
+        .filter(Integration.business_id == business_id, Integration.provider == "outlook")
+        .first()
+    )
+    if not integration:
+        integration = Integration(business_id=business_id, provider="outlook")
+        db.add(integration)
+    old = integration.config or {}
+    refresh = tokens.get("refresh_token") and CryptoManager.encrypt(tokens["refresh_token"]) or old.get("refresh_token")
+    if not refresh:
+        return RedirectResponse(f"{frontend}?outlook=error")
+    integration.status = "connected"
+    integration.config = {
+        "refresh_token": refresh,
+        "email": outlook_calendar.outlook_email(tokens["access_token"]),
+        "calendar": "default",
+    }
+    integration.connected_at = datetime.utcnow()
+    db.commit()
+    background.add_task(outlook_calendar.backfill_in_background, business_id)
+    return RedirectResponse(f"{frontend}?outlook=connected")
+
+
+# -----------------------------------------------------------------------------
 # Tenant Dashboard Integrations Router (/api/businesses/{business_id}/integrations)
 # -----------------------------------------------------------------------------
 dashboard_router = APIRouter(prefix="/api/businesses/{business_id}/integrations", tags=["dashboard-integrations"])
@@ -216,6 +286,16 @@ def dashboard_disconnect_integration(
 @dashboard_router.post("/google_calendar/sync-existing")
 def dashboard_google_calendar_sync_existing(business_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     return google_calendar_sync_existing(business_id, db, current_user)
+
+
+@dashboard_router.get("/outlook/auth-url")
+def dashboard_outlook_calendar_auth_url(business_id: str, ret: str = "dashboard", db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return outlook_calendar_auth_url(business_id, ret, db, current_user)
+
+
+@dashboard_router.post("/outlook/sync-existing")
+def dashboard_outlook_calendar_sync_existing(business_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return outlook_calendar_sync_existing(business_id, db, current_user)
 
 
 @dashboard_router.get("/google_calendar/auth-url")

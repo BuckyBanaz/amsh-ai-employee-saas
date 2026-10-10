@@ -867,6 +867,18 @@ class BehaviorSettings(unittest.TestCase):
         r = run(e.toolbox.execute("cancel_appointment", {"ref": "A1", "confirmed_by_caller": True}))  # even if the model tries
         self.assertEqual(r["code"], "disabled")
 
+    def test_transfers_off_tells_the_model_never_to_offer_a_person(self):
+        """Live: transfers were turned off, the agent still offered "shall I connect you?" (many rules and tool results say
+        "offer the front desk"), the caller said yes, and only then heard "sorry, I can't"."""
+        off = self.engine(capabilities={"transfer": False})._system
+        self.assertIn("TRANSFERS ARE OFF", off)
+        self.assertNotIn("offer the front desk instead", off)
+        self.assertNotIn("ESCALATION:", off)  # all of it is about handing the caller to a person
+        on = self.engine()._system
+        self.assertNotIn("TRANSFERS ARE OFF", on)
+        chat = self.engine(capabilities={"transfer": False}, channel="chat")._system
+        self.assertNotIn("TRANSFERS ARE OFF", chat)  # the chat addendum already says how to reach a person
+
     def test_transfers_off_still_allows_emergencies(self):
         e = self.engine(ScriptedBackend(reply("Sorry, I can't transfer calls here. Anything else?")), capabilities={"transfer": False})
         human = run(e.turn("I want to speak to a human"))
@@ -4641,6 +4653,59 @@ class AdminOverview(unittest.TestCase):
         self.assertEqual((again["Speech-to-text"], again["Email"]), ("degraded", "operational"))
 
 
+class LexiconSlotQuestions(unittest.TestCase):
+    """Which slot a sentence of ours asks for, and whether a caller is only buying time, come from the language packs. A new
+    language is added by its JSON file. Wording for nl, de, fr, es and ar is a first draft and should be checked by a native
+    speaker; the cases below pin what it must catch."""
+
+    def _slots(self, sentence):
+        from backend.ai.engine.agent.controller import _asks
+        return {slot for slot, rx in _asks().items() if rx and rx.search(sentence)}
+
+    def test_every_pack_has_the_keys_the_controller_reads(self):
+        from backend.ai.lexicon import lexicon_languages, load_lexicon
+        for code in lexicon_languages():
+            pack = load_lexicon(code)
+            for key in ("slot_asks", "imperative", "fluff", "hesitation_start", "hesitation_extra", "hesitation_filler"):
+                self.assertIn(key, pack, f"{code}.json has no {key!r}")
+            self.assertEqual(set(pack["slot_asks"]), {"name", "phone", "service", "date", "time"}, code)
+
+    def test_questions_are_recognised_per_language(self):
+        cases = {
+            "name": ["Wat is uw volledige naam?", "Wie ist Ihr vollständiger Name?", "Quel est votre nom complet ?",
+                     "¿Cuál es su nombre completo?", "ما اسمك؟"],
+            "phone": ["Wat is uw telefoonnummer?", "Wie ist Ihre Telefonnummer?", "Quel est votre numéro de téléphone ?",
+                      "¿Qué número de teléfono tiene?", "ما رقم هاتفك؟"],
+            "date": ["Welke dag wilt u komen?", "Welcher Tag passt Ihnen?", "Quel jour souhaitez-vous venir ?",
+                     "¿Qué día le viene bien?", "أي يوم تفضل؟"],
+            "time": ["Hoe laat komt u?", "Welche Uhrzeit passt Ihnen?", "Quelle heure vous conviendrait ?",
+                     "¿A qué hora?", "في أي ساعة؟"],
+            "service": ["Welke behandeling wilt u?", "Welche Behandlung brauchen Sie?", "Quel soin souhaitez-vous ?",
+                        "¿Qué tratamiento necesita?", "أي خدمة تريد؟"],
+        }
+        for slot, sentences in cases.items():
+            for sentence in sentences:
+                self.assertIn(slot, self._slots(sentence), sentence)
+
+    def test_plain_statements_ask_nothing(self):
+        for sentence in ("Wir sind heute geopend.", "Het is vandaag open.", "Nous sommes ouverts aujourd'hui.",
+                         "Estamos abiertos hoy.", "نحن مفتوحون اليوم."):
+            self.assertEqual(self._slots(sentence), set(), sentence)
+
+    def test_a_day_and_a_time_in_one_sentence_is_one_question(self):
+        from backend.ai.engine.agent.controller import CallState
+        self.assertEqual(CallState().separate_asks("Welke dag en welke tijd?"), {"date"})
+        self.assertEqual(CallState().separate_asks("Quel jour et à quelle heure ?"), {"date"})
+
+    def test_buying_time_is_recognised_in_several_languages(self):
+        from backend.ai.engine.agent.controller import CallState
+        ctrl = CallState()
+        for phrase in ("wacht even", "attendez", "espere un momento", "einen Moment bitte", "ruko zara", "ek second"):
+            self.assertTrue(ctrl.is_hesitation(phrase), phrase)
+        for phrase in ("I want to book tomorrow at ten", "kal 12 baje book karo"):
+            self.assertFalse(ctrl.is_hesitation(phrase), phrase)
+
+
 class OneQuestionRule(unittest.TestCase):
     def test_glued_sentences_are_split(self):
         s = SentenceSplitter()
@@ -4685,6 +4750,108 @@ class TextHelpers(unittest.TestCase):
         self.assertIsNone(parse_sse_line("data: [DONE]"))
         self.assertIsNone(parse_sse_line(": keep-alive"))
         self.assertIsNone(parse_sse_line("data: {broken"))
+
+
+class SpokenClockTimes(unittest.TestCase):
+    """Live call CA410b8b7f6a: the caller said "बारह बजे" (twelve o'clock in words), the time parser only knew digits, so
+    book_appointment was refused as "the caller never gave a time" and the agent told the caller about a technical problem."""
+
+    def test_the_live_call_now_grounds_the_time_and_still_rejects_another(self):
+        from datetime import time as clock
+        from backend.ai.engine.agent.validator import ground_booking
+        said = ["परसों का ठीक रहेगा?", "कल का नहीं मेरे लिए बारह बजे का समय ठीक रहेगा.", "मेरा नाम परीक्षित वर्मा है.",
+                "मेरा phone number है eight eight nine zero one four one four one zero seven."]
+        fields = {"patient_name": "Parikshit Verma", "phone_number": "88901414107", "date": date(2026, 10, 12), "time": clock(12, 0)}
+        self.assertIsNone(ground_booking(fields, said, "+918901414107", date(2026, 10, 10)))
+        wrong = ground_booking(dict(fields, time=clock(11, 0)), said, "+918901414107", date(2026, 10, 10))
+        self.assertEqual(wrong["field"], "preferred_time")  # the guard still refuses a time the caller never said
+
+    def test_replay_of_the_live_call_books_after_the_caller_confirms(self):
+        """End to end through the engine, guards and database: the caller gives the time in Hindi words, then confirms."""
+        args = dict(patient_name="Parikshit Verma", phone_number="88901414107", preferred_date="2026-09-30",
+                    preferred_time="12:00 PM", service_name="Dental Cleaning")
+        backend = ScriptedBackend(
+            reply("जी, परसों 30 सितंबर देख लेती हूँ।"), reply("ठीक है।"), reply("धन्यवाद परीक्षित जी।"), reply("जी, नंबर नोट कर लिया।"),
+            call("book_appointment", **args, confirmed_by_caller=False), reply("तो 30 सितंबर दोपहर 12 बजे डेंटल क्लीनिंग, सही है?"),
+            call("book_appointment", **args, confirmed_by_caller=True), reply("आपकी अपॉइंटमेंट बुक हो गई है।"),
+        )
+        engine, factory = make_engine(backend, caller="+918901414107")
+        for said in ("परसों का ठीक रहेगा?", "कल का नहीं मेरे लिए बारह बजे का समय ठीक रहेगा.", "मेरा नाम परीक्षित वर्मा है.",
+                     "मेरा phone number है eight eight nine zero one four one four one zero seven.", "डेंटल क्लीनिंग",
+                     "सही है ma'am मेरी यह."):
+            run(engine.turn(said))
+        codes = [c["result_code"] for c in engine.toolbox.calls if c["tool"] == "book_appointment"]
+        self.assertEqual(codes, ["needs_confirmation", "booked"])
+        self.assertIn("book", engine.toolbox.succeeded)
+
+    def test_an_hour_the_caller_said_without_am_pm_is_not_an_invented_time(self):
+        from backend.ai.engine.agent.grounding import ungrounded
+        for caller, draft in (("twelve o'clock please", "Great, 12 PM it is."), ("12 baje", "Theek hai, 12 PM."),
+                              ("बारह बजे", "ठीक है, 12 PM."), ("half twaalf graag", "Prima, 11:30 AM dan.")):
+            self.assertEqual(ungrounded(draft, [{"role": "user", "content": caller}]), [], caller)
+        self.assertEqual(ungrounded("Theek hai, 3 PM.", [{"role": "user", "content": "बारह बजे"}]), ["3:00 PM"])  # still guarded
+
+    def test_yes_in_every_language_pack(self):
+        from backend.ai.engine.agent.validator import is_affirmative, normalize_hindi
+        for text in ("सही है ma'am मेरी यह.", "जी हाँ", "कर दो.", "ja, klopt", "Genau.", "oui, parfait", "sí, vale", "نعم، تمام", "yes please"):
+            self.assertTrue(is_affirmative(normalize_hindi(text)), text)
+        for text in ("nahin", "nee, liever niet", "non merci", "no gracias", "لا", "nein", "sahara clinic?", "japan", "simple question"):
+            self.assertFalse(is_affirmative(normalize_hindi(text)), text)
+
+    def test_a_repeated_yes_after_booking_neither_books_twice_nor_asks_again(self):
+        """Live: once the caller had said yes, the agent asked for permission again. After a booked appointment a repeated
+        "haan" must not start another booking or another read-back."""
+        args = dict(patient_name="Parikshit Verma", phone_number="88901414107", preferred_date="2026-09-30",
+                    preferred_time="12:00 PM", service_name="Dental Cleaning")
+        backend = ScriptedBackend(
+            reply("जी, परसों 30 सितंबर देख लेती हूँ।"), reply("ठीक है।"), reply("धन्यवाद परीक्षित जी।"), reply("जी, नंबर नोट कर लिया।"),
+            call("book_appointment", **args, confirmed_by_caller=False), reply("तो 30 सितंबर दोपहर 12 बजे डेंटल क्लीनिंग, सही है?"),
+            call("book_appointment", **args, confirmed_by_caller=True), reply("आपकी अपॉइंटमेंट बुक हो गई है।"),
+            reply("जी, आपकी अपॉइंटमेंट बुक हो चुकी है। और कुछ?"),
+        )
+        engine, _ = make_engine(backend, caller="+918901414107")
+        for said in ("परसों का ठीक रहेगा?", "कल का नहीं मेरे लिए बारह बजे का समय ठीक रहेगा.", "मेरा नाम परीक्षित वर्मा है.",
+                     "मेरा phone number है eight eight nine zero one four one four one zero seven.", "डेंटल क्लीनिंग",
+                     "सही है ma'am मेरी यह.", "हाँ, हाँ, सही है।"):
+            run(engine.turn(said))
+        codes = [c["result_code"] for c in engine.toolbox.calls if c["tool"] == "book_appointment"]
+        self.assertEqual(codes, ["needs_confirmation", "booked"])  # one booking, and no second read-back after the yes
+
+    def test_clock_times_in_words_in_every_language_pack(self):
+        from backend.ai.engine.agent.validator import normalize_hindi, spoken_clock_times
+        cases = {
+            "बारह बजे": {(12, 0)}, "साढ़े दस बजे": {(10, 30)}, "सवा नौ बजे": {(9, 15)}, "पौने दस बजे": {(9, 45)}, "डेढ़ बजे": {(1, 30)},
+            "twelve o'clock": {(12, 0)}, "half past eleven": {(11, 30)}, "quarter to twelve": {(11, 45)},
+            "Om half twaalf graag": {(11, 30)}, "kwart over drie": {(3, 15)}, "een afspraak om tien uur": {(10, 0)},
+            "um halb zwölf": {(11, 30)}, "zwölf Uhr": {(12, 0)}, "à midi et demie": {(12, 30)}, "onze heures et quart": {(11, 15)},
+            "a las doce y media": {(12, 30)}, "a las doce": {(12, 0)}, "mediodía": {(12, 0)},
+            "الساعة الثانية عشرة والنصف": {(12, 30)}, "الساعة الثانية": {(2, 0)},
+        }
+        for text, expected in cases.items():
+            self.assertEqual(spoken_clock_times(normalize_hindi(text)), expected, text)
+
+    def test_ordinary_words_that_are_also_numbers_are_not_times(self):
+        from backend.ai.engine.agent.validator import normalize_hindi, spoken_clock_times
+        for text in ("kar do", "do din baad", "saat din", "las dos citas", "een afspraak graag", "ein Termin bitte", "une question"):
+            self.assertEqual(spoken_clock_times(normalize_hindi(text)), set(), text)
+
+
+class LiveCallCAbaf0(unittest.TestCase):
+    """Live call CAbaf0cd8630: "चाहिए: 1." and "2." were spoken, and asking for the day and time together was blocked as two
+    questions, which cost a second LLM round and stacked a second thank-you on the first."""
+
+    def test_bare_list_markers_are_not_spoken(self):
+        from backend.ai.engine.agent.agent_loop import clean_for_speech
+        self.assertEqual(clean_for_speech("इसके लिए मुझे कुछ जानकारी चाहिए: 1."), "इसके लिए मुझे कुछ जानकारी चाहिए:")
+        self.assertEqual(clean_for_speech("2."), "")
+        for kept in ("आपकी अपॉइंटमेंट दोपहर 12 बजे है।", "Your appointment is at 12.", "Am 12. Oktober passt es."):
+            self.assertEqual(clean_for_speech(kept), kept)
+
+    def test_day_and_time_together_is_one_question_but_name_and_phone_is_two(self):
+        engine, _ = make_engine(ScriptedBackend())
+        self.assertEqual(engine.ctrl.separate_asks("आप किस दिन और किस समय आना चाहेंगे?"), {"date"})
+        self.assertEqual(engine.ctrl.separate_asks("Which day and what time would suit you?"), {"date"})
+        self.assertEqual(engine.ctrl.separate_asks("कृपया अपना नाम और फोन नंबर बताएं।"), {"name", "phone"})
 
 
 if __name__ == "__main__":

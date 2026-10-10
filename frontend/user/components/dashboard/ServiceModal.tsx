@@ -13,9 +13,11 @@ interface ServiceModalProps {
     price_currency?: string;
   }) => Promise<void>;
   editingService?: ServiceItem | null;
+  /** Pre-fills a NEW service (e.g. one suggested from the clinic's website); ignored when editing. */
+  draft?: { title: string; description?: string } | null;
 }
 
-export function ServiceModal({ isOpen, onClose, onSave, editingService }: ServiceModalProps) {
+export function ServiceModal({ isOpen, onClose, onSave, editingService, draft }: ServiceModalProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [durationMinutes, setDurationMinutes] = useState(30);
@@ -32,14 +34,14 @@ export function ServiceModal({ isOpen, onClose, onSave, editingService }: Servic
       setPriceAmount(editingService.price_amount ?? 0);
       setPriceCurrency(editingService.price_currency || 'USD');
     } else {
-      setTitle('');
-      setDescription('');
+      setTitle(draft?.title || '');
+      setDescription(draft?.description || '');
       setDurationMinutes(30);
       setPriceAmount(50);
       setPriceCurrency('USD');
     }
     setError(null);
-  }, [editingService, isOpen]);
+  }, [editingService, draft, isOpen]);
 
   if (!isOpen) return null;
 

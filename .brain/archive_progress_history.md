@@ -331,7 +331,7 @@ See **[`DOCS/roadmap/AMSh_Master_Daily_Roadmap_and_Tracker.md`](file:///c:/Users
    - **Calls Hub (`/calls`)**:
      - Updated [`calls.py`](file:///c:/Users/Parikshit/Desktop/saas/backend/server/api/routes/calls.py) to return `recording_url` alongside turns.
      - Built HTML5 Audio Recording Player in [`CallDetailPanel.tsx`](file:///c:/Users/Parikshit/Desktop/saas/frontend/user/components/dashboard/CallDetailPanel.tsx) featuring Play/Pause, scrubber range seeker, elapsed/total time, playback speed toggle (`1x`, `1.25x`, `1.5x`, `2x`), and call-back action.
-     - Built full conversation transcript thread rendering multi-turn chat bubbles (Aura AI assistant vs caller).
+     - Built full conversation transcript thread rendering multi-turn chat bubbles (AMSh Ai assistant vs caller).
      - Updated [`CallLogsTable.tsx`](file:///c:/Users/Parikshit/Desktop/saas/frontend/user/components/dashboard/CallLogsTable.tsx) with live PostgreSQL calls loading, audio indicator, and selection state (mock array removed).
      - Updated [`CallLogsFilterBar.tsx`](file:///c:/Users/Parikshit/Desktop/saas/frontend/user/components/dashboard/CallLogsFilterBar.tsx) and [`CallLogsHeader.tsx`](file:///c:/Users/Parikshit/Desktop/saas/frontend/user/components/dashboard/CallLogsHeader.tsx) with search and refresh actions.
    - **Doctors Hub (`/doctors`)**:

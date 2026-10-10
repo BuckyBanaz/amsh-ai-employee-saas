@@ -1,0 +1,89 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #0f172a;
+  --muted: #64748b;
+  --border: #e2e8f0;
+  --primary: #323dfe;
+  --surface: #f8fafc;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-inter), sans-serif;
+  --font-mono: var(--font-mono), monospace;
+}
+
+.font-sora {
+  font-family: var(--font-sora), system-ui, -apple-system, sans-serif;
+  line-height: 1.25;
+}
+
+h1.font-sora,
+h2.font-sora,
+h3.font-sora,
+h4.font-sora {
+  line-height: 1.18;
+}
+
+.font-mono-ui {
+  font-family: var(--font-mono), monospace;
+  letter-spacing: 0.12em;
+}
+
+html, body {
+  background: #ffffff;
+  color: #0f172a;
+  font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+  width: 100%;
+  max-width: 100%;
+}
+
+/* Plivo Technical Frame Accent */
+.tech-millimeter-ruler {
+  background-image: repeating-linear-gradient(
+    to right,
+    rgba(148, 163, 184, 0.45) 0px,
+    rgba(148, 163, 184, 0.45) 1px,
+    transparent 1px,
+    transparent 10px
+  );
+  height: 6px;
+  width: 100%;
+}
+
+/* Scrollbar Utility */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Audio Wave Animations */
+@keyframes voice-wave {
+  0%, 100% {
+    transform: scaleY(0.25);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+@keyframes live-ping {
+  75%, 100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+
+.animate-live-ping {
+  animation: live-ping 1.6s cubic-bezier(0, 0, 0.2, 1) infinite;
+}

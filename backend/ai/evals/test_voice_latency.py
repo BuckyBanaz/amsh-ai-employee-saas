@@ -560,9 +560,9 @@ class BargeInPlayback(unittest.TestCase):
         self.assertIn("clear", events)
         self.assertNotIn("media", events[events.index("clear"):])  # nothing spoken after the interruption
 
-    def test_vad_needs_consecutive_voiced_frames(self):
+    def test_vad_needs_sustained_voiced_frames(self):
         import base64
-        from backend.ai.realtime.twilio import gateway
+        from backend.ai.realtime.barge_in import monitor
 
         gw = GatewayTurn()
         session, sent = gw._session(ScriptedBackend(reply("ok")))
@@ -577,7 +577,7 @@ class BargeInPlayback(unittest.TestCase):
 
         run(frames(loud, loud, quiet, loud))  # a spike, then a broken run: not speech
         self.assertEqual(sent, [])
-        run(frames(*[loud] * gateway.BARGE_IN_MIN_VOICED_FRAMES))
+        run(frames(*[loud] * monitor.NEED_FRAMES))
         self.assertEqual([e["event"] for e in sent], ["clear"])
 
     def test_deepgram_speech_started_calls_the_hook_directly(self):
@@ -685,3 +685,368 @@ class SpeechAudioCache(unittest.TestCase):
             self.assertEqual(tts.requests, prewarmed)  # played from memory: no new synthesis
         finally:
             gateway.cartesia_tts = saved
+
+
+class InterruptDuringFirstTokenWait(unittest.TestCase):
+    def test_stop_ends_the_stream_without_waiting_for_the_next_event(self):
+        from types import SimpleNamespace
+        from backend.ai.engine.agent.agent_loop import AgentEngine
+
+        async def slow_stream():
+            await asyncio.sleep(5)  # the model's first token is slow to arrive
+            yield {"type": "text", "delta": "late"}
+
+        async def go():
+            owner = SimpleNamespace(_stop_event=asyncio.Event())
+            asyncio.get_running_loop().call_later(0.05, owner._stop_event.set)
+            started = time.monotonic()
+            events = [ev async for ev in AgentEngine._until_stop(owner, slow_stream())]
+            return events, time.monotonic() - started
+
+        events, took = run(go())
+        self.assertEqual(events, [])
+        self.assertLess(took, 1.0)
+
+    def test_events_pass_through_when_not_stopped(self):
+        from types import SimpleNamespace
+        from backend.ai.engine.agent.agent_loop import AgentEngine
+
+        async def stream():
+            yield {"type": "text", "delta": "a"}
+            yield {"type": "text", "delta": "b"}
+
+        async def go():
+            owner = SimpleNamespace(_stop_event=asyncio.Event())
+            return [ev["delta"] async for ev in AgentEngine._until_stop(owner, stream())]
+
+        self.assertEqual(run(go()), ["a", "b"])
+
+
+class EndpointingConstant(unittest.TestCase):
+    def test_constant_matches_the_deepgram_url(self):
+        from backend.ai.speech.stt.deepgram import DEEPGRAM_LIVE_URL_TEMPLATE, ENDPOINTING_MS
+        self.assertIn(f"endpointing={ENDPOINTING_MS}&", DEEPGRAM_LIVE_URL_TEMPLATE)
+
+
+class TtsFirstAudioMark(unittest.TestCase):
+    def test_websocket_path_marks_first_audio(self):
+        """Live calls use the Cartesia websocket; only the REST and cache paths used to mark tts_first_audio (tts_ttfb was null)."""
+        import base64
+        from backend.ai.speech.tts.cartesia import CartesiaTTS
+
+        tts = CartesiaTTS()
+        tts.api_key = "k"
+
+        class FakeWS:
+            close_code = None
+
+            async def send(self, raw):
+                msg = json.loads(raw)
+                q = tts._ws_pending.get(msg.get("context_id"))
+                if q is not None and "transcript" in msg:
+                    for part in (b"a", b"b"):
+                        q.put_nowait({"type": "chunk", "data": base64.b64encode(part).decode()})
+                    q.put_nowait({"type": "done", "done": True})
+
+        async def ensure():
+            return FakeWS()
+
+        tts._ensure_ws = ensure
+
+        async def go():
+            tracker = latency.TurnLatency("c", 1)
+            token = latency.start_turn(tracker)
+            try:
+                audio = b"".join([c async for c in tts.stream_speech("hello there")])
+            finally:
+                latency.end_turn(token)
+            return audio, tracker
+
+        audio, tracker = run(go())
+        self.assertEqual(audio, b"ab")
+        self.assertIsNotNone(tracker.summary()["stages_ms"]["tts_ttfb"])
+        self.assertEqual([n for n, _, _ in tracker.timeline].count("tts_first_audio"), 1)
+
+
+class OneAcknowledgementPerTurn(unittest.TestCase):
+    def _dedupe(self, sentences):
+        from types import SimpleNamespace
+        from backend.ai.engine.agent.agent_loop import AgentEngine
+
+        owner = SimpleNamespace(_ack_used=set(), _cues={})
+        return [AgentEngine._dedupe_ack(owner, s) for s in sentences]
+
+    def test_hindi_acks_after_a_retry_are_not_stacked(self):
+        # live call turn 6: "जी, बिल्कुल।" then, after the guard retry, "जी, जरूर।"
+        self.assertEqual(self._dedupe(["जी, बिल्कुल।", "जी, जरूर।", "कृपया अपना नाम बताएं।"]), ["जी, बिल्कुल।", "", "कृपया अपना नाम बताएं।"])
+
+    def test_a_second_ack_word_is_stripped_but_the_rest_kept(self):
+        self.assertEqual(self._dedupe(["Sure!", "Got it, which day works for you?"]), ["Sure!", "which day works for you?"])
+        self.assertEqual(self._dedupe(["Haan ji, zaroor.", "Theek hai, kal 12 baje khali hai."]), ["Haan ji, zaroor.", "kal 12 baje khali hai."])
+
+    def test_words_that_only_start_like_an_ack_are_left_alone(self):
+        self.assertEqual(self._dedupe(["Sure.", "Surely the clinic is open.", "Okra is not a service."]),
+                         ["Sure.", "Surely the clinic is open.", "Okra is not a service."])
+        self.assertEqual(self._dedupe(["जी।", "जीभ में दर्द है तो डॉक्टर देखेंगे।"]), ["जी।", "जीभ में दर्द है तो डॉक्टर देखेंगे।"])
+
+    def test_an_ack_word_inside_a_phrase_is_not_cut(self):
+        self.assertEqual(self._dedupe(["Got it.", "Sure thing! Which service?"]), ["Got it.", "Sure thing! Which service?"])
+        self.assertEqual(self._dedupe(["जी।", "अच्छा लगा कि आपने कॉल किया।"]), ["जी।", "अच्छा लगा कि आपने कॉल किया।"])
+
+
+class BargeInMonitorCalibration(unittest.TestCase):
+    """Live call CAbaf0cd8630: on that line the caller's speech measured median ~300 / p90 ~1100-1300 RMS; with the fixed
+    threshold of 1400 and 15 frames in a row the energy barge-in could never fire (longest run above 1400: 11 frames)."""
+
+    def _monitor(self):
+        from backend.ai.realtime.barge_in.monitor import BargeInMonitor
+        now = {"t": 0.0}
+        return BargeInMonitor("CA1", clock=lambda: now["t"]), now
+
+    @staticmethod
+    def _caller_speech(n, level=600):
+        # syllables with dips, like the measured line: loud, loud, quiet, loud...
+        return [level if i % 3 != 2 else 120 for i in range(n)]
+
+    def _feed(self, m, now, levels, audible, blocked=None):
+        fired_at = None
+        for i, rms in enumerate(levels):
+            now["t"] += 0.02
+            if m.frame(rms, audible=audible, blocked=blocked) and fired_at is None:
+                fired_at = i
+        return fired_at
+
+    def _calibrate(self, m, now, caller=800, echo=40):
+        self._feed(m, now, [caller] * 40, audible=False)  # the caller answering a question while we are silent
+        self._feed(m, now, [echo] * 40, audible=True, blocked="greeting")  # our greeting leaking back
+        self._feed(m, now, [0], audible=False)  # greeting over
+
+    def test_uncalibrated_keeps_the_old_threshold(self):
+        m, now = self._monitor()
+        self.assertEqual(m.threshold(), 1400)
+        self.assertIsNone(self._feed(m, now, self._caller_speech(100), audible=True))
+
+    def test_a_quiet_caller_interrupts_once_the_call_is_calibrated(self):
+        m, now = self._monitor()
+        self._calibrate(m, now)
+        self.assertLess(m.threshold(), 600)
+        fired = self._feed(m, now, self._caller_speech(100), audible=True)
+        self.assertIsNotNone(fired)
+        self.assertLess(fired, 20)  # within 400 ms, despite the dips between syllables
+
+    def test_echo_raises_the_threshold_and_never_triggers(self):
+        m, now = self._monitor()
+        self._calibrate(m, now, caller=800, echo=500)
+        self.assertGreaterEqual(m.threshold(), 1250)  # 2.5x the echo: our own voice cannot interrupt us
+        self.assertIsNone(self._feed(m, now, [500] * 200, audible=True))
+
+    def test_a_short_spike_is_not_speech_and_silence_never_triggers(self):
+        m, now = self._monitor()
+        self._calibrate(m, now)
+        self.assertIsNone(self._feed(m, now, [900, 900, 0, 0, 0, 0] * 10, audible=True))
+        self.assertIsNone(self._feed(m, now, [5] * 300, audible=True))
+
+    def test_blocked_frames_never_trigger_and_are_reported(self):
+        m, now = self._monitor()
+        self._calibrate(m, now)
+        self.assertIsNone(self._feed(m, now, [3000] * 50, audible=True, blocked="grace"))
+        summary = m.response_end("played_out")
+        self.assertEqual(summary["blocked_ms"], {"grace": 1000})
+        self.assertIsNone(summary["barge_in"])
+
+    def test_the_summary_says_why_and_how_fast(self):
+        m, now = self._monitor()
+        self._calibrate(m, now)
+        self._feed(m, now, self._caller_speech(30), audible=True)
+        summary = m.fired("vad", {"tts_task_cancelled": True, "clear_sent": True}, turn=3, generation=2)
+        self.assertEqual((summary["barge_in"], summary["turn"], summary["generation"]), ("vad", 3, 2))
+        self.assertIsNotNone(summary["reaction_ms"])
+        self.assertTrue(summary["cancel"]["clear_sent"])
+        self.assertIsNotNone(summary["caller_p75"])
+        self.assertIsNotNone(summary["echo_p90"])
+
+
+class BargeInScenarios(unittest.TestCase):
+    """Interruptions through the real gateway paths: nothing of the interrupted response is sent after Twilio's `clear`,
+    and the rest of the turn cannot resume."""
+
+    def setUp(self):
+        from backend.ai.realtime.twilio import gateway
+        self._grace = gateway.BARGE_IN_GRACE_PERIOD_S
+        gateway.BARGE_IN_GRACE_PERIOD_S = 0.0  # the grace window has its own tests; here the caller speaks after it
+
+    def tearDown(self):
+        from backend.ai.realtime.twilio import gateway
+        gateway.BARGE_IN_GRACE_PERIOD_S = self._grace
+
+    @staticmethod
+    def _words(session, text="wait wait"):
+        """Deepgram delivering interim words while we speak, through the real STT consumer."""
+        class FakeSTT:
+            async def events(self):
+                yield {"type": "transcript", "text": text, "is_final": False, "speech_final": False, "received_at": time.monotonic()}
+
+        session.stt = FakeSTT()
+        return session._consume_stt_events()
+
+    def _run(self, chat_stream, interrupt, tts_delay=0.0, tts_chunks=8):
+        gw = GatewayTurn()
+        backend = ScriptedBackend(reply("ignored"))
+        backend.chat_stream = chat_stream
+        session, sent = gw._session(backend, tts_delay=tts_delay, tts_chunks=tts_chunks)
+        try:
+            async def go():
+                turn = asyncio.create_task(session._handle_transcript("I want to book"))
+                await interrupt(session, sent)
+                await turn
+            run(go())
+        finally:
+            gw.tearDown()
+        events = [e["event"] for e in sent]
+        self.assertIn("clear", events)
+        self.assertNotIn("media", events[events.index("clear"):])
+        return session, sent
+
+    @staticmethod
+    async def _wait_for(pred, timeout=3.0):
+        for _ in range(int(timeout / 0.005)):
+            if pred():
+                return
+            await asyncio.sleep(0.005)
+        raise AssertionError("condition never became true")
+
+    @staticmethod
+    async def _two_sentences(messages, tools):
+        yield {"type": "text", "delta": "Of course, I can certainly help you with that today. "}
+        await asyncio.sleep(0.3)
+        yield {"type": "text", "delta": "Our next opening is on Monday morning."}
+        yield {"type": "final", "content": None, "tool_calls": []}
+
+    def test_interrupt_during_the_first_audio_chunk(self):
+        async def interrupt(session, sent):
+            await self._wait_for(lambda: any(e["event"] == "media" for e in sent))
+            await self._words(session)
+        self._run(self._two_sentences, interrupt)
+
+    def test_interrupt_mid_sentence(self):
+        async def interrupt(session, sent):
+            await self._wait_for(lambda: sum(e["event"] == "media" for e in sent) >= 20)
+            await self._words(session)
+        self._run(self._two_sentences, interrupt, tts_chunks=20)
+
+    def test_interrupt_while_tts_audio_is_delayed_by_the_network(self):
+        async def interrupt(session, sent):
+            await self._wait_for(lambda: session.barge_in.is_speaking)  # TTS requested, no audio yet
+            self.assertFalse(any(e["event"] == "media" for e in sent))
+            await self._words(session)
+        session, sent = self._run(self._two_sentences, interrupt, tts_delay=0.5)
+        self.assertFalse(any(e["event"] == "media" for e in sent))  # the delayed audio never reached the caller
+
+    def test_caller_overlap_detected_from_audio_energy(self):
+        import audioop
+        import base64
+
+        def frame(level):
+            pcm = audioop.mul(b"\x00\x10" * 160, 2, level / 4096)  # constant level: RMS ~= level
+            return base64.b64encode(audioop.lin2ulaw(pcm, 2)).decode()
+
+        async def interrupt(session, sent):
+            for _ in range(40):  # calibration as on a real call: the caller's earlier answer, then our greeting's echo
+                session.barge_monitor.frame(800, audible=False, blocked=None)
+            for _ in range(40):
+                session.barge_monitor.frame(40, audible=True, blocked="greeting")
+            await self._wait_for(lambda: sum(e["event"] == "media" for e in sent) >= 5)
+            for i in range(40):  # a quiet caller talking over us, with dips between syllables
+                await session.handle_media(frame(600 if i % 3 != 2 else 100))
+                if any(e["event"] == "clear" for e in sent):
+                    break
+        self._run(self._two_sentences, interrupt, tts_chunks=40)
+
+    def test_an_interrupted_turn_cannot_speak_again(self):
+        async def interrupt(session, sent):
+            await self._wait_for(lambda: any(e["event"] == "media" for e in sent))
+            await self._words(session)
+            await asyncio.sleep(0.5)  # sentence two is generated after the interruption
+        self._run(self._two_sentences, interrupt)
+
+
+class FirstTokenDeadline(unittest.TestCase):
+    """Live call CA7bb473994c turn 8: Gemini sent nothing for 5.7 s (the stream timeout is 8 s), the caller heard silence and
+    said "Hello" over and over. A provider that is not last now gets FIRST_TOKEN_TIMEOUT_S, then the next one answers."""
+
+    @staticmethod
+    def _backend(provider, script, first_token_timeout=None):
+        """An OpenAI-style streaming backend whose HTTP response is `script`: a list of (delay_s, sse_line)."""
+        import httpx
+        from backend.ai.engine.agent.llm_backend import GroqChatBackend
+
+        class Body(httpx.AsyncByteStream):
+            async def __aiter__(self):
+                for delay, line in script:
+                    await asyncio.sleep(delay)
+                    yield (line + "\n\n").encode()
+
+        async def handler(request):
+            return httpx.Response(200, stream=Body())
+
+        b = GroqChatBackend(model=provider, first_token_timeout=first_token_timeout)
+        b.provider = provider
+        client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        b.client = lambda: client
+        b.api_key = lambda: "k"
+        return b
+
+    @staticmethod
+    def _sse(text):
+        return "data: " + json.dumps({"choices": [{"delta": {"content": text}}]})
+
+    def _collect(self, backend):
+        async def go():
+            started = time.monotonic()
+            out = [ev async for ev in backend.chat_stream([{"role": "user", "content": "hi"}], [])]
+            return out, time.monotonic() - started
+        return run(go())
+
+    def test_a_stalled_provider_hands_over_to_the_next_one(self):
+        from backend.ai.engine.agent import llm_backend
+        llm_backend._COOLDOWN_UNTIL.clear()
+        stalled = self._backend("stalled", [(5.0, self._sse("late"))], first_token_timeout=0.3)
+        healthy = self._backend("healthy", [(0.05, self._sse("Hello there.")), (0, "data: [DONE]")])
+        chain = llm_backend.FallbackChatBackend([stalled, healthy])
+        out, took = self._collect(chain)
+        llm_backend._COOLDOWN_UNTIL.clear()
+        self.assertEqual([e["delta"] for e in out if e["type"] == "text"], ["Hello there."])
+        self.assertLess(took, 1.5)
+        self.assertEqual(chain.last_provider, "healthy")
+
+    def test_a_slow_answer_is_not_cut_once_the_first_token_arrived(self):
+        slow = self._backend("slow", [(0.1, self._sse("One, ")), (0.6, self._sse("two.")), (0, "data: [DONE]")], first_token_timeout=0.3)
+        out, _ = self._collect(slow)
+        self.assertEqual("".join(e["delta"] for e in out if e["type"] == "text"), "One, two.")
+
+    def test_the_last_provider_in_the_chain_has_no_first_token_deadline(self):
+        from backend.ai.engine.agent import llm_backend
+        from types import SimpleNamespace
+        from unittest import mock
+        settings = SimpleNamespace(LLM_PROVIDERS="gemini,groq", GEMINI_API_KEY="k", GROQ_API_KEY="k", GEMINI_MODEL="gemini-x")
+        with mock.patch("backend.server.common.config.get_settings", return_value=settings), \
+                mock.patch.object(llm_backend.GroqChatBackend, "api_key", return_value="k"), \
+                mock.patch.object(llm_backend.GeminiChatBackend, "api_key", return_value="k"):
+            chain = llm_backend.build_chat_backend()
+        self.assertEqual([b.first_token_timeout for b in chain.backends], [llm_backend.FIRST_TOKEN_TIMEOUT_S, None])
+
+    def test_through_the_engine_the_caller_hears_the_next_provider_quickly(self):
+        from backend.ai.engine.agent import llm_backend
+        llm_backend._COOLDOWN_UNTIL.clear()
+        stalled = self._backend("stalled", [(5.0, self._sse("late"))], first_token_timeout=0.3)
+        healthy = self._backend("healthy", [(0.05, self._sse("Hello there, how can I help?")), (0, "data: [DONE]")])
+        engine, _ = make_engine(llm_backend.FallbackChatBackend([stalled, healthy]))
+
+        async def go():
+            started = time.monotonic()
+            said = [e["text"] async for e in engine.turn_events("hi", stream=True) if e["type"] == "sentence"]
+            return said, time.monotonic() - started
+        said, took = run(go())
+        llm_backend._COOLDOWN_UNTIL.clear()
+        self.assertEqual(said, ["Hello there, how can I help?"])
+        self.assertLess(took, 1.5)

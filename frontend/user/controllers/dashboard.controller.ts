@@ -106,6 +106,9 @@ export interface AppointmentItem {
 export interface CallLogItem {
   id: string;
   business_id: string;
+  business_name?: string;
+  agent_name?: string;
+  agent_role?: string;
   caller_number: string;
   caller_name: string;
   intent: string | null; // null until the call has been analysed
@@ -118,7 +121,9 @@ export interface CallLogItem {
   latency_ms: number;
   recording_url?: string | null;
   is_test?: boolean; // made from the dashboard playground, not a real caller
-  channel?: 'phone' | 'whatsapp' | 'playground';
+  channel?: 'phone' | 'whatsapp' | 'playground' | string;
+  call_type?: string;
+  language?: string;
   started_at: string | null;
   ended_at: string | null;
   messages?: Array<{
@@ -128,6 +133,16 @@ export interface CallLogItem {
     sequence: number;
     created_at: string;
   }>;
+  appointment?: {
+    id?: string;
+    service_name?: string;
+    doctor_name?: string;
+    preferred_date?: string;
+    preferred_time?: string;
+    patient_name?: string;
+    status?: string;
+    channel?: string;
+  } | null;
 }
 
 export interface ServiceItem {
@@ -139,6 +154,20 @@ export interface ServiceItem {
   price_amount: number | null;
   price_currency: string;
   created_at?: string;
+}
+
+/** A service the clinic's crawled website mentions that is not in its Services list (the AI can only book listed ones). */
+export interface ServiceSuggestion {
+  title: string;
+  description: string;
+  quote: string;
+  source_url: string;
+}
+
+export interface ServiceSuggestionsResult {
+  suggestions: ServiceSuggestion[];
+  sources: string[];
+  error: string | null;
 }
 
 export interface StaffItem {
@@ -350,9 +379,28 @@ export const DashboardController = {
     }
   },
 
+  async updateCall(
+    callId: string,
+    payload: { outcome?: string; summary?: string; notes?: string; action_items?: string[] },
+    businessId?: string
+  ): Promise<CallLogItem> {
+    const bId = this.getEffectiveBusinessId(businessId);
+    return ApiService.patch<CallLogItem>(API_ENDPOINTS.CALLS.UPDATE(bId, callId), payload);
+  },
+
+  async deleteCall(callId: string, businessId?: string): Promise<void> {
+    const bId = this.getEffectiveBusinessId(businessId);
+    return ApiService.delete<void>(API_ENDPOINTS.CALLS.DELETE(bId, callId));
+  },
+
   async getServices(businessId?: string): Promise<ServiceItem[]> {
     const bId = this.getEffectiveBusinessId(businessId);
     return ApiService.get<ServiceItem[]>(API_ENDPOINTS.SERVICES.LIST(bId));
+  },
+
+  async getServiceSuggestions(businessId?: string): Promise<ServiceSuggestionsResult> {
+    const bId = this.getEffectiveBusinessId(businessId);
+    return ApiService.get<ServiceSuggestionsResult>(API_ENDPOINTS.SERVICES.SUGGESTIONS(bId));
   },
 
   async createService(
@@ -659,6 +707,14 @@ export const DashboardController = {
         console.warn('[CALL] endSimulatedCall ignored:', err);
       }
     }
+  },
+
+  /** Take over a live call: silences the AI receptionist and connects caller to staff line. */
+  async takeOverCall(callId: string, businessId?: string, targetPhone?: string): Promise<{ success: boolean; transferred_to: string; message: string }> {
+    const bId = this.getEffectiveBusinessId(businessId);
+    return ApiService.post<any>(API_ENDPOINTS.CALLS.TAKEOVER(bId, callId), {
+      phone_number: targetPhone,
+    });
   },
 
   async transcribeAudio(audioBlob: Blob): Promise<{ transcript: string }> {

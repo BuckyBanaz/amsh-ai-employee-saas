@@ -56,6 +56,7 @@ class DeepgramSTT:
 deepgram_stt = DeepgramSTT()
 
 
+ENDPOINTING_MS = 200  # silence Deepgram waits before it finalises an utterance (the endpointing= value in the URL below)
 DEEPGRAM_LIVE_URL_TEMPLATE = (
     "wss://api.deepgram.com/v1/listen"
     "?model={model}&language={language}&encoding={encoding}&sample_rate=8000&channels=1"

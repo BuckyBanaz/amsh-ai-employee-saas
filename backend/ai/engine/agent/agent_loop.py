@@ -10,6 +10,7 @@ import json
 import logging
 import re
 import time
+from functools import lru_cache
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Tuple
@@ -21,7 +22,7 @@ from backend.ai.capabilities.rules.safety_emergency import EmergencyRule
 from backend.ai.engine.agent.emotion import EmotionState, parse_cues, tts_text
 from backend.ai.engine.agent.fillers import choose_backchannel, wait_text
 from backend.ai.engine.agent.language_layer import LanguageLayer
-from backend.ai.lexicon import language_pack
+from backend.ai.lexicon import language_pack, lexicon_languages, load_lexicon
 from backend.ai.verticals.context import resolve_business_context
 from backend.ai.engine.agent.controller import CallState, SentenceDeduper
 from backend.ai.engine.agent.progress import booking_note
@@ -89,9 +90,19 @@ _NUMBER_OFFER = re.compile(
 _SAME_NUMBER = re.compile(
     r"\b(?:same|this|yahi|isi|is)\s+(?:whatsapp\s+)?number\b|\bcalling\s+from\b|इसी\s+नंबर|यही\s+नंबर|\bsame\s+wala\b", re.IGNORECASE
 )
-_ENGLISH_FILLER = re.compile(
-    r"\s*(?:sure|great|okay|ok|alright|perfect|awesome|absolutely|got it|of course|no problem|right|cool|nice)[!.,\s]*", re.IGNORECASE
-)
+@lru_cache(maxsize=None)
+def _ack_pattern(language: Optional[str] = None) -> "re.Pattern[str]":
+    """Opening acknowledgement(s) ("Sure!", "जी, बिल्कुल।", "Claro.", "تمام،"): one per turn. The words are each language
+    pack's "acks" list (ai/locales/lexicon/<code>.json), never code; `language` limits it to one pack, None = every pack
+    (callers switch languages mid-call). Only a standalone ack (followed by punctuation or the end) counts, so "Sure thing!"
+    or "अच्छा लगा" stay whole."""
+    codes = [language] if language else lexicon_languages()
+    words = {w.lower() for code in codes for w in load_lexicon(code).get("acks") or []}
+    if not words:
+        return re.compile(r"(?!)")
+    alt = "|".join(re.escape(w).replace(r"\ ", r"\s+") for w in sorted(words, key=len, reverse=True))
+    word = rf"(?:{alt})(?!\w)"
+    return re.compile(rf"\s*(?:{word}(?:\s+{word})*\s*(?:[!.,،।…]+\s*|$))+", re.IGNORECASE)
 _EMOJI = re.compile("[\U0001F000-\U0001FAFF\u2600-\u27BF\uFE0F\u200d]")
 _NO_REGREET_NOTE = _notes()["no_regreet"]
 _LANGUAGE_RETRY_NOTE = _notes()["language_retry"]
@@ -244,6 +255,8 @@ def clean_for_speech(text: str) -> str:
     text = _EMOJI.sub("", text)  # a voice would read them out or stumble
     text = re.sub(r"[*#`_~]+", "", text)
     text = re.sub(r"\s+", " ", text).strip()
+    # A numbered list split into sentences leaves bare markers ("…चाहिए: 1." then "2."): the voice read them out.
+    text = re.sub(r"(?:^|(?<=:))\s*\d{1,2}[.)]$", "", text).strip()
     # Some models leak their reasoning into the reply ("... We need to respond confirming."): never speak that.
     sentences = re.split(r"(?<=[.!?…।])\s+", text)
     return " ".join(s for s in sentences if not is_reasoning_leak(s)).strip()
@@ -296,6 +309,7 @@ class AgentEngine:
         self._prefetched: Dict[Any, float] = {}  # day -> when its open times were last read ahead of the model (latency)
         self._wait_spoken = False
         self._stop_turn = False  # request_stop(): the caller spoke over the running turn; checked between stream events
+        self._stop_event = asyncio.Event()  # same signal, awaitable: wakes a stream that is still waiting for its first token
         self._ack_used: set = set()  # acknowledgement words ("sure", "got it"...) already said this turn, see _speech
         self.channel = channel  # "voice" (phone call, playground) or "chat" (WhatsApp text)
         self.emotion = EmotionState()  # the caller's mood and how the voice should react (agent/emotion.py)
@@ -330,6 +344,7 @@ class AgentEngine:
         self._system = build_system_prompt(
             facts, agent_name, self.now_fn(), caller_number, tone, gender,
             instructions=instructions, small_talk=small_talk, require_confirmation=require_confirmation, disabled=disabled_notes,
+            transfers_on="transfer_to_human" not in disabled_tools,
             primary_language=language, languages=languages, auto_detect_language=auto_detect_language, triggers=self.triggers,
             channel=channel, context=self.context,
         )
@@ -394,6 +409,28 @@ class AgentEngine:
         starts a new tool round, and never abandons a tool already running (a half-finished booking would be missing from
         history). The turn is still committed, with only what was actually produced, so the next turn sees the truth."""
         self._stop_turn = True
+        self._stop_event.set()
+
+    async def _until_stop(self, stream: AsyncIterator[Dict[str, Any]]) -> AsyncIterator[Dict[str, Any]]:
+        """The stream's events, but ending the moment request_stop() fires. A plain `async for` only notices a stop when the
+        next event arrives, so an interrupt during the model's first-token wait (~1 s) would hold the next turn back."""
+        it = stream.__aiter__()
+        stop = asyncio.ensure_future(self._stop_event.wait())
+        try:
+            while True:
+                nxt = asyncio.ensure_future(it.__anext__())
+                await asyncio.wait({nxt, stop}, return_when=asyncio.FIRST_COMPLETED)
+                if not nxt.done():
+                    nxt.cancel()
+                    await asyncio.gather(nxt, return_exceptions=True)
+                    return
+                try:
+                    ev = nxt.result()
+                except StopAsyncIteration:
+                    return
+                yield ev
+        finally:
+            stop.cancel()
 
     async def turn_events(self, utterance: str, stream: bool = True) -> AsyncIterator[Dict[str, Any]]:
         """Yields {"type": "sentence", "text"} as replies form, then {"type": "done", "turn": AgentTurn}."""
@@ -404,6 +441,7 @@ class AgentEngine:
         self._wait_spoken = False
         self._ack_used = set()
         self._stop_turn = False
+        self._stop_event.clear()
         self._dup = SentenceDeduper()
         self._asked_slots = set()
         asked = requested_language(utterance) or requested_language(normalize_hindi(utterance))
@@ -513,7 +551,7 @@ class AgentEngine:
                         return False
                     bad = ungrounded(sentence, messages_for_guard())
                     claim = unbacked_claim(sentence, self.toolbox.succeeded)
-                    if not multi_state["retried"] and len(more := self.ctrl.slots_asked(sentence)) > 1:
+                    if not multi_state["retried"] and len(more := self.ctrl.separate_asks(sentence)) > 1:
                         invented.append("multi:" + ",".join(sorted(more)))
                         return False
                     if not repeat_state["retried"] and not tool_refused() and (again := self.ctrl.repeat_ask(sentence)):
@@ -537,7 +575,7 @@ class AgentEngine:
                 if stream:
                     event_stream = self.backend.chat_stream(messages, tools)
                     try:
-                        async for ev in event_stream:
+                        async for ev in self._until_stop(event_stream):
                             if self._stop_turn:
                                 break
                             if ev["type"] == "text":
@@ -732,7 +770,7 @@ class AgentEngine:
             cue, laugh = cue or self._carry[0], laugh or self._carry[1]
             self._carry = None
         out = match_speaker_gender(clean_for_speech(text), self.gender)
-        if not out or (_ENGLISH_FILLER.fullmatch(out) and self._expects_hindi()):
+        if not out or (_ack_pattern("en").fullmatch(out) and self._expects_hindi()):
             if cue or laugh:
                 self._carry = (cue, laugh)
             return ""
@@ -745,13 +783,13 @@ class AgentEngine:
         started) tends to open with the same acknowledgement again ("Sure!", "Got it"). Only the first one per turn is
         kept; a repeat is stripped so the caller does not hear "Sure... Sure!... Got it..." stacked up. Called once per
         real sentence, after `_speech` and the grounding guard, so re-processing the same text twice (the non-streaming
-        path runs `_speech` once on the whole reply, then again per split sentence) cannot double-count a word as used."""
-        m = _ENGLISH_FILLER.match(sentence)
-        if not m:
+        path runs `_speech` once on the whole reply, then again per split sentence) cannot double-count a word as used.
+        Any acknowledgement counts, in any language: "जी, बिल्कुल। जी, जरूर।" is the same stacking as "Sure! Got it!"."""
+        m = _ack_pattern().match(sentence)
+        if not m or not m.group(0).strip():
             return sentence
-        key = re.sub(r"[^a-z]", "", m.group(0).lower())
-        if key not in self._ack_used:
-            self._ack_used.add(key)
+        if not self._ack_used:
+            self._ack_used.add(m.group(0).strip().lower())
             return sentence
         rest = sentence[m.end():].lstrip()
         cue = self._cues.pop(sentence, None)

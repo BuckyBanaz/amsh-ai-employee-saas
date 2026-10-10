@@ -73,5 +73,171 @@
  ],
  "hangup_patterns": [
   "\\b(?:raccroch\\w+|terminer\\s+l'appel|coupe\\w*\\s+l'appel)\\b"
+ ],
+ "clock": {
+  "hours": {
+   "1": [
+    "une"
+   ],
+   "2": [
+    "deux"
+   ],
+   "3": [
+    "trois"
+   ],
+   "4": [
+    "quatre"
+   ],
+   "5": [
+    "cinq"
+   ],
+   "6": [
+    "six"
+   ],
+   "7": [
+    "sept"
+   ],
+   "8": [
+    "huit"
+   ],
+   "9": [
+    "neuf"
+   ],
+   "10": [
+    "dix"
+   ],
+   "11": [
+    "onze"
+   ],
+   "12": [
+    "douze",
+    "midi"
+   ]
+  },
+  "patterns": [
+   [
+    "{h} heures?",
+    0
+   ],
+   [
+    "{h}(?: heures?)? et demie?",
+    30
+   ],
+   [
+    "{h}(?: heures?)? et quart",
+    15
+   ],
+   [
+    "{h}(?: heures?)? moins le quart",
+    -15
+   ]
+  ],
+  "fixed": [
+   [
+    "midi",
+    12,
+    0
+   ]
+  ]
+ },
+ "affirm": [
+  "oui",
+  "d'accord",
+  "c'est bon",
+  "c'est ça",
+  "parfait",
+  "exactement",
+  "volontiers"
+ ],
+ "acks": [
+  "d'accord",
+  "bien sûr",
+  "parfait",
+  "très bien",
+  "entendu",
+  "super"
+ ],
+ "slot_asks": {
+  "name": [
+   "\\b(?:votre|ton)\\s+(?:nom(?:\\s+complet)?)\\b",
+   "\\bpuis-je\\s+avoir\\s+(?:votre|ton)\\s+nom\\b",
+   "\\bqui\\s+(?:est|suis)\\s+(?:à|a)\\s+l'appareil\\b"
+  ],
+  "phone": [
+   "\\bnum[ée]ro\\s+de\\s+t[ée]l[ée]phone\\b",
+   "\\bnum[ée]ro\\s+de\\s+portable\\b",
+   "\\bquel\\s+num[ée]ro\\b"
+  ],
+  "service": [
+   "\\bquel\\s+(?:soin|traitement|service|type)\\b",
+   "\\bpour\\s+quel\\s+(?:soin|traitement|motif|service)\\b",
+   "\\bpourquoi\\s+venez\\b"
+  ],
+  "date": [
+   "\\bquel\\s+jour\\b",
+   "\\bquelle\\s+date\\b",
+   "\\bquand\\s+souhaitez\\b"
+  ],
+  "time": [
+   "\\bquelle\\s+heure\\b",
+   "\\b[àa]\\s+quelle\\s+heure\\b",
+   "\\bquel\\s+horaire\\b"
+  ]
+ },
+ "imperative": [
+  "\\bdites(?:-moi)?\\b",
+  "\\bdonnez(?:-moi)?\\b",
+  "\\bindiquez\\b",
+  "\\bfaites-moi\\s+savoir\\b"
+ ],
+ "fluff": [
+  "s'il",
+  "vous",
+  "plaît",
+  "plait",
+  "votre",
+  "vos",
+  "le",
+  "la",
+  "les",
+  "un",
+  "une",
+  "je",
+  "moi",
+  "me",
+  "dire",
+  "donner",
+  "quel",
+  "quelle",
+  "est",
+  "sont",
+  "oui",
+  "d'accord",
+  "merci",
+  "bien"
+ ],
+ "hesitation_start": [
+  "attendez",
+  "attends",
+  "attend",
+  "hum",
+  "euh",
+  "bah"
+ ],
+ "hesitation_extra": [
+  "instant",
+  "moment",
+  "seconde",
+  "réfléchir",
+  "encore",
+  "un"
+ ],
+ "hesitation_filler": [
+  "instant",
+  "moment",
+  "seconde",
+  "minute",
+  "s'il",
+  "plaît"
  ]
 }

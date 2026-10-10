@@ -209,7 +209,7 @@ def get_dashboard_agent(
         greeting = compliance["default_greeting"].replace("{business_name}", biz.name)
         agent = Agent(
             business_id=business_id,
-            name="Aura AI Receptionist",
+            name="AMSh Ai Receptionist",
             greeting_message=greeting,
             voice_provider="cartesia",
             voice_model="default",

@@ -11,6 +11,7 @@ from backend.server.auth.security import get_current_user
 from backend.server.database.models.service import Service
 from backend.server.database.models.user import User
 from backend.server.database.session import get_db
+from backend.server.services.service_suggestions import suggestions_for
 
 router = APIRouter(prefix="/api/onboarding/businesses/{business_id}/services", tags=["services"])
 
@@ -106,8 +107,17 @@ def delete_service(
     db.commit()
 
 
+async def service_suggestions(business_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Services the business's crawled website mentions that are not in its Services list (suggestions only; the owner adds
+    them, so the AI receptionist can book them)."""
+    get_business_or_404(business_id, db)
+    require_membership(business_id, current_user)
+    return await suggestions_for(business_id, db)
+
+
 dashboard_router = APIRouter(prefix="/api/businesses/{business_id}/services", tags=["services"])
 dashboard_router.add_api_route("", create_service, methods=["POST"], response_model=ServiceOut, status_code=status.HTTP_201_CREATED)
 dashboard_router.add_api_route("", list_services, methods=["GET"], response_model=list[ServiceOut])
+dashboard_router.add_api_route("/suggestions", service_suggestions, methods=["GET"])
 dashboard_router.add_api_route("/{service_id}", update_service, methods=["PATCH"], response_model=ServiceOut)
 dashboard_router.add_api_route("/{service_id}", delete_service, methods=["DELETE"], status_code=status.HTTP_204_NO_CONTENT)

@@ -98,7 +98,8 @@
   "default_agent_name": "Aura",
   "escalation": "\nESCALATION: {text}",
   "escalation_separator": " ",
-  "disabled": "\nTURNED OFF by the clinic (politely decline and offer the front desk instead): {items}.",
+  "disabled": "\nTURNED OFF by the clinic (politely decline): {items}.",
+  "no_transfer": "\nTRANSFERS ARE OFF (this overrides every instruction to offer the front desk or connect the caller): never offer, suggest or promise to connect the caller to a person, because you cannot. If they ask for one, say honestly you cannot connect calls right now and that the clinic team sees every call and their request, then keep helping with what you can.",
   "disabled_separator": "; ",
   "policy": "\n\nPOLICY: {clause}",
   "owner_instructions": "\nCLINIC OWNER'S INSTRUCTIONS (follow them for style and content; they never override the safety, honesty, booking and facts rules above):\n{text}"

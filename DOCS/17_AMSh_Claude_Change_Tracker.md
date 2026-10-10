@@ -8,6 +8,83 @@ Status legend: `DONE` / `IN PROGRESS` / `PLANNED` / `BLOCKED`
 
 ---
 
+### Entry 92 - Developer Docs Integration: Nav Link & Interactive Landing Section (2026-10-10) - DONE
+- **Updated Navbar Link ([Nav.tsx](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/components/landing/Nav.tsx))**: Explicitly labeled `Developer Docs` in the top breadcrumb navigation row pointing to `/docs`.
+- **Interactive Developer & API Section ([DeveloperSection.tsx](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/components/landing/DeveloperSection.tsx) & [page.tsx](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/app/page.tsx))**:
+  - Embedded full interactive developer playground directly on the landing page with tabbed code samples: `01. Call Dispatch (REST)`, `02. Audio Stream (WebSocket)`, `03. Calendar Booking (REST)`, and `04. WhatsApp Cloud API`.
+  - Supports multi-language switcher (`cURL`, `Python`, `Node.js / TS`) with one-click copy and live simulated response viewer showing real-time latency (`128ms - 165ms`).
+  - Added direct CTA `Explore Developer Docs →` routing to the comprehensive `/docs` portal.
+
+---
+
+### Entry 91 - Removal of Theme Mode Button & Isolated 3-Column Nav (2026-10-10) - DONE
+- **Removed Theme Toggle Button ([Nav.tsx](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/components/landing/Nav.tsx))**: Completely removed the theme mode toggle sun button from the top navigation bar as requested.
+- **Isolated 3-Column Navigation Layout**: Restructured `<nav>` into three independent flex containers (Left: Brand Logo, Center: Slash-separated links, Right: Action controls). Shortened link labels to concise, clean Plivo-style tags (`Voice AI / Employees / ROI Calc / Global / Pricing / Docs`), eliminating any horizontal overflow or collision with right-side buttons.
+
+---
+
+### Entry 90 - Complete Navigation & Hero Responsiveness Fix (2026-10-10) - DONE
+- **Navbar Word-Wrapping & Layout Fix ([Nav.tsx](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/components/landing/Nav.tsx))**:
+  - Enforced `whitespace-nowrap` on all breadcrumb links, brand wordmark, and action buttons, completely eliminating the two-line word-stacking artifact (`"Voice\nAI"`, `"Virtual\nEmployee"`, `"ROI\nCalculator"`).
+  - Raised mobile hamburger threshold from `md:hidden` to `lg:hidden`, ensuring tablets and smaller laptops gracefully collapse to the mobile drawer rather than squeezing the desktop link row into cramped containers.
+  - Adjusted button spacing and hidden `Contact Sales` on sub-`xl` viewports to protect center link spacing.
+- **Hero Kicker Responsiveness ([Hero.tsx](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/components/landing/Hero.tsx))**: Converted technical kicker strip to `flex-col sm:flex-row` with wrapping tag chips, preventing horizontal bleed on small viewport widths.
+
+---
+
+### Entry 89 - Tiered Pricing Restructure: $49, $299, $499 (2026-10-10) - DONE
+- **Updated Global Pricing Tiers ([GlobalPricing.tsx](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/components/landing/GlobalPricing.tsx))**:
+  - **Starter Practice**: $49/mo (Annual: $39/mo) | ₹3,999/mo | £39/mo | €45/mo (1,000 mins, 2 lines, calendar sync).
+  - **Busy Clinic Pro**: $299/mo (Annual: $239/mo) | ₹24,999/mo | £239/mo | €279/mo (8,000 mins, 8 lines, WhatsApp API, custom RAG).
+  - **Hospital / Multi-Branch**: $499/mo (Annual: $399/mo) | ₹39,999/mo | £399/mo | €460/mo (25,000 mins, 30 lines, HL7/FHIR sync, custom voice).
+- **Updated Hero Pill ([Hero.tsx](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/components/landing/Hero.tsx))**: Synchronized starting price badge to `$49/mo`.
+
+---
+
+### Entry 88 - Developer Documentation Portal & Grid Alignment Overhaul (2026-10-10) - DONE
+- **Developer Documentation Portal (`frontend/landing-page/app/docs/page.tsx`)**: Created comprehensive developer documentation with interactive REST API reference, bidirectional WebSocket audio streaming specifications (PCM 16kHz, Twilio Media Streams, μ-law, 20ms chunks, Silero VAD), HMAC-SHA256 webhook signature validation examples (Python FastAPI, Node.js, Go), and an interactive in-browser API sandbox tester for simulating live AI receptionist calls.
+- **Unified Section Positioning & Grid Alignment**: Resolved typography line collision issues across headings by establishing guaranteed baseline line-heights (`1.18` on headings, `1.25` on `.font-sora`) in [globals.css](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/app/globals.css) and removing colliding line breaks from [Hero.tsx](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/components/landing/Hero.tsx). Harmonized container widths across `VirtualEmployeeCard.tsx`, `RoiCalculator.tsx`, and `GlobalPresence.tsx` to align cleanly with the 7xl grid.
+- **Canvas Reflow Performance Fix**: Optimized [InteractiveGlobe.tsx](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/components/landing/InteractiveGlobe.tsx) to only resize canvas buffer when client dimensions change, preventing 60fps layout reflows.
+- **Navigation Integration**: Added `Developer Docs` to [Nav.tsx](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/components/landing/Nav.tsx) and updated footer links for seamless page navigation.
+
+---
+
+### Entry 87 - Autonomous AI Virtual Employee & 21st.dev Global Integration (2026-10-10) - DONE
+- **Autonomous AI Virtual Employee Positioning**: Framed AMSh as a hireable digital employee (`VirtualEmployeeCard.tsx`) with pre-trained regional personas (Priya for India/APAC, Sarah for US/Canada, Emma for UK/Europe, Fatima for UAE/Middle East). Displays digital employee ID badges, shift status (`On Duty · 24/7/365`), certified clinical skills, audio quotes, and live booking rates.
+- **21st.dev Interactive 3D Canvas Globe (`InteractiveGlobe.tsx` & `GlobalPresence.tsx`)**: Sourced and integrated 21st.dev component `[id: 10073]` — pure HTML canvas 3D rotating Fibonacci sphere connecting global clinic telemetry nodes (New York, San Francisco, London, Dubai, Mumbai, Delhi, Paris, Sydney) with traveling light particles and drag-to-rotate interaction. Paired with global compliance certifications: HIPAA (US with signed BAA), GDPR (EU/UK), DPDP Act 2023 (India), and SOC 2 Type II / ISO 27001.
+- **Interactive ROI & Staffing Calculator (`RoiCalculator.tsx`)**: Created dual-currency ($ USD and ₹ INR) staffing cost comparison between human receptionists ($3,200/mo or ₹28,000/mo) and AMSh ($49/mo or ₹3,999/mo). Includes sliders for doctor count (1-12) and call volume (200-4,000/mo), highlighting up to $37,800+ (or ₹3,12,000+) in annual payroll savings plus recovered missed visits.
+- **Multi-Currency Global Pricing (`GlobalPricing.tsx`)**: Built transparent global pricing with interactive currency switcher (USD $, INR ₹, GBP £, EUR €) and Annual 20% savings toggle.
+- **Updated Navigation**: Integrated direct jumping links (`Voice AI / Virtual Employee / ROI Calculator / Global Coverage / Pricing`) into `Nav.tsx`.
+
+---
+
+### Entry 86 - Complete Plivo-Style Light Theme Redesign & Voice Call-Scope Oscilloscope (2026-10-10) - DONE
+- **Plivo Light Theme Transformation**: Fully transitioned `frontend/landing-page` from dark mode into a light aesthetic inspired by Plivo (`https://www.plivo.com/`), featuring clean white surfaces, subtle slate borders (`border-slate-200`), high-contrast dark accents, and vibrant royal blue highlights (`#2563EB`).
+- **Plivo Typography Pairing**: Integrated Google Fonts `Sora` for display headlines, `Inter` for clean body text, and `JetBrains Mono` for technical monospace kickers, telemetry tags, and badges via Next.js Font Optimization (`--font-sora`, `--font-inter`, `--font-mono`).
+- **Interactive Call-Scope Oscilloscope (`VoiceCallScope.tsx`)**: Recreated Plivo's dual-channel voice oscilloscope widget. Features animated royal blue agent waveform and slate caller waveform, interactive scrubbing playhead, synchronized Hindi/Hinglish transcription (`caller > हाँ, ठीक है, चलेगा.`), state badges (`GREETING`, `LISTENING`, `SLOT CHECK`, `BARGE-IN`, `CONFIRMED`), audio speech synthesis, and live network telemetry (`pkt 2588 · jitter 5ms · rtt 65ms · latency <180ms`).
+- **Original Healthcare AI Messaging**: Replaced generic Plivo developer API copy with genuine clinic value proposition ("Never miss another patient phone call"), Hindi/English voice reception, and live appointment booking demo.
+- **Plivo Font Style Preserved**: Kept the exact Plivo typography pairing that the user loves (`Sora` for display headlines with negative tracking, `Inter` for clean body, `JetBrains Mono` with uppercase tracking for kickers/badges/buttons).
+- **Plivo Navigation Bar ([Nav.tsx](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/components/landing/Nav.tsx))**: Implemented the exact header structure from Plivo's screenshot: brand wordmark, slash-separated links (`Voice AI Receptionist / WhatsApp CRM / Features / Pricing`), monospace `LOGIN`, bordered `CONTACT SALES`, theme sun icon, and high-contrast solid black `SIGN UP FOR FREE` button.
+- **Section Redesigns & 3D Footer**: Converted `FeatureBento.tsx`, `ProductTour.tsx`, `PartnersMarquee.tsx`, and `Testimonials.tsx` to clean light theme, while preserving the user's favorite 3D perspective horizon glow footer (`Footer3D.tsx`) with 3D embossed social buttons, Meta partner badge, Twilio/Google chips, and AMSh background watermark.
+
+---
+
+### Entry 85 - Standalone Landing Page Setup & Configuration (2026-10-10) - DONE
+- **Transferred Landing Components**: Copied all 18 landing page components from `frontend/user/components/landing/` into `frontend/landing-page/` and `frontend/landing-page/components/landing/`.
+- **Created Full Next.js App Environment**: Initialized `package.json`, `tsconfig.json`, `next.config.ts`, `postcss.config.mjs`, `lib/seo.ts`, and `utils/api_endpoints.ts`.
+- **Configured App Router & Assets**: Setup `frontend/landing-page/app/` with `layout.tsx`, `page.tsx`, `globals.css`, and `landing.css`. Copied public assets (`public/landing/product/` screenshots and illustrations) from `frontend/user/public`.
+- **Resolved Turbopack Symlink Error**: Turbopack panics when `node_modules` is a directory junction/symlink pointing outside the project root. Replaced junction with full local multi-threaded disk copy of `node_modules` and cleared stale `.next` cache. Ready to run via `npm run dev`.
+
+---
+
+### Entry 84 - 100% Dynamic Real Data Integration for Call Inspector & Conversations (2026-10-10) - DONE
+- **Real Tenant Business & Agent Info**: Removed hardcoded `'Smile Dental Clinic'` and `'Sarah (Clinic Receptionist)'` placeholders. `ConversationInspector.tsx` now dynamically loads the real active business name from `call.business_name` or `StorageService.getBusiness()`, and real agent name/role from `call.agent_name` and `call.agent_role`.
+- **Dynamic AI Insights & Language Detection**: `_detect_language` accurately detects Hindi/Hinglish vs English from call transcripts and summaries. Real sentiment, real intent, real resolution, and real transfer-to-human status are loaded directly from call metadata. Fixed ternary `{isBooked ? 'Yes' : 'Yes'}` to `{isBooked ? 'Yes' : 'No'}`.
+- **Genuine Appointment Details**: Lookups link to real PostgreSQL `transactions` by `call_id` and caller phone number. If booked, displays real patient name, real service, real appointment date & time, status badge, and channel. If the call was an inquiry or transferred without booking, shows an honest "No appointment scheduled" state with a manual booking link instead of hardcoded teeth whitening appointments.
+- **Live Call Actions**: Added real `PATCH /api/businesses/{id}/calls/{id}` and `DELETE /api/businesses/{id}/calls/{id}` backend endpoints. Wired "Unresolve / Mark Resolved", "Add Note", and "Delete Conversation" in `ConversationInspector` with instant state refresh.
+
+---
+
 ### Entry 83 - Phone Call audio isolation in Playground & Telephony Barge-in/Event-Loop Fix (2026-10-06) - DONE
 - **Playground Phone Call Audio Isolation**: When using "Phone Call" mode in `TestPlaygroundModal.tsx`, browser audio synthesis (`playSpeech`) is suppressed so the laptop speakers never play audio aloud; the UI functions as a live transcript monitor while the audio conversation occurs exclusively on the telephone handset.
 - **Real Phone Call Transcript Polling**: `startExotelCall` now correctly stores the returned provider `call_sid` and polls `DashboardController.getCallDetail(call_sid)` every 2 seconds, streaming real turn-by-turn messages into the conversation stream. Live status banner replaces the chat input bar during connected phone calls.
@@ -338,7 +415,7 @@ Run it: `python -m backend.ai.evals.runner` (`--live`, `--only persona,safety`, 
   - **Live Takeover Alert**: Displays in-progress call warning (`This call is in progress. The clinic's own dashboard can take it over.`) with interactive `Take Over Call` button and confirmed handoff state.
   - **AI Intent & Summary**: Styled with `#EFF6FF` container, `#BFDBFE` border, uppercase tracking header, caller sentiment chips (`Positive`, `Urgent`, `Neutral`), and intent tags.
   - **Interactive Telephony Waveform Player**: 32-bar voice frequency waveform simulator with animated played state (`#0066FF`), click-to-seek support, stream carrier display (`Twilio Voice Stream`, `Exotel Telephony Stream`, `AI Studio WebRTC Stream`), playback speed toggle (`1x`-`2x`), and audio download link.
-  - **Live Conversation Transcript**: High-density message cards with clear speaker badges (`Aura AI (AI Receptionist)` vs `Caller`), sentiment pills, and bounded scroll (`max-h-56`).
+  - **Live Conversation Transcript**: High-density message cards with clear speaker badges (`AMSh Ai (AI Receptionist)` vs `Caller`), sentiment pills, and bounded scroll (`max-h-56`).
   - **Pinned Footer**: Sticky bottom container with `Call Back ({number})` button and `View Booked Appointment` direct link.
 
 ### Entry 69 - Business Users & AI Receptionists Live Database Overhaul (2026-10-03)
@@ -915,3 +992,60 @@ Run it: `python -m backend.ai.evals.runner` (`--live`, `--only persona,safety`, 
   - Hesitation ("रुको मेरे को ना", "wait", "ek second", "hmm"): answered with a one-line nod, no LLM call, and the pending question stays what a later "yes" answers. Anything that carries a request, service, name, day or time still goes to the model.
   - Prompt: booking order is now service, date, time, name, phone (text length kept under the 8000-char cap).
 - **Tests**: watchdog does not prompt a talking caller, grace window per response, hesitation vs real question, multi-ask regeneration, second-ask drop. Not yet verified on a live call.
+
+### Entry 104 - Live Phone Call Transcript Rendering & Outbound Call Recording Webhook (2026-10-10)
+- **Problem**:
+  - In `TestPlaygroundModal.tsx` ("Phone Call" tab during an active call): live conversation stream displayed blank blue bubbles titled "AI Receptionist" with no text inside, and zero user bubbles appeared.
+  - In Call Logs inspection: audio player showed "No recording" with play button disabled, audio stuck at 0:00, and no real voice playback.
+- **Root Cause & Fix**:
+  - **Transcript Polling Mapping (`frontend/user/components/dashboard/TestPlaygroundModal.tsx`)**:
+    - Backend returns messages with keys `{ role: "user" | "assistant", content: string }`.
+    - Modal mapping previously checked `m.speaker === 'user'` and `m.text`. Because both were undefined, every message defaulted to `speaker: 'AI'` and `text: undefined`, rendering empty bubbles.
+    - Updated mapping to check `isUser = m.role === 'user' || m.speaker === 'User' || m.speaker === 'caller' || m.speaker === 'user'` and `text = m.content || m.text || ''`. Caller messages now render as "You (Caller)" and AI replies render with complete text.
+  - **Exotel Call Recording Webhook (`backend/ai/realtime/exotel/client.py` & `backend/server/api/routes/voice.py`)**:
+    - Added `Record: "true"`, `StatusCallback`, and `StatusCallbackEvents[0]: "terminal"` to `create_outbound_call` parameters so Exotel records the call and hits `/api/voice/exotel/status` on call completion.
+  - **Twilio Call Recording Webhook (`backend/server/api/routes/voice.py`)**:
+    - Added `Record: "true"`, `RecordingStatusCallback`, `StatusCallback`, and `StatusCallbackEvent: ["completed"]` to outbound Twilio call payload so Twilio saves recordings and hits `/api/voice/recording-status`.
+
+### Entry 105 - Live Call Takeover Implementation (2026-10-10)
+- **Problem**:
+  - In `CallDetailPanel.tsx`, the "Take Over Call" button was a non-functional frontend mockup (`onClick={() => setTakenOver(true)}`) that performed no API request or call handoff.
+- **Root Cause & Fix**:
+  - **Active Session Registry (`backend/ai/realtime/twilio/gateway.py`)**:
+    - Added `ACTIVE_CALL_SESSIONS` mapping and `get_active_call_session(call_id)` helper.
+    - `CallSession.start` registers the session upon connection, and `CallSession.stop` removes it.
+  - **Takeover Endpoint (`backend/server/api/routes/calls.py`)**:
+    - Implemented `POST /api/businesses/{business_id}/calls/{call_id}/takeover`.
+    - Resolves target staff/clinic phone number from payload, `agent.config.transfer_phone`, `Staff` table, or `Business.phone`.
+    - Silences and requests stop on the active AI engine session via `get_active_call_session`.
+    - For Twilio calls, executes real-time `<Dial>` TwiML redirect using `redirect_call` to bridge the caller directly to the staff phone.
+    - Updates call state to `transferred` with an audit summary.
+  - **Frontend Client & UI (`dashboard.controller.ts`, `api_endpoints.ts`, `CallDetailPanel.tsx`)**:
+    - Added `API_ENDPOINTS.CALLS.TAKEOVER` and `DashboardController.takeOverCall`.
+    - Replaced mockup button with `handleTakeOver` async function, showing spinner while transferring and displaying the destination staff line once connected.
+
+### Entry 106 - AI Conversations Redesign (3-Panel View, Call Logs Toggle, Internal Scrolling Containment) (2026-10-10)
+- **Problem**:
+  - `/conversations` page required the exact 3-column UI matching the provided design:
+    - Left Panel: Call Conversations list with search, filter tabs (`All`, `Booked`, `Inquiries`, `Transferred`), status badges, and circular direction icons.
+    - Center Panel: Turn-by-turn chat thread with AI receptionist robot avatar, caller blue bubbles, AI summary card, and integrated bottom audio player.
+    - Right Panel: Inspector with Call Details, AI Insights, Appointment Details, and Quick Actions.
+  - User requested ability to switch between Conversation View (3-column) and a Table / List View of Call Logs.
+  - Outer page was scrolling vertically, causing double scrollbars and pushing components out of view instead of scrolling strictly inside components.
+- **Root Cause & Fixes**:
+  - **`frontend/user/components/dashboard/ConversationInspector.tsx`**:
+    - Built the complete right-hand inspection drawer matching the reference image: Phone, Date/Time, Duration, Clinic link, AI Employee name, Intent, Sentiment, WhatsApp confirmation, and interactive actions (`View in Appt`, `Edit Appt`, `Add Note`, `Delete`).
+  - **`frontend/user/components/dashboard/ConversationThread.tsx`**:
+    - Refactored message rendering to display the exact avatar layout: circular robot avatar for AI Receptionist, right-aligned blue speech bubble with caller avatar, vibrant blue AI Summary card, and fixed bottom audio player.
+  - **`frontend/user/components/dashboard/ConversationsSidebar.tsx`**:
+    - Added dynamic filter pill counters (`All (count)`, `Booked (count)`, etc.), search box with filter button, circular call direction indicators (green answered, red missed/transferred), and preview snippets.
+  - **`frontend/user/components/dashboard/ConversationsHeader.tsx`**:
+    - Added dual View Mode switcher buttons (`Conversation View` vs `Call Logs Table`) along with date range selector (`Oct 1, 2026 - Oct 31, 2026`) and live channel status badge.
+  - **Scroll Isolation & 100% Zoom Fit (`frontend/user/app/(dashboard)/layout.tsx` & `conversations/page.tsx`)**:
+    - Fixed `layout.tsx` line 55 from `h-screen` to `h-full min-h-0` to eliminate outer vertical overflow past the browser viewport at 100% zoom.
+    - Replaced abbreviations with full rounded pills (`All (50)`, `Booked (62)`, `Inquiries (50)`, `Transferred (12)`) in `ConversationsSidebar.tsx` and widened sidebar to `350px-380px` to fit all tabs smoothly.
+    - Fixed subline text wrapping in `ConversationThread.tsx` (`whitespace-nowrap`, middle dots `·`, formatted phone number `+91 89014 14107`) so duration `4m 00s` and date `Oct 10, 2026, 03:31 PM` stay on a single line without breaking onto multiple lines.
+    - Fixed `Infinity:NaN` duration bug in `ConversationThread.tsx` by validating `Number.isFinite(duration)` and falling back to `call.duration_seconds`.
+    - Added speech synthesis fallback in `ConversationThread.tsx` so clicking Play immediately reads out the Hindi/English transcript messages with scrubber progress even when a physical audio recording file is absent or blocked.
+    - Each panel now scrolls strictly internally: Sidebar list has `overflow-y-auto`, Thread chat body has `overflow-y-auto` while its header and bottom player remain anchored, and Inspector has `overflow-y-auto`.
+

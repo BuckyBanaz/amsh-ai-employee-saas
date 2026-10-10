@@ -71,5 +71,176 @@
  ],
  "hangup_patterns": [
   "\\b(?:ophangen|gesprek\\s+beëindigen|gesprek\\s+be[eë]indigen)\\b"
+ ],
+ "clock": {
+  "hours": {
+   "1": [
+    "een",
+    "één"
+   ],
+   "2": [
+    "twee"
+   ],
+   "3": [
+    "drie"
+   ],
+   "4": [
+    "vier"
+   ],
+   "5": [
+    "vijf"
+   ],
+   "6": [
+    "zes"
+   ],
+   "7": [
+    "zeven"
+   ],
+   "8": [
+    "acht"
+   ],
+   "9": [
+    "negen"
+   ],
+   "10": [
+    "tien"
+   ],
+   "11": [
+    "elf"
+   ],
+   "12": [
+    "twaalf"
+   ]
+  },
+  "patterns": [
+   [
+    "{h} uur",
+    0
+   ],
+   [
+    "half {h}",
+    -30
+   ],
+   [
+    "kwart over {h}",
+    15
+   ],
+   [
+    "kwart voor {h}",
+    -15
+   ]
+  ],
+  "fixed": [
+   [
+    "middag(?:uur)?",
+    12,
+    0
+   ]
+  ]
+ },
+ "affirm": [
+  "ja",
+  "klopt",
+  "dat klopt",
+  "prima",
+  "goed",
+  "akkoord",
+  "graag",
+  "doe maar"
+ ],
+ "acks": [
+  "oké",
+  "oke",
+  "prima",
+  "natuurlijk",
+  "goed",
+  "zeker",
+  "top",
+  "helemaal goed"
+ ],
+ "slot_asks": {
+  "name": [
+   "\\b(?:uw|jouw)\\s+(?:volledige\\s+)?naam\\b",
+   "\\bmag\\s+ik\\s+(?:uw|je)\\s+naam\\b",
+   "\\bwie\\s+spreek\\s+ik\\b"
+  ],
+  "phone": [
+   "\\btelefoonnummer\\b",
+   "\\bmobiele\\s+nummer\\b",
+   "\\bcontactnummer\\b",
+   "\\bwelk\\s+nummer\\b"
+  ],
+  "service": [
+   "\\bwelke\\s+(?:behandeling|dienst|afspraak)\\b",
+   "\\bvoor\\s+welke\\s+(?:behandeling|reden|klacht)\\b",
+   "\\bwaarvoor\\b"
+  ],
+  "date": [
+   "\\bwelke\\s+dag\\b",
+   "\\bwanneer\\s+wilt\\b",
+   "\\bop\\s+welke\\s+datum\\b"
+  ],
+  "time": [
+   "\\bwelke\\s+tijd\\b",
+   "\\bhoe\\s+laat\\b",
+   "\\bop\\s+welk\\s+uur\\b"
+  ]
+ },
+ "imperative": [
+  "\\bvertel\\b",
+  "\\bgeef\\s+(?:mij|me)\\b",
+  "\\blaat\\s+(?:het\\s+)?(?:me|mij)\\s+weten\\b"
+ ],
+ "fluff": [
+  "alstublieft",
+  "graag",
+  "uw",
+  "je",
+  "jouw",
+  "de",
+  "het",
+  "een",
+  "kunt",
+  "kan",
+  "wilt",
+  "mag",
+  "ik",
+  "mij",
+  "me",
+  "vertel",
+  "geef",
+  "wat",
+  "is",
+  "zijn",
+  "heb",
+  "ja",
+  "oké",
+  "prima",
+  "dank",
+  "bedankt"
+ ],
+ "hesitation_start": [
+  "wacht",
+  "even",
+  "ogenblik",
+  "momentje",
+  "hmm",
+  "eh"
+ ],
+ "hesitation_extra": [
+  "een",
+  "moment",
+  "beetje",
+  "denken",
+  "nog"
+ ],
+ "hesitation_filler": [
+  "even",
+  "momentje",
+  "ogenblik",
+  "seconde",
+  "minuut",
+  "please",
+  "alstublieft"
  ]
 }

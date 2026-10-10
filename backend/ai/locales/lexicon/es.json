@@ -70,5 +70,169 @@
  ],
  "hangup_patterns": [
   "\\b(?:cuelg\\w+|termina\\w*\\s+la\\s+llamada|finaliza\\w*\\s+la\\s+llamada)\\b"
+ ],
+ "clock": {
+  "hours": {
+   "1": [
+    "una"
+   ],
+   "2": [
+    "dos"
+   ],
+   "3": [
+    "tres"
+   ],
+   "4": [
+    "cuatro"
+   ],
+   "5": [
+    "cinco"
+   ],
+   "6": [
+    "seis"
+   ],
+   "7": [
+    "siete"
+   ],
+   "8": [
+    "ocho"
+   ],
+   "9": [
+    "nueve"
+   ],
+   "10": [
+    "diez"
+   ],
+   "11": [
+    "once"
+   ],
+   "12": [
+    "doce"
+   ]
+  },
+  "patterns": [
+   [
+    "a las? {h}",
+    0
+   ],
+   [
+    "las? {h} en punto",
+    0
+   ],
+   [
+    "{h} y media",
+    30
+   ],
+   [
+    "{h} y cuarto",
+    15
+   ],
+   [
+    "{h} menos cuarto",
+    -15
+   ]
+  ],
+  "fixed": [
+   [
+    "mediod[ií]a",
+    12,
+    0
+   ]
+  ]
+ },
+ "affirm": [
+  "sí",
+  "si",
+  "vale",
+  "claro",
+  "de acuerdo",
+  "perfecto",
+  "correcto",
+  "exacto"
+ ],
+ "acks": [
+  "claro",
+  "vale",
+  "perfecto",
+  "de acuerdo",
+  "muy bien",
+  "por supuesto"
+ ],
+ "slot_asks": {
+  "name": [
+   "\\b(?:su|tu)\\s+(?:nombre(?:\\s+completo)?)\\b",
+   "\\bpuedo\\s+(?:tener|saber)\\s+(?:su|tu)\\s+nombre\\b",
+   "\\bcon\\s+qui[ée]n\\s+(?:hablo|tengo)\\b"
+  ],
+  "phone": [
+   "\\bn[úu]mero\\s+de\\s+(?:tel[ée]fono|celular|m[óo]vil|contacto)\\b",
+   "\\bqu[ée]\\s+n[úu]mero\\b"
+  ],
+  "service": [
+   "\\bqu[ée]\\s+(?:tratamiento|servicio|tipo)\\b",
+   "\\bpara\\s+qu[ée]\\s+(?:tratamiento|servicio|motivo|consulta)\\b"
+  ],
+  "date": [
+   "\\bqu[ée]\\s+d[ií]a\\b",
+   "\\bqu[ée]\\s+fecha\\b",
+   "\\bcu[áa]ndo\\s+(?:le|prefiere|quiere)\\b"
+  ],
+  "time": [
+   "\\bqu[ée]\\s+hora\\b",
+   "\\ba\\s+qu[ée]\\s+hora\\b",
+   "\\bqu[ée]\\s+horario\\b"
+  ]
+ },
+ "imperative": [
+  "\\bd[íi]game\\b",
+  "\\bdiga\\b",
+  "\\bind[íi]queme\\b",
+  "\\bpor\\s+favor\\s+(?:diga|d[íi]game|indique)\\b"
+ ],
+ "fluff": [
+  "por",
+  "favor",
+  "su",
+  "tu",
+  "el",
+  "la",
+  "los",
+  "las",
+  "un",
+  "una",
+  "yo",
+  "me",
+  "decir",
+  "dar",
+  "qué",
+  "es",
+  "son",
+  "sí",
+  "vale",
+  "gracias",
+  "bien",
+  "acuerdo"
+ ],
+ "hesitation_start": [
+  "espere",
+  "espera",
+  "momento",
+  "mmm",
+  "eh",
+  "bueno"
+ ],
+ "hesitation_extra": [
+  "momento",
+  "segundo",
+  "pensar",
+  "todavía",
+  "un"
+ ],
+ "hesitation_filler": [
+  "momento",
+  "segundo",
+  "minuto",
+  "favor",
+  "por"
  ]
 }
