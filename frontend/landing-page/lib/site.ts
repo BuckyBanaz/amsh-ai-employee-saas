@@ -46,9 +46,12 @@ export function routeFor(path: string): SiteRoute | undefined {
   return ROUTES.find((r) => r.path === path);
 }
 
+/** The generated social preview (app/opengraph-image.tsx). Verified on a dev build: the file-based image only reaches
+ *  the home route, not child pages that set their own openGraph, so every page references it explicitly. */
+const OG_IMAGE = { url: "/opengraph-image", width: 1200, height: 630, alt: `${SITE.name} - ${SITE.tagline}` };
+
 /** Full metadata for one page. Next merges metadata shallowly, so every page must set its own canonical and openGraph
- *  (otherwise it inherits the home page's canonical and is treated as a duplicate of it). The OG/Twitter image comes from
- *  the file-based app/opengraph-image.tsx, which applies to every route. */
+ *  (otherwise it inherits the home page's canonical and is treated as a duplicate of it). */
 export function pageMetadata(opts: {
   path: string;
   title: string;
@@ -73,8 +76,9 @@ export function pageMetadata(opts: {
       siteName: SITE.name,
       locale: SITE.locale,
       type: "website",
+      images: [OG_IMAGE],
     },
-    twitter: { card: "summary_large_image", title: ogTitle, description: ogDescription },
+    twitter: { card: "summary_large_image", title: ogTitle, description: ogDescription, images: [OG_IMAGE.url] },
     ...(opts.noindex ? { robots: { index: false, follow: true } } : {}),
   };
 }

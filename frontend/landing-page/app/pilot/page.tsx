@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import JsonLd from "@/components/landing/JsonLd";
 import { pageMetadata } from "@/lib/site";
 import { breadcrumbSchema } from "@/lib/schema";
+import PilotCtaButton from "@/components/landing/PilotCtaButton";
 import Link from "next/link";
 import Nav from "@/components/landing/Nav";
 import Footer3D from "@/components/landing/Footer3D";
@@ -72,17 +73,10 @@ export default function PilotProgramPage() {
           </p>
 
           <div className="flex flex-wrap items-center justify-center gap-4 pt-2">
-            <button
-              onClick={() => {
-                if (typeof window !== "undefined") {
-                  window.dispatchEvent(new CustomEvent("open-pilot-modal"));
-                }
-              }}
-              className="inline-flex items-center justify-center rounded-xl bg-blue-600 px-7 py-4 text-base font-semibold text-white shadow-xl shadow-blue-500/25 hover:bg-blue-700 transition cursor-pointer active:scale-[0.98]"
-            >
+            <PilotCtaButton className="inline-flex items-center justify-center rounded-xl bg-blue-600 px-7 py-4 text-base font-semibold text-white shadow-xl shadow-blue-500/25 hover:bg-blue-700 transition cursor-pointer active:scale-[0.98]">
               Apply for 14-Day Pilot Now
               <span className="ml-2 font-bold">&rarr;</span>
-            </button>
+            </PilotCtaButton>
             <Link
               href="/#demo"
               className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-6 py-4 text-base font-medium text-slate-700 hover:bg-slate-50 transition"
@@ -147,16 +141,9 @@ export default function PilotProgramPage() {
           </div>
 
           <div className="mt-12 text-center">
-            <button
-              onClick={() => {
-                if (typeof window !== "undefined") {
-                  window.dispatchEvent(new CustomEvent("open-pilot-modal"));
-                }
-              }}
-              className="inline-flex items-center justify-center rounded-xl bg-slate-950 px-8 py-4 text-base font-semibold text-white shadow-lg hover:bg-blue-600 transition cursor-pointer"
-            >
+            <PilotCtaButton className="inline-flex items-center justify-center rounded-xl bg-slate-950 px-8 py-4 text-base font-semibold text-white shadow-lg hover:bg-blue-600 transition cursor-pointer">
               Open Pilot Application Form &rarr;
-            </button>
+            </PilotCtaButton>
           </div>
         </div>
       </section>
