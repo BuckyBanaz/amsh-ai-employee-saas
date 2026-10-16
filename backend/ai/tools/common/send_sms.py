@@ -17,23 +17,23 @@ _SMS_EXECUTOR = ThreadPoolExecutor(max_workers=1, thread_name_prefix="sms")
 
 
 async def dispatch_sms(to_phone: str, body: str) -> bool:
-    """Sends via Exotel (Indian numbers) then Twilio. Returns True only if a provider accepted the message."""
+    """Sends via Plivo (Indian numbers) then Twilio. Returns True only if a provider accepted the message."""
     from backend.server.common.config import get_settings
     import httpx
 
     settings = get_settings()
     is_indian = to_phone.startswith("+91") or to_phone.startswith("91") or (len(to_phone) == 10 and to_phone.isdigit())
 
-    if is_indian and settings.EXOTEL_ACCOUNT_SID and settings.EXOTEL_API_KEY and settings.EXOTEL_API_TOKEN:
+    if is_indian and settings.PLIVO_AUTH_ID and settings.PLIVO_AUTH_TOKEN:
         try:
-            from backend.ai.realtime.exotel.client import exotel_client
+            from backend.ai.realtime.plivo.client import plivo_client
 
-            res = await exotel_client.send_sms(to_phone, body)
+            res = await plivo_client.send_sms(to_phone, body)
             if not res.get("error"):
-                logger.info(f"[EXOTEL SMS] Successfully dispatched to {to_phone}")
+                logger.info(f"[PLIVO SMS] Successfully dispatched to {to_phone}")
                 return True
         except Exception as e:
-            logger.warning(f"[EXOTEL SMS] Dispatch failed, trying fallback: {e}")
+            logger.warning(f"[PLIVO SMS] Dispatch failed, trying fallback: {e}")
 
     if settings.TWILIO_ACCOUNT_SID and settings.TWILIO_AUTH_TOKEN and settings.TWILIO_PHONE_NUMBER:
         try:

@@ -197,7 +197,7 @@ class Tickets(Base):
     def test_staff_work_the_ticket_and_the_clinic_never_sees_internal_notes(self):
         tid = self.open().json()["id"]
         a = self.h["admin"]
-        self.assertEqual(self.c.post(f"/api/admin/tickets/{tid}/messages", json={"body": "Checking the Exotel balance.", "internal": True}, headers=a).status_code, 201)
+        self.assertEqual(self.c.post(f"/api/admin/tickets/{tid}/messages", json={"body": "Checking the Plivo balance.", "internal": True}, headers=a).status_code, 201)
         reply = self.c.post(f"/api/admin/tickets/{tid}/messages", json={"body": "Topped up, please retry."}, headers=a).json()
         self.assertEqual(reply["status"], "waiting")
         self.assertIsNotNone(reply["first_response_at"])

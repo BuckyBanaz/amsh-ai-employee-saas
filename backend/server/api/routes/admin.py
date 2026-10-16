@@ -684,12 +684,12 @@ INTEGRATION_SPECS = [
         "config_keys": ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER"]
     },
     {
-        "id": "exotel",
-        "name": "Exotel India Virtual Numbers",
+        "id": "plivo",
+        "name": "Plivo Voice & SMS (India + Global)",
         "category": "Voice",
-        "env_key": "EXOTEL_ACCOUNT_SID",
-        "ping_url": "https://api.exotel.com",
-        "config_keys": ["EXOTEL_ACCOUNT_SID", "EXOTEL_API_KEY", "EXOTEL_PHONE_NUMBER"]
+        "env_key": "PLIVO_AUTH_ID",
+        "ping_url": "https://api.plivo.com",
+        "config_keys": ["PLIVO_AUTH_ID", "PLIVO_AUTH_TOKEN", "PLIVO_PHONE_NUMBER"]
     },
     {
         "id": "groq",

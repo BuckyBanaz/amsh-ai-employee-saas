@@ -20,7 +20,7 @@ class CommonWriteOperations:
         booking_details: str
     ) -> Dict[str, Any]:
         """
-        Dispatches SMS via Exotel (India +91) or Twilio (Global).
+        Dispatches SMS via Plivo (India +91) or Twilio (Global).
         """
         body = f"Hello! Your booking at {business_name} is confirmed: {booking_details}. Thank you for calling!"
         return send_sms_sync(to_phone=to_phone, body=body)

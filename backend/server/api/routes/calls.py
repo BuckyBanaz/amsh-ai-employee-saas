@@ -266,7 +266,7 @@ def get_call_detail(
     )
     call = db.scalar(stmt)
     if not call:
-        if call_id.startswith(("CA", "exotel_", "studio_", "sim_")):
+        if call_id.startswith(("CA", "plivo_", "exotel_", "studio_", "sim_")):  # exotel_: legacy ids from before Exotel removal
             now_iso = datetime.now(timezone.utc).isoformat()
             return {
                 "id": call_id,

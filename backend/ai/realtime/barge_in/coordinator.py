@@ -21,6 +21,8 @@ from typing import Any, Callable, Dict, Optional
 
 from fastapi import WebSocket
 
+from backend.ai.realtime.call_tunnels.plivo_tunnel import plivo_clear_audio_message
+
 logger = logging.getLogger(__name__)
 
 
@@ -58,11 +60,11 @@ class BargeInCoordinator:
         return self._last_mark
 
     def on_mark(self, name: Optional[str]) -> None:
-        """Twilio/Exotel echoed a mark. Only the latest one proves the queue is empty; older ones are ignored."""
+        """Twilio/Plivo echoed a mark. Only the latest one proves the queue is empty; older ones are ignored."""
         if name and name == self._last_mark:
             self.playback_until = min(self.playback_until, self._clock())
 
-    async def handle_caller_speech(self, websocket: WebSocket, stream_sid: Optional[str], pcm: bool = False) -> Optional[Dict[str, Any]]:
+    async def handle_caller_speech(self, websocket: WebSocket, stream_sid: Optional[str], pcm: bool = False, provider: str = "twilio") -> Optional[Dict[str, Any]]:
         """Called when STT/VAD detects the caller has started talking. Only
         acts if the AI is audible — otherwise this is just normal caller
         speech with nothing to interrupt. Returns what was cancelled (for the barge-in diagnostics), or None."""
@@ -78,12 +80,16 @@ class BargeInCoordinator:
             task.cancel()
 
         try:
-            clear_msg = {"event": "clear"}
-            if pcm:
-                clear_msg["stream_sid"] = stream_sid
+            if provider == "plivo" and stream_sid:
+                clear_text = plivo_clear_audio_message(stream_sid)
             else:
-                clear_msg["streamSid"] = stream_sid
-            await websocket.send_text(json.dumps(clear_msg))
+                clear_msg = {"event": "clear"}
+                if pcm:
+                    clear_msg["stream_sid"] = stream_sid
+                else:
+                    clear_msg["streamSid"] = stream_sid
+                clear_text = json.dumps(clear_msg)
+            await websocket.send_text(clear_text)
             result["clear_sent"] = True
             logger.info("[BARGE-IN] Cleared telephony audio buffer")
         except Exception as e:

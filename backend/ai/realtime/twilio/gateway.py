@@ -37,6 +37,11 @@ from backend.ai.realtime import latency
 from backend.ai.realtime.audio.mulaw import FRAME_BYTES, FRAME_DURATION_S, PCM_FRAME_BYTES, frame_stream
 from backend.ai.realtime.barge_in.coordinator import BargeInCoordinator
 from backend.ai.realtime.barge_in.monitor import BargeInMonitor
+from backend.ai.realtime.call_tunnels.plivo_tunnel import (
+    parse_extra_headers,
+    plivo_checkpoint_message,
+    plivo_play_audio_message,
+)
 from backend.ai.realtime.twilio.call_control import redirect_call
 from backend.server.auth.security import get_current_user
 from backend.server.auth.webhook_signatures import stream_token_ok
@@ -100,8 +105,10 @@ class CallSession:
     """Per-call realtime state for one Twilio Media Stream WebSocket connection."""
 
     def __init__(self, websocket: WebSocket, business_id: str, pcm: bool = False) -> None:
-        # pcm=True: Exotel (linear PCM16 8kHz). False: Twilio (mulaw 8kHz).
+        # pcm=False (live): mulaw 8kHz for Twilio and Plivo.
         self.pcm = pcm
+        # "twilio" or "plivo", detected from the start event (Plivo puts streamId at the top level).
+        self.provider = "twilio"
         self.websocket = websocket
         self.business_id = business_id
         self.stream_sid: Optional[str] = None
@@ -164,7 +171,7 @@ class CallSession:
     async def _barge_in(self, path: str) -> None:
         """The caller is talking over us: stop playback, clear Twilio's queue, invalidate the rest of the turn (generation),
         and log what was cancelled and how long it took."""
-        result = await self.barge_in.handle_caller_speech(self.websocket, self.stream_sid, pcm=self.pcm)
+        result = await self.barge_in.handle_caller_speech(self.websocket, self.stream_sid, pcm=self.pcm, provider=self.provider)
         self.barge_monitor.fired(path, result, turn=self._turn_no, generation=self.barge_in.generation)
 
     async def start(self, stream_sid: str, call_id: str, caller_number: str) -> None:
@@ -420,7 +427,7 @@ class CallSession:
             logger.info(f"[TRANSCRIPT] Caller spoke ({transcript!r}) during greeting: interrupting greeting to answer caller")
             self._greeting_until = 0.0
             self._is_greeting = False
-            await self.barge_in.handle_caller_speech(self.websocket, self.stream_sid, pcm=self.pcm)
+            await self.barge_in.handle_caller_speech(self.websocket, self.stream_sid, pcm=self.pcm, provider=self.provider)
 
         print(f"\n==================== [LIVE CALL] ====================", flush=True)
         print(f"📞 CALL SID: {self.call_id}", flush=True)
@@ -684,21 +691,28 @@ class CallSession:
         async for frame_b64 in frames:
             sent += 1
             # LATENCY: frames go out as soon as TTS bytes arrive (no whole-sentence buffering). Mark the first one.
-            media_msg: Dict[str, Any] = {
-                "event": "media",
-                "media": {"payload": frame_b64},
-            }
-            if self.pcm:
-                media_msg["stream_sid"] = self.stream_sid
+            if self.provider == "plivo":
+                await self.websocket.send_text(plivo_play_audio_message(frame_b64))
             else:
-                media_msg["streamSid"] = self.stream_sid
-            await self.websocket.send_text(json.dumps(media_msg))
+                media_msg: Dict[str, Any] = {
+                    "event": "media",
+                    "media": {"payload": frame_b64},
+                }
+                if self.pcm:
+                    media_msg["stream_sid"] = self.stream_sid
+                else:
+                    media_msg["streamSid"] = self.stream_sid
+                await self.websocket.send_text(json.dumps(media_msg))
             self.barge_in.audio_sent(FRAME_DURATION_S)  # keeps the AI interruptible until this frame has played
             if sent == 1:
                 latency.mark("first_audio_sent_to_telephony", chars=len(text))
             # Yield to event loop without sleeping 20ms to keep telephony jitter buffer full
             await asyncio.sleep(0.005)
         logger.info(f"[TTS OUT] call={self.call_id} frames={sent} text={text[:40]!r}")
+        if self.provider == "plivo":
+            # checkpoint is echoed back as playedStream once played (see the "playedStream" branch below)
+            await self.websocket.send_text(plivo_checkpoint_message(self.stream_sid, self.barge_in.next_mark()))
+            return
         mark_msg: Dict[str, Any] = {
             "event": "mark",
             "mark": {"name": self.barge_in.next_mark()},  # echoed by Twilio once played (see on_mark)
@@ -750,9 +764,9 @@ class CallSession:
 
 @router.websocket("/media-stream/{business_id}")
 async def twilio_media_stream(websocket: WebSocket, business_id: str) -> None:
-    """Twilio Media Stream bidirectional WebSocket."""
+    """Twilio Media Stream / Plivo Audio Stream bidirectional WebSocket."""
     await websocket.accept()
-    session = CallSession(websocket, business_id, pcm=websocket.query_params.get("codec") == "pcm")
+    session = CallSession(websocket, business_id)
 
     try:
         while True:
@@ -771,15 +785,19 @@ async def twilio_media_stream(websocket: WebSocket, business_id: str) -> None:
 
             elif event_type in ("start", "session_start", "init"):
                 start = data.get("start") or data
-                stream_sid = start.get("streamSid") or start.get("stream_sid") or start.get("stream_id") or "STREAM_LIVE"
-                call_id = start.get("callSid") or start.get("call_sid") or start.get("call_id") or stream_sid
-                custom_params = start.get("customParameters") or start.get("custom_params") or {}
+                is_plivo = "streamId" in data or "callId" in start
+                if is_plivo:
+                    # Plivo: streamId at the top level, callId inside start, and the <Stream extraHeaders>
+                    # (carries the signed business token) as the top-level extra_headers string.
+                    session.provider = "plivo"
+                    stream_sid = data.get("streamId") or start.get("streamId") or "STREAM_LIVE"
+                    call_id = start.get("callId") or stream_sid
+                    custom_params = parse_extra_headers(data.get("extra_headers"))
+                else:
+                    stream_sid = start.get("streamSid") or start.get("stream_sid") or start.get("stream_id") or "STREAM_LIVE"
+                    call_id = start.get("callSid") or start.get("call_sid") or start.get("call_id") or stream_sid
+                    custom_params = start.get("customParameters") or start.get("custom_params") or {}
                 caller_number = custom_params.get("caller_number") or custom_params.get("from") or data.get("from") or ""
-                # Exotel drops URL query params and echoes them in the start event instead;
-                # its Voicebot stream is 8kHz linear PCM16 (128kbps).
-                media_format = start.get("media_format") or {}
-                if custom_params.get("codec") == "pcm" or media_format.get("bit_rate") == "128kbps":
-                    session.pcm = True
                 if not stream_token_ok(business_id, custom_params.get("token") or websocket.query_params.get("token")):
                     if not get_settings().ALLOW_DEV_FALLBACKS:
                         logger.warning(f"[WS GATEWAY] refusing a media stream for business {business_id}: missing or invalid token")
@@ -795,8 +813,8 @@ async def twilio_media_stream(websocket: WebSocket, business_id: str) -> None:
                 if session.should_close:
                     break
 
-            elif event_type == "mark":  # Twilio/Exotel: the audio before this mark has finished playing
-                mark_name = (data.get("mark") or {}).get("name")
+            elif event_type in ("mark", "playedStream"):  # Twilio mark / Plivo playedStream: audio before this point has played
+                mark_name = data.get("name") if event_type == "playedStream" else (data.get("mark") or {}).get("name")
                 session.barge_in.on_mark(mark_name)
                 if mark_name and mark_name == getattr(session, "_greeting_mark", None):
                     session._greeting_until = 0.0

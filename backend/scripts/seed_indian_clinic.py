@@ -1,10 +1,10 @@
-"""Seed a Hindi/Hinglish clinic and route the live Exotel number to it.
+"""Seed a Hindi/Hinglish clinic and route the live Plivo number to it.
 
 Run:  python -m backend.scripts.seed_indian_clinic
 Idempotent: re-running updates the same business/agent/phone rows.
 
 Env overrides:
-  EXOTEL_NUMBER            default 08047284627
+  PLIVO_NUMBER            default 08047284627
   CARTESIA_HINDI_VOICE_ID  Cartesia voice to speak Hindi with (no default: pick one in the Cartesia console)
 """
 
@@ -20,7 +20,7 @@ from backend.server.database.models.service import Service
 from backend.server.database.session import SessionLocal
 
 BUSINESS_NAME = "Sanjeevani Clinic"
-EXOTEL_NUMBER = os.getenv("EXOTEL_NUMBER", "09513886363")
+PLIVO_NUMBER = os.getenv("PLIVO_NUMBER", "09513886363")
 HINDI_VOICE_ID = os.getenv("CARTESIA_HINDI_VOICE_ID") or None
 
 SERVICES = [
@@ -69,7 +69,7 @@ def main() -> None:
         business.timezone = "Asia/Kolkata"
         business.currency = "INR"
         business.status = "active"
-        business.business_phone = EXOTEL_NUMBER
+        business.business_phone = PLIVO_NUMBER
         db.flush()
 
         # Clear existing services to avoid duplicates
@@ -105,10 +105,10 @@ def main() -> None:
         db.flush()
 
         # Clear old phone numbers
-        db.execute(PhoneNumber.__table__.delete().where(PhoneNumber.number == EXOTEL_NUMBER))
+        db.execute(PhoneNumber.__table__.delete().where(PhoneNumber.number == PLIVO_NUMBER))
         db.flush()
         
-        number = PhoneNumber(business_id=business.id, number=EXOTEL_NUMBER)
+        number = PhoneNumber(business_id=business.id, number=PLIVO_NUMBER)
         db.add(number)
         number.business_id = business.id
         number.mode = "dedicated"
@@ -117,7 +117,7 @@ def main() -> None:
         db.commit()
         print(f"Business : {business.name} ({business.id})")
         print(f"Agent    : {agent.name} ({agent.id})")
-        print(f"Number   : {EXOTEL_NUMBER} -> business {business.id}")
+        print(f"Number   : {PLIVO_NUMBER} -> business {business.id}")
         if not HINDI_VOICE_ID:
             print("NOTE: CARTESIA_HINDI_VOICE_ID not set; agent.config.tts_provider.voice_id is null.")
 

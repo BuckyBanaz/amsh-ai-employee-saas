@@ -88,7 +88,7 @@ class DeepgramLiveConnection:
     speech-started (barge-in) events via `events()`."""
 
     def __init__(self, encoding: str = "mulaw", language: str = "en-IN") -> None:
-        self.encoding = encoding  # "mulaw" (Twilio) or "linear16" (Exotel)
+        self.encoding = encoding  # "mulaw" (Twilio/Plivo) or "linear16" (PCM path)
         self.language = language  # "en-IN" (India), "en-US" (US), "en-GB" (UK), "hi" (Hindi)
         self.settings = get_settings()
         self.api_key = getattr(self.settings, "DEEPGRAM_API_KEY", "")

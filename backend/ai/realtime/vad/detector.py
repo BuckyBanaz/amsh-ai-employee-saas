@@ -20,7 +20,7 @@ class SimpleVAD:
         """Root-mean-square energy of one inbound frame (0 if it cannot be decoded)."""
         try:
             raw_bytes = base64.b64decode(payload_base64)
-            # Exotel sends linear PCM16 already; Twilio sends mulaw
+            # linear PCM16 input (PCM path); Twilio and Plivo send mulaw
             pcm_bytes = raw_bytes if pcm else audioop.ulaw2lin(raw_bytes, 2)
             return audioop.rms(pcm_bytes, 2)
         except Exception:

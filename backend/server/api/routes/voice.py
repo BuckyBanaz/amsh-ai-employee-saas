@@ -37,7 +37,7 @@ router = APIRouter(prefix="/api/voice", tags=["Voice Telephony"])
 
 
 from pydantic import BaseModel
-from backend.ai.realtime.exotel.client import exotel_client
+from backend.ai.realtime.plivo.client import plivo_client
 
 
 MAX_AUDIO_BYTES = 10 * 1024 * 1024
@@ -133,10 +133,95 @@ async def transcribe_audio_file(
     return {"transcript": text or ""}
 
 
+async def _place_plivo_call(phone: str, business_id: Optional[str], biz_name: str, from_line: str) -> dict:
+    """Plivo "call me": the callee's answer triggers our signed answer URL, which bridges the call to the business's stream."""
+    base_url = build_base_url()
+    answer_url = f"{base_url}/api/voice/plivo/incoming"
+    if business_id:  # signed: the incoming webhook trusts a business_id only with its signature
+        answer_url += f"?business_id={business_id}&bsig={sign_business_route(business_id)}"
+    from backend.server.services.call_recorder import record_call_start
+    res = await plivo_client.create_outbound_call(
+        phone,
+        caller_id=from_line,
+        answer_url=answer_url,
+        hangup_url=f"{base_url}/api/voice/plivo/status",
+        record=True,
+    )
+    if "error" in res:
+        logger.warning(f"[VOICE CALL-ME] Plivo returned error: {res.get('error')}")
+        return {"success": False, "provider": "plivo", "message": f"Plivo error: {res.get('error')}"}
+    # Plivo gives a request_uuid now; the real CallUUID arrives later at the answer URL
+    call_id = res.get("request_uuid") or "plivo_call"
+    record_call_start(call_id, business_id, phone, caller_name="Test Caller", greeting="Connecting outbound call...")
+    return {
+        "success": True,
+        "provider": "plivo",
+        "call_sid": call_id,
+        "from_number": from_line,
+        "message": f"Calling your phone {phone} from {from_line} for {biz_name}. Please pick up!",
+    }
+
+
+async def _place_twilio_call(phone: str, business_id: Optional[str], biz_name: str, from_line: str) -> dict:
+    """Twilio "call me": inline TwiML streams the answered call straight to the business's media stream."""
+    settings = get_settings()
+    base_url = build_base_url()
+    twiml = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        f'<Response><Connect><Stream url="{to_ws_url(base_url)}/media-stream/{business_id}">'
+        f'<Parameter name="caller_number" value="{phone}"/>'
+        f'<Parameter name="token" value="{create_stream_token(business_id)}"/>'
+        '</Stream></Connect></Response>'
+    )
+    url = f"https://api.twilio.com/2010-04-01/Accounts/{settings.TWILIO_ACCOUNT_SID}/Calls.json"
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.post(
+            url,
+            auth=(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN),
+            data={
+                "To": phone,
+                "From": from_line,
+                "Twiml": twiml,
+                "Record": "true",
+                "RecordingStatusCallback": f"{base_url}/api/voice/recording-status",
+                "StatusCallback": f"{base_url}/api/voice/status",
+                "StatusCallbackEvent": ["completed"],
+            },
+        )
+    if resp.status_code not in (200, 201):
+        err_msg = resp.json().get("message", resp.text)
+        logger.error(f"[VOICE CALL-ME] Twilio error: {err_msg}")
+        return {"success": False, "provider": "twilio", "message": f"Twilio error: {err_msg}"}
+    call_sid = resp.json().get("sid", "twilio_call")
+    from backend.server.services.call_recorder import record_call_start
+    record_call_start(call_sid, business_id, phone, caller_name="Test Caller", greeting="Connecting outbound call...")
+    return {
+        "success": True,
+        "provider": "twilio",
+        "call_sid": call_sid,
+        "from_number": from_line,
+        "message": f"Calling your phone {phone} from {from_line} for {biz_name}. Please pick up!",
+    }
+
+
+def _business_provider(agent_cfg: dict, line: Optional[str], biz: Optional[Business]) -> str:
+    """The clinic's own telephony provider: its saved setting, else what its assigned line / country implies.
+    "exotel" is the legacy name stored before Exotel was removed; it means Plivo now. The callee's number never decides this."""
+    saved = (agent_cfg.get("telephony_provider") or "").lower()
+    if saved in ("plivo", "exotel"):
+        return "plivo"
+    if saved == "twilio":
+        return "twilio"
+    if line:
+        return "plivo" if line.startswith("+91") else "twilio"
+    return "plivo" if biz and "india" in (biz.country or "").lower() else "twilio"
+
+
 @router.post("/call-me")
 async def trigger_test_call(payload: CallMeRequest, db: Session = Depends(get_db), user: User = Depends(get_voice_user)):
-    """Places a real test call to the signed-in user's own phone via Exotel (a call costs money, so it needs a login, is limited
-    per user and per number, and always uses the caller's own business)."""
+    """Places a real test call to the signed-in user's own phone (a call costs money, so it needs a login and is limited
+    per user and per number). The call goes out only through the clinic's own provider, from the clinic's own AI number:
+    a Plivo clinic never falls back to Twilio and vice versa."""
     phone = payload.phone_number.strip().replace(" ", "").replace("-", "")
     if not _PHONE.match(phone):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Enter a phone number with country code, like +919876543210")
@@ -150,130 +235,40 @@ async def trigger_test_call(payload: CallMeRequest, db: Session = Depends(get_db
     if not biz:
         business_id = user.business_id
         biz = db.get(Business, business_id)
+    biz_name = biz.name if biz else "your business"
 
-    # Check business assigned line and provider settings
+    # The clinic's assigned AI line and provider settings
     from backend.server.database.models.phone_number import PhoneNumber
     from backend.server.database.models.agent import Agent
-    pn = db.query(PhoneNumber).filter(PhoneNumber.business_id == business_id).first()
+    pn = db.query(PhoneNumber).filter(PhoneNumber.business_id == business_id, PhoneNumber.status == "active").first()
     agent = db.query(Agent).filter(Agent.business_id == business_id).first()
-    agent_cfg = (agent.config or {}) if agent else {}
-    biz_provider = (agent_cfg.get("telephony_provider") or "").lower()
-
-    biz_uses_exotel = (
-        biz_provider == "exotel"
-        or (biz and "india" in (biz.country or "").lower())
-        or phone.startswith("+91")
-    )
-
-    # 1. Route through Exotel if business/destination is configured for Exotel
-    if biz_uses_exotel and exotel_client.is_configured():
-        try:
-            base_url = build_base_url()
-            callback_url = f"{base_url}/api/voice/exotel/incoming"
-            params = []
-            if business_id:  # signed: the incoming webhook trusts a business_id only with its signature
-                params.append(f"business_id={business_id}&bsig={sign_business_route(business_id)}")
-            if get_settings().EXOTEL_WEBHOOK_SECRET:
-                params.append(f"key={get_settings().EXOTEL_WEBHOOK_SECRET}")
-            if params:
-                callback_url = f"{callback_url}?{'&'.join(params)}"
-
-            status_callback = f"{base_url}/api/voice/exotel/status"
-            from_line = (pn.number if pn and pn.number else None) or exotel_client.caller_id
-            res = await exotel_client.create_outbound_call(phone, callback_url=callback_url, status_callback=status_callback, record=True)
-            if "error" not in res:
-                call_sid = res.get("Call", {}).get("Sid") or "exotel_call"
-                from backend.server.services.call_recorder import record_call_start
-                record_call_start(call_sid, business_id, phone, caller_name="Test Caller", greeting="Connecting outbound call...")
-                return {
-                    "success": True,
-                    "provider": "exotel",
-                    "call_sid": call_sid,
-                    "from_number": from_line,
-                    "message": f"Calling your phone {phone} from {from_line} for {biz.name if biz else 'your business'}. Please pick up!",
-                }
-            logger.warning(f"[VOICE CALL-ME] Exotel returned error: {res.get('error')}, falling back to Twilio if available")
-        except Exception as e:
-            logger.error(f"[VOICE CALL-ME] Exotel failed: {e}")
-
-    # 2. Twilio Gateway (for international numbers or when Twilio is active)
+    line = pn.number if pn and pn.number else None
+    provider = _business_provider((agent.config or {}) if agent else {}, line, biz)
+    logger.info(f"[VOICE CALL-ME] business {business_id} uses {provider} (line {line or 'none'})")
     settings = get_settings()
-    if settings.TWILIO_ACCOUNT_SID and settings.TWILIO_AUTH_TOKEN and settings.TWILIO_PHONE_NUMBER:
-        try:
-            base_url = build_base_url()
-            twiml = (
-                '<?xml version="1.0" encoding="UTF-8"?>'
-                f'<Response><Connect><Stream url="{to_ws_url(base_url)}/media-stream/{business_id}">'
-                f'<Parameter name="caller_number" value="{phone}"/>'
-                f'<Parameter name="token" value="{create_stream_token(business_id)}"/>'
-                '</Stream></Connect></Response>'
-            )
-            url = f"https://api.twilio.com/2010-04-01/Accounts/{settings.TWILIO_ACCOUNT_SID}/Calls.json"
-            from_twilio_line = (pn.number if pn and pn.number and not pn.number.startswith("+91") else None) or settings.TWILIO_PHONE_NUMBER
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                resp = await client.post(
-                    url,
-                    auth=(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN),
-                    data={
-                        "To": phone,
-                        "From": from_twilio_line,
-                        "Twiml": twiml,
-                        "Record": "true",
-                        "RecordingStatusCallback": f"{base_url}/api/voice/recording-status",
-                        "StatusCallback": f"{base_url}/api/voice/status",
-                        "StatusCallbackEvent": ["completed"],
-                    },
-                )
-                if resp.status_code in (200, 201):
-                    call_sid = resp.json().get("sid", "twilio_call")
-                    from backend.server.services.call_recorder import record_call_start
-                    record_call_start(call_sid, business_id, phone, caller_name="Test Caller", greeting="Connecting outbound call...")
-                    return {
-                        "success": True,
-                        "provider": "twilio",
-                        "call_sid": call_sid,
-                        "from_number": from_twilio_line,
-                        "message": f"Calling your phone {phone} from {from_twilio_line} for {biz.name if biz else 'your business'}. Please pick up!",
-                    }
-                else:
-                    err_msg = resp.json().get("message", resp.text)
-                    logger.error(f"[VOICE CALL-ME] Twilio error: {err_msg}")
-                    return {"success": False, "provider": "twilio", "message": f"Twilio error: {err_msg}"}
-        except Exception as e:
-            logger.error(f"[VOICE CALL-ME] Twilio call failed: {e}")
-            return {"success": False, "message": str(e)}
 
-    # 3. Fallback to Exotel for other numbers if configured
-    if exotel_client.is_configured():
+    if provider == "plivo":
+        if not plivo_client.is_configured():
+            return {"success": False, "provider": "plivo", "message": "This clinic uses Plivo, but Plivo is not configured (PLIVO_AUTH_ID / PLIVO_AUTH_TOKEN)."}
+        from_line = line or plivo_client.caller_id
+        if not from_line:
+            return {"success": False, "provider": "plivo", "message": "This clinic has no Plivo number assigned (and PLIVO_PHONE_NUMBER is empty)."}
         try:
-            base_url = build_base_url()
-            callback_url = f"{base_url}/api/voice/exotel/incoming"
-            params = []
-            if business_id:
-                params.append(f"business_id={business_id}&bsig={sign_business_route(business_id)}")
-            if params:
-                callback_url = f"{callback_url}?{'&'.join(params)}"
-            res = await exotel_client.create_outbound_call(phone, callback_url=callback_url)
-            if "error" in res:
-                return {"success": False, "provider": "exotel", "message": f"Exotel error: {res.get('error')}"}
-            call_sid = res.get("Call", {}).get("Sid") or "exotel_call"
-            from backend.server.services.call_recorder import record_call_start
-            record_call_start(call_sid, business_id, phone, caller_name="Test Caller", greeting="Connecting outbound call...")
-            return {
-                "success": True,
-                "provider": "exotel",
-                "call_sid": call_sid,
-                "from_number": exotel_client.caller_id,
-                "message": f"Calling your phone {phone} from {exotel_client.caller_id}. Please pick up!",
-            }
+            return await _place_plivo_call(phone, business_id, biz_name, from_line)
         except Exception as e:
-            logger.error(f"[VOICE CALL-ME] Exotel fallback failed: {e}")
-            return {"success": False, "message": str(e)}
+            logger.error(f"[VOICE CALL-ME] Plivo call failed: {e}")
+            return {"success": False, "provider": "plivo", "message": str(e)}
 
-    return {
-        "success": False,
-        "message": "Telephony provider not configured. Please test in browser using the chat simulation.",
-    }
+    if not (settings.TWILIO_ACCOUNT_SID and settings.TWILIO_AUTH_TOKEN):
+        return {"success": False, "provider": "twilio", "message": "This clinic uses Twilio, but Twilio is not configured (TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN)."}
+    from_line = line or settings.TWILIO_PHONE_NUMBER
+    if not from_line:
+        return {"success": False, "provider": "twilio", "message": "This clinic has no Twilio number assigned (and TWILIO_PHONE_NUMBER is empty)."}
+    try:
+        return await _place_twilio_call(phone, business_id, biz_name, from_line)
+    except Exception as e:
+        logger.error(f"[VOICE CALL-ME] Twilio call failed: {e}")
+        return {"success": False, "provider": "twilio", "message": str(e)}
 
 
 @router.post("/incoming", dependencies=[Depends(verify_twilio)])

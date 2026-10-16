@@ -1,5 +1,5 @@
 # Production overrides. Use: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
-# Requires in .env: ENV=production, a real JWT_SECRET (32+ characters), POSTGRES_PASSWORD, TWILIO_AUTH_TOKEN and/or EXOTEL_WEBHOOK_SECRET,
+# Requires in .env: ENV=production, a real JWT_SECRET (32+ characters), POSTGRES_PASSWORD, TWILIO_AUTH_TOKEN and/or PLIVO_AUTH_TOKEN,
 # META_APP_SECRET, PUBLIC_BASE_URL, CORS_ORIGINS. The API refuses to start in production with unsafe settings (see production_problems()).
 services:
   postgres:

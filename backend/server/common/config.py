@@ -88,13 +88,10 @@ class Settings(BaseSettings):
     # real domain in prod). Used to build absolute TwiML action/stream URLs.
     PUBLIC_BASE_URL: str | None = None
 
-    # Exotel — Indian Telephony (+91 calls & SMS)
-    EXOTEL_ACCOUNT_SID: str | None = None
-    EXOTEL_API_KEY: str | None = None
-    EXOTEL_API_TOKEN: str | None = None
-    EXOTEL_PHONE_NUMBER: str | None = None
-    # Exotel does not sign webhooks: a shared secret goes in the callback URL as ?key=... (see server/auth/webhook_signatures.py)
-    EXOTEL_WEBHOOK_SECRET: str | None = None
+    # Plivo — Indian & global telephony (calls & SMS). PLIVO_AUTH_TOKEN also verifies Plivo webhook signatures.
+    PLIVO_AUTH_ID: str | None = None
+    PLIVO_AUTH_TOKEN: str | None = None
+    PLIVO_PHONE_NUMBER: str | None = None
     # Meta WhatsApp Cloud API
     META_WHATSAPP_TOKEN: str | None = None
     META_WHATSAPP_PHONE_NUMBER_ID: str | None = None
@@ -133,8 +130,8 @@ def production_problems(s: "Settings") -> list[str]:
         problems.append("ALLOW_DEV_FALLBACKS is on (unmatched calls go to the newest business; old WhatsApp verify tokens accepted)")
     if "amsh:amsh@" in s.DATABASE_URL:
         problems.append("DATABASE_URL uses the default amsh/amsh password")
-    if not s.TWILIO_AUTH_TOKEN and not s.EXOTEL_WEBHOOK_SECRET:
-        problems.append("no TWILIO_AUTH_TOKEN or EXOTEL_WEBHOOK_SECRET: telephony webhooks cannot be verified")
+    if not s.TWILIO_AUTH_TOKEN and not s.PLIVO_AUTH_TOKEN:
+        problems.append("no TWILIO_AUTH_TOKEN or PLIVO_AUTH_TOKEN: telephony webhooks cannot be verified")
     return problems
 
 

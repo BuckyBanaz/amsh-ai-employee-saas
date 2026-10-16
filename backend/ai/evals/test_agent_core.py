@@ -1672,7 +1672,7 @@ class CallRecordings(unittest.TestCase):
         self.assertTrue(self.calls._format_call(self.db.get(Call, "studio_abc123"))["is_test"])
         for cid in ("studio_x", "webcall_x", "sim_x", "test_call_x"):
             self.assertTrue(self.calls.is_test_call(cid), cid)
-        self.assertFalse(self.calls.is_test_call("CA1234567890abcdef"))  # a provider (Twilio/Exotel) call id
+        self.assertFalse(self.calls.is_test_call("CA1234567890abcdef"))  # a provider (Twilio/Plivo) call id
 
     def test_calls_left_live_are_closed_when_the_list_is_loaded(self):
         from datetime import datetime, timedelta, timezone
@@ -3876,7 +3876,7 @@ class AdminTenants(unittest.TestCase):
     def test_a_suspended_clinic_is_not_answered_on_either_provider(self):
         from types import SimpleNamespace
 
-        from backend.server.api.routes import exotel, voice
+        from backend.server.api.routes import plivo, voice
         from backend.server.auth.webhook_signatures import sign_business_route
         from backend.server.database.models.business import Business
         from backend.server.database.models.phone_number import PhoneNumber
@@ -3888,12 +3888,12 @@ class AdminTenants(unittest.TestCase):
         def call_both():
             with self.factory() as db:
                 request = SimpleNamespace(query_params={"business_id": self.biz1, "bsig": sign_business_route(self.biz1)})
-                ex = run(exotel.handle_exotel_incoming_call(request, CallSid="EXO1", From="+911", To="+912000000000", CallType=None, Direction=None, db=db))
+                ex = run(plivo.handle_plivo_incoming_call(request, CallUUID="PL1", From="+911", To="+912000000000", Direction=None, db=db))
                 tw = run(voice.handle_incoming_call(To="+912000000000", From="+911", CallSid="CA1", ForwardedFrom=None, db=db))
             return ex, tw
 
         ex, tw = call_both()
-        self.assertIsInstance(ex, dict)  # active: the normal stream hand-over
+        self.assertIn(b"<Stream", ex.body)  # active: the normal stream hand-over
         self.assertIn(b"<Connect>", tw.body)
         with self.factory() as db:
             db.get(Business, self.biz1).status = "suspended"
@@ -4579,7 +4579,7 @@ class AdminOverview(unittest.TestCase):
             self.owner_h = {"Authorization": f"Bearer {create_access_token(owner.id)}"}
 
         self.settings = dict(DEEPGRAM_API_KEY="k", CARTESIA_API_KEY="k", GROQ_API_KEY="k", RESEND_API_KEY=None, TWILIO_ACCOUNT_SID="sid",
-                             EXOTEL_ACCOUNT_SID=None, RAZORPAY_KEY_ID=None, RAZORPAY_KEY_SECRET=None)
+                             PLIVO_AUTH_ID=None, RAZORPAY_KEY_ID=None, RAZORPAY_KEY_SECRET=None)
         self.state = SimpleNamespace(redis_ready=True, deepgram_ready=True, tts_ready=True, groq_ready=True, qdrant_ready=False)
         for pt in (patch.object(admin_overview, "get_settings", lambda: SimpleNamespace(**self.settings)), patch.object(warmup, "state", self.state)):
             pt.start()

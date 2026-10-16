@@ -67,7 +67,7 @@ def seed_sanjeevani():
             business_type="healthcare",
             business_subtype="hospital",
             country="IN",
-            business_phone="+918047284627",
+            business_phone="+918065392465",
             business_email="contact@sanjeevani.com",
             website="https://sanjeevani-hospital.com",
             city="Noida",

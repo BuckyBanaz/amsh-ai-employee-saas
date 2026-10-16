@@ -7,7 +7,7 @@ order, and records every attempt in `message_log`.
   language with English as the fallback.
 * Preferences (clinic-owned events): the clinic can switch an event off, choose the channel order, and set quiet hours. Quiet hours
   hold back only messages AMSh starts itself (a reminder, a follow-up), never the answer to something the patient just did.
-* Channels: `sms` (Exotel / Twilio), `email` (platform SMTP or Resend) and `whatsapp`. WhatsApp text that AMSh starts must use a
+* Channels: `sms` (Plivo / Twilio), `email` (platform SMTP or Resend) and `whatsapp`. WhatsApp text that AMSh starts must use a
   Meta-approved template (`meta_status == "approved"` and a recorded `whatsapp_name`); inside the 24-hour window after the patient's
   own message (`window_open=True`) free text is allowed. A channel that cannot be used is skipped and the next one is tried.
 * `fanout=False` (default): stop at the first channel that sends. `fanout=True` (staff alerts): send on every channel with an address.

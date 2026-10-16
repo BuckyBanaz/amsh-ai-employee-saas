@@ -9,6 +9,10 @@ const plusJakartaSans = Plus_Jakarta_Sans({
 export const metadata: Metadata = {
   title: "Admin Portal",
   description: "Amsh Platform Administration",
+  icons: {
+    icon: "/landing/amsh_logo.png",
+    apple: "/landing/amsh_logo.png",
+  },
 };
 
 export default function RootLayout({

@@ -32,7 +32,7 @@ def record_call_start(
     greeting: Optional[str] = None,
 ) -> Optional[Call]:
     """
-    Persist initial Call record when a caller connects via Exotel, Twilio, or simulator.
+    Persist initial Call record when a caller connects via Plivo, Twilio, or simulator.
     Also stores the opening greeting message as sequence 0.
     """
     try:
@@ -203,7 +203,7 @@ def update_call_recording_webhook(
     status: Optional[str] = None,
 ) -> bool:
     """
-    Update call recording URL and duration when telephony providers (Exotel / Twilio)
+    Update call recording URL and duration when telephony providers (Plivo / Twilio)
     send their post-call status / recording webhook.
     """
     if not call_id:

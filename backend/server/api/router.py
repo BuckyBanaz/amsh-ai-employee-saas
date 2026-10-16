@@ -31,7 +31,7 @@ from backend.server.api.routes import (
     customers,
     dashboard_stats,
     demo,
-    exotel,
+    plivo,
     integrations,
     knowledge,
     notifications,
@@ -105,7 +105,7 @@ api_router.include_router(admin_verticals.router)
 api_router.include_router(admin_platform_data.router)
 api_router.include_router(admin_integrations.router)
 api_router.include_router(calendar_feed.router)
-api_router.include_router(exotel.router)
+api_router.include_router(plivo.router)
 api_router.include_router(admin.router)
 api_router.include_router(billing.router)
 api_router.include_router(payments.router)

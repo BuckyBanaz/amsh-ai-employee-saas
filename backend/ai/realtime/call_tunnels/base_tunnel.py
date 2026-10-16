@@ -1,6 +1,6 @@
 """
 Abstract Base Telephony Tunnel.
-Defines the standard interface for all telephony providers (Exotel, Twilio, Telnyx, Plivo)
+Defines the standard interface for all telephony providers (Plivo, Twilio)
 to stream bidirectional audio with STT, State Machine, and TTS.
 """
 
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 class BaseTelephonyTunnel(ABC):
     """
     Abstract interface for streaming bidirectional telephony media streams.
-    Decouples provider-specific protocols (Exotel JSON vs Twilio Media Streams)
+    Decouples provider-specific protocols (Plivo Audio Streaming vs Twilio Media Streams)
     from core audio and conversation engines.
     """
 
@@ -36,7 +36,7 @@ class BaseTelephonyTunnel(ABC):
     @property
     @abstractmethod
     def provider_name(self) -> str:
-        """Name of the provider (e.g. 'exotel', 'twilio', 'telnyx')."""
+        """Name of the provider (e.g. 'plivo', 'twilio')."""
         pass
 
     @property

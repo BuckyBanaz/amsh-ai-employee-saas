@@ -1,6 +1,6 @@
 """
 Fix script:
-1. Clear Sanjeevani Hospital's business_phone (it incorrectly stores the Exotel DID)
+1. Clear Sanjeevani Hospital's business_phone (it incorrectly stores the telephony DID)
 2. Ensure user's real business (703b13dc) is marked active
 3. Report current state
 """
@@ -11,7 +11,7 @@ from backend.server.database.models.business import Business
 
 db = SessionLocal()
 
-# Fix 1: Clear Sanjeevani's phone (it stores the Exotel DID which causes wrong routing)
+# Fix 1: Clear Sanjeevani's phone (it stores the telephony DID which causes wrong routing)
 sanjeevani = db.get(Business, "47adec85-6aa4-4d53-b767-f8fd766a180b")
 if sanjeevani:
     print(f"Clearing Sanjeevani phone: {sanjeevani.business_phone} -> None")

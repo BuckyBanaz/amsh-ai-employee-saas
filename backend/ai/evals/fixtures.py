@@ -10,7 +10,7 @@ from sqlalchemy.pool import StaticPool
 
 import os
 
-# Tests and evals must never send a real SMS, even when Twilio/Exotel credentials exist in .env.
+# Tests and evals must never send a real SMS, even when Twilio/Plivo credentials exist in .env.
 os.environ.setdefault("AMSH_DISABLE_SMS", "1")
 os.environ.setdefault("AMSH_DISABLE_POST_CALL", "1")  # tests call process_call_end directly when they want it
 

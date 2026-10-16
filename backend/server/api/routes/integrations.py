@@ -506,26 +506,26 @@ async def get_available_telephony_numbers(
         std = (area_code or "080").strip().lstrip("0")
         code_str = f"0{std}" if std else "080"
         return AvailableNumbersResponse(
-            source="exotel_pool",
+            source="plivo_pool",
             country="IN",
             area_code=code_str,
             numbers=[
                 AvailableNumberItem(
                     number=f"+91 {code_str} 4728 4627",
-                    locality=f"Exotel Direct Indian Line • STD ({code_str})",
-                    feature="Exotel HD • Sub-50ms Latency",
+                    locality=f"Plivo Direct Indian Line • STD ({code_str})",
+                    feature="Plivo HD • Low Latency",
                     is_live=False,
                 ),
                 AvailableNumberItem(
                     number=f"+91 {code_str} 4728 4628",
-                    locality=f"Exotel Toll-Free Line • India ({code_str})",
-                    feature="Exotel HD • Toll Free Voice",
+                    locality=f"Plivo Toll-Free Line • India ({code_str})",
+                    feature="Plivo HD • Toll Free Voice",
                     is_live=False,
                 ),
                 AvailableNumberItem(
                     number=f"+91 {code_str} 4728 4629",
-                    locality=f"Exotel Smart Trunk Line • India ({code_str})",
-                    feature="Exotel HD • Call Recording",
+                    locality=f"Plivo Smart Trunk Line • India ({code_str})",
+                    feature="Plivo HD • Call Recording",
                     is_live=False,
                 ),
             ],
@@ -600,7 +600,7 @@ async def get_available_telephony_numbers(
 class TelephonyAssignRequest(BaseModel):
     business_id: str
     number: str
-    provider: str | None = "exotel"
+    provider: str | None = "plivo"
     mode: str | None = "dedicated"
     forwarded_from: str | None = None
 
@@ -648,7 +648,7 @@ def assign_telephony_number(
     agent = db.query(Agent).filter(Agent.business_id == biz.id).first()
     if agent:
         cfg = dict(agent.config or {})
-        cfg["telephony_provider"] = payload.provider or ("exotel" if "IN" in (biz.country or "").upper() or clean_num.startswith("+91") else "twilio")
+        cfg["telephony_provider"] = payload.provider or ("plivo" if "IN" in (biz.country or "").upper() or clean_num.startswith("+91") else "twilio")
         cfg["telephony_number"] = clean_num
         agent.config = cfg
 

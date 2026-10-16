@@ -143,17 +143,18 @@ class CallsRouteOnlyThroughAssignedNumbers(_Api):
             self.admin_h = {"Authorization": f"Bearer {create_access_token(admin.id)}"}
 
     def _calls(self, to, forwarded_from=None, query=None):
-        """(business id Twilio routed to or None, business id Exotel routed to or None)."""
+        """(business id Twilio routed to or None, business id Plivo routed to or None)."""
         import asyncio
         from types import SimpleNamespace
 
-        from backend.server.api.routes import exotel, voice
+        from backend.server.api.routes import plivo, voice
 
         with self.factory() as db:
             tw = asyncio.run(voice.handle_incoming_call(To=to, From="+911", CallSid="CA1", ForwardedFrom=forwarded_from, db=db))
-            ex = asyncio.run(exotel.handle_exotel_incoming_call(SimpleNamespace(query_params=query or {}), CallSid="E1", From="+911", To=to, CallType=None, Direction=None, db=db))
+            pl = asyncio.run(plivo.handle_plivo_incoming_call(SimpleNamespace(query_params=query or {}), CallUUID="P1", From="+911", To=to, Direction=None, db=db))
         tw_biz = tw.body.decode().split("/media-stream/")[1].split('"')[0] if b"/media-stream/" in tw.body else None
-        return tw_biz, (ex["business_id"] if isinstance(ex, dict) else None)
+        pl_biz = pl.body.decode().split("/media-stream/")[1].split("<")[0] if b"/media-stream/" in pl.body else None
+        return tw_biz, pl_biz
 
     def _assign(self, biz, number, **extra):
         return self.client.post(f"/api/admin/tenants/{biz}/numbers", json={"number": number, **extra}, headers=self.admin_h)
@@ -189,7 +190,7 @@ class CallsRouteOnlyThroughAssignedNumbers(_Api):
         self.assertEqual(self._assign(self.biz, "+15550000001", mode="forwarding", forwarded_from="+912000000000").status_code, 201)
         self.assertEqual(self._calls("+15559999999", forwarded_from="+912000000000")[0], self.biz)
 
-    def test_exotel_trusts_a_business_id_only_with_our_signature(self):
+    def test_plivo_trusts_a_business_id_only_with_our_signature(self):
         from backend.server.auth.webhook_signatures import sign_business_route
 
         self.assertEqual(self._calls("+919999999999", query={"business_id": "other-biz"})[1], None)

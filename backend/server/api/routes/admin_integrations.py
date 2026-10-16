@@ -9,7 +9,7 @@ What the superadmin sees here is REAL:
   * The database table `platform_integrations` keeps only non-secret operational state: the last check result, latency, a
     failure rate, and the "default" switch.
 
-Providers: Twilio, Exotel (telephony), Groq, Gemini, Deepgram (AI / speech), Cartesia, ElevenLabs (voice), WhatsApp (Meta Graph),
+Providers: Twilio, Plivo (telephony), Groq, Gemini, Deepgram (AI / speech), Cartesia, ElevenLabs (voice), WhatsApp (Meta Graph),
 Resend (platform email), Razorpay and Stripe (billing).
 """
 
@@ -91,11 +91,11 @@ def _ping_twilio() -> Tuple[bool, str]:
     return _verdict(r, "Twilio")
 
 
-def _ping_exotel() -> Tuple[bool, str]:
-    sub = _setting("EXOTEL_SUBDOMAIN") or "api.exotel.com"
-    r = _get(f"https://{sub}/v1/Accounts/{_setting('EXOTEL_ACCOUNT_SID')}/Calls.json", params={"PageSize": 1},
-             auth=(_setting("EXOTEL_API_KEY"), _setting("EXOTEL_API_TOKEN")))
-    return _verdict(r, "Exotel")
+def _ping_plivo() -> Tuple[bool, str]:
+    auth_id = _setting("PLIVO_AUTH_ID")
+    r = _get(f"https://api.plivo.com/v1/Account/{auth_id}/",
+             auth=(auth_id, _setting("PLIVO_AUTH_TOKEN")))
+    return _verdict(r, "Plivo")
 
 
 def _ping_groq() -> Tuple[bool, str]:
@@ -180,7 +180,7 @@ def _ping_stripe() -> Tuple[bool, str]:
 # id -> (display name, category, environment keys that must be set (an alternative group is a tuple), ping function)
 PROVIDERS: Dict[str, Tuple[str, str, List[Any], Callable[[], Tuple[bool, str]]]] = {
     "twilio": ("Twilio Telephony Gateway", "Voice", ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN"], _ping_twilio),
-    "exotel": ("Exotel India Virtual Numbers", "Voice", ["EXOTEL_ACCOUNT_SID", "EXOTEL_API_KEY", "EXOTEL_API_TOKEN"], _ping_exotel),
+    "plivo": ("Plivo Voice & SMS (India + Global)", "Voice", ["PLIVO_AUTH_ID", "PLIVO_AUTH_TOKEN", "PLIVO_PHONE_NUMBER"], _ping_plivo),
     "groq": ("Groq Fast LPU Inference", "AI", ["GROQ_API_KEY"], _ping_groq),
     "gemini": ("Google Gemini", "AI", ["GEMINI_API_KEY"], _ping_gemini),
     "deepgram": ("Deepgram Speech-to-Text", "AI", ["DEEPGRAM_API_KEY"], _ping_deepgram),

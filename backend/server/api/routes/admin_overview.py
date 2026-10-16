@@ -62,7 +62,7 @@ def _health(db: Session) -> List[Dict[str, str]]:
         item("AI model (Groq)", bool(settings.GROQ_API_KEY), warmup_state.groq_ready),
         item("Knowledge search (Qdrant)", True, warmup_state.qdrant_ready),
         item("Email (Resend)", bool(settings.RESEND_API_KEY), None),
-        item("SMS (Twilio / Exotel)", bool(settings.TWILIO_ACCOUNT_SID or settings.EXOTEL_ACCOUNT_SID), None),
+        item("SMS (Twilio / Plivo)", bool(settings.TWILIO_ACCOUNT_SID or settings.PLIVO_AUTH_ID), None),
         item("Payments (Razorpay)", bool(settings.RAZORPAY_KEY_ID and settings.RAZORPAY_KEY_SECRET), None),
     ]
 

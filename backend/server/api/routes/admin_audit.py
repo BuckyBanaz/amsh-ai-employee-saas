@@ -130,7 +130,7 @@ def security_overview(db: Session = Depends(get_db), admin: User = Depends(requi
     s = get_settings()
     checks = [
         {"key": "twilio_signature", "label": "Twilio webhook signatures", "ok": bool(s.TWILIO_AUTH_TOKEN), "fix": "Set TWILIO_AUTH_TOKEN."},
-        {"key": "exotel_secret", "label": "Exotel webhook key", "ok": bool(s.EXOTEL_WEBHOOK_SECRET), "fix": "Set EXOTEL_WEBHOOK_SECRET and add ?key=<secret> to the applet URL in Exotel."},
+        {"key": "plivo_secret", "label": "Plivo webhook signing (auth token)", "ok": bool(s.PLIVO_AUTH_TOKEN), "fix": "Set PLIVO_AUTH_TOKEN so Plivo webhook signatures are verified."},
         {"key": "meta_secret", "label": "WhatsApp webhook signature", "ok": bool(s.META_APP_SECRET), "fix": "Set META_APP_SECRET (and rotate it if it was ever shared)."},
         {"key": "debug_off", "label": "Debug mode off", "ok": not s.DEBUG, "fix": "Set DEBUG=false."},
         {"key": "dev_fallbacks_off", "label": "Development fallbacks off", "ok": not s.ALLOW_DEV_FALLBACKS, "fix": "Set ALLOW_DEV_FALLBACKS=false."},

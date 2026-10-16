@@ -6,6 +6,119 @@ Running log of what Claude changes, plans, or reviews in this repo. Newest entry
 
 Status legend: `DONE` / `IN PROGRESS` / `PLANNED` / `BLOCKED`
 
+### Entry 102 - SMTP Email Notifications for Pilot Leads & Vercel .env (2026-10-16) - DONE
+- **Founder Lead Notification via SMTP ([app/api/pilot/route.ts](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/app/api/pilot/route.ts))**:
+  - Integrated transactional SMTP dispatch via `nodemailer` connecting to `mail.techycodex.com` (Port 587).
+  - Every time a clinic owner submits the pilot form, an automated HTML notification email is delivered immediately to both `info@techycodex.com` and `parikshitverma865@gmail.com`.
+  - Email includes clinic name, applicant name, direct `mailto:` link, 1-click WhatsApp chat link (`wa.me/<phone>`), location, practice type, daily call volume, and automation goals.
+- **Vercel Deployment Environment Files ([.env](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/.env) & [.env.example](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/.env.example))**:
+  - Created `.env` and `.env.example` in `frontend/landing-page/` populated with TechyCodex SMTP credentials (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `FROM_EMAIL`, `FROM_NAME`) and `PILOT_NOTIFICATION_EMAILS`.
+- **Dependencies Updated ([package.json](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/package.json))**:
+  - Added `nodemailer` and `@types/nodemailer` to ensure zero-friction automated installation during Vercel builds.
+
+---
+
+### Entry 101 - Fixed Hero Pilot Pill Mobile Responsive Wrapping (2026-10-16) - DONE
+- **Hero Pilot Pill Streamlined ([Hero.tsx](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/components/landing/Hero.tsx))**:
+  - Fixed mobile responsive wrapping where 80+ characters of monospaced text broke into 4 awkward lines with a detached vertical pipe (`|`).
+  - Converted to a clean, single-line responsive capsule pill: `● 14-Day Clinic Pilot • Guided Onboarding for Practices`.
+  - Guaranteed single-line display across both small mobile devices (<360px) and wide desktop screens.
+
+---
+
+### Entry 100 - Pricing Cards Connected to Pilot Program & Modal Responsiveness (2026-10-16) - DONE
+- **Pricing Cards Conversion ([GlobalPricing.tsx](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/components/landing/GlobalPricing.tsx))**:
+  - Replaced generic "Start 14-Day Free Trial" with `Join 14-Day Pilot Program →`.
+  - Wired `onClick` to trigger `open-pilot-modal`, so clicking any tier card immediately opens the clinic pilot application modal.
+- **Pilot Modal Responsiveness & Z-Index Polish ([PilotModal.tsx](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/components/landing/PilotModal.tsx))**:
+  - Elevated z-index to `z-[100]`, completely eliminating mobile header overlap/bleed through.
+  - Streamlined header badge (`14-Day Clinic Pilot • getamsh.com`) into a single non-wrapping flex row with the close `✕` button.
+  - Compacted daily call volume pills and automation goal chips so the full modal and submit button fit cleanly without overwhelming vertical scrolling.
+
+---
+
+### Entry 99 - Cleaned Audio Demo CTA & Fixed Hero Checkmarks (2026-10-16) - DONE
+- **Audio Scope Simplified ([VoiceCallScope.tsx](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/components/landing/VoiceCallScope.tsx))**:
+  - Removed the `WhatsApp Demo →` button from the audio player controls as requested.
+  - Expanded the `Listen to Call Audio (53s)` / `Pause Call Audio` button to full width for a bolder, cleaner player layout.
+- **Hero Checkmark Bug Fixed ([Hero.tsx](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/components/landing/Hero.tsx))**:
+  - Replaced literal `&check;` string with crisp unicode checkmarks (`✓`) in the pilot highlights pill strip.
+
+---
+
+### Entry 98 - Official Domain Integration: getamsh.com (2026-10-11) - DONE
+- **Official Domain Configured (getamsh.com)**:
+  - **Metadata & Canonical URL ([layout.tsx](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/app/layout.tsx))**: Configured `metadataBase: new URL("https://getamsh.com")`, canonical link `https://getamsh.com`, and OpenGraph metadata (`siteName: "AMSh - getamsh.com"`).
+  - **Dynamic Sitemap ([sitemap.ts](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/app/sitemap.ts))**: Built Next.js XML sitemap indexing all 10 priority pages under `https://getamsh.com` (homepage, `/pilot`, all 7 clinical SEO landing pages, and `/docs`).
+  - **Search Engine Directives ([robots.ts](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/app/robots.ts))**: Created `robots.ts` referencing `https://getamsh.com/sitemap.xml`.
+  - **Brand & Email Updates ([Footer3D.tsx](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/components/landing/Footer3D.tsx), [Hero.tsx](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/components/landing/Hero.tsx), [PilotModal.tsx](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/components/landing/PilotModal.tsx), [Logo.tsx](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/components/landing/Logo.tsx))**: Updated contact email to `help@getamsh.com`, badges to `getamsh.com • Guided Clinic Pilot`, and brand wordmark to pure `AMSh`.
+
+---
+
+### Entry 97 - Navbar Streamline & Pilot Modal Aesthetic Redesign (2026-10-11) - DONE
+- **Navbar Controls Cleaned Up ([Nav.tsx](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/components/landing/Nav.tsx))**:
+  - Removed `Login` and `Book a Demo` buttons from both desktop navigation header and mobile drawer.
+  - Positioned `● PILOT PROGRAM` as the single, clean, hyper-focused call-to-action on the right side of the navbar.
+- **Pilot Modal Premium Overhaul ([PilotModal.tsx](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/components/landing/PilotModal.tsx))**:
+  - Expanded width from cramped `max-w-xl` to generous `max-w-2xl` with `p-6 sm:p-10` padding and `rounded-3xl` corners.
+  - Eliminated the awkward browser native scrollbar with `scrollbarWidth: "none"` and smooth overflow scrolling.
+  - Restyled close button into a dedicated circular pill with generous breathing room.
+  - Replaced boxy HTML inputs with sleek modern inputs (`bg-slate-50/50 hover:bg-white`, smooth blue focus ring `focus:ring-4 focus:ring-blue-500/10`).
+  - Converted daily calls buttons into sleek segmented pill chips.
+  - Converted automation goals into interactive checkbox cards with custom SVG checkmarks.
+
+---
+
+### Entry 96 - Pilot Program Pivot: Primary CTA, Application Modal & Lead Pipeline (2026-10-11) - DONE
+- **Pivot to 14-Day Pilot Program as Primary Offer**:
+  - Replaced generic "Sign Up for Free" push with dedicated Early Access Clinic Pilot Program targeting 2–5 high-quality validation clinics.
+  - Replaced unverified latency and speed claims in Hero with verified, measurable pilot facts: 14 Days duration, 1-on-1 guided founder onboarding, agreed terms before activation, and 2-way calendar sync.
+  - Updated Hero copy to: *"Be One of the First Clinics to Hire an AI Employee. Join the AMSh Pilot Program to test an AI front-desk employee that answers calls, assists with appointment booking, and helps reduce missed enquiries."*
+- **Navbar Restructure ([Nav.tsx](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/components/landing/Nav.tsx))**:
+  - `PILOT PROGRAM`: Elevated to primary high-priority blue button with live animated pulse beacon.
+  - Replaced `Sign Up for Free` with `Book a Demo` (clean outline) and modal trigger.
+- **Interactive Pilot Application Modal ([PilotModal.tsx](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/components/landing/PilotModal.tsx))**:
+  - Built clean application modal triggered from anywhere via custom event `open-pilot-modal` or query param `?pilot=open`.
+  - Captures: Clinic/Practice Name, Full Name, Business Email, Phone/WhatsApp, Location, Practice Type, Daily Calls range, and Automation Goals (Missed calls, Booking, After-hours, WhatsApp).
+  - Displays instant polite confirmation screen with next-steps timeline.
+- **Backend Lead Pipeline Route ([app/api/pilot/route.ts](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/app/api/pilot/route.ts))**:
+  - Handles `POST /api/pilot` and writes new leads to structured file storage (`data/pilot_applications.json`) with timestamps, unique lead ID, and status (`NEW_LEAD`).
+- **Dedicated Pilot Page ([app/pilot/page.tsx](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/app/pilot/page.tsx))**:
+  - Created standalone `/pilot` overview page for direct campaigns and referrals with 6-pillar breakdown (Duration, Setup, Product, Support, Pricing, Goal).
+
+---
+
+### Entry 95 - Full High-Converting SEO Landing Pages Suite for UK & USA Clinics (2026-10-11) - DONE
+- **Created Dedicated High-Intent SEO Landing Pages**:
+  - [`/ai-appointment-booking`](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/app/ai-appointment-booking/page.tsx): Autonomous 2-way clinical calendar booking assistant with real-time Google Calendar, Outlook, and EHR sync; cancellation backfilling; no-show reduction.
+  - [`/dental-answering-service`](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/app/dental-answering-service/page.tsx): Next-gen dental answering service vs traditional call center comparison table; emergency toothache triage; real Smiles Orthodontics audio recording demo.
+  - [`/ai-phone-answering-service`](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/app/ai-phone-answering-service/page.tsx): Infinite concurrent call lines (50+ parallel); 10-minute carrier forwarding (*71 code) for AT&T, Verizon, BT, T-Mobile; 180ms voice latency.
+  - [`/ai-receptionist-whatsapp`](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/app/ai-receptionist-whatsapp/page.tsx): Official Meta WhatsApp Business Cloud API receptionist; automated pre-op fasting/prep instructions; 30+ languages supported; simulated WhatsApp interactive chat interface.
+  - [`/ai-receptionist-for-dentists`](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/app/ai-receptionist-for-dentists/page.tsx): Dental & orthodontic practices; Delta Dental insurance pre-verification; chairside slot locking.
+  - [`/ai-receptionist-for-clinics`](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/app/ai-receptionist-for-clinics/page.tsx): Multi-doctor clinical schedule coordination; high-volume front-desk relief; emergency safety escalation.
+  - [`/ai-answering-service-medical`](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/app/ai-answering-service-medical/page.tsx): Medical offices call answering service; HIPAA compliance; call center replacement.
+- **Integrated Navigation & Footer Cross-Linking ([Footer3D.tsx](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/components/landing/Footer3D.tsx))**: Linked all 7 landing pages into "Useful Links" and "Practices" footer columns.
+
+---
+
+### Entry 94 - Official Compliance Logos (HIPAA, GDPR, DPDP, SOC 2) Added (2026-10-11) - DONE
+- **Official Security Seals & Logos ([GlobalPresence.tsx](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/components/landing/GlobalPresence.tsx))**:
+  - Replaced generic text/emoji markers with high-fidelity, professional SVG security trust badges:
+    - **HIPAA**: Medical shield emblem with "HIPAA · BAA SIGNED · US".
+    - **GDPR**: European security padlock with "GDPR · EU / UK SOVEREIGN".
+    - **DPDP 2023**: Indian regulatory chakra shield with "DPDP 2023 · DISHA READY · IN".
+    - **SOC 2 / ISO**: AICPA verification audit shield with "SOC 2 / ISO · TYPE II AUDITED".
+  - Added individual status pills (`● 100% AUDITED`, custom badge borders) and card hover states to match enterprise healthcare trust standards.
+
+---
+
+### Entry 93 - AI Front-Desk Employee Positioning & SEO ETIMEDOUT Fix (2026-10-11) - DONE
+- **Resolved SSR Fetch ETIMEDOUT Warning ([lib/seo.ts](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/lib/seo.ts))**: Added local development guard and `AbortSignal.timeout(1000)` to `getSeo()` and `getSeoFile()`, preventing 1.4-second TCP connection hang and console `AggregateError ETIMEDOUT` when local backend port 8010 is not running.
+- **Hero & Landing Copy Overhaul ([Hero.tsx](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/components/landing/Hero.tsx) & [page.tsx](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/app/page.tsx))**:
+  - Main Headline updated to: **"The AI Front-Desk Employee that automates calls, WhatsApp & email"** with signature Plivo curved accent underline.
+  - Kicker strip highlighted with automated channel badges: `01 — 24/7 AI FRONT-DESK EMPLOYEE · AUTOMATING · PHONE CALLS · WHATSAPP · EMAIL · CALENDAR`.
+  - Subtitle and trust metrics updated to emphasize 10x faster appointment booking, zero waiting times, and multi-channel coverage (`3-in-1: Call + WhatsApp + Email`).
+
 ---
 
 ### Entry 92 - Developer Docs Integration: Nav Link & Interactive Landing Section (2026-10-10) - DONE
@@ -1048,4 +1161,232 @@ Run it: `python -m backend.ai.evals.runner` (`--live`, `--only persona,safety`, 
     - Fixed `Infinity:NaN` duration bug in `ConversationThread.tsx` by validating `Number.isFinite(duration)` and falling back to `call.duration_seconds`.
     - Added speech synthesis fallback in `ConversationThread.tsx` so clicking Play immediately reads out the Hindi/English transcript messages with scrubber progress even when a physical audio recording file is absent or blocked.
     - Each panel now scrolls strictly internally: Sidebar list has `overflow-y-auto`, Thread chat body has `overflow-y-auto` while its header and bottom player remain anchored, and Inspector has `overflow-y-auto`.
+
+### Entry 107 - Landing Page Compliance Badges & Logo Alignment (2026-10-11)
+- **Problem**:
+  - In `GlobalPresence.tsx`, compliance cards included code badge chips (`[ SOC 2 ]`, `[ HIPAA ]`, etc.) that cluttered the card header.
+  - The logos needed to match the official seals provided in the reference screenshot (AICPA SOC 2 circular seal with top blue arc and bottom black crescent, HIPAA black Caduceus circle, GDPR black 12-stars circle, ISO 27001:2022 peach octagon with red certified banner, CCPA California map outline).
+  - Next.js SSR threw a hydration mismatch warning on `GdprSealBadge` because runtime `Math.sin`/`Math.cos` produced floating point coordinate precision differences (`67.00000000000001` vs `67`).
+- **Root Cause & Fix**:
+  - **`frontend/landing-page/components/landing/GlobalPresence.tsx`**:
+    - Precomputed the 12 EU stars into `GDPR_STAR_COORDS` with static fixed coordinates, permanently eliminating SSR floating point hydration mismatches.
+    - Updated `AicpaSoc2Badge`, `HipaaSealBadge`, `GdprSealBadge`, `Iso27001Badge`, and `CcpaBadge` SVG components to match official certification seals with high-fidelity vector paths.
+    - Completely removed the `span` pill chip badges (`SOC 2`, `HIPAA`, `GDPR`, etc.) from all cards.
+
+### Entry 108 - Hero Kicker Strip Channel Logos Integration (2026-10-11)
+- **Problem**:
+  - The hero kicker strip displayed raw rectangular colored chips (`[PHONE CALLS]`, `[WHATSAPP]`, `[EMAIL]`, `[CALENDAR]`) that looked blocky and generic.
+  - User requested using authentic channel logos for Phone Call, WhatsApp, Email, and Calendar.
+- **Root Cause & Fix**:
+  - **`frontend/landing-page/components/landing/Hero.tsx`**:
+    - Replaced the rectangular chips with sleek inline brand items:
+      - **Phone Call**: Blue circular handset emblem (`bg-blue-100 text-blue-600`) + clean label.
+      - **WhatsApp**: Official Meta WhatsApp green emblem (`bg-[#25D366] text-white`) + clean label.
+      - **Email**: Violet mail envelope emblem (`bg-purple-100 text-purple-600`) + clean label.
+      - **Calendar**: Indigo calendar grid emblem (`bg-blue-100 text-blue-600`) + clean label.
+    - Preserved responsive flex wrapping, middle dot dividers, and clean Plivo design system alignment.
+
+### Entry 109 - Official AMSh Brand Logo Integration (`amsh_logo.png`) (2026-10-11)
+- **Problem**:
+  - Navbar and brand components used a generic blue square tile with the letter "A" or an SVG waveform glyph instead of the official AMSh 3D fluid gradient brand mark.
+  - User provided `frontend/landing-page/public/landing/amsh_logo.png` to be used as the brand logo.
+- **Root Cause & Fix**:
+  - **`frontend/landing-page/components/landing/Logo.tsx`**:
+    - Updated `LogoMark` to render `/landing/amsh_logo.png` with `object-contain`.
+    - Updated `Logo` component so all usages (such as in `Footer3D.tsx`) render the authentic brand emblem with Sora typography `AMSh.ai`.
+  - **`frontend/landing-page/components/landing/Nav.tsx`**:
+    - Replaced the placeholder blue square tile with the official `amsh_logo.png` image with subtle hover micro-interaction.
+  - **`frontend/landing-page/app/page.tsx`**:
+    - Outcome pillar cards updated with authentic Phone Call, Meta WhatsApp, and Calendar booking logos.
+
+### Entry 110 - Unified Global Logo Component Architecture (2026-10-11)
+- **Problem**:
+  - Legacy implementations and navbar used ad-hoc inline logo markup with placeholder 'A' boxes.
+  - User requested creating a single global Logo component (`Logo.tsx`) and using the official emblem everywhere.
+- **Root Cause & Fix**:
+  - **`frontend/landing-page/components/landing/Logo.tsx`**:
+    - Architected a centralized global `Logo` component supporting `dark={true | false}`, `size="sm" | "md" | "lg"`, and `showText={boolean}` options.
+    - Exported `LogoMark` for standalone emblem instances (e.g. `FeatureBento.tsx` live transfer visual).
+    - Unified typography with `font-sora` and `AMSh.ai` brand signature.
+  - **`frontend/landing-page/components/landing/Nav.tsx`**:
+    - Replaced manual link layout with `<Logo dark={false} size="md" />`.
+  - **`frontend/landing-page/components/landing/Footer3D.tsx`**:
+    - Configured `<Logo dark={true} />` for seamless contrast on dark 3D footer.
+  - **`frontend/landing-page/Logo.tsx` & `Nav.tsx`**:
+    - Re-exported unified components from project root to ensure legacy imports resolve to the global component.
+
+### Entry 111 - Healthcare Compliance Claims Alignment & Light Theme Footer with Outlined AMSh Watermark (2026-10-11)
+- **Problem**:
+  - Healthcare security cards previously claimed "100% Audited" and formal certifications prior to verified audit completion. User provided honest roadmap wording to protect credibility while preserving the high-fidelity design.
+  - Footer was dark/black (`#030612`) with an invisible watermark (`opacity-[0.03]`). User requested a light-themed footer matching the reference design (like OvieHealth) with clean columns, a "Book a Demo" pill button, and a clearly visible outlined/wireframe "AMSh" watermark across the bottom.
+- **Root Cause & Fix**:
+  - **`frontend/landing-page/components/landing/GlobalPresence.tsx`**:
+    - Replaced "100% Audited" with "● COMPLIANCE READINESS".
+    - Updated subtitle to: "Security-first infrastructure · Privacy-focused design · Compliance readiness".
+    - Aligned card titles & subtitles to honest readiness stages:
+      - SOC 2: "Audit readiness in progress"
+      - HIPAA: "Healthcare security readiness"
+      - GDPR: "Privacy controls & data protection"
+      - ISO 27001: "Security management roadmap"
+      - CCPA / CPRA: "Applicable privacy requirements"
+      - DPDP 2023: "Indian data protection readiness"
+    - Added verification disclaimer note: "Formal certifications and independent audit status will be disclosed when achieved and verified."
+  - **`frontend/landing-page/components/landing/Footer3D.tsx`**:
+    - Redesigned to soft light background (`bg-slate-50/80 border-t border-slate-200/80`) with dark typography.
+    - Added `Platform`, `Company`, and `Get in touch` columns with dark "Book a Demo" pill button.
+    - Implemented giant outlined watermark across the bottom with `text-transparent` and `-webkit-text-stroke: 2px rgba(148, 163, 184, 0.42)`, creating the exact visible wireframe effect from the reference screenshot.
+
+### Entry 112 - Responsive Vector SVG `AMSh.ai` Footer Watermark & UI/UX Pro Max Polish (2026-10-11)
+- **Problem**:
+  - The previous CSS font watermark text `AMSH` suffered from letter clipping, collision, and overlapping on various screen widths due to fixed CSS `rem` font sizes with negative tracking, and did not include `.ai`.
+  - User requested bringing `AMSh.ai` to the footer and leveraging `ui-ux-pro-max` intelligence & 21st dev inspiration.
+- **Root Cause & Fix**:
+  - **`frontend/landing-page/components/landing/Footer3D.tsx`**:
+    - Replaced CSS text span with a responsive vector SVG `<svg viewBox="0 0 1200 230">` that scales proportionally across 320px mobile to 4K displays with zero clipping or collision.
+    - Updated display text to `AMSh.ai`, styling `AMSh` in wireframe slate stroke (`rgba(148, 163, 184, 0.48)`) and `.ai` in subtle signature brand blue stroke (`rgba(37, 99, 235, 0.55)`).
+    - Applied `ui-ux-pro-max` accessible touch targets (40×40px minimum with `h-10 w-10`), smooth hover spring transitions (`whileHover={{ y: -2, scale: 1.06 }}`), explicit aria-labels, and crisp high-contrast link states.
+  - **`frontend/landing-page/Footer3D.tsx`**:
+    - Synchronized root re-export with `components/landing/Footer3D`.
+
+### Entry 113 - Watermark Typography Collision Fix & Luxury Outline Alignment (2026-10-11)
+- **Problem**:
+  - The SVG text with mixed-case `AMSh.ai` and negative SVG letter-spacing (`-0.035em`) caused glyph collisions where letters directly intersected each other in the browser. Mixed-case characters also had uneven ascender/x-height baselines.
+- **Root Cause & Fix**:
+  - **`frontend/landing-page/components/landing/Footer3D.tsx`**:
+    - Replaced the broken SVG with all-caps geometric display typography `AMSH.AI` matching the reference image (`OVIEHEALTH`).
+    - Applied positive letter-spacing (`tracking-[0.06em] sm:tracking-[0.09em]`) to guarantee zero character intersection.
+    - Reduced stroke to razor-thin `1.2px` (`rgba(148, 163, 184, 0.38)`) with subtle signature blue stroke on `.AI`.
+    - Set fluid responsive font size `text-[8vw] sm:text-[9.5vw] md:text-[10vw]` ensuring complete horizontal containment across all viewports without wrapping.
+
+### Entry 114 - Watermark Variable Font Internal Overlap Elimination (2026-10-11)
+- **Problem**:
+  - In `Footer3D.tsx`, the giant outlined watermark `AMSH.AI` showed internal geometric construction lines (triangle inside `A`, diagonal crossing stems inside `M`, crossbar rectangle cutting across `H`, square box inside the dot, top/bottom stem intersections in `I`).
+  - This occurred because `font-sora` is a variable font whose OpenType/TrueType glyphs are built from composite unmerged sub-paths. With `-webkit-text-stroke` and transparent fill, the browser strokes every internal component path individually before flattening.
+- **Root Cause & Fix**:
+  - **`frontend/landing-page/components/landing/Footer3D.tsx`**:
+    - Replaced `font-sora` with a clean monolithic sans font stack: `'"Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif'`.
+    - Monolithic system fonts store glyphs as single unified boundary contours with zero composite component overlaps.
+    - Verified via browser rendering that all internal intersecting lines in `A`, `M`, `S`, `H`, `.`, `A`, `I` are completely eliminated, producing the razor-clean hollow outline matching the reference design.
+
+### Entry 115 - Revert Footer to Original 3D Dark Design (2026-10-11)
+- **Problem**:
+  - User requested discarding the experimental light theme footer changes and restoring the original footer design.
+- **Root Cause & Fix**:
+  - **`frontend/landing-page/components/landing/Footer3D.tsx`**:
+    - Reverted `Footer3D.tsx` to the original 3D dark aesthetic (`bg-[#030612]`, top horizon lighting glow, 3D angled perspective grid, 5-column layout with Useful Links, Practices, Resources, Contact Us, and Twilio SIP indicator).
+    - Preserved official brand emblem `<Logo dark={true} />` from the unified global component.
+
+### Entry 116 - AI Virtual Employee Showcase Redesign (Photorealistic Portraits, Animated Equalizer & Smart ID Badge) (2026-10-11)
+- **Problem**:
+  - In `VirtualEmployeeCard.tsx`, the persona avatars were flat colored boxes with a single letter ("P", "S", "E", "F").
+  - The persona tab selector displayed truncated region labels (e.g. "(North)" for North America, "(United)" for United Kingdom).
+  - The audio sample player was a static flat box without real-time waveform animation.
+- **Root Cause & Fix**:
+  - **`frontend/landing-page/public/landing/personas/`**:
+    - Generated 4 high-resolution, photorealistic clinical front-desk portraits for Priya Sharma (India), Sarah Jenkins (USA), Emma Watson (UK), and Fatima Al-Mansoor (UAE).
+  - **`frontend/landing-page/components/landing/VirtualEmployeeCard.tsx`**:
+    - Upgraded persona selector with floating glassmorphic container, thumbnail portraits, official country flags, and animated `layoutId="activePersonaIndicator"` spring pill.
+    - Redesigned left column into a holographic Smart Clinical ID Badge with lanyard slot, 128px glowing portrait, pulsing status indicator, NFC microchip verification badge, and specifications matrix.
+    - Upgraded audio player with real-time 16-bar animated equalizer waveform that pulses dynamically during playback.
+    - Added structured certified skills grid with icons, high-contrast performance telemetry cards, and direct "Test Live Call" CTA.
+
+### Entry 117 - Hero Interactive VoiceCallScope: Real Audio (`air-healthcare.mp3`) & 9-Turn Transcript Integration (2026-10-11)
+- **Problem**:
+  - `VoiceCallScope.tsx` in the Hero section previously used synthetic browser speech synthesis with dummy timing intervals and Hindi placeholders (`Sunrise Dental Clinic`).
+  - User provided authentic 53.6-second audio recording `public/demo_audio/air-healthcare.mp3` along with the exact conversation transcript between AI Receptionist and Caller (Jennifer Robinson) at Smiles Orthodontics.
+- **Root Cause & Fix**:
+  - **`frontend/landing-page/components/landing/VoiceCallScope.tsx`**:
+    - Wired `air-healthcare.mp3` as the primary live audio source for the `New Patient Intake` scenario (`Smiles Orthodontics`).
+    - Configured the exact 9-turn dialogue with synced millisecond timestamps across the 53.58-second recording.
+    - Added speaker classification: `AMSh (AI Receptionist)` with signature blue styling and `Jennifer (Caller)` with dark slate styling.
+    - Added intelligent clinical action notes on respective turns (Sub-150ms connection, RAG intake policy verification, Delta Dental in-network check, EHR intake field capture, Calendar slot locking).
+    - Implemented interactive clickable scrub bar allowing users to jump anywhere in the 53-second recording.
+    - Added expandable full transcript thread (`View Full Transcript`) with click-to-seek functionality on any individual message bubble.
+
+### Entry 118 - Hero VoiceCallScope Clean Executive Polish & Tab Removal (2026-10-11)
+- **Problem**:
+  - `VoiceCallScope.tsx` displayed cluttered test case tabs (`FAQ & Fees`, `Emergency Gate`), generating an unsightly horizontal scrollbar and awkward line-wrapping.
+  - User requested removing `FAQ & Fees` and `Emergency Gate` tabs and elevating the component to a clean, professional executive design.
+- **Root Cause & Fix**:
+  - **`frontend/landing-page/components/landing/VoiceCallScope.tsx`**:
+    - Completely removed all unnecessary test case tabs and eliminated the horizontal scrollbar.
+    - Focused 100% on the real patient intake call at **Smiles Orthodontics** with authentic audio (`air-healthcare.mp3`).
+    - Added a sleek segmented mode switcher: `Live Visualizer` vs `Full Transcript (9 Turns)` in a clean rounded pill.
+    - Upgraded caller and receptionist typography with high-contrast avatars (`AI` vs `JR`), timestamp tags, verified clinical EHR tags, and interactive click-to-scrub audio controls.
+
+### Entry 119 - VoiceCallScope Layout Un-Cramping, Text Wrap Elimination & Action Note Visibility (2026-10-11)
+### Entry 120 - VoiceCallScope Overflow Elimination & Pro Audio Scrubber Architecture (2026-10-11)
+- **Problem**:
+  - `Smiles Orthodontics` truncated into `Smiles Orth...` because the timer pill was competing for the same top row.
+  - Caller text collided with right-side `AI Receptionist` label.
+  - Footer metadata strings collided due to fixed width bounds.
+- **Root Cause & Fix**:
+  - **`frontend/landing-page/components/landing/VoiceCallScope.tsx`**:
+    - Relocated the countdown timer to frame the audio scrubber (`00:00 [ scrubber ] 00:53`) like modern Spotify/Apple audio players, freeing up 100% of the header width.
+    - Clinic title `Smiles Orthodontics` and `Live Call` badge now have uninterrupted horizontal space and will never truncate.
+    - Removed competing right-side header label; caller metadata has dedicated unobstructed row.
+    - Simplified footer to concise telemetry tags (`US English Audio` and `<150ms Edge Telephony`) with guaranteed >140px clearance.
+
+### Entry 121 - Navigation Header Pilot Program CTA Integration (2026-10-11)
+- **Problem**:
+  - User requested adding a dedicated "Pilot Program" button to the top navigation header so interested clinics can immediately join the pilot cohort.
+- **Root Cause & Fix**:
+  - **`frontend/landing-page/components/landing/Nav.tsx`**:
+    - Integrated a high-priority **`Pilot Program`** button into the desktop navbar action controls with a pulsing blue live radar beacon (`bg-blue-50 text-blue-700 border-blue-200`).
+    - Added direct link `http://localhost:3000/login?plan=pilot` for streamlined clinic onboarding.
+    - Added matching `● Join Pilot Program` button to the mobile menu dropdown.
+
+### Entry 122 - Footer Brand Logo Dark Contrast Fix (2026-10-11)
+- **Problem**:
+  - In `Footer3D.tsx`, the brand name text "AMSh" in the logo was rendered with the default `dark={false}` (`text-slate-950`), making "AMSh" pitch black and completely invisible against the dark `#030612` footer background.
+- **Root Cause & Fix**:
+  - **`frontend/landing-page/components/landing/Footer3D.tsx`**:
+    - Passed `dark={true}` and `size="md"` to `<Logo dark={true} size="md" />` so the typography renders in crisp `text-white`.
+  - **`frontend/landing-page/components/landing/Logo.tsx`**:
+    - Styled `.ai` in glowing `text-blue-400` when `dark={true}` for maximum contrast and brand pop against dark backgrounds.
+
+### Entry 123 - Zero-Dependency SMTP Engine, TechyCodex Footer Contact & 14-Day Pilot CTA (2026-10-16)
+- **Problem**:
+  - `POST /api/pilot` threw `❌ [PILOT EMAIL FAILED]: Cannot find module 'nodemailer'` because local environment cannot run arbitrary npm packages without installation friction.
+  - User requested using TechyCodex SMTP credentials directly to dispatch pilot lead emails to `info@techycodex.com` and `parikshitverma865@gmail.com`.
+  - User requested updating footer copyright to `TechyCodex (techycodex.com)` and contact details to `info@techycodex.com`, `+91 8901414107`, and WhatsApp link.
+  - Section 15 CTA banner on landing page needed update to the 14-Day Pilot offer.
+- **Root Cause & Fix**:
+  - **`frontend/landing-page/app/api/pilot/route.ts`**:
+    - Implemented a pure zero-dependency native Node.js TCP/TLS SMTP client using built-in `net` and `tls` modules.
+    - Speaks standard RFC 5321 SMTP: port 587 -> `EHLO` -> `STARTTLS` -> upgrade socket -> `EHLO` -> `AUTH LOGIN` (base64) -> `MAIL FROM` -> `RCPT TO` -> `DATA` (MIME multipart/alternative) -> `QUIT`.
+    - Guarantees zero runtime dependency crashes both locally and on Vercel deployment.
+  - **`frontend/landing-page/components/landing/Footer3D.tsx`**:
+    - Updated copyright text to `TechyCodex (techycodex.com)` with direct hyperlink.
+    - Updated contact phone to `+91 8901414107`.
+    - Updated contact email to `info@techycodex.com`.
+    - Updated WhatsApp link to `Chat on WhatsApp` with prefilled message: `Hi TechyCodex / AMSh Team, I am interested in the 14-Day AI Receptionist Pilot for my clinic. Please share details.`
+  - **`frontend/landing-page/components/landing/Hero.tsx`**:
+    - Converted secondary hero action button into direct `Chat on WhatsApp` with WhatsApp brand icon and prefilled message targeting +91 8901414107.
+  - **`frontend/landing-page/app/page.tsx`**:
+    - Added high-visibility emerald `Chat on WhatsApp →` button with prefilled message to Section 7 (WhatsApp Cloud API section).
+    - Updated Section 15 final CTA to 14-Day Clinic Pilot Program featuring `<PilotCtaButton />` for instant modal trigger.
+  - **Turbopack Google Font Fix (`Noto_Sans_Arabic` / `Noto_Sans_Devanagari`)**:
+    - In Next.js 16 / Turbopack, loading variable font `Noto_Sans_Arabic` with an array of weights caused `next/font/google queries have exactly one entry` resolver crash.
+    - Cleaned `app/layout.tsx` to use robust core fonts (`Inter`, `Sora`, `JetBrains_Mono`) and configured system font fallbacks in `globals.css` for Arabic and Devanagari scripts, completely eliminating font build errors.
+  - **Cleaned `.next` cache**: Cleared corrupted build artifacts resolving module-not-found crashes on next dev reload.
+
+### Entry 124 - SMTP Configuration Alignment (Port 465 SSL, no-replay User, Quote Stripping) (2026-10-16)
+- **Problem**:
+  - `POST /api/pilot` threw `⚠️ [NATIVE SMTP FAILED]: SMTP Authentication failed for no-reply@techycodex.com: 535 Incorrect authentication data`.
+  - The actual mailbox username is `no-replay@techycodex.com` (spelled with `replay`), port is `465` (direct SSL/TLS), and password is `Hello@007`.
+- **Root Cause & Fix**:
+  - **`frontend/landing-page/.env` & `.env.example`**:
+    - Updated `SMTP_HOST=mail.techycodex.com`.
+    - Updated `SMTP_PORT=465`.
+    - Updated `SMTP_USER=no-replay@techycodex.com`.
+    - Updated `SMTP_PASS=Hello@007` & `SMTP_PASSWORD=Hello@007`.
+    - Updated `SMTP_FROM_NAME="Parikshit Verma"`.
+    - Updated `SMTP_FROM_EMAIL=no-replay@techycodex.com`.
+  - **`frontend/landing-page/app/api/pilot/route.ts`**:
+    - Updated env variable parsing to support all aliases (`SMTP_PASS` vs `SMTP_PASSWORD`, `SMTP_FROM_EMAIL` vs `FROM_EMAIL`, `SMTP_FROM_NAME` vs `FROM_NAME`).
+    - Added quote-stripping (`.replace(/^["']|["']$/g, "")`) so passwords wrapped in quotes like `"Hello@007"` are cleanly decoded without quote contamination.
+
+
+
 

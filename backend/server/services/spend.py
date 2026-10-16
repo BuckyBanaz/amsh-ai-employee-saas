@@ -34,8 +34,8 @@ RATE_CARD: Dict[str, Tuple[str, str, str, str, float]] = {
     "llm.gemini.output": ("llm.gemini", "AI model: Gemini (output)", "Google", "per 1M tokens", 0.40),
     "stt": ("stt", "Speech to text", "Deepgram", "per minute of call", 0.0043),
     "tts": ("tts", "Text to speech", "Cartesia", "per 1,000 characters", 0.03),
-    "telephony": ("telephony", "Phone calls", "Twilio / Exotel", "per minute", 0.012),
-    "sms": ("sms", "SMS", "Twilio / Exotel", "per message", 0.0075),
+    "telephony": ("telephony", "Phone calls", "Twilio / Plivo", "per minute", 0.012),
+    "sms": ("sms", "SMS", "Twilio / Plivo", "per message", 0.0075),
     "whatsapp": ("whatsapp", "WhatsApp", "Meta", "per message", 0.0125),
     "email": ("email", "Email", "SMTP provider", "per message", 0.0004),
 }
@@ -44,8 +44,8 @@ TOOLS: Dict[str, Dict[str, str]] = {
     "llm.gemini": {"label": "AI model: Gemini", "provider": "Google", "unit": "tokens"},
     "stt": {"label": "Speech to text", "provider": "Deepgram", "unit": "minutes"},
     "tts": {"label": "Text to speech", "provider": "Cartesia", "unit": "characters"},
-    "telephony": {"label": "Phone calls", "provider": "Twilio / Exotel", "unit": "minutes"},
-    "sms": {"label": "SMS", "provider": "Twilio / Exotel", "unit": "messages"},
+    "telephony": {"label": "Phone calls", "provider": "Twilio / Plivo", "unit": "minutes"},
+    "sms": {"label": "SMS", "provider": "Twilio / Plivo", "unit": "messages"},
     "whatsapp": {"label": "WhatsApp", "provider": "Meta", "unit": "messages"},
     "email": {"label": "Email", "provider": "SMTP provider", "unit": "messages"},
 }

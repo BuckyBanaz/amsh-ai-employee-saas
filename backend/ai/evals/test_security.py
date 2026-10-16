@@ -18,8 +18,9 @@ from backend.server.database.session import get_db
 
 
 def fake_settings(**over):
-    base = dict(TWILIO_AUTH_TOKEN="12345", EXOTEL_WEBHOOK_SECRET="s3cret", ALLOW_DEV_FALLBACKS=False, PUBLIC_BASE_URL="https://mycompany.com",
-                JWT_SECRET="x" * 40, ENFORCE_VOICE_QUOTA=False, EXOTEL_ACCOUNT_SID=None, EXOTEL_API_KEY=None, EXOTEL_API_TOKEN=None, EXOTEL_PHONE_NUMBER=None)
+    base = dict(TWILIO_AUTH_TOKEN="12345", PLIVO_AUTH_TOKEN="plivo-secret", ALLOW_DEV_FALLBACKS=False, ENV="production", DEBUG=False, PUBLIC_BASE_URL="https://mycompany.com",
+                JWT_SECRET="x" * 40, ENFORCE_VOICE_QUOTA=False, PLIVO_AUTH_ID=None, PLIVO_PHONE_NUMBER=None,
+                TWILIO_ACCOUNT_SID=None, TWILIO_PHONE_NUMBER=None)
     base.update(over)
     return SimpleNamespace(**base)
 
@@ -29,11 +30,16 @@ class SignatureMath(unittest.TestCase):
         params = {"Digits": "1234", "To": "+18005551212", "From": "+14158675310", "Caller": "+14158675310", "CallSid": "CA1234567890ABCDE"}
         self.assertEqual(ws.twilio_signature("12345", "https://mycompany.com/myapp.php?foo=1&bar=2", params), "GvWf1cFY/Q7PnoempGyD5oXAezc=")
 
-    def test_exotel_key_compare(self):
-        self.assertTrue(ws.exotel_key_ok("abc", "abc"))
-        self.assertFalse(ws.exotel_key_ok("abc", "abd"))
-        self.assertFalse(ws.exotel_key_ok("abc", ""))
-        self.assertFalse(ws.exotel_key_ok("", ""))
+    def test_plivo_v3_signature_check(self):
+        # Reference value from the Plivo SDK's own signing helper: HMAC-SHA256(auth token, url + "." + nonce)
+        from plivo.utils.signature_v3 import get_signature_v3
+        url, nonce = "https://mycompany.com/api/voice/plivo/incoming", "n1"
+        good = get_signature_v3("plivo-secret", url, nonce).decode()
+        self.assertTrue(ws.plivo_signature_ok("GET", url, nonce, "plivo-secret", good))
+        self.assertFalse(ws.plivo_signature_ok("GET", url, nonce, "other-token", good))
+        self.assertFalse(ws.plivo_signature_ok("GET", url, "n2", "plivo-secret", good))  # nonce is part of the signed data
+        self.assertFalse(ws.plivo_signature_ok("GET", url, nonce, "plivo-secret", "garbage"))
+        self.assertFalse(ws.plivo_signature_ok("GET", url, nonce, "plivo-secret", ""))
 
     def test_stream_token_is_tied_to_the_business_and_expires(self):
         t = ws.create_stream_token("biz-1", now=1000)
@@ -44,15 +50,28 @@ class SignatureMath(unittest.TestCase):
         self.assertFalse(ws.stream_token_ok("biz-1", None))
         self.assertFalse(ws.stream_token_ok("biz-1", "1100.deadbeef"))
 
+    def test_plivo_stream_token_survives_the_extra_headers_round_trip(self):
+        # The answer route puts the token in <Stream extraHeaders="token=...">; Plivo echoes it in the start event
+        from backend.ai.realtime.call_tunnels.plivo_tunnel import parse_extra_headers
+        t = ws.create_stream_token("biz-1", now=1000)
+        echoed = parse_extra_headers(f"token={t}")
+        self.assertTrue(ws.stream_token_ok("biz-1", echoed.get("token"), now=1100))
+        self.assertFalse(ws.stream_token_ok("biz-2", echoed.get("token"), now=1100))
+        self.assertEqual(parse_extra_headers("a=1;b=two; c = 3"), {"a": "1", "b": "two", "c": "3"})
+        # the shape live Plivo actually sends (captured from a real call's start event)
+        live = parse_extra_headers(f"{{X-PH-token: {t}}}")
+        self.assertEqual(live, {"token": t})
+        self.assertTrue(ws.stream_token_ok("biz-1", live.get("token"), now=1100))
+
 
 class TelephonyWebhooks(unittest.TestCase):
     def setUp(self):
-        from backend.server.api.routes import exotel, voice
+        from backend.server.api.routes import plivo, voice
 
         factory, self.biz = make_db_factory()
         app = FastAPI()
         app.include_router(voice.router)
-        app.include_router(exotel.router)
+        app.include_router(plivo.router)
 
         def override():
             with factory() as db:
@@ -91,14 +110,33 @@ class TelephonyWebhooks(unittest.TestCase):
         with patch.object(ws, "get_settings", lambda: fake_settings(TWILIO_AUTH_TOKEN=None, ALLOW_DEV_FALLBACKS=True)):
             self.assertEqual(self.c.post("/api/voice/status", data=form).status_code, 200)
 
-    def test_exotel_webhook_needs_the_shared_key(self):
-        with patch.object(ws, "get_settings", lambda: fake_settings()):
-            self.assertEqual(self.c.post("/api/voice/exotel/status", data={"CallSid": "E1"}).status_code, 403)
-            self.assertEqual(self.c.post("/api/voice/exotel/status?key=wrong", data={"CallSid": "E1"}).status_code, 403)
-            self.assertEqual(self.c.post("/api/voice/exotel/status?key=s3cret", data={"CallSid": "E1"}).status_code, 200)
-            self.assertEqual(self.c.get("/api/voice/exotel/incoming?CallSid=E1").status_code, 403)
-        with patch.object(ws, "get_settings", lambda: fake_settings(EXOTEL_WEBHOOK_SECRET=None)):
-            self.assertEqual(self.c.post("/api/voice/exotel/status", data={"CallSid": "E1"}).status_code, 403)
+    def plivo_sign(self, path, form, nonce="n1", token="plivo-secret"):
+        """Headers Plivo would send: V3 signature over the public URL + sorted POST params + nonce (SDK helper)."""
+        from plivo.utils.signature_v3 import construct_post_url, get_signature_v3
+        base = construct_post_url("https://mycompany.com" + path, form).decode("utf-8")
+        return {"X-Plivo-Signature-V3": get_signature_v3(token, base, nonce).decode(), "X-Plivo-Signature-V3-Nonce": nonce}
+
+    def test_plivo_webhook_needs_a_valid_signature(self):
+        form = {"CallUUID": "U1", "CallStatus": "completed"}
+        with patch.object(ws, "get_settings", lambda: fake_settings()), patch("backend.ai.realtime.twilio.call_control.get_settings", lambda: fake_settings()):
+            self.assertEqual(self.c.post("/api/voice/plivo/status", data=form).status_code, 403)
+            self.assertEqual(self.c.post("/api/voice/plivo/status", data=form, headers={"X-Plivo-Signature-V3": "nope", "X-Plivo-Signature-V3-Nonce": "n1"}).status_code, 403)
+            self.assertEqual(self.c.post("/api/voice/plivo/status", data=form, headers=self.plivo_sign("/api/voice/plivo/status", form, token="other")).status_code, 403)
+            self.assertEqual(self.c.post("/api/voice/plivo/status", data=form, headers=self.plivo_sign("/api/voice/plivo/status", form)).status_code, 200)
+            self.assertEqual(self.c.get("/api/voice/plivo/incoming?CallUUID=U1").status_code, 403)  # GET without a signature is refused
+        with patch.object(ws, "get_settings", lambda: fake_settings(PLIVO_AUTH_TOKEN=None)):
+            self.assertEqual(self.c.post("/api/voice/plivo/status", data=form).status_code, 403)
+
+    def test_plivo_answer_url_streams_only_with_a_signed_token(self):
+        form = {"CallUUID": "U1", "From": "+919999999999", "To": "+912000000000"}
+        with patch.object(ws, "get_settings", lambda: fake_settings()), \
+             patch("backend.ai.realtime.twilio.call_control.get_settings", lambda: fake_settings()), \
+             patch("backend.server.api.routes.plivo.get_settings", lambda: fake_settings()):
+            self.assertEqual(self.c.post("/api/voice/plivo/incoming", data=form).status_code, 403)
+            ok = self.c.post("/api/voice/plivo/incoming", data=form, headers=self.plivo_sign("/api/voice/plivo/incoming", form))
+            self.assertEqual(ok.status_code, 200)
+            self.assertIn("<Stream", ok.text)
+            self.assertIn('extraHeaders="token=', ok.text)  # the stream token rides in extraHeaders, which Plivo echoes in start
 
 
 class PaidVoiceEndpoints(unittest.TestCase):
@@ -107,8 +145,12 @@ class PaidVoiceEndpoints(unittest.TestCase):
 
         ratelimit.reset()
         factory, self.biz = make_db_factory()
+        self.factory = factory
         with factory() as db:
+            from backend.server.database.models.phone_number import PhoneNumber
+
             db.add(Business(id="biz-2", name="Other"))
+            db.add(PhoneNumber(business_id=self.biz, number="+912000000000", status="active"))  # the clinic's own (Plivo) AI line
             owner = User(email="o@c.com", hashed_password="x", name="Owner", business_id=self.biz, role="owner")
             db.add(owner)
             db.commit()
@@ -168,11 +210,11 @@ class PaidVoiceEndpoints(unittest.TestCase):
 
         seen = {}
 
-        async def fake_call(phone, callback_url=None):
-            seen["url"] = callback_url
-            return {"Call": {"Sid": "X1"}}
+        async def fake_call(phone, caller_id=None, answer_url=None, hangup_url=None, record=True):
+            seen["url"] = answer_url
+            return {"request_uuid": "X1"}
 
-        with patch.object(voice.exotel_client, "is_configured", lambda: True), patch.object(voice.exotel_client, "create_outbound_call", fake_call), \
+        with patch.object(voice.plivo_client, "is_configured", lambda: True), patch.object(voice.plivo_client, "create_outbound_call", fake_call), \
              patch.object(voice, "get_settings", lambda: fake_settings()):
             self.assertEqual(self.c.post("/api/voice/call-me", json={"phone_number": "12"}, headers=self.h).status_code, 400)
             self.assertEqual(self.c.post("/api/voice/call-me", json={"phone_number": "+91 98765-43210; rm"}, headers=self.h).status_code, 400)
@@ -180,9 +222,35 @@ class PaidVoiceEndpoints(unittest.TestCase):
             self.assertTrue(r.json()["success"])
             self.assertIn(f"business_id={self.biz}", seen["url"])  # the payload's business was ignored
             self.assertNotIn("biz-2", seen["url"])
-            self.assertIn("key=s3cret", seen["url"])  # the call-back carries the Exotel shared key
+            self.assertIn("/api/voice/plivo/incoming", seen["url"])  # the answer URL is our Plivo route
+            self.assertNotIn("key=", seen["url"])  # no shared secret in URLs: Plivo webhooks are signed
             self.assertEqual(self.c.post("/api/voice/call-me", json={"phone_number": "+919876543210"}, headers=self.h).status_code, 200)
             self.assertEqual(self.c.post("/api/voice/call-me", json={"phone_number": "+919876543210"}, headers=self.h).status_code, 429)  # same number: 2 per hour
+
+    def test_call_me_uses_only_the_clinics_own_provider_and_number(self):
+        from backend.server.api.routes import voice
+        from backend.server.database.models.agent import Agent
+
+        placed = []
+
+        async def fake_call(phone, caller_id=None, answer_url=None, hangup_url=None, record=True):
+            placed.append(caller_id)
+            return {"request_uuid": "X1"}
+
+        with patch.object(voice.plivo_client, "is_configured", lambda: True), patch.object(voice.plivo_client, "create_outbound_call", fake_call),              patch.object(voice, "get_settings", lambda: fake_settings()):
+            r = self.c.post("/api/voice/call-me", json={"phone_number": "+15550001111"}, headers=self.h).json()
+            self.assertEqual((r["provider"], r["from_number"]), ("plivo", "+912000000000"))  # a +1 callee does not switch a Plivo clinic to Twilio
+            self.assertEqual(placed, ["+912000000000"])  # from the clinic's own AI number
+            with self.factory() as db:  # the same clinic, now saved as a Twilio clinic (Twilio not configured here)
+                agent = db.query(Agent).filter(Agent.business_id == self.biz).first()
+                if agent:
+                    agent.config = {**(agent.config or {}), "telephony_provider": "twilio"}
+                else:
+                    db.add(Agent(business_id=self.biz, name="AI", config={"telephony_provider": "twilio"}))
+                db.commit()
+            r = self.c.post("/api/voice/call-me", json={"phone_number": "+919876543210"}, headers=self.h).json()
+            self.assertEqual((r["success"], r["provider"]), (False, "twilio"))  # refused: never falls back to Plivo
+            self.assertEqual(len(placed), 1)
 
 
 class SimulateEndpoint(unittest.TestCase):
@@ -234,7 +302,7 @@ class NoUnguardedRoutes(unittest.TestCase):
 
         from backend.main import app
 
-        guards = {security.get_current_user, security.require_platform_admin, security.get_voice_user, ws.verify_twilio, ws.verify_exotel}
+        guards = {security.get_current_user, security.require_platform_admin, security.get_voice_user, ws.verify_twilio, ws.verify_plivo}
 
         def calls(dep):
             out = {dep.call} if dep.call else set()
