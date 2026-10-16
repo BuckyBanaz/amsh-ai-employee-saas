@@ -4,7 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Icon } from "./icons";
-import { BASE_URL } from "../../utils/api_endpoints";
+import { BASE_URL } from "@/utils/api_endpoints";
 
 const HeroOrb = dynamic(() => import("./HeroOrb"), {
   ssr: false,
