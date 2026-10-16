@@ -82,11 +82,11 @@ function ActivityFeed() {
       <div className="mt-3 grid grid-cols-2 gap-2 border-t border-white/[0.06] pt-3">
         <div>
           <p className="text-[11px] text-white/45">Missed enquiries</p>
-          <p className="font-[family-name:var(--font-display)] text-lg font-semibold text-white">0</p>
+          <p className="font-sora text-lg font-semibold text-white">0</p>
         </div>
         <div>
           <p className="text-[11px] text-white/45">Open 24/7</p>
-          <p className="font-[family-name:var(--font-display)] text-lg font-semibold text-emerald-300">On shift</p>
+          <p className="font-sora text-lg font-semibold text-emerald-300">On shift</p>
         </div>
       </div>
     </div>
@@ -122,7 +122,7 @@ export default function AuthShowcase() {
       {/* promise */}
       <div className="relative mt-2 xl:mt-4 max-w-lg shrink-0">
         <p className="text-[10px] xl:text-xs font-semibold uppercase tracking-[0.18em] text-cyan-300">AMSh for clinics</p>
-        <h1 className="mt-1 font-[family-name:var(--font-display)] text-[1.65rem] xl:text-[2rem] font-semibold leading-[1.12] tracking-tight">
+        <h1 className="mt-1 font-sora text-[1.65rem] xl:text-[2rem] font-semibold leading-[1.12] tracking-tight">
           Your clinic&apos;s{" "}
           <span className="bg-gradient-to-r from-[#7FB2FF] via-[#A5B4FC] to-[#67E8F9] bg-clip-text text-transparent">24/7 AI employee.</span>
         </h1>

@@ -18,15 +18,34 @@ const inter = Inter({
 
 const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
-  variable: "--font-mono",
+  variable: "--font-jetbrains",
   display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "AMSh — The 24/7 AI Receptionist for Modern Clinics",
+  metadataBase: new URL("https://getamsh.com"),
+  title: "AI Receptionist for Clinics & Dentists | AMSh (getamsh.com)",
   description:
-    "Never miss another patient call. AMSh answers your clinic phones 24/7 in fluent Hindi, English and Hinglish, books slots directly in your calendar, and sends WhatsApp confirmations.",
+    "Meet AMSh, your AI virtual front-desk employee at getamsh.com. Answer clinic calls 24/7, manage appointment requests, handle follow-ups and help your team respond faster.",
+  alternates: {
+    canonical: "https://getamsh.com",
+  },
+  openGraph: {
+    title: "AI Receptionist for Clinics & Dentists | AMSh",
+    description:
+      "Meet AMSh, your AI virtual front-desk employee. Answer clinic calls 24/7, manage appointment requests, handle follow-ups and help your team respond faster.",
+    url: "https://getamsh.com",
+    siteName: "AMSh - getamsh.com",
+    locale: "en_US",
+    type: "website",
+  },
+  icons: {
+    icon: "/landing/amsh_logo.png",
+    apple: "/landing/amsh_logo.png",
+  },
 };
+
+import PilotModal from "@/components/landing/PilotModal";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -35,6 +54,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         suppressHydrationWarning
         className={`${inter.variable} ${sora.variable} ${jetbrainsMono.variable} font-sans bg-white text-slate-900 min-h-full flex flex-col selection:bg-blue-100 selection:text-blue-900`}
       >
+        <PilotModal />
         {children}
       </body>
     </html>

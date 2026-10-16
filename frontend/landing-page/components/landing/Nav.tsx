@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { Logo } from "./Logo";
 
 const NAV_LINKS = [
   { href: "/#demo", label: "Voice AI" },
@@ -28,14 +29,9 @@ export default function Nav() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <nav aria-label="Main navigation" className="flex h-[60px] items-center justify-between gap-4">
           
-          {/* 1. Left: Brand Wordmark */}
-          <Link href="/" className="flex items-center gap-2 group shrink-0" aria-label="AMSh Home">
-            <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-sm shadow-xs group-hover:bg-[#323dfe] transition-colors shrink-0">
-              A
-            </div>
-            <span className="font-sora font-extrabold text-[19px] sm:text-[20px] tracking-tight text-slate-950 whitespace-nowrap">
-              AMSh<span className="text-blue-600">.ai</span>
-            </span>
+          {/* 1. Left: Unified Global Brand Logo */}
+          <Link href="/" className="flex items-center group shrink-0" aria-label="AMSh Home">
+            <Logo dark={false} size="md" className="group-hover:opacity-90 transition-opacity" />
           </Link>
 
           {/* 2. Center: Slash-Separated Links (Never Collides) */}
@@ -55,31 +51,24 @@ export default function Nav() {
             ))}
           </ul>
 
-          {/* 3. Right: Action Controls (Theme button removed) */}
+          {/* 3. Right: Action Controls (Clean Pilot Program Only) */}
           <div className="flex items-center gap-2 sm:gap-3 font-mono-ui shrink-0">
-            {/* LOGIN */}
-            <a
-              href="http://localhost:3000/login"
-              className="hidden sm:inline-flex text-[11.5px] uppercase tracking-[0.12em] font-semibold text-slate-600 hover:text-slate-950 px-2.5 py-1.5 transition-colors whitespace-nowrap"
+            {/* PILOT PROGRAM BUTTON (Primary High-Priority Blue Button) */}
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof window !== "undefined") {
+                  window.dispatchEvent(new CustomEvent("open-pilot-modal"));
+                }
+              }}
+              className="inline-flex items-center gap-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white px-4 sm:px-4.5 py-2 text-[11px] sm:text-[11.5px] font-bold uppercase tracking-[0.14em] transition-all shadow-md shadow-blue-500/25 cursor-pointer whitespace-nowrap active:scale-[0.98]"
             >
-              Login
-            </a>
-
-            {/* CONTACT SALES */}
-            <a
-              href="#contact"
-              className="hidden 2xl:inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-3.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-800 hover:border-slate-300 hover:bg-slate-50 transition-all shadow-2xs whitespace-nowrap"
-            >
-              Contact Sales
-            </a>
-
-            {/* SIGN UP FOR FREE */}
-            <a
-              href="http://localhost:3000/login"
-              className="inline-flex items-center justify-center rounded-md bg-[#0a0a0a] hover:bg-[#323dfe] text-white px-3.5 sm:px-4 py-2 text-[11px] sm:text-[11.5px] font-bold uppercase tracking-[0.14em] transition-all shadow-xs cursor-pointer whitespace-nowrap"
-            >
-              Sign Up For Free
-            </a>
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-200 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-white" />
+              </span>
+              <span>Pilot Program</span>
+            </button>
 
             {/* Mobile / Tablet Toggle (< xl) */}
             <button
@@ -113,19 +102,20 @@ export default function Nav() {
               {item.label}
             </a>
           ))}
-          <div className="pt-3 flex flex-col gap-2.5">
-            <a
-              href="http://localhost:3000/login"
-              className="w-full text-center py-2.5 text-slate-700 bg-slate-50 border border-slate-200 rounded-md uppercase tracking-wider font-semibold text-[11px]"
+          <div className="pt-3">
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                if (typeof window !== "undefined") {
+                  window.dispatchEvent(new CustomEvent("open-pilot-modal"));
+                }
+              }}
+              className="w-full text-center py-2.5 text-white bg-blue-600 hover:bg-blue-700 rounded-md font-bold uppercase tracking-wider text-[11px] shadow-sm flex items-center justify-center gap-2"
             >
-              Login
-            </a>
-            <a
-              href="http://localhost:3000/login"
-              className="w-full text-center py-2.5 text-white bg-[#0a0a0a] rounded-md font-bold uppercase tracking-wider text-[11px]"
-            >
-              Sign Up For Free
-            </a>
+              <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+              Join Pilot Program
+            </button>
           </div>
         </div>
       )}

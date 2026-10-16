@@ -186,18 +186,23 @@ export default function GlobalPricing() {
                 </div>
 
                 <div className="pt-8">
-                  <a
-                    href="http://localhost:3000/login"
-                    className={`w-full py-3 px-4 rounded-xl font-mono-ui text-xs font-bold uppercase tracking-wider text-center block transition-all shadow-xs ${
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (typeof window !== "undefined") {
+                        window.dispatchEvent(new CustomEvent("open-pilot-modal"));
+                      }
+                    }}
+                    className={`w-full py-3.5 px-4 rounded-xl font-mono-ui text-xs font-bold uppercase tracking-wider text-center block transition-all shadow-xs cursor-pointer active:scale-[0.98] ${
                       tier.featured
-                        ? "bg-blue-600 hover:bg-blue-700 text-white"
+                        ? "bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/25"
                         : "bg-slate-950 hover:bg-blue-600 text-white"
                     }`}
                   >
-                    Start 14-Day Free Trial
-                  </a>
+                    Join 14-Day Pilot Program &rarr;
+                  </button>
                   <p className="text-center font-mono-ui text-[10px] text-slate-400 mt-2">
-                    Cancel anytime &bull; No setup fees
+                    Guided onboarding &bull; Agreed pilot terms
                   </p>
                 </div>
               </div>

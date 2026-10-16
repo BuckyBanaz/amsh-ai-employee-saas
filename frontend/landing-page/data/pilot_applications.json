@@ -1,0 +1,132 @@
+[
+  {
+    "id": "pilot_1792161401130",
+    "receivedAt": "2026-10-16T14:36:41.130Z",
+    "clinicName": "edr",
+    "fullName": "Parikshit Verma",
+    "email": "r@gmail.com",
+    "phone": "+9192382932",
+    "location": "India",
+    "practiceType": "Dental clinic",
+    "dailyCalls": "20–50",
+    "goals": [
+      "Missed calls",
+      "Appointment booking"
+    ],
+    "notes": null,
+    "status": "NEW_LEAD"
+  },
+  {
+    "id": "pilot_1792161232526",
+    "receivedAt": "2026-10-16T14:33:52.526Z",
+    "clinicName": "edr",
+    "fullName": "Parikshit Verma",
+    "email": "r@gmail.com",
+    "phone": "+9192382932",
+    "location": "India",
+    "practiceType": "Dental clinic",
+    "dailyCalls": "20–50",
+    "goals": [
+      "Missed calls",
+      "Appointment booking"
+    ],
+    "notes": null,
+    "status": "NEW_LEAD"
+  },
+  {
+    "id": "pilot_1792161040937",
+    "receivedAt": "2026-10-16T14:30:40.937Z",
+    "clinicName": "fedf",
+    "fullName": "fdfd",
+    "email": "dfd@gmail.com",
+    "phone": "+9192382932",
+    "location": "India",
+    "practiceType": "Dental clinic",
+    "dailyCalls": "20–50",
+    "goals": [
+      "Missed calls",
+      "Appointment booking",
+      "WhatsApp enquiries",
+      "Appointment reminders"
+    ],
+    "notes": null,
+    "status": "NEW_LEAD"
+  },
+  {
+    "id": "pilot_1792160741808",
+    "receivedAt": "2026-10-16T14:25:41.808Z",
+    "clinicName": "operoe",
+    "fullName": "rerje",
+    "email": "re@gmail.com",
+    "phone": "+9192382932",
+    "location": "India",
+    "practiceType": "Dental clinic",
+    "dailyCalls": "Under 20",
+    "goals": [
+      "Missed calls",
+      "Appointment booking"
+    ],
+    "notes": null,
+    "status": "NEW_LEAD"
+  },
+  {
+    "id": "pilot_1792160123156",
+    "receivedAt": "2026-10-16T14:15:23.156Z",
+    "clinicName": "Parikshit Verma",
+    "fullName": "Parikshit Verma",
+    "email": "ej@gmail.com",
+    "phone": "+9192382932",
+    "location": "India",
+    "practiceType": "Dental clinic",
+    "dailyCalls": "20–50",
+    "goals": [
+      "Missed calls",
+      "Appointment booking",
+      "After-hours calls",
+      "Appointment reminders",
+      "WhatsApp enquiries"
+    ],
+    "notes": null,
+    "status": "NEW_LEAD"
+  },
+  {
+    "id": "pilot_1792159836595",
+    "receivedAt": "2026-10-16T14:10:36.595Z",
+    "clinicName": "Parikshit Verma",
+    "fullName": "Parikshit Verma",
+    "email": "f@gmail.cmom",
+    "phone": "+9192382932",
+    "location": "India",
+    "practiceType": "Dental clinic",
+    "dailyCalls": "20–50",
+    "goals": [
+      "Missed calls",
+      "Appointment booking",
+      "Appointment reminders",
+      "After-hours calls",
+      "WhatsApp enquiries"
+    ],
+    "notes": null,
+    "status": "NEW_LEAD"
+  },
+  {
+    "id": "pilot_1792159742581",
+    "receivedAt": "2026-10-16T14:09:02.581Z",
+    "clinicName": "Parikshit Verma",
+    "fullName": "Parikshit Verma",
+    "email": "inod@gmail.cmom",
+    "phone": "+9192382932",
+    "location": "India",
+    "practiceType": "Dental clinic",
+    "dailyCalls": "20–50",
+    "goals": [
+      "Missed calls",
+      "After-hours calls",
+      "Appointment reminders",
+      "Appointment booking",
+      "WhatsApp enquiries"
+    ],
+    "notes": null,
+    "status": "NEW_LEAD"
+  }
+]

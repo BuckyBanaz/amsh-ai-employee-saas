@@ -13,6 +13,7 @@ import ProductTour from "@/components/landing/ProductTour";
 import PartnersMarquee from "@/components/landing/PartnersMarquee";
 import Testimonials from "@/components/landing/Testimonials";
 import Footer3D from "@/components/landing/Footer3D";
+import PilotCtaButton from "@/components/landing/PilotCtaButton";
 import { Icon, type IconName } from "@/components/landing/icons";
 import { BrandIcon } from "@/components/landing/BrandIcon";
 import SeoScripts from "@/components/landing/SeoScripts";
@@ -20,9 +21,9 @@ import { getSeo } from "@/lib/seo";
 
 export async function generateMetadata(): Promise<Metadata> {
   const seo = await getSeo();
-  const title = "AMSh — Hire Your 24/7 Autonomous AI Clinic Receptionist";
+  const title = "AI Receptionist for Clinics & Dentists | AMSh";
   const desc =
-    "Deploy autonomous AI employees that answer patient calls, schedule appointments, and triage WhatsApp chats for healthcare practices worldwide.";
+    "Meet AMSh, your AI virtual front-desk employee. Answer clinic calls 24/7, manage appointment requests, handle follow-ups and help your team respond faster.";
   return {
     title,
     description: desc,
@@ -43,21 +44,47 @@ const AUDIENCES = [
   "Diagnostic Centers",
 ];
 
-const OUTCOMES: { icon: IconName; title: string; body: string }[] = [
+const OUTCOMES: {
+  title: string;
+  body: string;
+  renderIcon: () => React.ReactNode;
+}[] = [
   {
-    icon: "phone",
     title: "Zero Missed Calls",
     body: "Every call is picked up on the first ring — even during peak morning hours when 5 lines ring simultaneously.",
+    renderIcon: () => (
+      <div className="w-12 h-12 rounded-2xl bg-blue-50 border border-blue-200/80 flex items-center justify-center mb-5 shadow-2xs group-hover:scale-105 transition-transform">
+        <svg className="w-6 h-6 text-blue-600" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M6.62 10.79a15.053 15.053 0 006.59 6.59l2.2-2.2a1 1 0 011.01-.24c1.12.37 2.33.57 3.58.57a1 1 0 011 1V20a1 1 0 01-1 1C10.61 21 3 13.39 3 4a1 1 0 011-1h3.5a1 1 0 011 1c0 1.25.2 2.46.57 3.58a1 1 0 01-.24 1.01l-2.21 2.2z" />
+        </svg>
+      </div>
+    ),
   },
   {
-    icon: "message",
     title: "Instant WhatsApp Triage",
     body: "Patients message day or night. AMSh answers in seconds, checks real-time doctor slots, and confirms bookings.",
+    renderIcon: () => (
+      <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-200/80 flex items-center justify-center mb-5 shadow-2xs group-hover:scale-105 transition-transform">
+        <svg className="w-6 h-6" viewBox="0 0 24 24" fill="#25D366">
+          <path d="M19.05 4.91A9.816 9.816 0 0 0 12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01zm-7.01 15.24c-1.48 0-2.93-.4-4.2-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.264 8.264 0 0 1-1.26-4.38c0-4.54 3.7-8.24 8.25-8.24 2.2 0 4.27.86 5.82 2.42a8.183 8.183 0 0 1 2.41 5.83c.02 4.54-3.68 8.23-8.23 8.23zm4.52-6.16c-.25-.12-1.47-.72-1.69-.81-.23-.08-.39-.12-.56.12-.17.25-.64.81-.78.98-.15.17-.29.19-.54.07-.25-.12-1.05-.39-2-1.23-.74-.66-1.23-1.47-1.38-1.72-.15-.25-.02-.38.11-.51.11-.11.25-.29.37-.43.12-.15.17-.25.25-.41.08-.17.04-.31-.02-.43s-.56-1.34-.76-1.84c-.2-.48-.41-.42-.56-.43h-.48c-.17 0-.44.06-.66.3-.23.25-.86.84-.86 2.06s.88 2.39 1 2.56c.12.17 1.73 2.64 4.19 3.7.59.25 1.05.4 1.41.51.59.19 1.13.16 1.56.1.48-.07 1.47-.6 1.67-1.18.21-.58.21-1.07.15-1.18-.07-.1-.23-.17-.48-.29z" />
+        </svg>
+      </div>
+    ),
   },
   {
-    icon: "calendar",
     title: "Direct Calendar Booking",
-    body: "Enquiries are guided to confirmed appointments on your calendar with automated reminders that prevent no-shows.",
+    body: "Enquiries across phone, WhatsApp & email are guided to confirmed appointments on your calendar with automated reminders that prevent no-shows.",
+    renderIcon: () => (
+      <div className="w-12 h-12 rounded-2xl bg-blue-50 border border-blue-200/80 flex items-center justify-center mb-5 shadow-2xs group-hover:scale-105 transition-transform">
+        <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none">
+          <rect x="3" y="4" width="18" height="17" rx="3" fill="#FFFFFF" stroke="#2563EB" strokeWidth="2" />
+          <path d="M3 8.5h18" stroke="#2563EB" strokeWidth="1.8" />
+          <rect x="7" y="2" width="2" height="3.5" rx="0.8" fill="#EA4335" />
+          <rect x="15" y="2" width="2" height="3.5" rx="0.8" fill="#EA4335" />
+          <path d="M7.5 14l2.5 2.5 6-6" stroke="#16A34A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </div>
+    ),
   },
 ];
 
@@ -186,11 +213,9 @@ export default async function LandingPage() {
               {OUTCOMES.map((o) => (
                 <div
                   key={o.title}
-                  className="rounded-2xl border border-slate-200 bg-white p-7 shadow-xs hover:border-slate-300 transition-all hover:shadow-md"
+                  className="rounded-2xl border border-slate-200 bg-white p-7 shadow-xs hover:border-slate-300 transition-all hover:shadow-md group"
                 >
-                  <div className="w-12 h-12 rounded-xl bg-blue-50 text-[#2563EB] flex items-center justify-center mb-5 border border-blue-100/80">
-                    <Icon name={o.icon} className="h-5 w-5" />
-                  </div>
+                  {o.renderIcon()}
                   <h3 className="font-sora text-lg font-semibold text-slate-900 mb-2">
                     {o.title}
                   </h3>
@@ -282,6 +307,20 @@ export default async function LandingPage() {
                       <p className="text-xs text-slate-600 leading-relaxed">{pt.body}</p>
                     </div>
                   ))}
+                </div>
+
+                <div className="pt-2">
+                  <a
+                    href="https://wa.me/918901414107?text=Hi%20TechyCodex%20%2F%20AMSh%20Team%2C%20I%20want%20to%20see%20a%20live%20WhatsApp%20AI%20Receptionist%20demo%20for%20my%20clinic."
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2.5 rounded-xl bg-[#25D366] hover:bg-[#20ba59] text-white px-6 py-3.5 text-sm font-semibold transition-all shadow-md shadow-emerald-500/20 active:scale-[0.98]"
+                  >
+                    <svg viewBox="0 0 24 24" className="h-4 w-4 fill-white shrink-0" aria-hidden="true">
+                      <path d="M19.05 4.91A9.816 9.816 0 0 0 12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01zm-7.01 15.24c-1.48 0-2.93-.4-4.2-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.264 8.264 0 0 1-1.26-4.38c0-4.54 3.7-8.24 8.25-8.24 2.2 0 4.27.86 5.82 2.42a8.183 8.183 0 0 1 2.41 5.83c.02 4.54-3.68 8.23-8.23 8.23zm4.52-6.16c-.25-.12-1.47-.72-1.69-.81-.23-.08-.39-.12-.56.12-.17.25-.64.81-.78.98-.15.17-.29.19-.54.07-.25-.12-1.05-.39-2-1.23-.74-.66-1.23-1.47-1.38-1.72-.15-.25-.02-.38.11-.51.11-.11.25-.29.37-.43.12-.15.17-.25.25-.41.08-.17.04-.31-.02-.43s-.56-1.34-.76-1.84c-.2-.48-.41-.42-.56-.43h-.48c-.17 0-.44.06-.66.3-.23.25-.86.84-.86 2.06s.88 2.39 1 2.56c.12.17 1.73 2.64 4.19 3.7.59.25 1.05.4 1.41.51.59.19 1.13.16 1.56.1.48-.07 1.47-.6 1.67-1.18.21-.58.21-1.07.15-1.18-.07-.1-.23-.17-.48-.29z" />
+                    </svg>
+                    <span>Chat on WhatsApp →</span>
+                  </a>
                 </div>
               </div>
 
@@ -445,32 +484,31 @@ export default async function LandingPage() {
           </div>
         </section>
 
-        {/* 15. Final Call-To-Action Banner */}
+        {/* 15. Final Call-To-Action Banner: 14-Day Pilot Program */}
         <section className="py-24 bg-white">
           <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
             <div className="rounded-3xl border border-slate-200 bg-gradient-to-br from-blue-50/60 via-slate-50 to-white p-10 sm:p-16 text-center shadow-xs">
               <span className="font-mono-ui text-xs uppercase tracking-[0.16em] text-blue-600 font-bold">
-                HIRE YOUR VIRTUAL EMPLOYEE TODAY
+                14-DAY CLINIC PILOT PROGRAM &bull; LIMITED COHORT
               </span>
               <h2 className="font-sora text-3xl sm:text-4xl md:text-5xl font-semibold tracking-tight text-slate-950 mt-4 max-w-2xl mx-auto leading-tight">
-                Never miss another patient call or WhatsApp.
+                Be one of the first clinics to hire an AI employee.
               </h2>
               <p className="mt-4 text-slate-600 text-base max-w-xl mx-auto leading-relaxed">
-                Deploy your 24/7 AI Receptionist in 5 minutes. Includes ₹1,000 / $10 in free voice credits on sign up.
+                Join our guided 14-day clinic pilot. We calibrate your voice AI to your practice specialties, sync your calendar, and answer every patient call with zero missed inquiries.
               </p>
 
-              <div className="mt-8 flex flex-wrap justify-center gap-4 font-mono-ui">
+              <div className="mt-8 flex flex-wrap justify-center items-center gap-4 font-mono-ui">
+                <PilotCtaButton className="rounded-md bg-[#0a0a0a] hover:bg-blue-600 text-white px-8 py-3.5 text-xs uppercase tracking-wider font-semibold transition-all shadow-xs cursor-pointer">
+                  Join 14-Day Pilot Program →
+                </PilotCtaButton>
                 <a
-                  href="http://localhost:3000/login"
-                  className="rounded-md bg-[#0a0a0a] hover:bg-[#323dfe] text-white px-7 py-3.5 text-xs uppercase tracking-wider font-semibold transition-all shadow-xs"
-                >
-                  Start For Free →
-                </a>
-                <a
-                  href="#contact"
+                  href="https://wa.me/918901414107"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="rounded-md border border-slate-300 bg-white hover:bg-slate-50 text-slate-900 px-6 py-3.5 text-xs uppercase tracking-wider font-semibold transition-all shadow-2xs"
                 >
-                  Contact Sales
+                  Chat with Onboarding Team
                 </a>
               </div>
             </div>

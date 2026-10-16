@@ -13,23 +13,23 @@ export default function Footer3D() {
   const currentYear = new Date().getFullYear();
 
   const usefulLinks = [
-    { label: "AI Calling Agent", href: "#demo" },
-    { label: "WhatsApp CRM & Triage", href: "#whatsapp" },
-    { label: "Multilingual Voice Engine", href: "#demo" },
-    { label: "2-Way Calendar Booking", href: "#features" },
-    { label: "Emergency Escalation Gate", href: "#features" },
-    { label: "Call Recordings & Logs", href: "#product" },
-    { label: "WhatsApp Cloud API", href: "#integrations" },
+    { label: "AI Receptionist for Dentists", href: "/ai-receptionist-for-dentists" },
+    { label: "AI Receptionist for Clinics", href: "/ai-receptionist-for-clinics" },
+    { label: "Medical Office Call Answering", href: "/ai-answering-service-medical" },
+    { label: "Dental Answering Service", href: "/dental-answering-service" },
+    { label: "AI Appointment Booking", href: "/ai-appointment-booking" },
+    { label: "AI Phone Answering Service", href: "/ai-phone-answering-service" },
+    { label: "AI Receptionist for WhatsApp", href: "/ai-receptionist-whatsapp" },
   ];
 
   const industries = [
-    { label: "Dental Clinics", href: "#features" },
-    { label: "Dermatology & Aesthetics", href: "#features" },
-    { label: "Multi-Specialty Hospitals", href: "#features" },
-    { label: "Physiotherapy & Rehab", href: "#features" },
-    { label: "Eye Care & Ophthalmology", href: "#features" },
-    { label: "Women's & Pediatrics", href: "#features" },
-    { label: "Diagnostic Centers", href: "#features" },
+    { label: "Dental & Orthodontics", href: "/ai-receptionist-for-dentists" },
+    { label: "Medical Clinics & GP", href: "/ai-receptionist-for-clinics" },
+    { label: "Dermatology & Aesthetics", href: "/ai-receptionist-for-clinics" },
+    { label: "Emergency Dental Triage", href: "/dental-answering-service" },
+    { label: "Multi-Doctor Scheduling", href: "/ai-appointment-booking" },
+    { label: "Carrier Phone Forwarding", href: "/ai-phone-answering-service" },
+    { label: "WhatsApp Clinic Triage", href: "/ai-receptionist-whatsapp" },
   ];
 
   const resources = [
@@ -81,7 +81,7 @@ export default function Footer3D() {
           <div className="lg:col-span-4 flex flex-col justify-between space-y-6">
             <div>
               <Link href="/" className={`inline-block ${FOCUS_DARK}`} aria-label="AMSh home">
-                <Logo />
+                <Logo dark={true} size="md" />
               </Link>
               <p className="mt-4 text-sm leading-relaxed text-slate-300 max-w-sm">
                 Your clinic&apos;s 24/7 AI employee answering patient phone calls, WhatsApp triage &amp; Google Calendar appointments — alongside your team.
@@ -272,31 +272,31 @@ export default function Footer3D() {
             <ul className="mt-4 space-y-3.5 text-sm">
               <li>
                 <a
-                  href="tel:+18005550100"
+                  href="tel:+918901414107"
                   className="flex items-center gap-2.5 text-slate-300 hover:text-white transition-colors group"
                 >
                   <svg className="h-4 w-4 text-cyan-400 group-hover:text-cyan-300 transition-colors shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                   </svg>
-                  <span>+1 (800) 555-0100</span>
+                  <span>+91 8901414107</span>
                 </a>
               </li>
 
               <li>
                 <a
-                  href="mailto:help@amsh.ai"
+                  href="mailto:info@techycodex.com"
                   className="flex items-center gap-2.5 text-slate-300 hover:text-white transition-colors group"
                 >
                   <svg className="h-4 w-4 text-cyan-400 group-hover:text-cyan-300 transition-colors shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                   </svg>
-                  <span>help@amsh.ai</span>
+                  <span>info@techycodex.com</span>
                 </a>
               </li>
 
               <li>
                 <a
-                  href="https://wa.me/919876543210"
+                  href="https://wa.me/918901414107?text=Hi%20TechyCodex%20%2F%20AMSh%20Team%2C%20I%20am%20interested%20in%20the%2014-Day%20AI%20Receptionist%20Pilot%20for%20my%20clinic.%20Please%20share%20details."
                   target="_blank"
                   rel="noreferrer"
                   className="flex items-center gap-2.5 text-slate-300 hover:text-emerald-400 transition-colors group"
@@ -328,7 +328,16 @@ export default function Footer3D() {
         {/* ========================================================= */}
         <div className="border-t border-white/10 pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
           <p className="text-center sm:text-left">
-            &copy; Copyright {currentYear} AMSh Cloudtech Pvt Ltd. All Rights Reserved.
+            &copy; Copyright {currentYear}{" "}
+            <a
+              href="https://techycodex.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-slate-300 hover:text-cyan-400 font-medium transition-colors underline decoration-slate-600 underline-offset-4"
+            >
+              TechyCodex (techycodex.com)
+            </a>
+            . All Rights Reserved.
           </p>
           <div className="flex items-center gap-6">
             <a href="#privacy" className="hover:text-slate-300 transition-colors">Privacy Policy</a>

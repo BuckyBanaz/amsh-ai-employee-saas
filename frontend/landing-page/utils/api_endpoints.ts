@@ -1,4 +1,4 @@
-// Set NEXT_PUBLIC_API_URL (for example https://api.amsh.ai/api) for any deployed build; the default is local development.
+// Set NEXT_PUBLIC_API_URL (for example https://api.getamsh.com/api) for any deployed build; the default is local development.
 export const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010/api';
 // Where uploaded files (logos) are served from: the API host without the /api suffix.
 export const ASSET_BASE = BASE_URL.replace(/\/api\/?$/, '');

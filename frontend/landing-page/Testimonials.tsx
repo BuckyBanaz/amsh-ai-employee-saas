@@ -2,7 +2,7 @@
 
 import React from "react";
 import { Reveal } from "./Motion";
-import { AI, MONO, aiMono, aiSans } from "./aiFonts";
+import { AI, MONO } from "./aiFonts";
 
 // Illustrative scenarios, not named customer endorsements: no real person, photo or result is claimed. Each card describes what AMSh
 // does for a practice type; swap in real, approved customer stories here when there are some.
@@ -126,7 +126,7 @@ function ScenarioCard({ s }: { s: Scenario }) {
 
 export default function Testimonials() {
   return (
-    <section id="testimonials" className={`${aiSans.variable} ${aiMono.variable} relative scroll-mt-24 overflow-hidden bg-[#050816] py-16 sm:py-20`}>
+    <section id="testimonials" className={`relative scroll-mt-24 overflow-hidden bg-[#050816] py-16 sm:py-20`}>
       <div aria-hidden="true" className="pointer-events-none absolute inset-0">
         <div className="absolute inset-0 opacity-50 [background-image:radial-gradient(rgba(125,211,252,0.2)_1px,transparent_1px)] [background-size:24px_24px] [mask-image:radial-gradient(ellipse_75%_60%_at_50%_40%,black,transparent_78%)]" />
         <div className="absolute left-1/2 top-1/3 h-[500px] w-[800px] -translate-x-1/2 rounded-full bg-gradient-to-r from-indigo-600/15 via-cyan-600/15 to-purple-600/10 blur-[150px]" />

@@ -1,9 +1,5 @@
-import { JetBrains_Mono, Space_Grotesk } from "next/font/google";
-
-// Shared "AI product" typography for the landing page's technical sections: a geometric sans for headings and names, and a
-// monospace for machine-style labels. Put `${aiSans.variable} ${aiMono.variable}` on a section's root to use AI / MONO inside it.
-export const aiSans = Space_Grotesk({ subsets: ["latin"], variable: "--font-ai", display: "swap" });
-export const aiMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-ai-mono", display: "swap" });
-
-export const AI = "font-[family-name:var(--font-ai)]";
-export const MONO = "font-[family-name:var(--font-ai-mono)]";
+// Shared typography for the landing page's technical sections. They map onto the site's three faces (Sora for headings and
+// names, Inter for body text, JetBrains Mono for labels; see app/globals.css and app/layout.tsx), so a section never brings in a
+// fourth font. Use `${AI}` for headings and names, `${MONO}` for machine-style labels.
+export const AI = "font-sora";
+export const MONO = "font-mono-ui";

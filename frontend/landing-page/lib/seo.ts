@@ -24,8 +24,15 @@ export interface SeoPublic {
 /** The marketing site's SEO settings from the API (edited in the admin portal). Cached for 5 minutes; null when the API is down,
  *  in which case callers fall back to the text written in code. */
 export async function getSeo(): Promise<SeoPublic | null> {
+  // In development, skip remote SEO fetch if backend is not explicitly enabled to prevent ETIMEDOUT warnings
+  if (process.env.NODE_ENV === 'development' && !process.env.NEXT_PUBLIC_API_URL) {
+    return null;
+  }
   try {
-    const res = await fetch(`${BASE_URL}/seo/public`, { next: { revalidate: 300 } });
+    const res = await fetch(`${BASE_URL}/seo/public`, {
+      signal: AbortSignal.timeout(1000),
+      next: { revalidate: 300 },
+    });
     return res.ok ? ((await res.json()) as SeoPublic) : null;
   } catch {
     return null;
@@ -34,8 +41,14 @@ export async function getSeo(): Promise<SeoPublic | null> {
 
 /** robots.txt / sitemap.xml text from the API, passed through as is. */
 export async function getSeoFile(name: 'robots.txt' | 'sitemap.xml'): Promise<string | null> {
+  if (process.env.NODE_ENV === 'development' && !process.env.NEXT_PUBLIC_API_URL) {
+    return null;
+  }
   try {
-    const res = await fetch(`${BASE_URL}/seo/${name}`, { next: { revalidate: 300 } });
+    const res = await fetch(`${BASE_URL}/seo/${name}`, {
+      signal: AbortSignal.timeout(1000),
+      next: { revalidate: 300 },
+    });
     return res.ok ? await res.text() : null;
   } catch {
     return null;
