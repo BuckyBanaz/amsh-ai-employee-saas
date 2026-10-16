@@ -69,7 +69,7 @@ export function serviceSchema(path: string, description: string): Json {
 }
 
 export function breadcrumbSchema(path: string): Json {
-  const items = [{ name: "Home", url: SITE.url }];
+  const items: { name: string; url: string }[] = [{ name: "Home", url: SITE.url }];
   if (path !== "/") items.push({ name: routeFor(path)?.name ?? path, url: absoluteUrl(path) });
   return {
     "@context": "https://schema.org",
