@@ -1,5 +1,5 @@
 import Script from 'next/script';
-import type { SeoPublic } from '../../lib/seo';
+import type { SeoPublic } from '@/lib/seo';
 
 const GA4 = /^G-[A-Z0-9]{4,12}$/;
 const GTM = /^GTM-[A-Z0-9]{4,10}$/;
