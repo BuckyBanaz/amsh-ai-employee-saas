@@ -420,7 +420,7 @@ Time: ${app.receivedAt}
 
     // 2. Fallback to nodemailer if present in the environment (e.g. Vercel)
     try {
-      // @ts-expect-error nodemailer might not be installed locally
+      // @ts-ignore
       const nodemailer = await import("nodemailer");
       const transporter = nodemailer.createTransport({
         host: smtpHost,
