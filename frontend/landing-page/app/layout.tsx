@@ -22,30 +22,35 @@ const jetbrainsMono = JetBrains_Mono({
   display: "swap",
 });
 
+// Site-wide defaults only. No canonical here on purpose: Next merges metadata shallowly, so a canonical set in the layout
+// would be inherited by every page that forgets its own and mark it a duplicate of the home page. Pages use pageMetadata().
 export const metadata: Metadata = {
-  metadataBase: new URL("https://getamsh.com"),
-  title: "AI Receptionist for Clinics & Dentists | AMSh (getamsh.com)",
-  description:
-    "Meet AMSh, your AI virtual front-desk employee at getamsh.com. Answer clinic calls 24/7, manage appointment requests, handle follow-ups and help your team respond faster.",
-  alternates: {
-    canonical: "https://getamsh.com",
+  metadataBase: new URL(SITE.url),
+  title: `${SITE.tagline} | ${SITE.name}`,
+  description: SITE.description,
+  applicationName: SITE.name,
+  publisher: SITE.publisher.name,
+  authors: [{ name: SITE.publisher.name, url: SITE.publisher.url }],
+  category: "Healthcare software",
+  formatDetection: { telephone: false, email: false, address: false },
+  // Let search and AI answer engines quote long snippets and show large previews.
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: { index: true, follow: true, "max-snippet": -1, "max-image-preview": "large", "max-video-preview": -1 },
   },
-  openGraph: {
-    title: "AI Receptionist for Clinics & Dentists | AMSh",
-    description:
-      "Meet AMSh, your AI virtual front-desk employee. Answer clinic calls 24/7, manage appointment requests, handle follow-ups and help your team respond faster.",
-    url: "https://getamsh.com",
-    siteName: "AMSh - getamsh.com",
-    locale: "en_US",
-    type: "website",
-  },
+  openGraph: { siteName: SITE.name, locale: SITE.locale, type: "website", url: SITE.url },
+  twitter: { card: "summary_large_image" },
   icons: {
-    icon: "/landing/amsh_logo.png",
-    apple: "/landing/amsh_logo.png",
+    icon: SITE.logo,
+    apple: SITE.logo,
   },
 };
 
 import PilotModal from "@/components/landing/PilotModal";
+import JsonLd from "@/components/landing/JsonLd";
+import { SITE } from "@/lib/site";
+import { organizationSchema, websiteSchema } from "@/lib/schema";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -54,6 +59,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         suppressHydrationWarning
         className={`${inter.variable} ${sora.variable} ${jetbrainsMono.variable} font-sans bg-white text-slate-900 min-h-full flex flex-col selection:bg-blue-100 selection:text-blue-900`}
       >
+        <JsonLd data={[organizationSchema(), websiteSchema()]} />
         <PilotModal />
         {children}
       </body>

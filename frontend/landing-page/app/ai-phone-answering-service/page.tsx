@@ -1,18 +1,20 @@
 import type { Metadata } from "next";
+import JsonLd from "@/components/landing/JsonLd";
+import { pageMetadata } from "@/lib/site";
+import { landingPageSchemas } from "@/lib/schema";
 import Link from "next/link";
 import Nav from "@/components/landing/Nav";
 import Footer3D from "@/components/landing/Footer3D";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
+  path: "/ai-phone-answering-service",
   title: "AI Phone Answering Service for Healthcare & Clinics | AMSh",
   description:
     "24/7 AI phone answering service for clinics and medical practices. Handles 50+ concurrent patient calls, answers on the first ring, books appointments, and integrates with your existing clinic phone number.",
-  openGraph: {
-    title: "AI Phone Answering Service for Healthcare & Clinics | AMSh",
-    description:
-      "Never let a patient hear a busy signal again. AMSh answers inbound clinic calls with ultra-low latency voice AI and direct calendar scheduling.",
-  },
-};
+  ogTitle: "AI Phone Answering Service for Healthcare & Clinics | AMSh",
+  ogDescription:
+    "Never let a patient hear a busy signal again. AMSh answers inbound clinic calls with ultra-low latency voice AI and direct calendar scheduling.",
+});
 
 const PHONE_FEATURES = [
   {
@@ -58,6 +60,7 @@ export default function AiPhoneAnsweringServicePage() {
   return (
     <div className="min-h-screen bg-white text-slate-900 selection:bg-blue-100 selection:text-blue-900">
       <Nav />
+      <JsonLd data={landingPageSchemas("/ai-phone-answering-service", String(metadata.description))} />
 
       {/* 1. HERO SECTION */}
       <section className="relative overflow-hidden pt-28 pb-20 sm:pt-36 sm:pb-28 border-b border-slate-100 bg-gradient-to-b from-blue-50/50 via-white to-white">

@@ -18,17 +18,30 @@ import { Icon, type IconName } from "@/components/landing/icons";
 import { BrandIcon } from "@/components/landing/BrandIcon";
 import SeoScripts from "@/components/landing/SeoScripts";
 import { getSeo } from "@/lib/seo";
+import JsonLd from "@/components/landing/JsonLd";
+import { pageMetadata } from "@/lib/site";
+import { faqSchema, softwareSchema } from "@/lib/schema";
 
 export async function generateMetadata(): Promise<Metadata> {
-  const seo = await getSeo();
-  const title = "AI Receptionist for Clinics & Dentists | AMSh";
-  const desc =
-    "Meet AMSh, your AI virtual front-desk employee. Answer clinic calls 24/7, manage appointment requests, handle follow-ups and help your team respond faster.";
-  return {
-    title,
-    description: desc,
-    openGraph: { title, description: desc },
-  };
+  // Text edited in the admin portal's SEO settings wins; the copy below is the fallback when the API is unset or down.
+  const page = (await getSeo())?.pages?.["/"];
+  return pageMetadata({
+    path: "/",
+    title: page?.full_title || page?.title || "AI Receptionist for Clinics & Dentists | AMSh",
+    description:
+      page?.description ||
+      "Meet AMSh, your AI virtual front-desk employee. Answer clinic calls 24/7, manage appointment requests, handle follow-ups and help your team respond faster.",
+    keywords: [
+      "AI receptionist",
+      "AI receptionist for clinics",
+      "AI receptionist for dentists",
+      "virtual receptionist for doctors",
+      "medical answering service",
+      "AI appointment booking",
+      "WhatsApp AI receptionist",
+    ],
+    noindex: page?.noindex,
+  });
 }
 
 const AUDIENCES = [
@@ -155,6 +168,10 @@ const STEPS = [
 
 const FAQS = [
   {
+    q: "What is AMSh?",
+    a: "AMSh is an AI receptionist for clinics and dental practices. It works as a virtual front-desk employee that answers patient calls and WhatsApp messages 24/7, books and reschedules appointments, answers clinic FAQs, and hands urgent calls to your staff.",
+  },
+  {
     q: "Does AMSh replace our human front-desk team?",
     a: "No. AMSh is an autonomous virtual employee designed to assist your team. It handles high-volume repetitive queries, after-hours calls, and booking flows so your front-desk staff can focus entirely on welcoming in-clinic patients.",
   },
@@ -186,7 +203,8 @@ export default async function LandingPage() {
   return (
     <div className="min-h-screen bg-white text-slate-900 w-full max-w-full overflow-x-hidden selection:bg-blue-100 selection:text-blue-900">
       <SeoScripts seo={seo} />
-      
+      <JsonLd data={[softwareSchema(), faqSchema(FAQS)]} />
+
       {/* 1. Plivo Style Navigation Bar */}
       <Nav />
 

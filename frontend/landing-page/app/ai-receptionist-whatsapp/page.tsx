@@ -1,18 +1,20 @@
 import type { Metadata } from "next";
+import JsonLd from "@/components/landing/JsonLd";
+import { pageMetadata } from "@/lib/site";
+import { landingPageSchemas } from "@/lib/schema";
 import Link from "next/link";
 import Nav from "@/components/landing/Nav";
 import Footer3D from "@/components/landing/Footer3D";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
+  path: "/ai-receptionist-whatsapp",
   title: "AI Receptionist for WhatsApp | AMSh Healthcare CRM",
   description:
     "Automate patient inquiries, appointment scheduling, and post-op follow-ups on WhatsApp. Official Meta Cloud API integration with 2-way EHR and Google Calendar sync.",
-  openGraph: {
-    title: "AI Receptionist for WhatsApp | AMSh Healthcare CRM",
-    description:
-      "Transform your clinic WhatsApp into an autonomous 24/7 front-desk employee. Books appointments, sends intake forms, and answers FAQs instantly.",
-  },
-};
+  ogTitle: "AI Receptionist for WhatsApp | AMSh Healthcare CRM",
+  ogDescription:
+    "Transform your clinic WhatsApp into an autonomous 24/7 front-desk employee. Books appointments, sends intake forms, and answers FAQs instantly.",
+});
 
 const WHATSAPP_FEATURES = [
   {
@@ -72,6 +74,7 @@ export default function AiReceptionistWhatsappPage() {
   return (
     <div className="min-h-screen bg-white text-slate-900 selection:bg-emerald-100 selection:text-emerald-900">
       <Nav />
+      <JsonLd data={landingPageSchemas("/ai-receptionist-whatsapp", String(metadata.description))} />
 
       {/* 1. HERO SECTION */}
       <section className="relative overflow-hidden pt-28 pb-20 sm:pt-36 sm:pb-28 border-b border-slate-100 bg-gradient-to-b from-emerald-50/40 via-white to-white">
