@@ -1,18 +1,20 @@
 import type { Metadata } from "next";
+import JsonLd from "@/components/landing/JsonLd";
+import { pageMetadata } from "@/lib/site";
+import { breadcrumbSchema } from "@/lib/schema";
 import Link from "next/link";
 import Nav from "@/components/landing/Nav";
 import Footer3D from "@/components/landing/Footer3D";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
+  path: "/pilot",
   title: "Join the AMSh Clinic Pilot Program | 14-Day Guided Access",
   description:
     "Apply to test AMSh's AI front-desk employee for your medical or dental clinic. Selected clinics receive guided onboarding, direct founder support, and agreed pilot terms before activation.",
-  openGraph: {
-    title: "Join the AMSh Clinic Pilot Program | 14-Day Guided Access",
-    description:
-      "Be one of the first clinics to hire an AI employee. Apply for our 14-day guided pilot program.",
-  },
-};
+  ogTitle: "Join the AMSh Clinic Pilot Program | 14-Day Guided Access",
+  ogDescription:
+    "Be one of the first clinics to hire an AI employee. Apply for our 14-day guided pilot program.",
+});
 
 const PILOT_PERKS = [
   {
@@ -51,6 +53,7 @@ export default function PilotProgramPage() {
   return (
     <div className="min-h-screen bg-white text-slate-900 selection:bg-blue-100 selection:text-blue-900">
       <Nav />
+      <JsonLd data={breadcrumbSchema("/pilot")} />
 
       {/* Hero Header */}
       <section className="relative overflow-hidden pt-28 pb-16 sm:pt-36 sm:pb-24 border-b border-slate-100 bg-gradient-to-b from-blue-50/50 via-white to-white">

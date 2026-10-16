@@ -1,19 +1,21 @@
 import type { Metadata } from "next";
+import JsonLd from "@/components/landing/JsonLd";
+import { pageMetadata } from "@/lib/site";
+import { landingPageSchemas } from "@/lib/schema";
 import Link from "next/link";
 import Nav from "@/components/landing/Nav";
 import VoiceCallScope from "@/components/landing/VoiceCallScope";
 import Footer3D from "@/components/landing/Footer3D";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
+  path: "/ai-receptionist-for-dentists",
   title: "AI Receptionist for Dentists & Orthodontists | AMSh Dental",
   description:
     "The 24/7 AI dental answering service and virtual receptionist. Answers every patient call on the first ring, verifies dental insurance, and books chair appointments directly in your PMS calendar.",
-  openGraph: {
-    title: "AI Receptionist for Dentists & Orthodontists | AMSh Dental",
-    description:
-      "Automate dental patient calls, emergency toothache triage, Delta Dental insurance checks, and appointment scheduling 24/7.",
-  },
-};
+  ogTitle: "AI Receptionist for Dentists & Orthodontists | AMSh Dental",
+  ogDescription:
+    "Automate dental patient calls, emergency toothache triage, Delta Dental insurance checks, and appointment scheduling 24/7.",
+});
 
 const DENTAL_WORKFLOWS = [
   {
@@ -80,6 +82,7 @@ export default function DentalLandingPage() {
   return (
     <div className="min-h-screen bg-white text-slate-900 selection:bg-blue-100 selection:text-blue-900">
       <Nav />
+      <JsonLd data={landingPageSchemas("/ai-receptionist-for-dentists", String(metadata.description), FAQS)} />
 
       {/* 1. HERO SECTION */}
       <section className="relative overflow-hidden pt-28 pb-20 sm:pt-36 sm:pb-28 border-b border-slate-100 bg-gradient-to-b from-blue-50/40 via-white to-white">

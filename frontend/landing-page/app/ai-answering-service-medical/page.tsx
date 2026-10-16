@@ -1,18 +1,20 @@
 import type { Metadata } from "next";
+import JsonLd from "@/components/landing/JsonLd";
+import { pageMetadata } from "@/lib/site";
+import { landingPageSchemas } from "@/lib/schema";
 import Link from "next/link";
 import Nav from "@/components/landing/Nav";
 import Footer3D from "@/components/landing/Footer3D";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
+  path: "/ai-answering-service-medical",
   title: "AI Answering Service for Medical Offices & Clinics | AMSh",
   description:
     "Replace outdated offshore call centers with autonomous 24/7 medical AI phone answering. Sub-150ms voice latency, HIPAA-compliant patient intake, 2-way doctor calendar sync, and zero hold times.",
-  openGraph: {
-    title: "AI Answering Service for Medical Offices & Clinics | AMSh",
-    description:
-      "HIPAA-compliant, 24/7 AI medical phone answering service. Never put another patient on hold.",
-  },
-};
+  ogTitle: "AI Answering Service for Medical Offices & Clinics | AMSh",
+  ogDescription:
+    "HIPAA-compliant, 24/7 AI medical phone answering service. Never put another patient on hold.",
+});
 
 const COMPARISON = [
   {
@@ -63,6 +65,7 @@ export default function MedicalAnsweringServicePage() {
   return (
     <div className="min-h-screen bg-white text-slate-900 selection:bg-blue-100 selection:text-blue-900">
       <Nav />
+      <JsonLd data={landingPageSchemas("/ai-answering-service-medical", String(metadata.description))} />
 
       {/* 1. HERO SECTION */}
       <section className="relative overflow-hidden pt-28 pb-20 sm:pt-36 sm:pb-24 border-b border-slate-100 bg-gradient-to-b from-blue-50/30 via-white to-white">

@@ -1,18 +1,20 @@
 import type { Metadata } from "next";
+import JsonLd from "@/components/landing/JsonLd";
+import { pageMetadata } from "@/lib/site";
+import { landingPageSchemas } from "@/lib/schema";
 import Link from "next/link";
 import Nav from "@/components/landing/Nav";
 import Footer3D from "@/components/landing/Footer3D";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
+  path: "/ai-appointment-booking",
   title: "AI Appointment Booking Assistant for Clinics & Doctors | AMSh",
   description:
     "Autonomous 24/7 AI appointment booking assistant for healthcare practices. Real-time 2-way sync with Google Calendar, Outlook, Dentrix, and EHR systems. Books patient visits on phone and WhatsApp without double-booking.",
-  openGraph: {
-    title: "AI Appointment Booking Assistant for Clinics & Doctors | AMSh",
-    description:
-      "Eliminate phone tag and empty chairs. AMSh's AI scheduling assistant books, confirms, and reschedules patient appointments 24/7 with 2-way EHR sync.",
-  },
-};
+  ogTitle: "AI Appointment Booking Assistant for Clinics & Doctors | AMSh",
+  ogDescription:
+    "Eliminate phone tag and empty chairs. AMSh's AI scheduling assistant books, confirms, and reschedules patient appointments 24/7 with 2-way EHR sync.",
+});
 
 const BOOKING_CAPABILITIES = [
   {
@@ -81,6 +83,7 @@ export default function AiAppointmentBookingPage() {
   return (
     <div className="min-h-screen bg-white text-slate-900 selection:bg-blue-100 selection:text-blue-900">
       <Nav />
+      <JsonLd data={landingPageSchemas("/ai-appointment-booking", String(metadata.description), SCHEDULING_FAQS)} />
 
       {/* 1. HERO SECTION */}
       <section className="relative overflow-hidden pt-28 pb-20 sm:pt-36 sm:pb-28 border-b border-slate-100 bg-gradient-to-b from-indigo-50/40 via-white to-white">

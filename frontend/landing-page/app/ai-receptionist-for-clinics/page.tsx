@@ -1,18 +1,20 @@
 import type { Metadata } from "next";
+import JsonLd from "@/components/landing/JsonLd";
+import { pageMetadata } from "@/lib/site";
+import { landingPageSchemas } from "@/lib/schema";
 import Link from "next/link";
 import Nav from "@/components/landing/Nav";
 import Footer3D from "@/components/landing/Footer3D";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
+  path: "/ai-receptionist-for-clinics",
   title: "AI Receptionist for Medical Clinics | AMSh Healthcare",
   description:
     "Autonomous 24/7 AI front-desk employee for medical clinics and healthcare practices. Answers patient calls on the first ring, triages symptoms, books doctor appointments, and reduces receptionist burnout.",
-  openGraph: {
-    title: "AI Receptionist for Medical Clinics | AMSh Healthcare",
-    description:
-      "Automate patient calls, doctor scheduling, symptom triage, and follow-ups with AMSh's HIPAA-compliant AI medical receptionist.",
-  },
-};
+  ogTitle: "AI Receptionist for Medical Clinics | AMSh Healthcare",
+  ogDescription:
+    "Automate patient calls, doctor scheduling, symptom triage, and follow-ups with AMSh's HIPAA-compliant AI medical receptionist.",
+});
 
 const CLINIC_FEATURES = [
   {
@@ -65,6 +67,7 @@ export default function ClinicsLandingPage() {
   return (
     <div className="min-h-screen bg-white text-slate-900 selection:bg-blue-100 selection:text-blue-900">
       <Nav />
+      <JsonLd data={landingPageSchemas("/ai-receptionist-for-clinics", String(metadata.description))} />
 
       {/* 1. HERO SECTION */}
       <section className="relative overflow-hidden pt-28 pb-20 sm:pt-36 sm:pb-24 border-b border-slate-100 bg-gradient-to-b from-slate-50 via-white to-white">
