@@ -1,34 +1,38 @@
 "use client";
 import React from 'react';
-import { STRINGS } from '../../../../utils/strings/en';
+import { STRINGS } from '../../utils/strings/en';
 
-export function BillingHeader() {
+interface BillingHeaderProps {
+  planStatus?: string;
+  planName?: string;
+}
+
+export function BillingHeader({
+  planStatus = 'active',
+  planName = 'Professional Clinic'
+}: BillingHeaderProps) {
+  const isActive = planStatus.toLowerCase() === 'active';
+
   return (
-    <header className="flex flex-col md:flex-row md:items-center justify-between mb-8 shrink-0 gap-4">
+    <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3 py-1 shrink-0">
       <div>
-        <h1 className="text-[28px] font-extrabold text-gray-900 tracking-tight leading-tight">
+        <h1 className="text-xl font-extrabold text-gray-900 tracking-tight leading-tight">
           {STRINGS.DASHBOARD.HEADERS.BILLING.TITLE}
         </h1>
-        <p className="text-[15px] text-gray-500 mt-1">
+        <p className="text-xs text-gray-500 font-medium mt-0.5">
           {STRINGS.DASHBOARD.HEADERS.BILLING.SUBTITLE}
         </p>
       </div>
 
-      <div className="flex items-center gap-4">
-        {/* Date Display */}
-        <div className="text-[14px] font-bold text-gray-600 mr-2">
-          Tuesday, August 12, 2026
-        </div>
-
-        {/* Notification Dot */}
-        <button className="w-10 h-10 rounded-full border border-gray-200 bg-white flex items-center justify-center text-gray-500 hover:bg-gray-50 shadow-sm transition-colors relative">
-          <div className="absolute top-3 right-3 w-1.5 h-1.5 bg-black rounded-full"></div>
-        </button>
-
-        {/* Profile Circle */}
-        <div className="w-10 h-10 rounded-full bg-[#F0F7FF] text-[#0066FF] flex items-center justify-center font-bold text-sm cursor-pointer shadow-sm hover:bg-blue-100 transition-colors">
-          SW
-        </div>
+      <div className="flex items-center gap-2">
+        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${
+          isActive 
+            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/60'
+            : 'bg-amber-50 text-amber-700 border border-amber-200/60'
+        }`}>
+          <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+          {isActive ? `${planName} Active` : `Subscription ${planStatus}`}
+        </span>
       </div>
     </header>
   );

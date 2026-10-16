@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /* ============================================
-   Dashboard Base Styles
+   Dashboard Base Styles & Rich Animations
    ============================================ */
 
 body {
@@ -20,8 +20,38 @@ body {
 
 /* Page Entrance Animation */
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(6px); }
+  from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes floatSlow {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-4px) rotate(1deg); }
+}
+
+@keyframes pathDraw {
+  from { stroke-dashoffset: 600; opacity: 0.3; }
+  to { stroke-dashoffset: 0; opacity: 1; }
+}
+
+@keyframes barGrow {
+  from { transform: scaleY(0); transform-origin: bottom; opacity: 0.2; }
+  to { transform: scaleY(1); transform-origin: bottom; opacity: 1; }
+}
+
+@keyframes donutSpin {
+  from { stroke-dashoffset: 314; opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes funnelExpand {
+  from { transform: scaleX(0.7) translateY(4px); opacity: 0; }
+  to { transform: scaleX(1) translateY(0); opacity: 1; }
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
 }
 
 .animate-in {
@@ -39,3 +69,42 @@ body {
 .duration-500 {
   animation-duration: 500ms;
 }
+
+.duration-700 {
+  animation-duration: 700ms;
+}
+
+.animate-float {
+  animation: floatSlow 3.5s ease-in-out infinite;
+}
+
+.animate-draw {
+  stroke-dasharray: 600;
+  animation: pathDraw 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-sparkline {
+  stroke-dasharray: 100;
+  animation: pathDraw 1s ease-out forwards;
+}
+
+.animate-bar {
+  animation: barGrow 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-donut {
+  animation: donutSpin 1.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-funnel {
+  animation: funnelExpand 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Stagger Delays */
+.delay-75 { animation-delay: 75ms; }
+.delay-100 { animation-delay: 100ms; }
+.delay-150 { animation-delay: 150ms; }
+.delay-200 { animation-delay: 200ms; }
+.delay-250 { animation-delay: 250ms; }
+.delay-300 { animation-delay: 300ms; }
+.delay-400 { animation-delay: 400ms; }

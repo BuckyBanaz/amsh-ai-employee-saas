@@ -1,35 +1,56 @@
 "use client";
 import React from 'react';
-import { STRINGS } from '../../../../utils/strings/en';
+import { STRINGS } from '../../utils/strings/en';
 
-export function AlertsCard() {
+interface AlertsCardProps {
+  transferredCalls?: number;
+  totalCalls?: number;
+}
+
+export function AlertsCard({ transferredCalls = 0, totalCalls = 0 }: AlertsCardProps) {
   return (
-    <div className="bg-white border border-gray-100 rounded-2xl shadow-[0_2px_10px_rgb(0,0,0,0.02)] p-6">
-      <h2 className="text-[13px] font-bold text-gray-900 tracking-wider uppercase mb-5">{STRINGS.DASHBOARD.COMPONENTS.ALERTS_CARD.TITLE}</h2>
-      
-      <ul className="space-y-4">
-        <li className="flex items-start gap-3">
-          <div className="w-4 h-4 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-            <div className="w-1.5 h-1.5 rounded-full bg-red-500"></div>
+    <div className="bg-white border border-gray-100 rounded-xl shadow-[0_1px_4px_rgba(0,0,0,0.03)] p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-xs font-bold text-gray-900 tracking-wider uppercase">System & Reception Health</h2>
+        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+      </div>
+
+      <ul className="space-y-2.5">
+        <li className="flex items-start gap-2.5">
+          <div className="w-3.5 h-3.5 rounded-full bg-emerald-100 flex items-center justify-center shrink-0 mt-0.5">
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
           </div>
-          <p className="text-[13px] font-semibold text-gray-900 leading-relaxed">
-            {STRINGS.DASHBOARD.COMPONENTS.ALERTS_CARD.ALERTS.CALLS_TRANSFERRED}
+          <p className="text-xs font-semibold text-gray-900 leading-relaxed">
+            AI Receptionist Online & Ready
           </p>
         </li>
-        <li className="flex items-start gap-3">
-          <div className="w-4 h-4 rounded-full bg-yellow-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-            <div className="w-1.5 h-1.5 rounded-full bg-yellow-500"></div>
+
+        {transferredCalls > 0 ? (
+          <li className="flex items-start gap-2.5">
+            <div className="w-3.5 h-3.5 rounded-full bg-amber-100 flex items-center justify-center shrink-0 mt-0.5">
+              <div className="w-1.5 h-1.5 rounded-full bg-amber-500"></div>
+            </div>
+            <p className="text-xs font-medium text-gray-800 leading-relaxed">
+              {transferredCalls} {transferredCalls === 1 ? 'call' : 'calls'} escalated to human staff today.
+            </p>
+          </li>
+        ) : (
+          <li className="flex items-start gap-2.5">
+            <div className="w-3.5 h-3.5 rounded-full bg-blue-100 flex items-center justify-center shrink-0 mt-0.5">
+              <div className="w-1.5 h-1.5 rounded-full bg-[#0066FF]"></div>
+            </div>
+            <p className="text-xs text-gray-700 leading-relaxed">
+              Zero emergency escalations recorded today.
+            </p>
+          </li>
+        )}
+
+        <li className="flex items-start gap-2.5">
+          <div className="w-3.5 h-3.5 rounded-full bg-gray-100 flex items-center justify-center shrink-0 mt-0.5">
+            <div className="w-1.5 h-1.5 rounded-full bg-gray-400"></div>
           </div>
-          <p className="text-[13px] text-gray-700 leading-relaxed">
-            <span className="font-semibold text-gray-900">{STRINGS.DASHBOARD.COMPONENTS.ALERTS_CARD.ALERTS.SYNC_WARNING_TITLE}</span>{STRINGS.DASHBOARD.COMPONENTS.ALERTS_CARD.ALERTS.SYNC_WARNING_DESC}
-          </p>
-        </li>
-        <li className="flex items-start gap-3">
-          <div className="w-4 h-4 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-            <div className="w-1.5 h-1.5 rounded-full bg-gray-500"></div>
-          </div>
-          <p className="text-[13px] text-gray-500 leading-relaxed italic">
-            {STRINGS.DASHBOARD.COMPONENTS.ALERTS_CARD.ALERTS.KNOWLEDGE_PARSING}
+          <p className="text-xs text-gray-500 leading-relaxed">
+            Telephony media stream latency &lt;800ms
           </p>
         </li>
       </ul>

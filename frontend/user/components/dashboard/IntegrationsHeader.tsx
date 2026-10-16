@@ -1,9 +1,9 @@
 "use client";
 import React from 'react';
-import { STRINGS } from '../../../../utils/strings/en';
+import { STRINGS } from '../../utils/strings/en';
 
 export const INTEGRATION_TABS = [
-  'All Integrations', // Kept generic in component state for simplicity, we map UI labels below
+  'All Integrations',
   'Calendar',
   'Communication',
   'Payments',
@@ -19,45 +19,35 @@ interface IntegrationsHeaderProps {
 
 export function IntegrationsHeader({ activeTab, setActiveTab }: IntegrationsHeaderProps) {
   return (
-    <div className="mb-6 shrink-0">
-      <header className="flex items-center justify-between mb-6">
+    <div className="mb-3 shrink-0">
+      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3 py-1">
         <div>
-          <h1 className="text-[28px] font-extrabold text-gray-900 tracking-tight leading-tight">
+          <h1 className="text-xl font-extrabold text-gray-900 tracking-tight leading-tight">
             {STRINGS.DASHBOARD.HEADERS.INTEGRATIONS.TITLE}
           </h1>
-          <p className="text-[15px] text-gray-500 mt-1">
+          <p className="text-xs text-gray-500 font-medium mt-0.5">
             {STRINGS.DASHBOARD.HEADERS.INTEGRATIONS.SUBTITLE}
           </p>
         </div>
 
-        <div className="flex items-center gap-4">
-          {/* Date Display */}
-          <div className="text-[14px] font-bold text-gray-600 mr-2">
-            Tuesday, August 12, 2026
-          </div>
-
-          {/* Notification Dot */}
-          <button className="w-10 h-10 rounded-full border border-gray-200 bg-white flex items-center justify-center text-gray-500 hover:bg-gray-50 shadow-sm transition-colors relative">
-            <div className="absolute top-3 right-3 w-1.5 h-1.5 bg-black rounded-full"></div>
-          </button>
-
-          {/* Profile Circle */}
-          <div className="w-10 h-10 rounded-full bg-[#F0F7FF] text-[#0066FF] flex items-center justify-center font-bold text-sm cursor-pointer shadow-sm hover:bg-blue-100 transition-colors">
-            SW
-          </div>
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 text-[#0066FF] border border-blue-200/60">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#0066FF]" />
+            API & Telephony Live
+          </span>
         </div>
       </header>
 
       {/* Tabs */}
       <div className="border-b border-gray-200 w-full">
-        <nav className="flex items-center gap-8 px-2 overflow-x-auto scrollbar-hide">
+        <nav className="flex items-center gap-5 px-1 overflow-x-auto scrollbar-hide">
           {INTEGRATION_TABS.map((tab) => {
             const isActive = tab === activeTab;
             return (
               <button 
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`pb-3 text-[14px] font-bold whitespace-nowrap transition-colors relative ${
+                className={`pb-2 text-xs font-semibold whitespace-nowrap transition-colors relative ${
                   isActive ? 'text-[#0066FF]' : 'text-gray-500 hover:text-gray-900'
                 }`}
               >

@@ -3,6 +3,9 @@ import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { STRINGS } from '../../utils/strings/en';
+import { StorageService } from '../../services/storage.service';
+import { DashboardController } from '../../controllers/dashboard.controller';
+import { ASSET_BASE } from '../../utils/api_endpoints';
 
 const navGroups = [
   {
@@ -19,6 +22,7 @@ const navGroups = [
     title: STRINGS.SIDEBAR.GROUPS.AI_SETTINGS,
     items: [
       { label: STRINGS.SIDEBAR.LINKS.AI_RECEPTIONIST, href: '/ai', icon: 'bot' },
+      { label: STRINGS.SIDEBAR.LINKS.MESSAGES, href: '/messages', icon: 'message' },
       { label: STRINGS.SIDEBAR.LINKS.KNOWLEDGE_BASE, href: '/knowledge', icon: 'book' },
       { label: STRINGS.SIDEBAR.LINKS.AI_CONVERSATIONS, href: '/conversations', icon: 'zap' },
     ]
@@ -34,10 +38,11 @@ const navGroups = [
   {
     title: STRINGS.SIDEBAR.GROUPS.SYSTEM,
     items: [
-      { label: STRINGS.SIDEBAR.LINKS.NOTIFICATIONS, href: '/notifications', icon: 'bell', badge: 3 },
+      { label: STRINGS.SIDEBAR.LINKS.NOTIFICATIONS, href: '/notifications', icon: 'bell' },
       { label: STRINGS.SIDEBAR.LINKS.TEAM, href: '/team', icon: 'activity' },
       { label: STRINGS.SIDEBAR.LINKS.BILLING, href: '/billing', icon: 'credit-card' },
       { label: STRINGS.SIDEBAR.LINKS.SETTINGS, href: '/settings', icon: 'sliders' },
+      { label: STRINGS.SIDEBAR.LINKS.SUPPORT, href: '/support', icon: 'help' },
     ]
   }
 ];
@@ -58,67 +63,181 @@ const getIcon = (name: string) => {
     case 'chart': return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>;
     case 'bell': return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>;
     case 'credit-card': return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>;
+    case 'help': return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>;
+    case 'message': return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.3 8.5 8.5 0 0 1-3.8-.9L3 20l1.2-4.6A8.4 8.4 0 1 1 21 11.5z"/></svg>;
     case 'sliders': return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>;
     default: return null;
   }
 };
 
-export function Sidebar() {
-  const pathname = usePathname();
+interface SidebarProps {
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
+}
 
-  return (
-    <aside className="w-[260px] bg-white border-r border-gray-100 flex flex-col h-screen flex-shrink-0 font-sans">
-      
+export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
+  const pathname = usePathname();
+  const [unread, setUnread] = React.useState(0); // real count from the notifications feed, not a placeholder
+  const [mounted, setMounted] = React.useState(false);
+  const [business, setBusiness] = React.useState<any>(null);
+  const [businessLogo, setBusinessLogo] = React.useState<string | null>(null);
+  const [user, setUser] = React.useState<any>(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    DashboardController.getNotifications()
+      .then((rows) => { if (!cancelled) setUnread(rows.filter((n) => n.unread).length); })
+      .catch(() => { if (!cancelled) setUnread(0); });
+    return () => { cancelled = true; };
+  }, [pathname]);
+
+  React.useEffect(() => {
+    setMounted(true);
+
+    const resolveLogoUrl = (raw: string | null) => {
+      if (!raw) return null;
+      return raw.startsWith('http') || raw.startsWith('data:') ? raw : `${ASSET_BASE}${raw}`;
+    };
+
+    const cachedBusiness = StorageService.getBusiness();
+    const cachedUser = StorageService.getUser();
+    const localLogo = localStorage.getItem('business_logo');
+
+    if (cachedBusiness) {
+      setBusiness(cachedBusiness);
+      setBusinessLogo(resolveLogoUrl(cachedBusiness.logo_url || localLogo));
+    } else if (localLogo) {
+      setBusinessLogo(resolveLogoUrl(localLogo));
+    }
+
+    if (cachedUser) setUser(cachedUser);
+
+    const refreshBusiness = () => {
+      const b = StorageService.getBusiness();
+      const currentLocalLogo = localStorage.getItem('business_logo');
+      if (b) {
+        setBusiness(b);
+        setBusinessLogo(resolveLogoUrl(b.logo_url || currentLocalLogo));
+      } else if (currentLocalLogo) {
+        setBusinessLogo(resolveLogoUrl(currentLocalLogo));
+      }
+
+      DashboardController.getBusinessInfo()
+        .then((fresh) => {
+          if (fresh) {
+            setBusiness(fresh);
+            setBusinessLogo(resolveLogoUrl(fresh.logo_url || currentLocalLogo));
+          }
+        })
+        .catch(() => {});
+    };
+
+    refreshBusiness();
+    window.addEventListener('business_updated', refreshBusiness);
+    return () => {
+      window.removeEventListener('business_updated', refreshBusiness);
+    };
+  }, []);
+
+  const businessName = business?.name || 'My Business';
+  const businessLocation = [business?.city, business?.country].filter(Boolean).join(', ') || 'Online Console';
+  const userName = user?.full_name || user?.name || user?.email?.split('@')[0] || 'Business Owner';
+  const userEmail = user?.email || 'owner@amsh.ai';
+  const userInitials = (userName.slice(0, 2) || 'BO').toUpperCase();
+
+  const handleLogout = () => {
+    StorageService.clearAll();
+    window.location.href = '/login';
+  };
+
+  const sidebarContent = (
+    <div className="flex flex-col h-full w-full">
       {/* Logo & Dropdown */}
-      <div className="p-5">
-        <div className="flex items-center gap-2.5 mb-6">
-          <div className="w-8 h-8 bg-[#0066FF] rounded-lg flex items-center justify-center">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
-              <path d="M12 4v16m-4-10v4m8-8v12" />
-            </svg>
+      <div className="p-3.5 pb-2">
+        <div className="flex items-center justify-between mb-3.5">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 bg-[#0066FF] rounded-md flex items-center justify-center">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
+                <path d="M12 4v16m-4-10v4m8-8v12" />
+              </svg>
+            </div>
+            <span className="text-base font-bold tracking-tight text-gray-900">{STRINGS.APP.NAME}</span>
           </div>
-          <span className="text-xl font-bold tracking-tight text-gray-900">{STRINGS.APP.NAME}</span>
+
+          {/* Close button for mobile */}
+          {onMobileClose && (
+            <button
+              onClick={onMobileClose}
+              className="lg:hidden p-1.5 text-gray-400 hover:text-gray-700 rounded-md transition-colors"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          )}
         </div>
 
-        <div className="w-full flex items-center justify-between px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors">
-          <div>
-            <h3 className="text-[13px] font-bold text-gray-900 leading-tight">Smile Dental Clinic</h3>
-            <p className="text-[11px] text-gray-500 font-medium mt-0.5">Amsterdam, NL</p>
-          </div>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-gray-500">
-            <polyline points="6 9 12 15 18 9"></polyline>
-          </svg>
+        <div className="w-full flex items-center justify-between px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-md">
+          {!mounted || !business ? (
+            <div className="flex items-center gap-2 min-w-0 pr-1 animate-pulse">
+              <div className="w-6 h-6 rounded bg-gray-200 shrink-0" />
+              <div className="space-y-1">
+                <div className="h-3 w-20 bg-gray-200 rounded" />
+                <div className="h-2 w-14 bg-gray-200 rounded" />
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 min-w-0 pr-1">
+              {businessLogo ? (
+                <img src={businessLogo} alt="Logo" className="w-6 h-6 rounded object-cover shrink-0 border border-gray-200" />
+              ) : (
+                <div className="w-6 h-6 rounded bg-blue-50 text-[#0066FF] flex items-center justify-center text-[11px] font-bold shrink-0">
+                  {businessName.charAt(0) || 'B'}
+                </div>
+              )}
+              <div className="min-w-0">
+                <h3 className="text-xs font-bold text-gray-900 leading-tight truncate">{businessName}</h3>
+                <p className="text-[10px] text-gray-500 font-medium truncate">{businessLocation}</p>
+              </div>
+            </div>
+          )}
+          <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 shrink-0" title="Active"></span>
         </div>
       </div>
 
       {/* Main Navigation */}
-      <nav className="flex-1 overflow-y-auto scrollbar-hide px-3 pb-6 space-y-6">
-        
+      <nav className="flex-1 overflow-y-auto scrollbar-hide px-2.5 pb-4 space-y-4">
         {navGroups.map((group, groupIdx) => (
           <div key={groupIdx}>
-            <h4 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider px-3 mb-2">
+            <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-2.5 mb-1">
               {group.title}
             </h4>
             <div className="space-y-0.5">
               {group.items.map((item) => {
                 const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
                 return (
-                  <Link key={item.label} href={item.href} className="block group/item">
-                    <div className={`flex items-center justify-between px-3 py-2 rounded-lg transition-colors ${
+                  <Link
+                    key={item.label}
+                    href={item.href}
+                    onClick={() => onMobileClose?.()}
+                    className="block group/item"
+                  >
+                    <div className={`flex items-center justify-between px-2.5 py-1.5 rounded-md transition-colors ${
                       isActive ? 'bg-[#F0F7FF] text-[#0066FF]' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                     }`}>
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2.5">
                         <span className={`${isActive ? 'text-[#0066FF]' : 'text-gray-400 group-hover/item:text-gray-600'} transition-colors`}>
                           {getIcon(item.icon)}
                         </span>
-                        <span className={`text-[13px] font-semibold ${isActive ? 'text-[#0066FF]' : ''}`}>
+                        <span className={`text-xs font-medium ${isActive ? 'font-semibold text-[#0066FF]' : ''}`}>
                           {item.label}
                         </span>
                       </div>
                       
-                      {item.badge && (
-                        <span className="w-4 h-4 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center leading-none">
-                          {item.badge}
+                      {(item.href === '/notifications' ? unread : 0) > 0 && (
+                        <span className="w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center leading-none">
+                          {unread > 9 ? '9+' : unread}
                         </span>
                       )}
                     </div>
@@ -131,18 +250,66 @@ export function Sidebar() {
       </nav>
 
       {/* Bottom Profile */}
-      <div className="p-4 border-t border-gray-100">
-        <div className="flex items-center gap-3 cursor-pointer hover:bg-gray-50 p-2 rounded-lg transition-colors">
-          <div className="w-9 h-9 rounded-full bg-[#F0F7FF] text-[#0066FF] flex items-center justify-center font-bold text-sm">
-            SW
-          </div>
-          <div className="flex-1 overflow-hidden">
-            <h2 className="text-[13px] font-bold text-gray-900 truncate">Dr. Sarah Wilson</h2>
-            <p className="text-[11px] text-gray-500 truncate mt-0.5">sarah@smileclinic.com</p>
-          </div>
+      <div className="p-3 border-t border-gray-100 mt-auto">
+        <div className="flex items-center justify-between p-1.5 rounded-md hover:bg-gray-50 transition-colors">
+          {!mounted || !user ? (
+            <div className="flex items-center gap-2.5 min-w-0 flex-1 animate-pulse">
+              <div className="w-7 h-7 rounded-full bg-gray-200 shrink-0" />
+              <div className="flex-1 space-y-1">
+                <div className="h-3 w-20 bg-gray-200 rounded" />
+                <div className="h-2 w-28 bg-gray-200 rounded" />
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+              <div className="w-7 h-7 rounded-full bg-[#F0F7FF] text-[#0066FF] flex items-center justify-center font-bold text-xs shrink-0">
+                {userInitials}
+              </div>
+              <div className="flex-1 overflow-hidden">
+                <h2 className="text-xs font-bold text-gray-900 truncate">{userName}</h2>
+                <p className="text-[10px] text-gray-500 truncate">{userEmail}</p>
+              </div>
+            </div>
+          )}
+          <button
+            onClick={handleLogout}
+            title="Log out"
+            className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors ml-1"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+              <polyline points="16 17 21 12 16 7"></polyline>
+              <line x1="21" y1="12" x2="9" y2="12"></line>
+            </svg>
+          </button>
         </div>
       </div>
+    </div>
+  );
 
-    </aside>
+  return (
+    <>
+      {/* Desktop Persistent Sidebar */}
+      <aside className="hidden lg:flex w-[230px] bg-white border-r border-gray-100 flex-col h-screen flex-shrink-0 font-sans sticky top-0">
+        {sidebarContent}
+      </aside>
+
+      {/* Mobile Slide-over Drawer */}
+      {mobileOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden flex">
+          {/* Backdrop Overlay */}
+          <div
+            className="fixed inset-0 bg-black/40 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
+            onClick={onMobileClose}
+          />
+
+          {/* Drawer Panel */}
+          <aside className="relative w-[260px] max-w-[85vw] bg-white h-full shadow-2xl z-10 flex flex-col animate-in slide-in-from-left duration-200">
+            {sidebarContent}
+          </aside>
+        </div>
+      )}
+    </>
   );
 }
+

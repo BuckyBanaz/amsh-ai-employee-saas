@@ -1,0 +1,238 @@
+{
+ "name": "Spanish",
+ "tts_language": "es",
+ "stt_language": "es",
+ "fillers": {
+  "think": [
+   "Mmm…",
+   "A ver…",
+   "Pues…"
+  ],
+  "ack": [
+   "Vale…",
+   "Claro…",
+   "Entiendo…"
+  ],
+  "delight": [
+   "¡Qué bien!",
+   "¡Genial!"
+  ],
+  "wait": "Un momento…"
+ },
+ "leading_sounds": [
+  "mm+",
+  "a ver",
+  "pues",
+  "vale",
+  "claro",
+  "entiendo",
+  "perfecto",
+  "genial",
+  "bueno",
+  "ah"
+ ],
+ "question_words": [
+  "qué",
+  "cómo",
+  "cuándo",
+  "cuál",
+  "cuánto",
+  "por qué",
+  "dónde",
+  "quién"
+ ],
+ "ask_patterns": [
+  "\\ben\\s+espa[nñ]ol\\b",
+  "\\bhabl\\w*\\s+(?:en\\s+)?espa[nñ]ol\\b",
+  "\\bin\\s+spanish\\b",
+  "\\bspeak\\s+spanish\\b"
+ ],
+ "style": "Natural spoken Spanish, warm and polite. Address the caller as \"usted\" unless they use \"tú\". Everyday fillers: \"vale\", \"claro\", \"perfecto\", \"a ver\", \"un momento\". Say times the Spanish way (\"las diez y media de la mañana\").",
+ "strings": {
+  "fallback": "Lo siento, estoy teniendo un problema en este momento. ¿Podría repetirlo, o prefiere que le pase con recepción?",
+  "no_transfer": "Lo siento, no puedo pasarle con recepción ahora mismo. ¿Quiere que le tome un mensaje para recepción?",
+  "billing": "Los pagos y reembolsos los gestiona nuestro equipo de recepción. Le paso con ellos ahora mismo.",
+  "frustrated": "Lamento mucho las molestias. Le paso ahora mismo con alguien de recepción.",
+  "unsure_claim": "Permítame confirmar esto con usted primero. ¿Podría confirmarme los datos una vez más?",
+  "unsure_times": "Quiero asegurarme de darle la hora correcta. ¿Qué día le vendría bien?",
+  "emergency": "Esto parece una emergencia médica grave. Cuelgue y llame de inmediato a su número local de emergencias. Estoy avisando ahora mismo a nuestro equipo médico de guardia."
+ },
+ "native_name": "Español",
+ "direction": "ltr",
+ "emergency_patterns": [
+  "\\b(?:dolor\\s+(?:de|en\\s+el)\\s+pecho|ataque\\s+(?:al\\s+coraz[oó]n|card[ií]aco)|infarto|derrame\\s+cerebral|no\\s+puedo\\s+respirar|me\\s+ahogo|(?:sangrado|hemorragia)\\s+(?:abundante|fuerte|grave)|sangra\\s+mucho|mucha\\s+sangre|inconsciente|se\\s+desmay\\w+|convulsion\\w*|sobredosis|suicid\\w*|quiero\\s+morir(?:me)?|matarme)\\b"
+ ],
+ "human_request": {
+  "who": "\\b(?:hablar|comunicar(?:me)?|pasar(?:me)?|conectar(?:me)?|transferir(?:me)?)\\s+con\\s+(?:una?\\s+)?(?:persona|humano|operador\\w*|recepcionista|gerente|alguien|agente)\\b|\\b(?:persona|humano)\\s+real\\b"
+ },
+ "farewell_patterns": [
+  "\\b(?:adi[oó]s|hasta\\s+(?:luego|pronto|ma[nñ]ana)|buenas\\s+noches|nada\\s+m[aá]s|eso\\s+es\\s+todo|cu[ií]dese)\\b"
+ ],
+ "hangup_patterns": [
+  "\\b(?:cuelg\\w+|termina\\w*\\s+la\\s+llamada|finaliza\\w*\\s+la\\s+llamada)\\b"
+ ],
+ "clock": {
+  "hours": {
+   "1": [
+    "una"
+   ],
+   "2": [
+    "dos"
+   ],
+   "3": [
+    "tres"
+   ],
+   "4": [
+    "cuatro"
+   ],
+   "5": [
+    "cinco"
+   ],
+   "6": [
+    "seis"
+   ],
+   "7": [
+    "siete"
+   ],
+   "8": [
+    "ocho"
+   ],
+   "9": [
+    "nueve"
+   ],
+   "10": [
+    "diez"
+   ],
+   "11": [
+    "once"
+   ],
+   "12": [
+    "doce"
+   ]
+  },
+  "patterns": [
+   [
+    "a las? {h}",
+    0
+   ],
+   [
+    "las? {h} en punto",
+    0
+   ],
+   [
+    "{h} y media",
+    30
+   ],
+   [
+    "{h} y cuarto",
+    15
+   ],
+   [
+    "{h} menos cuarto",
+    -15
+   ]
+  ],
+  "fixed": [
+   [
+    "mediod[ií]a",
+    12,
+    0
+   ]
+  ]
+ },
+ "affirm": [
+  "sí",
+  "si",
+  "vale",
+  "claro",
+  "de acuerdo",
+  "perfecto",
+  "correcto",
+  "exacto"
+ ],
+ "acks": [
+  "claro",
+  "vale",
+  "perfecto",
+  "de acuerdo",
+  "muy bien",
+  "por supuesto"
+ ],
+ "slot_asks": {
+  "name": [
+   "\\b(?:su|tu)\\s+(?:nombre(?:\\s+completo)?)\\b",
+   "\\bpuedo\\s+(?:tener|saber)\\s+(?:su|tu)\\s+nombre\\b",
+   "\\bcon\\s+qui[ée]n\\s+(?:hablo|tengo)\\b"
+  ],
+  "phone": [
+   "\\bn[úu]mero\\s+de\\s+(?:tel[ée]fono|celular|m[óo]vil|contacto)\\b",
+   "\\bqu[ée]\\s+n[úu]mero\\b"
+  ],
+  "service": [
+   "\\bqu[ée]\\s+(?:tratamiento|servicio|tipo)\\b",
+   "\\bpara\\s+qu[ée]\\s+(?:tratamiento|servicio|motivo|consulta)\\b"
+  ],
+  "date": [
+   "\\bqu[ée]\\s+d[ií]a\\b",
+   "\\bqu[ée]\\s+fecha\\b",
+   "\\bcu[áa]ndo\\s+(?:le|prefiere|quiere)\\b"
+  ],
+  "time": [
+   "\\bqu[ée]\\s+hora\\b",
+   "\\ba\\s+qu[ée]\\s+hora\\b",
+   "\\bqu[ée]\\s+horario\\b"
+  ]
+ },
+ "imperative": [
+  "\\bd[íi]game\\b",
+  "\\bdiga\\b",
+  "\\bind[íi]queme\\b",
+  "\\bpor\\s+favor\\s+(?:diga|d[íi]game|indique)\\b"
+ ],
+ "fluff": [
+  "por",
+  "favor",
+  "su",
+  "tu",
+  "el",
+  "la",
+  "los",
+  "las",
+  "un",
+  "una",
+  "yo",
+  "me",
+  "decir",
+  "dar",
+  "qué",
+  "es",
+  "son",
+  "sí",
+  "vale",
+  "gracias",
+  "bien",
+  "acuerdo"
+ ],
+ "hesitation_start": [
+  "espere",
+  "espera",
+  "momento",
+  "mmm",
+  "eh",
+  "bueno"
+ ],
+ "hesitation_extra": [
+  "momento",
+  "segundo",
+  "pensar",
+  "todavía",
+  "un"
+ ],
+ "hesitation_filler": [
+  "momento",
+  "segundo",
+  "minuto",
+  "favor",
+  "por"
+ ]
+}

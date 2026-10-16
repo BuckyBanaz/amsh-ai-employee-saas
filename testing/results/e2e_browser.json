@@ -1,0 +1,258 @@
+{
+  "ran_at": "2026-10-05 12:43:43",
+  "seconds": 74.2,
+  "passed": 50,
+  "failed": 0,
+  "checks": [
+    {
+      "check": "admin: real login form reaches the dashboard",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "admin: Alerts badge in the sidebar shows unread events",
+      "ok": true,
+      "detail": "1"
+    },
+    {
+      "check": "admin: alerts page lists the free trial",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "admin: alerts page lists the new signup and clinic",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "admin: alerts page lists the sign-in",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "admin: mark all read clears the badge",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "admin: category tab filters to trials",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "admin: voice studio sends a test turn and shows the reply",
+      "ok": true,
+      "detail": "2 AI messages"
+    },
+    {
+      "check": "admin: usage page shows spend, revenue and profit",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "admin: usage page lists the tools and the clinic",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "admin: usage page notes that prices are estimates",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "admin: the daily spend chart draws a line",
+      "ok": true,
+      "detail": "M 0.0 140.0 L 24.1 140.0 L 48.3 140.0 L 72.4 140.0 L 96.6 140.0 L 120.7 140.0 L "
+    },
+    {
+      "check": "admin: editing a price saves and marks it edited",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "admin: starter policy drafts are added and say they are not published",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "admin: the starter text warns it is a draft for a lawyer",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "admin: three policies are live after publishing",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "admin: AI rules show India's framework and the built-in notice",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "admin: the edited notice is shown as what the AI says",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "admin: no uncaught script errors on admin pages",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "user: real login form signs the clinic owner in",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "user: playground shows the test-mode banner",
+      "ok": true,
+      "detail": "TEST MODE\nNothing here is real: no booking is saved and no message is sent."
+    },
+    {
+      "check": "user: the published Terms are public (no login) at /legal/terms",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "user: the Privacy Policy page loads",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "user: an unpublished policy says so instead of failing",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "user: the landing demo asks the live AI and labels a fallback as a preview",
+      "ok": true,
+      "detail": "['http://127.0.0.1:8011/api/public/demo-chat']"
+    },
+    {
+      "check": "user: sign-up links to the real Terms and Privacy pages",
+      "ok": true,
+      "detail": "['/legal/terms', '/legal/privacy']"
+    },
+    {
+      "check": "user: onboarding shows what the AI does for the clinic's region",
+      "ok": true,
+      "detail": "How your AI follows the rules for India\nPrivacy framework: DPDP Act (India) & DISHA\nEmergencies: the AI sends callers to 112 / 108, and never gives medical advice.\nPrivacy instruction: built into the "
+    },
+    {
+      "check": "user: onboarding lists Terms, Privacy and the DPDP addendum",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "user: the next step is blocked until the policies are accepted",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "user: accepting unblocks the next step",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "user: onboarding plans come from the catalog",
+      "ok": true,
+      "detail": "Starter\n\nFor a single small practice getting started.\n\n$99\n/month\n\nBilled monthly, cancel anytime.\n\nINCLUDED CAPABILITIE"
+    },
+    {
+      "check": "user: choosing a plan checks out that plan at its catalog price",
+      "ok": true,
+      "detail": "$99"
+    },
+    {
+      "check": "user: a payment that cannot start shows the error instead of a fake success",
+      "ok": true,
+      "detail": "http://127.0.0.1:3000/onboarding/checkout?plan=starter&cycle=monthly"
+    },
+    {
+      "check": "user: checkout shows the clinic's own payment methods (India: UPI, Net Banking)",
+      "ok": true,
+      "detail": "UPI\nUPI\nGoogle Pay (UPI)\nPhonePe\nPaytm\nRuPay\nRuPay\nVisa\nMastercard\nNet Banking"
+    },
+    {
+      "check": "user: switching the billing country switches the methods (Netherlands: iDEAL)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "user: checkout has no emoji",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "user: a new version that needs accepting shows a dashboard banner",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "user: accepting the new version clears the banner",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "user: a booking appears as a patient with its next visit",
+      "ok": true,
+      "detail": "AS\nAsha Verma\n\t+91 98765 43210\t1\t\u2014\t2099-01-15\tACTIVE\t"
+    },
+    {
+      "check": "user: adding a patient does not create an appointment",
+      "ok": true,
+      "detail": "['Asha Verma']"
+    },
+    {
+      "check": "user: patient history lists the appointment",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "user: removing a patient takes them off the list",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "user: inviting a teammate gives a shareable link",
+      "ok": true,
+      "detail": "http://localhost:3000/accept-invite?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e"
+    },
+    {
+      "check": "user: the team list shows the invite as pending",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "user: the invite page greets the invitee and names the clinic",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "user: accepting the invite signs the teammate in to the dashboard",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "user: the invite link works only once",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "user: sign out everywhere ends the other session",
+      "ok": true,
+      "detail": "401"
+    },
+    {
+      "check": "user: this browser is still signed in afterwards",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "user: no uncaught script errors on user pages",
+      "ok": true,
+      "detail": ""
+    }
+  ]
+}

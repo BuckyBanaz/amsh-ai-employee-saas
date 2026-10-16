@@ -6,41 +6,49 @@ Implementation blueprint based on the uploaded Claude PRD
 
 This document converts the PRD into a concrete monorepo and backend architecture. The central rule is: one vertical-agnostic Conversation Engine, with vertical configuration, tools and integrations plugged into it. The source PRD explicitly defines this generic-core approach. fileciteturn0file0L20-L32
 
-# 2. Repository Structure
+# 2. Repository Structure & The 4-Pillar Architecture
 
-ai-receptionist/
-├── apps/
-│   ├── landing/                 # Public marketing website
-│   ├── admin/                   # Platform/admin panel
-│   └── dashboard/               # Business owner/user panel
+AMSh uses a high-velocity **Monorepo** today with strict package separation, designed to seamlessly evolve into **4 independent repositories** as the company and traffic scale:
+
+```
+amsh-ai-employee-saas/
+├── frontend/
+│   ├── user/                    # [Pillar 1: amsh-frontend] Customer Dashboard (Appointments, Conversations, CRM, AI Settings)
+│   └── admin/                   # [Pillar 2: amsh-admin] Internal Platform Operator Portal (Tenants, Quotas, Billing, Live Calls)
 ├── backend/
-│   ├── api/                     # REST API
-│   ├── realtime/                # Twilio/WebSocket/audio runtime
-│   ├── engine/                  # Conversation Engine
-│   ├── speech/                  # STT + TTS providers
-│   ├── llm/                     # Groq + model adapters
-│   ├── rag/                     # Knowledge ingestion/retrieval
-│   ├── memory/                  # Redis/session/caller memory
-│   ├── tools/                   # Tool framework + vertical tools
-│   ├── verticals/               # YAML/JSON vertical configs
-│   ├── integrations/            # Calendar/CRM/POS/ecommerce etc.
-│   ├── auth/
-│   ├── billing/
-│   ├── analytics/
-│   ├── workers/
-│   ├── database/
-│   └── common/
-├── packages/
-│   ├── shared-types/
-│   ├── api-client/
-│   ├── ui/
-│   └── config-schema/
-├── infrastructure/
-├── docs/
-├── tests/
-├── .env.example
-├── docker-compose.yml
+│   │── # --- [Pillar 3: amsh-backend: Core Business Server] ---
+│   ├── api/                     # REST API routes (users, businesses, staff, services, appointments)
+│   ├── auth/                    # JWT authentication, bcrypt, team invitations & RBAC
+│   ├── database/                # SQLAlchemy models & PostgreSQL connection engine
+│   ├── billing/                 # Stripe checkout, subscription tiers, overage metering
+│   ├── workers/                 # Celery/Background asynchronous task workers
+│   ├── analytics/               # Aggregated business BI & telephony performance metrics
+│   ├── integrations/            # Calendar, POS, WhatsApp & CRM external sync
+│   ├── common/                  # Shared utilities, logging & custom exceptions
+│   │
+│   │── # --- [Pillar 4: amsh-ai: Voice & Intelligence Engine] ---
+│   ├── realtime/                # Twilio bidirectional WebSocket streaming gateway
+│   ├── engine/                  # Deterministic Conversation State Machine (<800ms latency)
+│   ├── speech/                  # STT (Deepgram Nova-2/Groq Whisper) & TTS (ElevenLabs/Cartesia)
+│   ├── llm/                     # Groq Llama-3.3-70B model adapters & dynamic prompting
+│   ├── rag/                     # Vector embeddings ingestion & tenant-isolated vector retrieval
+│   ├── memory/                  # Redis short-term conversation state & caller variables
+│   ├── tools/                   # Executable tool framework (availability checks, booking slots)
+│   └── verticals/               # Vertical configuration blueprints (YAML/JSON schemas)
+├── infrastructure/              # [Platform] Docker, Postgres 16, Redis 7, Vector DB, Caddy/Nginx
+├── DOCS/                        # Specifications, Roadmaps, and Architecture guides
+├── tests/                       # Unit, integration, and voice latency benchmarks
+├── .env.example                 # Environment variables and vendor API keys
+├── docker-compose.yml           # Unified local development container stack
 └── README.md
+```
+
+### The 4-Pillar Separation Matrix
+1. **`amsh-frontend` (Customer Portal)**: Customer-facing Next.js application for clinic/business owners.
+2. **`amsh-admin` (Operator Panel)**: Platform control plane for AMSh support and operators.
+3. **`amsh-backend` (Business Server)**: Core persistence, relational DB, auth, billing, and transactional CRUD APIs.
+4. **`amsh-ai` (Voice Intelligence)**: Real-time telephony audio loop, STT, LLM state machine, TTS streaming, and RAG.
+5. **`infrastructure` (Platform Base)**: Multi-container orchestration, networking, and deployment recipes.
 
 # 3. Frontend Applications
 

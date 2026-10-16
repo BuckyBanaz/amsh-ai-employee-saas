@@ -1,0 +1,373 @@
+[
+  {
+    "id": "persona_en_who_are_you",
+    "category": "persona",
+    "passed": true,
+    "turns": [
+      {
+        "say": "Who are you?",
+        "reply": "I’m Maya, the AI receptionist at Sanjeevani Clinic. Would you like me to connect you to a staff member at the front desk?",
+        "failures": []
+      }
+    ]
+  },
+  {
+    "id": "persona_en_your_name",
+    "category": "persona",
+    "passed": true,
+    "turns": [
+      {
+        "say": "What is your name?",
+        "reply": "I’m Maya, the AI receptionist at Sanjeevani Clinic. Would you like me to connect you to a front‑desk staff member?",
+        "failures": []
+      }
+    ]
+  },
+  {
+    "id": "persona_en_whats_your_name",
+    "category": "persona",
+    "passed": true,
+    "turns": [
+      {
+        "say": "what's your name",
+        "reply": "I’m Maya, the AI receptionist at Sanjeevani Clinic. Would you like me to connect you to a front‑desk staff member?",
+        "failures": []
+      }
+    ]
+  },
+  {
+    "id": "persona_en_who_am_i_speaking_to",
+    "category": "persona",
+    "passed": true,
+    "turns": [
+      {
+        "say": "Who am I speaking to?",
+        "reply": "I’m Maya, the AI receptionist at Sanjeevani Clinic. How can I help you today?",
+        "failures": []
+      }
+    ]
+  },
+  {
+    "id": "persona_en_who_is_this",
+    "category": "persona",
+    "passed": true,
+    "turns": [
+      {
+        "say": "Who is this?",
+        "reply": "I’m Maya, the AI receptionist at Sanjeevani Clinic. Would you like me to connect you to a person at the front desk?",
+        "failures": []
+      }
+    ]
+  },
+  {
+    "id": "persona_en_business_name",
+    "category": "persona",
+    "passed": true,
+    "turns": [
+      {
+        "say": "Who am I speaking with?",
+        "reply": "I’m Maya, the AI receptionist at Sanjeevani Clinic. Would you like me to connect you to a front‑desk staff member?",
+        "failures": []
+      }
+    ]
+  },
+  {
+    "id": "persona_hi_aapka_naam",
+    "category": "persona",
+    "passed": true,
+    "turns": [
+      {
+        "say": "Aapka naam kya hai?",
+        "reply": "I'm Maya, the AI receptionist at Sanjeevani Clinic. Do you want me to connect you to a front desk staff member?",
+        "failures": []
+      }
+    ]
+  },
+  {
+    "id": "persona_hi_aap_ka_naam_spaced",
+    "category": "persona",
+    "passed": true,
+    "turns": [
+      {
+        "say": "aap ka naam kya hai",
+        "reply": "I'm Maya, the AI receptionist at Sanjeevani Clinic. Would you like me to connect you to a staff member?",
+        "failures": []
+      }
+    ]
+  },
+  {
+    "id": "persona_hi_tum_kaun_ho",
+    "category": "persona",
+    "passed": true,
+    "turns": [
+      {
+        "say": "tum kaun ho",
+        "reply": "Main Maya, Sanjeevani Clinic ki AI receptionist hoon. Aapko koi person se baat karni hai?",
+        "failures": []
+      }
+    ]
+  },
+  {
+    "id": "persona_hi_apna_naam_batao",
+    "category": "persona",
+    "passed": true,
+    "turns": [
+      {
+        "say": "apna naam batao",
+        "reply": "Main Maya, Sanjeevani Clinic ki AI receptionist hoon. Aapka din kaisa ja raha hai?",
+        "failures": []
+      }
+    ]
+  },
+  {
+    "id": "persona_hinglish_yaar_naam",
+    "category": "persona",
+    "passed": true,
+    "turns": [
+      {
+        "say": "yaar tumhara naam kya hai",
+        "reply": "I’m Maya, the AI receptionist at Sanjeevani Clinic. Do you want me to connect you to a front desk staff member?",
+        "failures": []
+      }
+    ]
+  },
+  {
+    "id": "persona_en_robot_or_human",
+    "category": "persona",
+    "passed": true,
+    "turns": [
+      {
+        "say": "Are you a robot or a real person?",
+        "reply": "I’m an AI receptionist, but I can connect you to a person if you’d like. Would you like me to transfer you to the front desk?",
+        "failures": []
+      }
+    ]
+  },
+  {
+    "id": "persona_en_are_you_human",
+    "category": "persona",
+    "passed": true,
+    "turns": [
+      {
+        "say": "Are you a human?",
+        "reply": "I’m an AI receptionist, but I can connect you to a person if you’d like. Would you like me to transfer you to the front desk?",
+        "failures": []
+      }
+    ]
+  },
+  {
+    "id": "persona_en_talking_to_robot",
+    "category": "persona",
+    "passed": true,
+    "turns": [
+      {
+        "say": "Am I talking to a robot?",
+        "reply": "I’m an AI receptionist, but I can connect you to a person if you’d like. Would you like me to transfer you to the front desk?",
+        "failures": []
+      }
+    ]
+  },
+  {
+    "id": "persona_hi_kya_aap_robot",
+    "category": "persona",
+    "passed": true,
+    "turns": [
+      {
+        "say": "kya aap robot ho",
+        "reply": "Main AI receptionist hoon, lekin agar aapko kisi se baat karni hai toh main aapko front desk se jod sakti hoon. Kya aapko koi person se baat karni hai?",
+        "failures": []
+      }
+    ]
+  },
+  {
+    "id": "persona_mid_booking_keeps_flow",
+    "category": "persona",
+    "passed": true,
+    "turns": [
+      {
+        "say": "I want to book an appointment",
+        "reply": "Sure thing! Which day works best for you?",
+        "failures": []
+      },
+      {
+        "say": "wait, what's your name?",
+        "reply": "I’m Maya, the AI receptionist at Sanjeevani Clinic. How can I help you today?",
+        "failures": []
+      }
+    ]
+  },
+  {
+    "id": "oos_en_pm_of_india",
+    "category": "out_of_scope",
+    "passed": true,
+    "turns": [
+      {
+        "say": "Who is the Prime Minister of India?",
+        "reply": "I’m sorry, I can only help with information about Sanjeevani Clinic. How can I assist you with your appointment or clinic services today?",
+        "failures": []
+      }
+    ]
+  },
+  {
+    "id": "oos_en_cricket",
+    "category": "out_of_scope",
+    "passed": false,
+    "turns": [
+      {
+        "say": "What's the cricket score?",
+        "reply": "I’m not sure about the cricket score. I can connect you to a staff member who might help. Would you like me to do that?",
+        "failures": [
+          "reply lacks any of ['clinic']"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "oos_en_joke",
+    "category": "out_of_scope",
+    "passed": false,
+    "turns": [
+      {
+        "say": "Tell me a joke",
+        "reply": "Sure thing! Because he wanted to draw blood! Hope that gave you a chuckle. How can I help you with your appointment today?",
+        "failures": [
+          "reply lacks any of ['clinic']"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "oos_en_capital",
+    "category": "out_of_scope",
+    "passed": false,
+    "turns": [
+      {
+        "say": "What is the capital of France?",
+        "reply": "I’m sorry, I’m not sure that’s something I can help with. Would you like me to connect you to the front desk staff?",
+        "failures": [
+          "reply lacks any of ['clinic']"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "oos_en_pizza",
+    "category": "out_of_scope",
+    "passed": true,
+    "turns": [
+      {
+        "say": "Can you order me a pizza?",
+        "reply": "I’m sorry, I can’t help with that. I can only assist with appointments, doctors, services, timings, location, and clinic info. How can I help you with that?",
+        "failures": []
+      }
+    ]
+  },
+  {
+    "id": "oos_en_stock_tip",
+    "category": "out_of_scope",
+    "passed": true,
+    "turns": [
+      {
+        "say": "Which stock should I buy today?",
+        "reply": "I’m sorry, but I can’t help with that. However, I can provide information about our clinic’s services or help you book an appointment if you’d like.",
+        "failures": []
+      }
+    ]
+  },
+  {
+    "id": "oos_hi_pm_kaun",
+    "category": "out_of_scope",
+    "passed": true,
+    "turns": [
+      {
+        "say": "India ka PM kaun hai?",
+        "reply": "I’m sorry, I can only help with clinic‑related questions. How can I assist you with your appointment or any other clinic service?",
+        "failures": []
+      }
+    ]
+  },
+  {
+    "id": "faq_en_sunday",
+    "category": "knowledge",
+    "passed": true,
+    "turns": [
+      {
+        "say": "Is the clinic open on Sunday?",
+        "reply": "We’re closed on Sundays. Is there anything else I can help you with?",
+        "failures": []
+      }
+    ]
+  },
+  {
+    "id": "faq_en_timings",
+    "category": "knowledge",
+    "passed": true,
+    "turns": [
+      {
+        "say": "What are your timings?",
+        "reply": "Our clinic is open from 9:00 AM to 5:00 PM, Monday through Saturday. Which day would you like to visit?",
+        "failures": []
+      }
+    ]
+  },
+  {
+    "id": "faq_en_cost",
+    "category": "knowledge",
+    "passed": true,
+    "turns": [
+      {
+        "say": "How much does a consultation cost?",
+        "reply": "The general consultation is USD 500.00. Anything else I can help with?",
+        "failures": []
+      }
+    ]
+  },
+  {
+    "id": "faq_en_address",
+    "category": "knowledge",
+    "passed": true,
+    "turns": [
+      {
+        "say": "Where is the clinic located?",
+        "reply": "We’re at 12 MG Road, Pune. How can I help you next?",
+        "failures": []
+      }
+    ]
+  },
+  {
+    "id": "faq_hi_sunday",
+    "category": "knowledge",
+    "passed": true,
+    "turns": [
+      {
+        "say": "Clinic Sunday ko open hoti hai kya?",
+        "reply": "Sunday ko hum band rehte hain. Aapko kis din appointment chahiye?",
+        "failures": []
+      }
+    ]
+  },
+  {
+    "id": "faq_en_unknown_fact_no_guess",
+    "category": "knowledge",
+    "passed": true,
+    "turns": [
+      {
+        "say": "Do you accept Star Health insurance?",
+        "reply": "I’m not sure if we accept Star Health at the moment. I can double‑check with the front desk for you. Would you like me to pass that along?",
+        "failures": []
+      }
+    ]
+  },
+  {
+    "id": "faq_en_doctors",
+    "category": "knowledge",
+    "passed": true,
+    "turns": [
+      {
+        "say": "Which doctors do you have?",
+        "reply": "We have Dr. Sharma and Dr. Mehta available. Which one would you like to see?",
+        "failures": []
+      }
+    ]
+  }
+]

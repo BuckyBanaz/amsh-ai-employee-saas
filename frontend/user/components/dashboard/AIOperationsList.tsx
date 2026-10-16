@@ -1,36 +1,87 @@
 "use client";
-import React from 'react';
-import { STRINGS } from '../../../../utils/strings/en';
-
-const operations = STRINGS.DASHBOARD.COMPONENTS.AI_OPERATIONS.LIST;
+import React, { useEffect, useState } from 'react';
+import { STRINGS } from '../../utils/strings/en';
+import { DashboardController, CallLogItem } from '../../controllers/dashboard.controller';
 
 export function AIOperationsList() {
-  return (
-    <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm h-full flex flex-col">
-      <h3 className="text-[15px] font-bold text-gray-900 mb-6">{STRINGS.DASHBOARD.COMPONENTS.AI_OPERATIONS.TITLE}</h3>
-      
-      <div className="flex-1 relative">
-        {/* Timeline Line */}
-        <div className="absolute left-[3px] top-2 bottom-2 w-px bg-gray-100"></div>
+  const [operations, setOperations] = useState<Array<{ time: string; title: string; outcome?: string }>>([]);
+  const [loading, setLoading] = useState(true);
 
-        <div className="space-y-6">
-          {operations.map((op, idx) => (
-            <div key={idx} className="relative pl-6">
-              {/* Timeline Dot */}
-              <div className="absolute left-0 top-1.5 w-2 h-2 rounded-full bg-[#0066FF] ring-4 ring-white"></div>
-              
-              <div className="flex flex-col gap-1">
-                <span className="text-[11px] font-bold text-gray-500">{op.time}</span>
-                <p className="text-[13px] font-medium text-gray-800 leading-snug">{op.title}</p>
+  useEffect(() => {
+    DashboardController.getCalls(undefined, { limit: 12 })
+      .then((calls: CallLogItem[]) => {
+        const realCalls = (calls || []).filter((c) => !c.is_test).slice(0, 6);
+        if (realCalls && realCalls.length > 0) {
+          const ops = realCalls.map((c) => {
+            const timeStr = c.started_at
+              ? new Date(c.started_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+              : 'Recent';
+            const actionText = c.summary || `AI handled call from ${c.caller_name || c.caller_number} (${c.intent || 'General'})`;
+            return {
+              time: timeStr,
+              title: actionText,
+              outcome: c.outcome,
+            };
+          });
+          setOperations(ops);
+        } else {
+          setOperations([]);
+        }
+      })
+      .catch(() => {
+        setOperations([]);
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  return (
+    <div className="bg-white border border-gray-100 rounded-xl p-4 shadow-[0_1px_4px_rgba(0,0,0,0.03)] h-full flex flex-col min-h-[260px]">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-xs font-bold text-gray-900 tracking-tight">{STRINGS.DASHBOARD.COMPONENTS.AI_OPERATIONS.TITLE}</h3>
+        <span className="text-[10px] font-semibold text-gray-400">Live Actions</span>
+      </div>
+      
+      <div className="flex-1 relative overflow-y-auto max-h-[220px]">
+        {/* Timeline Line */}
+        <div className="absolute left-[3px] top-1.5 bottom-1.5 w-px bg-gray-100"></div>
+
+        {loading ? (
+          <div className="space-y-3 p-3">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-2.5 animate-pulse pl-5">
+                <div className="w-1.5 h-1.5 rounded-full bg-gray-200 shrink-0" />
+                <div className="space-y-1 flex-1">
+                  <div className="h-2 w-12 bg-gray-200 rounded" />
+                  <div className="h-3 w-full max-w-[180px] bg-gray-200 rounded" />
+                </div>
               </div>
-              
-              {/* Subtle divider except for last item */}
-              {idx !== operations.length - 1 && (
-                <div className="w-full h-px bg-gray-50 mt-5"></div>
-              )}
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        ) : operations.length === 0 ? (
+          <div className="py-8 px-4 text-center text-xs text-gray-400 my-auto">
+            No live AI actions recorded yet. Inbound calls handled by your receptionist will appear here.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {operations.map((op, idx) => (
+              <div key={idx} className="relative pl-5">
+                {/* Timeline Dot */}
+                <div className={`absolute left-0 top-1.5 w-1.5 h-1.5 rounded-full ring-2 ring-white ${
+                  op.outcome === 'transferred' ? 'bg-amber-500' : 'bg-[#0066FF]'
+                }`}></div>
+                
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[10px] font-medium text-gray-400">{op.time}</span>
+                  <p className="text-xs font-medium text-gray-800 leading-snug line-clamp-2">{op.title}</p>
+                </div>
+                
+                {idx !== operations.length - 1 && (
+                  <div className="w-full h-px bg-gray-50 mt-2.5"></div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

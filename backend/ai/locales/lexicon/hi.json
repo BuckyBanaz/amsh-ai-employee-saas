@@ -1,0 +1,505 @@
+{
+ "_about": "Hindi/Hinglish lexical data. Code reads this; it holds no Hindi words itself. See backend/ai/lexicon.py.",
+ "emergency_patterns": [
+  "सीने\\s*में\\s*दर्द|सांस\\s*(?:नहीं|लेने\\s*में)|साँस\\s*(?:नहीं|लेने\\s*में)|दिल\\s*का\\s*दौरा|हार्ट\\s*अटैक|बेहोश|बहुत\\s*खून|खून\\s*बह|आत्महत्या|इमरजेंसी|एमरजेंसी|\\b(?:seene\\s+mein\\s+dard|saans\\s+nahi|sans\\s+nahi|behosh|dil\\s+ka\\s+daura|khoon\\s+beh)\\b"
+ ],
+ "hinglish_words": [
+  "aaj",
+  "aap",
+  "aapka",
+  "aapke",
+  "aapki",
+  "aapko",
+  "abhi",
+  "accha",
+  "acha",
+  "achha",
+  "baat",
+  "baje",
+  "bataiye",
+  "batana",
+  "batao",
+  "bataye",
+  "bhai",
+  "boliye",
+  "bolo",
+  "chahiye",
+  "chahta",
+  "chahti",
+  "chahunga",
+  "chahungi",
+  "dena",
+  "dijiye",
+  "dopahar",
+  "fir",
+  "haan",
+  "hai",
+  "hain",
+  "han",
+  "hoga",
+  "hogi",
+  "hoon",
+  "hun",
+  "ji",
+  "kab",
+  "kaisa",
+  "kaise",
+  "kaisi",
+  "kal",
+  "karana",
+  "karani",
+  "karen",
+  "karna",
+  "karni",
+  "karo",
+  "karte",
+  "karti",
+  "kaun",
+  "kijiye",
+  "kijiyega",
+  "kitne",
+  "kya",
+  "kyun",
+  "kyunki",
+  "lekin",
+  "lena",
+  "lijiye",
+  "mera",
+  "mere",
+  "meri",
+  "milega",
+  "milegi",
+  "mujhe",
+  "nahi",
+  "nahin",
+  "nhi",
+  "parso",
+  "phir",
+  "raat",
+  "rahe",
+  "rahi",
+  "samajh",
+  "shaam",
+  "subah",
+  "sun",
+  "sunai",
+  "suno",
+  "tha",
+  "theek",
+  "thi",
+  "thik",
+  "toh",
+  "wala",
+  "wali"
+ ],
+ "interjections_pattern": "(?:he+l+o+|hallo|hello\\s+ji|ji|haan(?:\\s+ji)?|han(?:\\s+ji)?|a(?:cc|ch)h?a(?:\\s+ji)?|theek\\s+hai(?:\\s+ji)?|thik\\s+hai(?:\\s+ji)?|ya\\s+phir|phir|fir|kya|sun\\s+(?:rahe|rahi)\\s+ho|suniye|हेलो|हैलो|जी|हाँ\\s*जी|हां\\s*जी|हाँ|हां|अच्छा|ठीक\\s*है(?:\\s*जी)?|या\\s*फिर|फिर|क्या|सुन\\s*रहे\\s*हो|सुन\\s*रही\\s*हो)",
+ "tts_words": [
+  "aaj",
+  "aap",
+  "aapka",
+  "aapki",
+  "aapko",
+  "abhi",
+  "accha",
+  "acha",
+  "achha",
+  "apka",
+  "apna",
+  "appointment",
+  "aur",
+  "baje",
+  "bataiye",
+  "batao",
+  "bilkul",
+  "bolo",
+  "chahiye",
+  "clinic",
+  "dhanyavad",
+  "din",
+  "dobara",
+  "doctor",
+  "haan",
+  "hai",
+  "hain",
+  "hoon",
+  "ji",
+  "ka",
+  "kaise",
+  "kal",
+  "kar",
+  "karna",
+  "karo",
+  "kaun",
+  "kaunsa",
+  "ke",
+  "ki",
+  "kijiye",
+  "kijiyega",
+  "ko",
+  "kripya",
+  "kya",
+  "liye",
+  "maaf",
+  "madad",
+  "main",
+  "mein",
+  "mera",
+  "meri",
+  "mujhe",
+  "naam",
+  "nahi",
+  "nahin",
+  "namaste",
+  "pe",
+  "sakta",
+  "sakte",
+  "sakti",
+  "samay",
+  "se",
+  "shukriya",
+  "swagat",
+  "theek",
+  "thik",
+  "toh",
+  "zaroor"
+ ],
+ "tts_shared_with_english": [
+  "appointment",
+  "clinic",
+  "doctor"
+ ],
+ "conversation_layer": true,
+ "name": "Hindi (Hinglish is fine)",
+ "tts_language": "hi",
+ "stt_language": "hi",
+ "fillers": {
+  "think": [
+   "हम्म…",
+   "अच्छा…",
+   "देखिए…"
+  ],
+  "ack": [
+   "अच्छा…",
+   "जी…",
+   "ठीक है…"
+  ],
+  "delight": [
+   "अरे वाह!",
+   "ओह, बढ़िया!"
+  ],
+  "wait": "जी, एक सेकंड…"
+ },
+ "style": "Natural spoken Hindi/Hinglish. Polite \"आप\", \"जी\", \"बिल्कुल\", \"ठीक है जी\", \"एक सेकंड\"; keep everyday English words (appointment, doctor, clinic) as they are.",
+ "native_name": "हिन्दी",
+ "direction": "ltr",
+ "strings": {
+  "fallback": "Maaf kijiye, mujhe abhi thodi dikkat aa rahi hai. Kya aap dobara bol sakte hain, ya main aapko front desk se connect kar doon?",
+  "no_transfer": "Maaf kijiye, abhi main aapko connect nahi kar pa rahi hoon. Kya main front desk ke liye message le loon?",
+  "billing": "Billing aur refund front desk team dekhti hai. Main abhi aapko connect karti hoon.",
+  "frustrated": "Takleef ke liye mujhe bahut khed hai. Main abhi aapko front desk se connect karti hoon.",
+  "unsure_claim": "Ek baar main aapse details dobara confirm kar loon. Kya aap phir se bata sakte hain?",
+  "unsure_times": "Main sahi samay bataungi. Aapko kaunsa din theek rahega?",
+  "emergency": "Yeh emergency lag rahi hai. Main aapko turant emergency coordinator se connect kar rahi hoon. Agar aap khatre mein hain toh abhi emergency services ko call kijiye."
+ },
+ "human_request": {
+  "who": "(?:इंसान|इन्सान|असली\\s*(?:व्यक्ति|इंसान)|किसी\\s*(?:से|इंसान\\s*से)\\s*बात|मैनेजर|कर्मचारी|स्टाफ)|\\b(?:insaan|insan|kisi\\s+se\\s+baat|kisi\\s+insaan|asli\\s+insaan|manager\\s+se)\\b",
+  "ask": "बात|मिला|कनेक्ट|ट्रांसफर|चाहिए|चाहता|चाहती|baat|milao|connect|transfer|chahiye"
+ },
+ "ask_patterns": [
+  "\\b(?:in|mein|me)\\s+hindi\\b|\\bhindi\\s+(?:mein|me|main)\\b|\\bhindi\\s+bol|हिंदी\\s*में|हिन्दी\\s*में|हिंदी\\s*बोल|हिन्दी\\s*बोल|इन\\s*हिं?न?्?दी"
+ ],
+ "farewell_patterns": [
+  "\\b(?:alvida|phir\\s+milte|kal\\s+baat|baad\\s+mein\\s+baat|bas\\s+itna(?:\\s+hi)?|shukriya\\s+bye|theek\\s+hai\\s+bye)\\b|अलविदा|फिर\\s+मिलते|बाय|गुड\\s*नाइट|बस\\s+इतना|कल\\s+बात"
+ ],
+ "hangup_patterns": [
+  "\\b(?:call\\s+(?:cut|kaat)|phone\\s+rakh|cut\\s+kar\\s+(?:do|sakti|sakte))\\b|कॉल\\s+(?:कट|काट)|फोन\\s+रख"
+ ],
+ "clock": {
+  "hours": {
+   "1": [
+    "ek"
+   ],
+   "2": [
+    "do"
+   ],
+   "3": [
+    "teen",
+    "tin"
+   ],
+   "4": [
+    "chaar",
+    "char"
+   ],
+   "5": [
+    "paanch",
+    "panch"
+   ],
+   "6": [
+    "chhah",
+    "chhe",
+    "chhh",
+    "chhai",
+    "chah"
+   ],
+   "7": [
+    "saat",
+    "sat"
+   ],
+   "8": [
+    "aath",
+    "ath"
+   ],
+   "9": [
+    "nau"
+   ],
+   "10": [
+    "das"
+   ],
+   "11": [
+    "gyaarah",
+    "gyarah",
+    "gyara"
+   ],
+   "12": [
+    "baarah",
+    "barah",
+    "bara"
+   ]
+  },
+  "patterns": [
+   [
+    "{h} baje",
+    0
+   ],
+   [
+    "(?:saarhe|saadhe|sarhe|sadhe) {h}",
+    30
+   ],
+   [
+    "(?:savaa|sawaa|sava|sawa) {h}",
+    15
+   ],
+   [
+    "paune {h}",
+    -15
+   ]
+  ],
+  "fixed": [
+   [
+    "(?:derh|dedh|dehd) baje",
+    1,
+    30
+   ],
+   [
+    "(?:dhaaee|dhaai|dhai) baje",
+    2,
+    30
+   ],
+   [
+    "(?:derh|dedh)",
+    1,
+    30
+   ],
+   [
+    "(?:dhaaee|dhaai)",
+    2,
+    30
+   ]
+  ]
+ },
+ "affirm": [
+  "sahee",
+  "sahi",
+  "kar do",
+  "kar deejie",
+  "kar deejiye",
+  "kar dijiye",
+  "buk kar do",
+  "book kar do",
+  "zaroor",
+  "jaroor",
+  "chalegaa",
+  "chalega",
+  "ho jaaegaa",
+  "theek hai",
+  "haan ji",
+  "ji haan",
+  "haan",
+  "bilkul",
+  "han",
+  "ha",
+  "haanji",
+  "ji",
+  "theek",
+  "thik"
+ ],
+ "acks": [
+  "जी",
+  "बिल्कुल",
+  "बिलकुल",
+  "ज़रूर",
+  "जरूर",
+  "ठीक है",
+  "अच्छा",
+  "हाँ",
+  "हां",
+  "ji",
+  "haan",
+  "han",
+  "bilkul",
+  "zaroor",
+  "zarur",
+  "theek hai",
+  "thik hai",
+  "accha",
+  "achha"
+ ],
+ "slot_asks": {
+  "name": [
+   "आपका\\s+(?:पूरा\\s+|शुभ\\s+)?नाम",
+   "अपना\\s+(?:पूरा\\s+)?नाम",
+   "नाम\\s+(?:बता|क्या|कहिए)",
+   "\\baapka\\s+(?:poora\\s+)?naam",
+   "\\bapna\\s+(?:poora\\s+)?naam",
+   "\\bnaam\\s+(?:bata|kya)"
+  ],
+  "phone": [
+   "फ़?ोन\\s*नंबर",
+   "मोबाइल\\s*नंबर",
+   "संपर्क\\s*नंबर",
+   "\\bnumber\\s+(?:bata|de)"
+  ],
+  "service": [
+   "कौन\\s*सी\\s+(?:सर्विस|सेवा)",
+   "किस\\s+(?:सर्विस|सेवा|काम)",
+   "\\bkaun\\s*si\\s+service\\b",
+   "\\bkis\\s+(?:service|liye)\\b"
+  ],
+  "date": [
+   "\\bkis\\s+din\\b",
+   "\\bkaun\\s*se\\s+din\\b",
+   "कौन\\s*से\\s+दिन",
+   "किस\\s+(?:दिन|तारीख)",
+   "कब\\s+आना"
+  ],
+  "time": [
+   "कितने\\s+बजे",
+   "किस\\s+समय",
+   "कौन\\s*सा\\s+समय",
+   "\\bkis\\s+time\\b",
+   "\\bkitne\\s+baje\\b"
+  ]
+ },
+ "imperative": [
+  "बता\\s+दीजिए",
+  "बता\\s+दीजिये",
+  "बता\\s+दें",
+  "बता\\s+दो",
+  "bata\\s+dijiye",
+  "bata\\s+dein",
+  "bata\\s+do",
+  "बताइए",
+  "बताएं",
+  "बताईये",
+  "बताइये",
+  "दीजिए",
+  "दीजिये",
+  "कहिए",
+  "batayiye",
+  "bataiye",
+  "bataye",
+  "batao",
+  "dijiye"
+ ],
+ "fluff": [
+  "मेरे",
+  "को",
+  "ना",
+  "मतलब",
+  "वो",
+  "वह",
+  "यार",
+  "जी",
+  "ji",
+  "कृपया",
+  "kripya",
+  "आपका",
+  "अपना",
+  "आप",
+  "आपके",
+  "aapka",
+  "apna",
+  "aap",
+  "aapke",
+  "बताइए",
+  "बताएं",
+  "बताइये",
+  "बताईये",
+  "bataiye",
+  "batayiye",
+  "bataye",
+  "batao",
+  "कहिए",
+  "है",
+  "hai",
+  "क्या",
+  "kya",
+  "पूरा",
+  "poora",
+  "जी"
+ ],
+ "hesitation_start": [
+  "ruko",
+  "ruk",
+  "rukiye",
+  "rukiyega",
+  "thehro",
+  "ठहरो",
+  "रुको",
+  "रुकिए",
+  "रुकिये",
+  "रुकिएगा",
+  "एक",
+  "ek",
+  "हम्म",
+  "उम्म",
+  "अरे",
+  "सोचने"
+ ],
+ "hesitation_extra": [
+  "thoda",
+  "थोड़ा",
+  "ठहर",
+  "sochne",
+  "do",
+  "दो"
+ ],
+ "hesitation_filler": [
+  "मेरे",
+  "को",
+  "ना",
+  "मतलब",
+  "वो",
+  "वह",
+  "यार",
+  "ji",
+  "जी",
+  "zara",
+  "ज़रा",
+  "जरा",
+  "मुझे",
+  "अच्छा",
+  "तो",
+  "ek",
+  "सेकंड",
+  "मिनट",
+  "पल",
+  "bas",
+  "बस",
+  "mere",
+  "ko",
+  "na",
+  "matlab",
+  "yaar"
+ ]
+}

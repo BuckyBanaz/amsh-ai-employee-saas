@@ -1,15 +1,15 @@
 export const STRINGS = {
   APP: {
-    NAME: "Aira",
-    COMPANY: "Aira Platform",
+    NAME: "Amsh",
+    COMPANY: "Amsh Platform",
   },
   AUTH: {
     LAYOUT: {
-      LOGO: "Aira",
+      LOGO: "AMSh",
       CHAT_USER: "Hi, I'd like to book a dental cleaning for next Tuesday afternoon.",
       CHAT_AI: "I can help with that! We have openings at 2:00 PM and 4:30 PM on Tuesday. Which works best?",
-      HERO_TITLE: "Empower your business with non-stop AI receptionist support.",
-      HERO_DESC: "Designed exclusively for businesses seeking operational elegance and infinite availability."
+      HERO_TITLE: "Your clinic's 24/7 AI employee.",
+      HERO_DESC: "AMSh answers calls, replies on WhatsApp and books appointments — even when your team is busy or the clinic is closed."
     },
     COMMON: {
       EMAIL_LABEL: "Work Email",
@@ -24,7 +24,7 @@ export const STRINGS = {
     },
     LOGIN: {
       TITLE: "Welcome back",
-      DESC: "Enter your credentials to access the Aira portal.",
+      DESC: "Enter your credentials to access the AMSh portal.",
       REMEMBER_ME: "Remember me",
       FORGOT_PASSWORD: "Forgot password?",
       SUBMIT: "Sign In",
@@ -33,7 +33,7 @@ export const STRINGS = {
     },
     REGISTER: {
       TITLE: "Create your account",
-      DESC: "Get started with your free trial of Aira.",
+      DESC: "Get started with your free trial of AMSh.",
       NAME_PLACEHOLDER: "Jane Doe",
       NEW_PASSWORD_PLACEHOLDER: "Create strong password",
       CONFIRM_PASSWORD_PLACEHOLDER: "Repeat your password",
@@ -52,11 +52,9 @@ export const STRINGS = {
     },
     ACCEPT_INVITE: {
       TITLE_PREFIX: "You've been invited to join",
-      TITLE_BUSINESS: "Smile Dental Clinic",
-      DESC: "Dr. Sarah Wilson has invited you to join their team.",
-      NAME_PLACEHOLDER: "Arthur Pendragon",
-      SUBMIT: "Accept Invitation",
-      DECLINE: "Decline invitation"
+      DESC: "Choose a password to join the team. You'll sign in with",
+      SUBMIT: "Accept invitation",
+      DECLINE: "Not you? Go to sign in"
     },
     VERIFY_EMAIL: {
       TITLE: "Verify your email",
@@ -90,10 +88,10 @@ export const STRINGS = {
     LINKS: {
       DASHBOARD: "Dashboard", APPOINTMENTS: "Appointments", PATIENTS: "Patients",
       DOCTORS: "Doctors", CALL_LOGS: "Call Logs", AI_RECEPTIONIST: "AI Receptionist",
-      KNOWLEDGE_BASE: "Knowledge Base", AI_CONVERSATIONS: "AI Conversations",
+      KNOWLEDGE_BASE: "Knowledge Base", AI_CONVERSATIONS: "AI Conversations", MESSAGES: "Messages",
       SERVICES: "Services", INTEGRATIONS: "Integrations", ANALYTICS: "Analytics",
       NOTIFICATIONS: "Notifications", BILLING: "Billing", TEAM: "Team & Permissions",
-      SETTINGS: "Settings",
+      SETTINGS: "Settings", SUPPORT: "Help & Support",
     }
   },
   TABLES: {
@@ -275,7 +273,7 @@ export const STRINGS = {
   ONBOARDING: {
     SUCCESS: {
       TITLE: "Your AI Receptionist is ready!",
-      SUBTITLE: "Smile Dental Clinic is configured and ready for testing. Sarah is now on standby to manage appointments, call routing, and patient inquiries.",
+      SUBTITLE: "Your business is configured and ready for live operations. Your AI receptionist is now on standby to manage appointments, call routing, and caller inquiries.",
       TEST_BTN: "Test AI Receptionist",
       DASHBOARD_BTN: "Go to Dashboard",
     },
@@ -315,7 +313,7 @@ export const STRINGS = {
     },
     HOURS: {
       TITLE: "Set your business hours",
-      SUBTITLE: "Configure your standard operating schedule. Aira receptionist will only book patient appointments during active hours.",
+      SUBTITLE: "Configure your standard operating schedule. Amsh will only book patient appointments during active hours.",
       DAY_HEADER: "Day",
       TIME_RANGES_HEADER: "Operating Time Ranges",
       TO: "to",
@@ -358,7 +356,7 @@ export const STRINGS = {
     },
     INTEGRATIONS: {
       TITLE: "Connect your tools",
-      SUBTITLE: "Sync Aira with calendars, channels, and payment systems to establish a fully-automated modern practice pipeline.",
+      SUBTITLE: "Sync Amsh with calendars, channels, and payment systems to establish a fully-automated modern practice pipeline.",
       STATUS_CONNECTED: "Connected",
       BTN_MANAGE: "Manage",
       BTN_CONNECT: "Connect",
@@ -437,6 +435,12 @@ export const STRINGS = {
       FINISH_BTN: "Finish Setup"
     }
   },
+  PAGES: {
+    DASHBOARD: {
+      GREETING: "Good morning, Sarah",
+      SUBTITLE: "Here is what is happening at Smile Dental Clinic today."
+    }
+  },
   DASHBOARD: {
     SETTINGS: {
       TITLE: "Settings",
@@ -448,6 +452,7 @@ export const STRINGS = {
           PROFILE: "Profile",
           SECURITY: "Security",
           NOTIFICATIONS: "Notifications",
+          MESSAGES: "Messages",
           AI_DEFAULTS: "AI Defaults",
           BILLING: "Billing",
           DANGER_ZONE: "Danger Zone"
@@ -636,13 +641,24 @@ export const STRINGS = {
       SERVICES: {
         TITLE: "Services",
         SUBTITLE: "Configure dental services handled by your clinic's AI Receptionist.",
-        ADD_BTN: "Add Service"
+        ADD_BTN: "Add Service",
+        SUGGESTIONS: {
+          TITLE: "Your website lists more services",
+          BODY: "Callers hear about these from your website, but the AI receptionist can only book services in this list. Add the ones you offer so the AI can take appointments for them.",
+          ADD: "Add",
+          ADD_ALL_HINT: "Set the duration and price, then save.",
+          FROM: "Found on",
+          SHOW_MORE: "Show all",
+          SHOW_LESS: "Show less",
+          HIDE: "Hide"
+        }
       },
       TEAM: {
         TITLE: "Team & Permissions",
         SUBTITLE: "Manage your clinic's team members and their permission levels."
-      },
-      COMPONENTS: {
+      }
+    },
+    COMPONENTS: {
         AI_BANNER: {
           STATUS: "AI ONLINE",
           STATUS_TEXT: "Sarah is active",
@@ -712,24 +728,14 @@ export const STRINGS = {
           API_KEYS: {
             TITLE: "API Keys",
             SUBTITLE: "Generate keys to authenticate your API requests.",
-            GENERATE_BTN: "Generate New Key",
-            TABLE: {
-              COLS: ["Name", "Key", "Created", "Actions"],
-              MOCK_DATA: {
-                NAME: "Production App",
-                KEY: "sk_live_...4f9a",
-                CREATED: "Aug 10, 2026",
-                REVOKE: "Revoke"
-              }
-            }
+            EMPTY: "API keys are not available yet. Until then, connect calendars and messaging from the integrations above."
           },
           WEBHOOKS: {
             TITLE: "Webhooks",
             SUBTITLE: "Receive real-time HTTP POST payloads when events occur.",
             ENDPOINT_LABEL: "Endpoint URL",
             EVENTS_LABEL: "Events to send",
-            EVENTS: ["appointment.created", "patient.created", "call.completed"],
-            SAVE_BTN: "Save Webhook"
+            EVENTS: ["appointment.created", "patient.created", "call.completed"]
           }
         },
         INSIGHTS_CARD: {
@@ -806,6 +812,18 @@ export const STRINGS = {
           CALL_HANDLING: {
             TITLE: "Call Handling Rules",
             DESCRIPTION: "Define how inbound and outbound calls are initiated and constrained.",
+            PHONE_NUMBER: {
+              TITLE: "AI Phone Number",
+              STATUS_PENDING: "Not set up yet",
+              STATUS_ACTIVE: "Call forwarding active",
+              FORWARD_TITLE: "Forward your existing number (start here)",
+              FORWARD_DESCRIPTION: "Keep your current clinic number. Forward it to your AI's number below to go live — no new number to give out yet.",
+              FORWARD_HINT: "Ask your phone carrier or check your PBX/VoIP dashboard for how to set up call forwarding to this number.",
+              COPY_BTN: "Copy Number",
+              DEDICATED_TITLE: "Get a dedicated AI number (optional, later)",
+              DEDICATED_DESCRIPTION: "Once you're ready, request a number you can advertise directly as your AI receptionist's own line.",
+              DEDICATED_BTN: "Request a Number"
+            },
             GREETING: {
               LABEL: "Default Inbound Greeting",
               PLACEHOLDER: "Hello! Thank you for calling Smile Dental Clinic. How can I assist you today?",
@@ -896,6 +914,28 @@ export const STRINGS = {
             SAVE: "Save Voice Settings"
           }
         },
+        APPOINTMENTS_TABLE: {
+          TITLE: "Today's Appointments",
+          VIEW_ALL: "View All",
+          HEADERS: {
+            TIME: "Time",
+            PATIENT: "Patient",
+            SERVICE: "Service",
+            PROVIDER: "Provider",
+            STATUS: "Status",
+            SOURCE: "Source"
+          },
+          STATUS: {
+            CONFIRMED: "Confirmed",
+            PENDING: "Pending"
+          },
+          MOCK_DATA: [
+            { time: '09:00 AM', patient: 'Rahul Sharma', service: 'Consultation', doctor: 'Dr. Sarah', status: 'Confirmed', source: 'AI' },
+            { time: '10:30 AM', patient: 'Emma Wilson', service: 'Cleaning', doctor: 'Dr. John', status: 'Confirmed', source: 'AI' },
+            { time: '11:15 AM', patient: 'Lucas Garcia', service: 'X-Ray', doctor: 'Dr. John', status: 'Pending', source: 'Manual' },
+            { time: '01:00 PM', patient: 'Sophie Adams', service: 'Whitening', doctor: 'Dr. Emily', status: 'Confirmed', source: 'AI' }
+          ]
+        },
         PAYMENT_METHOD_CARD: {
           BADGE: "VISA",
           DETAILS: "Visa ending in 4242",
@@ -952,6 +992,82 @@ export const STRINGS = {
             EDIT: "Edit"
           }
         },
+        TEST_PLAYGROUND: {
+          TITLE: "AI Test Playground",
+          SUBTITLE: "Simulate a call before publishing changes live. Nothing here affects real patients or bookings.",
+          BADGE: "Test Mode — isolated from live calls",
+          SCENARIOS_LABEL: "Test Scenario",
+          SCENARIOS: [
+            { id: 'booking', label: 'Book Appointment' },
+            { id: 'reschedule', label: 'Reschedule' },
+            { id: 'emergency', label: 'Emergency Keyword' },
+            { id: 'faq', label: 'Pricing FAQ' },
+          ],
+          RUN_BTN: "Run Test Call",
+          RUNNING_BTN: "Running Simulation...",
+          RESET_BTN: "Reset",
+          TRANSCRIPTS: {
+            booking: [
+              { speaker: 'AI', text: 'Good day, thank you for calling. I am your AI assistant. How may I help you today?' },
+              { speaker: 'User', text: 'I would like to book a routine cleaning for next Tuesday morning.' },
+              { speaker: 'AI', text: 'I have an opening at 10:00 AM on Tuesday. Shall I lock that in for you?' },
+              { speaker: 'User', text: 'Yes please, that works.' },
+              { speaker: 'AI', text: 'Booked! You will receive an SMS confirmation shortly.' },
+            ],
+            reschedule: [
+              { speaker: 'AI', text: 'Hello, thank you for calling. How can I assist you?' },
+              { speaker: 'User', text: 'I need to move my Thursday appointment to Friday afternoon.' },
+              { speaker: 'AI', text: 'No problem, I have 3:30 PM open on Friday. Shall I update your booking?' },
+              { speaker: 'User', text: 'Yes, thank you.' },
+            ],
+            emergency: [
+              { speaker: 'AI', text: 'Hello, thank you for calling. How can I help you today?' },
+              { speaker: 'User', text: 'I am in severe pain and need to be seen right now!' },
+              { speaker: 'AI', text: 'I understand this is urgent. I am escalating you to our emergency line immediately.' },
+            ],
+            faq: [
+              { speaker: 'AI', text: 'Hello, thank you for calling. How can I help you today?' },
+              { speaker: 'User', text: 'What is the price for a teeth whitening session?' },
+              { speaker: 'AI', text: 'Our teeth whitening session is priced at €150 and takes about 60 minutes.' },
+            ],
+          },
+          CONFIG_TITLE: "Configuration Being Tested",
+          CONFIG: {
+            GREETING: "Greeting Message",
+            VOICE: "Voice",
+            KNOWLEDGE: "Knowledge Sources",
+          },
+          RESULTS_TITLE: "Test Evaluation",
+          RESULTS: {
+            booking: [
+              { label: 'Correctly identified intent', pass: true },
+              { label: 'Collected all required fields', pass: true },
+              { label: 'Completed booking action', pass: true },
+              { label: 'Response latency under 800ms', pass: true },
+            ],
+            reschedule: [
+              { label: 'Correctly identified intent', pass: true },
+              { label: 'Located existing appointment', pass: true },
+              { label: 'Completed reschedule action', pass: true },
+              { label: 'Response latency under 800ms', pass: true },
+            ],
+            emergency: [
+              { label: 'Detected emergency keyword', pass: true },
+              { label: 'Skipped normal booking flow', pass: true },
+              { label: 'Escalated to human line', pass: true },
+              { label: 'Response latency under 800ms', pass: false },
+            ],
+            faq: [
+              { label: 'Correctly identified intent', pass: true },
+              { label: 'Answered from knowledge base', pass: true },
+              { label: 'No hallucinated pricing', pass: true },
+              { label: 'Response latency under 800ms', pass: true },
+            ],
+          },
+          CLOSE_BTN: "Close",
+          SAVE_DRAFT_BTN: "Save as Draft",
+          PUBLISH_BTN: "Looks Good — Publish Changes",
+        },
         WEEKLY_CALENDAR: {
           DAYS: [
             { day: 'Mon', date: '10' },
@@ -972,6 +1088,5 @@ export const STRINGS = {
           }
         }
       }
-    }
   }
 };

@@ -1,0 +1,969 @@
+"""LLM receptionist loop.
+
+  caller text -> [safety gate: emergencies/human requests, no LLM] -> LLM (+tools, max 3 rounds) -> reply
+
+The LLM writes every reply and decides when to call tools; the toolbox/validator decide what actually happens.
+`stream=True` yields complete sentences as soon as they exist so TTS can start before the model finishes."""
+
+import asyncio
+import json
+import logging
+import re
+import time
+from functools import lru_cache
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Tuple
+
+from backend.ai.capabilities.skills.emotional_tone import Sentiment, detect_sentiment
+from backend.ai.engine.agent.facts import DEFAULT_TRIGGERS, disabled_capabilities
+from backend.ai.engine.agent.grounding import CLAIM_NOTE, GUARD_NOTE, is_reasoning_leak, unbacked_claim, ungrounded
+from backend.ai.capabilities.rules.safety_emergency import EmergencyRule
+from backend.ai.engine.agent.emotion import EmotionState, parse_cues, tts_text
+from backend.ai.engine.agent.fillers import choose_backchannel, wait_text
+from backend.ai.engine.agent.language_layer import LanguageLayer
+from backend.ai.lexicon import language_pack, lexicon_languages, load_lexicon
+from backend.ai.verticals.context import resolve_business_context
+from backend.ai.engine.agent.controller import CallState, SentenceDeduper
+from backend.ai.engine.agent.progress import booking_note
+from backend.ai.engine.agent.hindi import caller_is_leaving, has_devanagari, language_escalation, looks_english, match_speaker_gender, normalize as normalize_hindi, requested_language
+from backend.ai.engine.agent.validator import is_affirmative
+from backend.ai.engine.agent.llm_backend import ChatBackend, LLMUnavailable
+from backend.ai.engine.agent.prompt_builder import build_system_prompt
+from backend.ai.engine.agent.toolbox import TOOL_SCHEMAS, AgentToolbox
+from backend.ai.engine.agent.validator import ActionGate, BusinessFacts
+from backend.ai.engine.agent.datetime_utils import dates_in, local_now
+from backend.ai.engine.conversation.i18n import language_code
+from backend.ai.engine.conversation.i18n import t
+from backend.ai.engine.guardrails.safety import SafetyGuardrails
+from backend.ai.realtime import latency
+from backend.ai.verticals.schemas import VerticalConfig
+from backend.ai.prompts import load_prompts
+
+
+def _notes() -> Dict[str, Any]:
+    """Per-turn system notes and model-facing messages: data in ai/prompts/engine_notes.json."""
+    return load_prompts("engine_notes")
+
+
+def _lines(key: str) -> Dict[str, str]:
+    """The English and Hindi version of a fixed line, read from the language packs (`strings.<key>`). Every other language is read
+    from its own pack by `_scripted`."""
+    return {code: language_pack(code)["strings"][key] for code in ("en", "hi")}
+
+
+logger = logging.getLogger(__name__)
+
+MAX_TOOL_ROUNDS = 3
+# Fixed moments (a transfer, a failed transfer, a reply blocked twice) are worded by the LLM in the caller's language; the language
+# pack's fixed line is spoken only when the LLM fails or takes longer than this. Emergencies get the shortest wait.
+SPOKEN_LINE_TIMEOUT_S = 2.5
+EMERGENCY_LINE_TIMEOUT_S = 1.5
+SPOKEN_LINE_MAX_CHARS = 320
+SPOKEN_LINE_MIN_WORDS = 5  # "ok" is not a transfer or emergency message
+# LATENCY: a caller who names a day ("tomorrow", "Thursday") nearly always needs that day's open times, which costs the model a
+# whole extra round (ask for check_availability, wait, ask again). The engine reads them first, in a few ms, and hands them
+# to the model as an already-made check_availability call, so the first round can answer. Not repeated for the same day
+# within this many seconds of the call.
+PREFETCH_REPEAT_S = 120.0
+# Same idea for "move / cancel my appointment": the caller's own upcoming appointments (by the number they call from) are read
+# first, so the model can say which one it found instead of spending a round on lookup_appointment.
+_CHANGE_APPOINTMENT = re.compile(
+    r"\b(?:reschedul\w*|cancel\w*|postpone\w*|prepone\w*|(?:change|move|shift)\s+(?:my|the|our)\s+(?:appointment|booking|slot))\b"
+    r"|\b(?:appointment|booking)\s+(?:badal\w*|change\s+kar\w*|cancel\s+kar\w*|aage\s+kar\w*)"
+    r"|रद्द|कैंसिल|बदल|री\s*शेड्यूल",
+    re.IGNORECASE,
+)
+# Tools safe to run side by side when the model asks for several in one round ("tomorrow or Friday?"). Only pure reads
+# qualify: lookup_appointment assigns A1/A2 refs on the gate and search_knowledge may (re)build the index, so they stay
+# sequential.
+PARALLEL_SAFE_TOOLS = frozenset({"check_availability"})
+MAX_HISTORY_TURNS = 8
+
+_FALLBACK = _lines("fallback")
+_NO_TRANSFER = _lines("no_transfer")
+_DEVANAGARI_NOTE = _notes()["devanagari"]
+_NUMBER_OFFER = re.compile(
+    r"\b(?:same|this|current|calling\s+from)\s+(?:phone\s+|whatsapp\s+)?number\b|\b(?:calling|messaging|chatting)\s+from\b|\bisi\s+number\b|\bis\s+number\s+(?:pe|par)\b|इसी\s+नंबर|इस\s+नंबर",
+    re.IGNORECASE,
+)
+_SAME_NUMBER = re.compile(
+    r"\b(?:same|this|yahi|isi|is)\s+(?:whatsapp\s+)?number\b|\bcalling\s+from\b|इसी\s+नंबर|यही\s+नंबर|\bsame\s+wala\b", re.IGNORECASE
+)
+@lru_cache(maxsize=None)
+def _ack_pattern(language: Optional[str] = None) -> "re.Pattern[str]":
+    """Opening acknowledgement(s) ("Sure!", "जी, बिल्कुल।", "Claro.", "تمام،"): one per turn. The words are each language
+    pack's "acks" list (ai/locales/lexicon/<code>.json), never code; `language` limits it to one pack, None = every pack
+    (callers switch languages mid-call). Only a standalone ack (followed by punctuation or the end) counts, so "Sure thing!"
+    or "अच्छा लगा" stay whole."""
+    codes = [language] if language else lexicon_languages()
+    words = {w.lower() for code in codes for w in load_lexicon(code).get("acks") or []}
+    if not words:
+        return re.compile(r"(?!)")
+    alt = "|".join(re.escape(w).replace(r"\ ", r"\s+") for w in sorted(words, key=len, reverse=True))
+    word = rf"(?:{alt})(?!\w)"
+    return re.compile(rf"\s*(?:{word}(?:\s+{word})*\s*(?:[!.,،।…]+\s*|$))+", re.IGNORECASE)
+_EMOJI = re.compile("[\U0001F000-\U0001FAFF\u2600-\u27BF\uFE0F\u200d]")
+_NO_REGREET_NOTE = _notes()["no_regreet"]
+_LANGUAGE_RETRY_NOTE = _notes()["language_retry"]
+_LANGUAGE_NOTE = dict(_notes()["language_note"])
+def _scripted(table: Dict[str, str], key: str, language: str) -> str:
+    """A fixed line the engine speaks itself (apology, transfer...). The base table has English and Hindi; every other language
+    reads it from its pack (`strings.<key>`), so a new language needs no code; with neither, English."""
+    code = (language or "en").split("-")[0].lower()
+    return table.get(code) or (language_pack(code).get("strings") or {}).get(key) or table["en"]
+
+
+def _language_note(code: str) -> str:
+    """The system note for a language the caller asked for. Hindi and English keep their tuned notes; any other language is
+    built from its pack (name + style guidance), or just its name when it has no pack. All wording is data (engine_notes.json)."""
+    if code in _LANGUAGE_NOTE:
+        return _LANGUAGE_NOTE[code]
+    pack = language_pack(code)
+    name = pack.get("name") or code
+    generic = _notes()["language_note_generic"]
+    style = pack.get("style") or generic["native"].format(name=name)
+    return f"{generic['asked'].format(name=name)} {style}"
+
+
+_BILLING = re.compile(r"\b(refunds?|billing|invoice|charged\s+twice|overcharg\w*|chargeback|dispute|bill\s+(?:is\s+)?wrong)\b", re.IGNORECASE)
+_BILLING_MSG = _lines("billing")
+_FRUSTRATED_MSG = _lines("frustrated")
+_UNSURE_CLAIM = _lines("unsure_claim")
+_UNSURE_TIMES = _lines("unsure_times")
+_ABBREVIATIONS = {"dr", "mr", "mrs", "ms", "st", "no", "vs"}
+
+
+@dataclass
+class AgentTurn:
+    reply: str
+    transferred: bool = False
+    hangup: bool = False
+    transfer_twiml: Optional[str] = None
+    tools: List[Dict[str, Any]] = field(default_factory=list)
+    latency_ms: int = 0
+    first_sentence_ms: Optional[int] = None
+    degraded: bool = False  # LLM unavailable this turn; the caller can fall back to another engine
+    error: Optional[str] = None
+    provider: Optional[str] = None  # which LLM answered this turn (groq / gemini)
+    language_mode: str = "english"  # english | hindi | hinglish (the session's mode after this turn)
+
+
+class SentenceSplitter:
+    """Cuts streamed text into speakable sentences (handles 'Dr.' and Hindi danda).
+
+    LATENCY: with `early=True` the *first* piece of a reply may be released at a clause boundary (", " / "; " / ": " /
+    " - ") instead of waiting for the sentence's full stop, so TTS starts while the model is still writing the rest:
+    "Sure, I can help you with that appointment, | what's your name?" speaks the first clause ~one clause sooner.
+    Only one early cut per splitter (one per LLM round): after that, audio is already playing and whole sentences sound
+    more natural. An early cut is refused when it would weaken a guard or sound wrong:
+      - fewer than `min_words` words (no choppy "Sure," / "Okay," TTS calls);
+      - any digit or time word: invented-time grounding must see the whole sentence ("at 10, 11 or 2 PM");
+      - the piece opens like a question: OneQuestion must still be able to hold / replace a question."""
+
+    _END = re.compile(r"([.!?।])(\s+|(?=[A-Z]))")  # also splits glued sentences like "book?Sure thing!"
+    _CLAUSE = re.compile(r"(?:[,;:]|\s[-–—])\s+")
+    _NUMERIC = re.compile(
+        r"\d|\b(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|noon|midnight|o'?clock|am|pm|a\.m|p\.m|"
+        r"half|quarter|baje|dedh|dhai|saade|sava|paune)\b|बजे",
+        re.IGNORECASE,
+    )
+    _QUESTION_START = re.compile(
+        r"^\W*(?:\[[^\]]*\]\s*)*(?:what|which|when|where|who|whom|whose|why|how|would|could|can|shall|should|may|do|does|did|"
+        r"is|are|was|were|will|have|has|kya|kab|kaun|kis|kahan|kaise|kitn)\b",
+        re.IGNORECASE,
+    )
+
+    def __init__(self, early: bool = False, min_words: int = 4) -> None:
+        self.buf = ""
+        self.early = early
+        self.min_words = min_words
+        self._emitted = False  # early cuts only apply before anything was emitted by this splitter
+
+    def feed(self, delta: str) -> List[str]:
+        self.buf += delta
+        out: List[str] = []
+        pos = 0
+        for m in self._END.finditer(self.buf):
+            head = self.buf[pos : m.end(1)]
+            last_word = re.findall(r"[A-Za-z]+", head)[-1:] or [""]
+            if m[1] == "." and last_word[0].lower() in _ABBREVIATIONS:
+                continue
+            out.append(head.strip())
+            pos = m.end()
+        self.buf = self.buf[pos:]
+        if self.early and not self._emitted and not out:
+            out.extend(self._early_clause())
+        out = [s for s in out if s]
+        if out:
+            self._emitted = True
+        return out
+
+    def _early_clause(self) -> List[str]:
+        """The first clause at the head of the buffer that is long enough and safe, or nothing (keep waiting)."""
+        cut = None
+        for m in self._CLAUSE.finditer(self.buf):
+            head = self.buf[: m.start() + 1].strip() if self.buf[m.start()] in ",;:" else self.buf[: m.start()].strip()
+            if len(head.split()) < self.min_words:
+                continue
+            if self._NUMERIC.search(head) or self._QUESTION_START.search(head):
+                return []  # the sentence carries a time/number or is a question: wait for the full sentence
+            cut = (head, m.end())
+            break  # the first clause that is long enough: speak as early as possible
+        if not cut:
+            return []
+        head, end = cut
+        self.buf = self.buf[end:]
+        return [head]
+
+    def flush(self) -> List[str]:
+        rest, self.buf = self.buf.strip(), ""
+        return [rest] if rest else []
+
+
+class OneQuestion:
+    """A phone receptionist asks one question at a time. Models sometimes emit a draft question and then a
+    rephrased one in the same reply ("What service?" ... "Sure! Which service are you after?"): keep only the last.
+    Statements are spoken immediately; the latest question is held and spoken last (a question ends a turn)."""
+
+    def __init__(self) -> None:
+        self.held: Optional[str] = None
+
+    def feed(self, sentence: str) -> List[str]:
+        if sentence.rstrip().endswith("?"):
+            self.held = sentence  # replaces any earlier question in this reply
+            return []
+        return [sentence]
+
+    def flush(self) -> List[str]:
+        out = [self.held] if self.held else []
+        self.held = None
+        return out
+
+
+_ZERO_WIDTH = re.compile("[​‌‍⁠﻿]")
+
+
+def clean_for_speech(text: str) -> str:
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
+    if _ZERO_WIDTH.search(text):
+        # A model glitch (seen on gpt-oss after a rate-limit fallback): "Your <zero-width burst> … … Your appointment…".
+        # `\s` does not match zero-width spaces, so strip them, then the stray ellipses and the restarted first word.
+        text = _ZERO_WIDTH.sub("", text)
+        text = re.sub(r"(?:\s*(?:…|\.{3}))+(?=\s|$)", "", text)
+        text = re.sub(r"\b(\w+)(?:\s+\1\b)+", r"\1", text, flags=re.IGNORECASE)
+    text = _EMOJI.sub("", text)  # a voice would read them out or stumble
+    text = re.sub(r"[*#`_~]+", "", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    # A numbered list split into sentences leaves bare markers ("…चाहिए: 1." then "2."): the voice read them out.
+    text = re.sub(r"(?:^|(?<=:))\s*\d{1,2}[.)]$", "", text).strip()
+    # Some models leak their reasoning into the reply ("... We need to respond confirming."): never speak that.
+    sentences = re.split(r"(?<=[.!?…।])\s+", text)
+    return " ".join(s for s in sentences if not is_reasoning_leak(s)).strip()
+
+
+class AgentEngine:
+    def __init__(
+        self,
+        business_id: str,
+        caller_number: str,
+        call_id: Optional[str],
+        facts: BusinessFacts,
+        vertical_config: VerticalConfig,
+        backend: ChatBackend,
+        db_factory: Callable[[], Any],
+        agent_name: str = "Aura",
+        language: str = "en",
+        tone: Optional[str] = None,
+        gender: Optional[str] = None,
+        now_fn: Optional[Callable[[], datetime]] = None,
+        dry_run: bool = False,
+        instructions: Optional[str] = None,
+        small_talk: bool = True,
+        require_confirmation: bool = True,
+        capabilities: Optional[Dict[str, bool]] = None,
+        triggers: Optional[Dict[str, bool]] = None,
+        transfer_phone: Optional[str] = None,
+        languages: Optional[List[str]] = None,
+        auto_detect_language: bool = True,
+        channel: str = "voice",
+        fillers: bool = False,
+        accent: Optional[str] = None,
+        early_chunking: bool = False,
+        sandbox: Optional[Any] = None,
+    ) -> None:
+        self.sandbox = sandbox  # playground test mode (engine/agent/sandbox.py)
+        self.early_chunking = early_chunking  # streamed turns may release a safe first clause to TTS (SentenceSplitter)
+        self.triggers = {**DEFAULT_TRIGGERS, **(triggers or {})}  # Escalation tab checklist
+        self.frustrated_turns = 0
+        self.language_pref: Optional[str] = None  # set when the caller asks to switch language
+        # The authoritative runtime context: vertical, language, accent, region (from the country), timezone. Five independent
+        # dimensions; raises MissingContextError rather than defaulting. Everything regional below reads it.
+        self.context = resolve_business_context(facts, vertical_config, language, languages, auto_detect_language, accent)
+        # Language conversation layer (engine/agent/language_layer.py): on by the tenant's LANGUAGE settings, never by region, and
+        # inert for callers speaking another language. Booking, tools and state never depend on it.
+        self.lang = LanguageLayer(enabled=self.context.policies.hindi_hinglish_layer)
+        self.gender = gender
+        self.fillers_on = fillers  # natural fillers ("hmm...", "one moment..."): spoken calls only, see agent/fillers.py
+        self._last_filler_turn = -99
+        self._prefetched: Dict[Any, float] = {}  # day -> when its open times were last read ahead of the model (latency)
+        self._wait_spoken = False
+        self._stop_turn = False  # request_stop(): the caller spoke over the running turn; checked between stream events
+        self._stop_event = asyncio.Event()  # same signal, awaitable: wakes a stream that is still waiting for its first token
+        self._ack_used: set = set()  # acknowledgement words ("sure", "got it"...) already said this turn, see _speech
+        self.channel = channel  # "voice" (phone call, playground) or "chat" (WhatsApp text)
+        self.emotion = EmotionState()  # the caller's mood and how the voice should react (agent/emotion.py)
+        self._mood_note: Optional[str] = None
+        self._cues: Dict[str, Tuple[Optional[str], bool]] = {}  # sentence -> (cue, laugh) the model asked for
+        self._carry: Optional[Tuple[Optional[str], bool]] = None  # a cue that arrived alone, for the next sentence
+        self._reply_started = False
+        self._raw_said: List[str] = []  # caller utterances as heard (the toolbox keeps a Roman version for the guards)
+        self.auto_detect_language = auto_detect_language
+        self._devanagari_turn = False  # the caller's latest message is in Devanagari (speech-to-text output)
+        self.facts = facts
+        # What is already known about this call and what to ask next, kept in code (agent/controller.py); the model only words it.
+        self.ctrl = CallState(services=list(getattr(facts, 'services', None) or []))
+        self._dup = SentenceDeduper()  # per turn: the same sentence twice (retries, second tool round) is spoken once
+        self._asked_slots: set = set()  # per turn: what we have already asked the caller for (one question per turn)
+        self.vertical_config = vertical_config
+        self.backend = backend
+        self._meter_backend(backend, business_id, call_id)
+        self.agent_name = agent_name
+        self.language = language_code(language)
+        self.dry_run = dry_run
+        self.now_fn = now_fn or (lambda: local_now(facts.timezone))
+        self.gate = ActionGate()
+        disabled_tools, disabled_notes = disabled_capabilities(capabilities or {})
+        self.tools = [s for s in TOOL_SCHEMAS if s["function"]["name"] not in disabled_tools]  # owner's switches
+        self.toolbox = AgentToolbox(
+            business_id, caller_number, call_id, facts, db_factory, self.gate, self.now_fn, dry_run,
+            require_confirmation=require_confirmation, disabled_tools=disabled_tools, transfer_phone=transfer_phone,
+            sandbox=sandbox,
+        )
+        self.toolbox.channel = channel
+        self._system = build_system_prompt(
+            facts, agent_name, self.now_fn(), caller_number, tone, gender,
+            instructions=instructions, small_talk=small_talk, require_confirmation=require_confirmation, disabled=disabled_notes,
+            transfers_on="transfer_to_human" not in disabled_tools,
+            primary_language=language, languages=languages, auto_detect_language=auto_detect_language, triggers=self.triggers,
+            channel=channel, context=self.context,
+        )
+        if channel == "chat":  # a text chat has no call to transfer or hang up
+            self.toolbox.disabled_tools |= {"transfer_to_human", "end_call"}
+            self.tools = [s for s in self.tools if s["function"]["name"] not in self.toolbox.disabled_tools]
+        self._turns: List[List[Dict[str, Any]]] = []  # one message group per caller turn (keeps tool pairs intact)
+        self.ended = False
+
+    # ------------------------------------------------------------------ public API
+    def greeting(self, override: Optional[str] = None) -> str:
+        text = override or t(self.language, "greeting", business_name=self.facts.name)
+        self._turns.append([{"role": "assistant", "content": text}])
+        return text
+
+    def set_patient_context(self, text: str) -> None:
+        """Add what the clinic's own records say about THIS caller (see rules/patient_privacy.py) to the system prompt."""
+        if text:
+            self._system = self._system + "\n" + text
+
+    def _meter_backend(self, backend: Any, business_id: str, call_id: Optional[str]) -> None:
+        """Attribute the model's token use to this clinic so the admin spend report can price it. Test conversations are marked
+        as testing spend. A backend without a usage hook (a scripted test backend) is left alone."""
+        from backend.server.services.cost_tracking import record_llm
+
+        test = self.sandbox is not None
+
+        def sink(provider: str, model: str, prompt: int, completion: int, estimated: bool) -> None:
+            record_llm(business_id, call_id, provider, prompt, completion, estimated=estimated, test=test)
+
+        for b in getattr(backend, "backends", None) or [backend]:
+            if hasattr(b, "usage_sink"):
+                b.usage_sink = sink
+
+    def restore(self, turns: List[Tuple[str, str]]) -> None:
+        """Rebuild the conversation from (caller, agent) pairs saved earlier, after the server restarted mid-call (a code
+        reload drops in-memory sessions). Brings back what the model remembers, the language the caller asked for and the
+        words the booking guards check against. A half-finished confirmation is not restored: the agent simply asks again."""
+        for said, replied in turns:
+            self._turns.append([{"role": "user", "content": said}, {"role": "assistant", "content": replied}])
+            roman = normalize_hindi(said)
+            self.toolbox.said.append(roman)
+            self._raw_said.append(said)
+            self.toolbox.last_utterance = roman
+            self.toolbox.last_assistant = replied
+            self.gate.turn += 1
+            asked = requested_language(said) or requested_language(roman)
+            if asked:
+                self.language_pref = asked
+            self.lang.observe(said, roman, asked, self.auto_detect_language)
+
+    async def turn(self, utterance: str) -> AgentTurn:
+        final: Optional[AgentTurn] = None
+        async for event in self.turn_events(utterance, stream=False):
+            if event["type"] == "done":
+                final = event["turn"]
+        assert final is not None
+        return final
+
+    def request_stop(self) -> None:
+        """The caller spoke over this turn. Cooperative: the turn stops streaming and speaking at its next checkpoint, never
+        starts a new tool round, and never abandons a tool already running (a half-finished booking would be missing from
+        history). The turn is still committed, with only what was actually produced, so the next turn sees the truth."""
+        self._stop_turn = True
+        self._stop_event.set()
+
+    async def _until_stop(self, stream: AsyncIterator[Dict[str, Any]]) -> AsyncIterator[Dict[str, Any]]:
+        """The stream's events, but ending the moment request_stop() fires. A plain `async for` only notices a stop when the
+        next event arrives, so an interrupt during the model's first-token wait (~1 s) would hold the next turn back."""
+        it = stream.__aiter__()
+        stop = asyncio.ensure_future(self._stop_event.wait())
+        try:
+            while True:
+                nxt = asyncio.ensure_future(it.__anext__())
+                await asyncio.wait({nxt, stop}, return_when=asyncio.FIRST_COMPLETED)
+                if not nxt.done():
+                    nxt.cancel()
+                    await asyncio.gather(nxt, return_exceptions=True)
+                    return
+                try:
+                    ev = nxt.result()
+                except StopAsyncIteration:
+                    return
+                yield ev
+        finally:
+            stop.cancel()
+
+    async def turn_events(self, utterance: str, stream: bool = True) -> AsyncIterator[Dict[str, Any]]:
+        """Yields {"type": "sentence", "text"} as replies form, then {"type": "done", "turn": AgentTurn}."""
+        started = time.perf_counter()
+        self.gate.turn += 1
+        self._mood_note = self.emotion.hear(utterance)
+        self._reply_started = False
+        self._wait_spoken = False
+        self._ack_used = set()
+        self._stop_turn = False
+        self._stop_event.clear()
+        self._dup = SentenceDeduper()
+        self._asked_slots = set()
+        asked = requested_language(utterance) or requested_language(normalize_hindi(utterance))
+        if asked:
+            self.language_pref = asked  # remembered for the rest of the call, until they ask for another language
+        roman = normalize_hindi(utterance)  # Devanagari -> Roman approximation, used by the code-side guards only
+        self._devanagari_turn = has_devanagari(utterance)
+        self.lang.observe(utterance, roman, asked, self.auto_detect_language)
+        # The calling number may be used only once the caller agrees: they say "same number", or say yes to our offer.
+        if _SAME_NUMBER.search(roman) or (is_affirmative(roman) and self._offered_calling_number()):
+            self.toolbox.caller_number_ok = True
+        self.toolbox.last_utterance = roman
+        self.toolbox.said.append(roman)
+        self.toolbox.language = self.active_language or "en"
+        self.ctrl.observe(utterance, self.now_fn().date(), language=self.active_language, emotion=self.emotion.mood,
+                          calling_number_ok=self.toolbox.caller_number_ok)
+        self._raw_said.append(utterance)
+        first_ms: Optional[int] = None
+        spoken: List[str] = []
+        group: List[Dict[str, Any]] = [{"role": "user", "content": utterance}]
+
+        def elapsed() -> int:
+            return int((time.perf_counter() - started) * 1000)
+
+        # 1. Deterministic safety gate: emergencies and "I want a human" never wait for the LLM.
+        # Which triggers fire is the owner's Escalation-tab checklist. Emergencies always fire (patient safety).
+        escalated, esc_msg, target = SafetyGuardrails.check_escalation(utterance, self.vertical_config)
+        esc_kind = "front_desk"  # which spoken_line instruction words the transfer (engine_notes.json)
+        if not escalated and (hindi := language_escalation(utterance)):  # Hindi / Devanagari cues the English rules miss
+            escalated, target = True, hindi
+            esc_msg = self._emergency_line(utterance) if hindi == "emergency" else None
+        if not escalated and (emergency := EmergencyRule.evaluate(utterance, self.context.emergency_numbers))[0]:  # capabilities/rules: English + Hindi, whole phrases
+            escalated, target = True, "emergency"
+            esc_msg = self._emergency_line(utterance, emergency[1])
+        transfers_on = "transfer_to_human" not in self.toolbox.disabled_tools
+        if escalated and (target or "front_desk") != "emergency" and not (transfers_on and self.triggers["human_request"]):
+            escalated = False  # trigger off or transfers off: a human request goes to the LLM, which will decline
+        if not escalated and transfers_on and self.triggers["complex_billing"] and _BILLING.search(utterance):
+            escalated, target, esc_kind = True, "front_desk", "billing"
+            esc_msg = _scripted(_BILLING_MSG, "billing", self.active_language)
+        if not escalated and transfers_on and self.triggers["frustration"]:
+            self.frustrated_turns = self.frustrated_turns + 1 if detect_sentiment(utterance) == Sentiment.FRUSTRATED else 0
+            if self.frustrated_turns >= 2:  # same rule as the legacy engine: two upset turns in a row
+                escalated, target, esc_kind = True, "front_desk", "frustrated"
+                esc_msg = _scripted(_FRUSTRATED_MSG, "frustrated", self.active_language)
+        if escalated:
+            department = target or "front_desk"
+            if self.dry_run or self.channel == "chat" or self.sandbox is not None:  # chat: reply with the message, nothing to redirect
+                self.toolbox.pending = {"type": "transfer", "department": department, "twiml": None, "dry_run": True}
+                transfer = None
+            else:
+                transfer = asyncio.create_task(self.toolbox.transfer(department, f"Safety escalation: {utterance}"))
+            # The transfer is decided by code (never waits for the model); only the words are the model's, written while
+            # the transfer is set up. The fixed line is the fallback for a failed or slow model.
+            emergency_now = department == "emergency"
+            reply, _ = await self._spoken_line(
+                group, "emergency" if emergency_now else esc_kind, esc_msg or t(self.active_language, "transfer_generic"),
+                timeout=EMERGENCY_LINE_TIMEOUT_S if emergency_now else SPOKEN_LINE_TIMEOUT_S,
+                must_say_one_of=self.context.emergency_numbers if emergency_now else (),
+            )
+            result: Dict[str, Any] = await transfer if transfer is not None else {"ok": True}
+            if not result.get("ok") and not emergency_now:
+                reply, _ = await self._spoken_line(group, "no_transfer", _scripted(_NO_TRANSFER, "no_transfer", self.active_language))
+            group.append({"role": "assistant", "content": reply})
+            self._commit(group)
+            yield {"type": "sentence", "text": reply}
+            yield {"type": "done", "turn": self._result(reply, started, tools=[{"tool": "transfer_to_human", "via": "safety_gate"}], first_ms=elapsed())}
+            return
+
+        # 1b. The caller is only buying time ("ruko...", "wait", "ek second"): a nod, not the whole questionnaire again, and no LLM call.
+        if self.ctrl.is_hesitation(utterance):
+            nod = self._speech("जी, बताइए, मैं सुन रही हूँ।" if (self._devanagari_turn or self._expects_hindi() or self.lang.active) else "Sure, take your time.")
+            group.append({"role": "assistant", "content": nod})
+            self._turns.append(group)  # remembered, but it is not a proposal: the pending question stays what a "yes" answers
+            first_ms = elapsed()
+            yield self._sentence_event(nod)
+            yield {"type": "done", "turn": self._result(nod, started, tools=[], first_ms=first_ms)}
+            return
+
+        # 2. LLM + tool rounds (with the day the caller named already looked up)
+        if prefetched := await self._prefetch(roman, utterance):
+            group.extend(prefetched)
+        degraded = False
+        error: Optional[str] = None
+        reply = ""
+        guard_notes: List[str] = []  # one-shot corrections after the grounding guard blocked an invented time
+        round_no = 0
+        lang_state = {"retried": False}  # the wrong-language guard corrects once per turn, then lets the reply through
+        repeat_state = {"retried": False}  # same for asking again what the caller already told us
+        multi_state = {"retried": False}  # and for asking several things in one sentence
+        try:
+            while round_no <= MAX_TOOL_ROUNDS:
+                if self._stop_turn:  # interrupted before this model round: do not spend a request on a reply nobody will hear
+                    reply = " ".join(spoken)
+                    break
+                use_tools = round_no < MAX_TOOL_ROUNDS
+                messages = self._messages(group) + [{"role": "system", "content": n} for n in guard_notes]
+                tools = self.tools if use_tools else []
+                content, calls = "", []
+                invented: List[str] = []
+
+                def check(sentence: str) -> bool:
+                    """True if speakable. Records an invented time, or a claim that an action is done which no tool
+                    has confirmed (stored as 'claim:<kind>' in the same list, so the retry logic below is shared)."""
+                    if not lang_state["retried"] and self._expects_hindi() and looks_english(sentence):
+                        invented.append("lang:hi")
+                        return False
+                    bad = ungrounded(sentence, messages_for_guard())
+                    claim = unbacked_claim(sentence, self.toolbox.succeeded)
+                    if not multi_state["retried"] and len(more := self.ctrl.separate_asks(sentence)) > 1:
+                        invented.append("multi:" + ",".join(sorted(more)))
+                        return False
+                    if not repeat_state["retried"] and not tool_refused() and (again := self.ctrl.repeat_ask(sentence)):
+                        invented.append(f"repeat:{again}")
+                        return False
+                    invented.extend(bad)
+                    if claim:
+                        invented.append(f"claim:{claim}")
+                    return not bad and not claim
+
+                def tool_refused() -> bool:
+                    """A tool turned a value down this turn (bad name, taken slot...): asking for it again is then correct."""
+                    return any(m.get("role") == "tool" and '"ok": false' in str(m.get("content")) for m in group)
+
+                def messages_for_guard() -> List[Dict[str, Any]]:
+                    return self._messages(group)
+
+                one_q = OneQuestion()
+                splitter = SentenceSplitter(early=self.early_chunking and stream)
+
+                if stream:
+                    event_stream = self.backend.chat_stream(messages, tools)
+                    try:
+                        async for ev in self._until_stop(event_stream):
+                            if self._stop_turn:
+                                break
+                            if ev["type"] == "text":
+                                for sentence in splitter.feed(ev["delta"]):
+                                    if self._stop_turn:
+                                        break
+                                    sentence = self._speech(sentence)
+                                    if not sentence:
+                                        continue
+                                    if not check(sentence):
+                                        break
+                                    sentence = self._dedupe_ack(sentence)
+                                    if not sentence or self._dup.is_dup(sentence) or self._second_ask(sentence):
+                                        continue
+                                    for out in one_q.feed(sentence):
+                                        first_ms = first_ms if first_ms is not None else elapsed()
+                                        event = self._sentence_event(out)
+                                        spoken.append(event["text"])
+                                        yield event
+                                if invented:
+                                    break
+                            else:
+                                content, calls = ev["content"] or "", ev["tool_calls"]
+                    finally:
+                        close = getattr(event_stream, "aclose", None)
+                        if close and (invented or self._stop_turn):
+                            await close()
+                    tail = [] if (invented or self._stop_turn) else splitter.flush()
+                else:
+                    resp = await self.backend.chat(messages, tools)
+                    content, calls = resp["content"] or "", resp["tool_calls"]
+                    text = self._speech(content)
+                    tail = [] if (calls or not text) else splitter.feed(text + " ") + splitter.flush()
+
+                for sentence in tail:
+                    if self._stop_turn:
+                        break
+                    sentence = self._speech(sentence)
+                    if not sentence:
+                        continue
+                    if not check(sentence):
+                        break
+                    sentence = self._dedupe_ack(sentence)
+                    if not sentence or self._dup.is_dup(sentence) or self._second_ask(sentence):
+                        continue
+                    for out in one_q.feed(sentence):
+                        first_ms = first_ms if first_ms is not None else elapsed()
+                        event = self._sentence_event(out)
+                        spoken.append(event["text"])
+                        yield event
+                if not invented and not self._stop_turn:
+                    for out in one_q.flush():  # a trailing question is released once nothing newer replaces it
+                        first_ms = first_ms if first_ms is not None else elapsed()
+                        event = self._sentence_event(out)
+                        spoken.append(event["text"])
+                        yield event
+
+                if multis := [x[6:] for x in invented if x.startswith("multi:")]:
+                    invented[:] = [x for x in invented if not x.startswith("multi:")]
+                    if not invented:  # asked for several things in one sentence: regenerate once, one question only
+                        logger.warning("Guard blocked a multi-question sentence: %s", multis)
+                        multi_state["retried"] = True
+                        if spoken:
+                            guard_notes.append(_NO_REGREET_NOTE)
+                        guard_notes.append(self.ctrl.multi_correction(",".join(multis).split(",")))
+                        continue
+                if repeats := [x[7:] for x in invented if x.startswith("repeat:")]:
+                    invented[:] = [x for x in invented if not x.startswith("repeat:")]
+                    if not invented:  # only a repeated question was blocked: regenerate once with the known facts spelled out
+                        logger.warning("Guard blocked a repeated question: %s", repeats)
+                        repeat_state["retried"] = True
+                        if spoken:
+                            guard_notes.append(_NO_REGREET_NOTE)
+                        guard_notes.append(self.ctrl.repeat_correction(repeats))
+                        continue
+                if invented and all(x == "lang:hi" for x in invented):
+                    logger.warning("Guard blocked an English reply to a Hindi-speaking caller")
+                    lang_state["retried"] = True
+                    if spoken:
+                        guard_notes.append(_NO_REGREET_NOTE)
+                    guard_notes.append(_LANGUAGE_RETRY_NOTE)
+                    continue
+                invented[:] = [x for x in invented if x != "lang:hi"]
+                if invented:
+                    times = sorted({x for x in invented if not x.startswith("claim:")})
+                    claimed = sorted({x[6:] for x in invented if x.startswith("claim:")})
+                    logger.warning("Guard blocked a reply: invented time(s)=%s unbacked claim(s)=%s", times, claimed)
+                    if guard_notes:  # the model repeated the mistake after a correction: one plain, tool-less line instead
+                        table = _UNSURE_CLAIM if claimed else _UNSURE_TIMES
+                        key = "unsure_claim" if claimed else "unsure_times"
+                        safe, _ = await self._spoken_line(group, key, _scripted(table, key, self.active_language))
+                        first_ms = first_ms if first_ms is not None else elapsed()
+                        spoken.append(safe)
+                        yield {"type": "sentence", "text": safe}
+                        reply = " ".join(spoken)
+                        break
+                    notes = []
+                    if times:
+                        notes.append(GUARD_NOTE.format(times=", ".join(times)))
+                    if claimed:
+                        notes.append(CLAIM_NOTE.format(kinds="/".join({"book": "booked or confirmed", "cancel": "cancelled", "reschedule": "rescheduled"}[k] for k in claimed)))
+                    if spoken:
+                        notes.append(_NO_REGREET_NOTE)
+                    guard_notes.append(" ".join(notes))
+                    continue  # same round: regenerate with the correction; nothing wrong was spoken
+
+                if self._stop_turn:  # tool calls the model asked for but nothing started: drop them, history stays consistent
+                    reply = " ".join(spoken)
+                    break
+                if calls and use_tools:
+                    if self.fillers_on and not spoken and not any(c["name"] in ("end_call", "transfer_to_human") for c in calls):
+                        # Say something now: the next model call takes a moment and silence sounds like a dropped call.
+                        wait = wait_text(self._devanagari_turn or self.language_pref == "hi" or self.lang.active, language=self._pack_language())
+                        first_ms = first_ms if first_ms is not None else elapsed()
+                        spoken.append(wait)
+                        self._wait_spoken = True
+                        yield {"type": "sentence", "text": wait, "filler": True}
+                    group.append(
+                        {
+                            "role": "assistant",
+                            "content": content or None,
+                            "tool_calls": [
+                                {"id": c["id"], "type": "function", "function": {"name": c["name"], "arguments": c["arguments"]},
+                                 **({"extra_content": c["extra_content"]} if c.get("extra_content") else {})}  # Gemini 3 thought_signature
+                                for c in calls
+                            ],
+                        }
+                    )
+                    for c, result in zip(calls, await self._run_tools(calls)):
+                        group.append({"role": "tool", "tool_call_id": c["id"], "content": json.dumps(result, default=str)})
+                    round_no += 1
+                    continue
+
+                reply = " ".join(spoken)
+                break
+        except LLMUnavailable as e:
+            logger.warning("Agent LLM unavailable: %s", e)
+            degraded, error = True, str(e)[:160]
+
+        if self._stop_turn and not degraded:
+            reply = reply.strip() or "…"  # history records only what was produced; "…" keeps the message list valid
+        elif not reply.strip():
+            reply = _scripted(_FALLBACK, "fallback", self.active_language)
+            first_ms = first_ms if first_ms is not None else elapsed()
+            if not spoken and not degraded:  # when degraded the caller decides (e.g. fall back to another engine)
+                yield {"type": "sentence", "text": reply}
+        group.append({"role": "assistant", "content": reply})
+        self._commit(group)
+        yield {"type": "done", "turn": self._result(reply, started, tools=list(self.toolbox.calls), first_ms=first_ms, degraded=degraded, error=error)}
+
+    # ------------------------------------------------------------------ internals
+    async def _run_tools(self, calls: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Execute one round's tool calls. LATENCY: when every call in the round is a pure availability read they run
+        concurrently (each uses its own DB session in a worker thread), so checking two days costs one DB round trip
+        of wall time. Anything that writes or changes call state (booking, cancel, transfer, end_call) keeps the
+        original strict order, because the confirmation gate and idempotency checks depend on it."""
+        async def one(c: Dict[str, Any]) -> Dict[str, Any]:
+            latency.mark("tool_start", tool=c["name"])
+            try:
+                return await self.toolbox.execute(c["name"], c["arguments"])
+            finally:
+                latency.mark("tool_end", tool=c["name"])
+
+        if len(calls) > 1 and all(c["name"] in PARALLEL_SAFE_TOOLS for c in calls):
+            return list(await asyncio.gather(*(one(c) for c in calls)))
+        return [await one(c) for c in calls]
+
+    def _second_ask(self, sentence: str) -> bool:
+        """One question per turn: once this reply has asked for something, a sentence asking for a different thing is dropped
+        (the first ask stays; the caller is never handed a list of everything still missing)."""
+        asked = self.ctrl.slots_asked(sentence)
+        if not asked:
+            return False
+        if self._asked_slots and not asked <= self._asked_slots:
+            logger.info("Dropped a second question in the same turn: %s (already asked %s)", sorted(asked), sorted(self._asked_slots))
+            return True
+        self._asked_slots |= asked
+        return False
+
+    def _offered_calling_number(self) -> bool:
+        """Did our last reply propose using the number the caller is calling from?"""
+        last = self.toolbox.last_assistant or ""
+        digits = re.sub(r"\D", "", last)
+        tail = re.sub(r"\D", "", self.toolbox.caller_number or "")[-6:]
+        return bool(_NUMBER_OFFER.search(last) or (tail and tail in digits))
+
+    def _speech(self, text: str) -> str:
+        """Cleaned text that is safe to speak, with Hindi first-person verb endings matched to the agent's gender. In a
+        Hindi conversation a bare English interjection ("Sure!", "Great!") is dropped: it sounds like a different person."""
+        text, cue, laugh = parse_cues(text)  # [warm] / [laugh] tags never reach the caller's ears or the transcript
+        if self._carry and text.strip():
+            cue, laugh = cue or self._carry[0], laugh or self._carry[1]
+            self._carry = None
+        out = match_speaker_gender(clean_for_speech(text), self.gender)
+        if not out or (_ack_pattern("en").fullmatch(out) and self._expects_hindi()):
+            if cue or laugh:
+                self._carry = (cue, laugh)
+            return ""
+        if cue or laugh:
+            self._cues[out] = (cue, laugh)
+        return out
+
+    def _dedupe_ack(self, sentence: str) -> str:
+        """A retry (the guard rejected a sentence and the model regenerated the round from scratch, or a new tool round
+        started) tends to open with the same acknowledgement again ("Sure!", "Got it"). Only the first one per turn is
+        kept; a repeat is stripped so the caller does not hear "Sure... Sure!... Got it..." stacked up. Called once per
+        real sentence, after `_speech` and the grounding guard, so re-processing the same text twice (the non-streaming
+        path runs `_speech` once on the whole reply, then again per split sentence) cannot double-count a word as used.
+        Any acknowledgement counts, in any language: "जी, बिल्कुल। जी, जरूर।" is the same stacking as "Sure! Got it!"."""
+        m = _ack_pattern().match(sentence)
+        if not m or not m.group(0).strip():
+            return sentence
+        if not self._ack_used:
+            self._ack_used.add(m.group(0).strip().lower())
+            return sentence
+        rest = sentence[m.end():].lstrip()
+        cue = self._cues.pop(sentence, None)
+        if rest and cue:
+            self._cues[rest] = cue
+        return rest
+
+    def _sentence_event(self, sentence: str) -> Dict[str, Any]:
+        """The sentence event for the voice layer: the words, plus how to say them (emotion, and a real laugh)."""
+        cue, laugh = self._cues.pop(sentence, (None, False))
+        emotion, laugh = self.emotion.direct(cue, laugh, first_in_reply=not self._reply_started)
+        self._reply_started_before = self._reply_started
+        self._reply_started = True
+        if self.fillers_on and not self._reply_started_before and not self._wait_spoken:
+            sound = choose_backchannel(
+                self._raw_said[-1] if self._raw_said else "", sentence, self.emotion.mood, self.emotion.turn, self._last_filler_turn, self.emotion.turn,
+                language=self._pack_language(),
+            )
+            if sound:
+                sentence = f"{sound} {sentence}"
+                self._last_filler_turn = self.emotion.turn
+        event: Dict[str, Any] = {"type": "sentence", "text": sentence}
+        if emotion:
+            event["emotion"] = emotion
+        if laugh:
+            event["tts_text"] = tts_text(sentence, True)
+        return event
+
+    @property
+    def active_language(self) -> str:
+        """The language the agent speaks right now: what the caller asked for, else the tenant's primary language (/ai settings)."""
+        return (self.language_pref or self.language or "en").split("-")[0].lower()
+
+    def _emergency_line(self, utterance: str, default: Optional[str] = None) -> str:
+        """What is spoken on an emergency, in the caller's language (from its pack's `strings.emergency`). English keeps the
+        region-aware line with the local numbers when one was built (`default`)."""
+        code = "hi" if has_devanagari(utterance) else (self.active_language or "en")
+        if code == "en" and default:
+            return default
+        line = (language_pack(code).get("strings") or {}).get("emergency") or default or language_pack("en")["strings"]["emergency"]
+        numbers = self.context.emergency_numbers
+        return f"{line} ({' / '.join(numbers)})" if numbers and code != "en" else line
+
+    def _wanted_reads(self, roman: str, utterance: str) -> List[Tuple[str, Dict[str, Any]]]:
+        """Reads the model would almost surely ask for first: the one day the caller named (open times), and the caller's own
+        appointments when they want to move or cancel one. Skipped for a tool that is switched off, several or past days, a
+        caller without a usable number, or the same read moments ago."""
+        offered = {s["function"]["name"] for s in self.tools}
+        now, today = time.monotonic(), self.now_fn().date()
+        reads: List[Tuple[str, Dict[str, Any]]] = []
+        days = dates_in(roman, today)
+        if "check_availability" in offered and len(days) == 1 and (day := next(iter(days))) >= today:
+            if now - self._prefetched.get(day, -PREFETCH_REPEAT_S) >= PREFETCH_REPEAT_S:
+                self._prefetched[day] = now
+                reads.append(("check_availability", {"date": day.isoformat()}))
+        own_number = len(re.sub(r"\D", "", self.toolbox.caller_number or "")) >= 10
+        if "lookup_appointment" in offered and own_number and (_CHANGE_APPOINTMENT.search(roman) or _CHANGE_APPOINTMENT.search(utterance)):
+            if now - self._prefetched.get("lookup", -PREFETCH_REPEAT_S) >= PREFETCH_REPEAT_S:
+                self._prefetched["lookup"] = now
+                reads.append(("lookup_appointment", {}))
+        return reads
+
+    async def _prefetch(self, roman: str, utterance: str) -> List[Dict[str, Any]]:
+        """Those reads, done before the first model round and handed to it as finished tool calls (assistant tool calls + tool
+        results). Same tools, same checks and records as when the model asks itself; a read that fails is left out so the
+        model asks the normal way."""
+        reads = self._wanted_reads(roman, utterance)
+        if not reads:
+            return []
+
+        async def one(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
+            latency.mark("tool_start", tool=name, prefetch=True)
+            try:
+                return await self.toolbox.execute(name, args)
+            finally:
+                latency.mark("tool_end", tool=name, prefetch=True)
+
+        results = await asyncio.gather(*(one(n, a) for n, a in reads))  # both are pure reads: side by side
+        calls, answers = [], []
+        for i, ((name, args), result) in enumerate(zip(reads, results)):
+            if not result.get("ok"):
+                continue
+            call_id = f"prefetch_{name}_{len(self._turns)}_{i}"
+            calls.append({"id": call_id, "type": "function", "function": {"name": name, "arguments": json.dumps(args)}})
+            answers.append({"role": "tool", "tool_call_id": call_id, "content": json.dumps(result, default=str)})
+        return [{"role": "assistant", "content": None, "tool_calls": calls}, *answers] if calls else []
+
+    async def _spoken_line(
+        self, group: List[Dict[str, Any]], kind: str, fallback: str, timeout: float = SPOKEN_LINE_TIMEOUT_S, must_say_one_of: Any = (),
+    ) -> Tuple[str, bool]:
+        """(line, written_by_llm). The model words a fixed moment of the call from `engine_notes.spoken_line.<kind>`, with the whole
+        conversation so it matches the caller's language and tone. The same guards as a normal reply apply (no invented time, no
+        unconfirmed booking, the caller's language, no thinking out loud); `must_say_one_of` must appear (emergency numbers).
+        `fallback` (the language pack's fixed line) is returned when the model fails, is slower than `timeout`, or breaks a rule."""
+        notes = _notes()["spoken_line"]
+        numbers = [n for n in (must_say_one_of or []) if n]
+        instruction = notes[kind].format(numbers=" / ".join(numbers) or notes["no_numbers"])
+        messages = self._messages(group) + [{"role": "system", "content": f"{notes['common']} {instruction}"}]
+        try:
+            resp = await asyncio.wait_for(self.backend.chat(messages, []), timeout)
+        except (LLMUnavailable, asyncio.TimeoutError) as e:
+            logger.info("Spoken line '%s' from the language pack (model: %s)", kind, type(e).__name__)
+            return fallback, False
+        except Exception as e:  # never let wording break a transfer or an emergency
+            logger.warning("Spoken line '%s' failed: %s", kind, e)
+            return fallback, False
+        line = self._speech(" ".join((resp.get("content") or "").split()))
+        if (
+            not line
+            or len(line.split()) < SPOKEN_LINE_MIN_WORDS
+            or resp.get("tool_calls")
+            or len(line) > SPOKEN_LINE_MAX_CHARS
+            or is_reasoning_leak(line)
+            or ungrounded(line, messages)
+            or unbacked_claim(line, self.toolbox.succeeded)
+            or (self._expects_hindi() and looks_english(line))
+            or (numbers and not any(n in line for n in numbers))
+        ):
+            logger.info("Spoken line '%s' from the language pack (draft broke a rule)", kind)
+            return fallback, False
+        return line, True
+
+    def _pack_language(self) -> Optional[str]:
+        """The active language when it is something other than Hindi/English (those keep their sentence-based handling)."""
+        active = self.active_language
+        return None if active in ("hi", "en") else active
+
+    def _expects_hindi(self) -> bool:
+        """The caller asked for Hindi, or is speaking Devanagari (speech-to-text output) and has not asked for English."""
+        return self.language_pref == "hi" or (self._devanagari_turn and self.auto_detect_language and self.language_pref != "en")
+
+    def _messages(self, group: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        history = [m for g in self._turns[-MAX_HISTORY_TURNS:] for m in g]
+        messages = [{"role": "system", "content": self._system}, *history, *group]
+        # Notes go last so the static prompt prefix stays identical between turns (better for provider prompt caching).
+        if layer_note := self.lang.note(str(group[0].get("content") or ""), self.toolbox.last_assistant):
+            messages.append({"role": "system", "content": layer_note})
+        if self.language_pref:
+            messages.append({"role": "system", "content": _language_note(self.language_pref)})
+        elif self._devanagari_turn and self.auto_detect_language:
+            messages.append({"role": "system", "content": _DEVANAGARI_NOTE})
+        if self._mood_note:
+            messages.append({"role": "system", "content": self._mood_note})
+        if note := booking_note(self._raw_said, self.toolbox.succeeded, self.now_fn().date()):
+            messages.append({"role": "system", "content": note})  # a half-finished booking must survive small talk
+        self.ctrl.observe_tools(self.toolbox.calls, self.toolbox.succeeded)
+        if note := self.ctrl.note():  # what is already known, and the one thing to ask next (right after the static prompt, so the
+            messages.insert(1, {"role": "system", "content": note})  # trailing notes and tool results stay the last messages)
+        return messages
+
+    def _commit(self, group: List[Dict[str, Any]]) -> None:
+        self._turns.append(group)
+        last = group[-1]
+        if last.get("role") == "assistant" and last.get("content"):
+            self.toolbox.last_assistant = last["content"]  # what a caller's next "yes" would be agreeing to
+            self.ctrl.observe_reply(last["content"])
+
+    def _result(self, reply: str, started: float, tools: List[Dict[str, Any]], first_ms: Optional[int], degraded: bool = False, error: Optional[str] = None) -> AgentTurn:
+        if (not self.toolbox.pending and not degraded and "?" not in reply and "end_call" not in self.toolbox.disabled_tools
+                and self._raw_said and caller_is_leaving(self._raw_said[-1])):
+            self.toolbox.pending = {"type": "hangup"}  # the caller said goodbye and our reply asks nothing: end the call even if the model forgot end_call
+        pending = self.toolbox.pending or {}
+        if pending.get("type") == "hangup":
+            self.ended = True
+        return AgentTurn(
+            reply=reply,
+            transferred=pending.get("type") == "transfer",
+            hangup=pending.get("type") == "hangup",
+            transfer_twiml=pending.get("twiml"),
+            tools=tools,
+            latency_ms=int((time.perf_counter() - started) * 1000),
+            first_sentence_ms=first_ms,
+            degraded=degraded,
+            error=error,
+            provider=getattr(self.backend, "last_provider", None) or getattr(self.backend, "provider", None),
+            language_mode=self.lang.mode.value,
+        )

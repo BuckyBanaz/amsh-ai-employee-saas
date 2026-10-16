@@ -1,51 +1,68 @@
 "use client";
 import React from 'react';
-import { STRINGS } from '../../../../utils/strings/en';
+import { STRINGS } from '../../utils/strings/en';
 
-export function NotificationsHeader() {
+interface NotificationsHeaderProps {
+  activeFilter?: string;
+  onFilterChange?: (filter: string) => void;
+  onMarkAllRead?: () => void;
+}
+
+export function NotificationsHeader({
+  activeFilter = 'All',
+  onFilterChange,
+  onMarkAllRead,
+}: NotificationsHeaderProps = {}) {
+  const filterList = [
+    { id: 'All', label: 'All' },
+    { id: 'appt', label: 'Appointments' },
+    { id: 'transfer', label: 'Call Transfers' },
+    { id: 'system', label: 'System & AI' },
+  ];
+
   return (
-    <div className="mb-6 shrink-0">
-      <header className="flex items-start justify-between mb-6">
+    <div className="mb-3 shrink-0">
+      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3 py-1">
         <div>
-          <h1 className="text-[28px] font-extrabold text-gray-900 tracking-tight leading-tight">
+          <h1 className="text-xl font-extrabold text-gray-900 tracking-tight leading-tight">
             {STRINGS.DASHBOARD.HEADERS.NOTIFICATIONS.TITLE}
           </h1>
-          <p className="text-[15px] text-gray-500 mt-1">
+          <p className="text-xs text-gray-500 font-medium mt-0.5">
             {STRINGS.DASHBOARD.HEADERS.NOTIFICATIONS.SUBTITLE}
           </p>
         </div>
 
-        <div className="flex items-center gap-4">
-          <button className="text-[13px] font-bold text-[#0066FF] hover:text-[#0052cc] transition-colors bg-transparent border-none p-0 cursor-pointer">
-            {STRINGS.DASHBOARD.HEADERS.NOTIFICATIONS.MARK_READ}
-          </button>
-          
-          <div className="w-10 h-10 rounded-full bg-[#F0F7FF] text-[#0066FF] flex items-center justify-center font-bold text-sm cursor-pointer shadow-sm hover:bg-blue-100 transition-colors ml-4">
-            SW
+        {onMarkAllRead && (
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={onMarkAllRead}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold text-[#0066FF] hover:bg-blue-50 transition-colors border border-blue-200/60 bg-blue-50/50 cursor-pointer active:scale-95"
+            >
+              {STRINGS.DASHBOARD.HEADERS.NOTIFICATIONS.MARK_READ}
+            </button>
           </div>
-        </div>
+        )}
       </header>
 
       {/* Filter Pills */}
-      <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide pb-2">
-        <button className="px-4 py-1.5 bg-[#0066FF] text-white rounded-lg text-[13px] font-bold whitespace-nowrap shadow-sm transition-colors">
-          {STRINGS.DASHBOARD.HEADERS.NOTIFICATIONS.FILTERS.ALL}
-        </button>
-        <button className="px-4 py-1.5 border border-gray-200 text-gray-600 bg-white rounded-lg text-[13px] font-bold hover:bg-gray-50 whitespace-nowrap shadow-sm transition-colors">
-          {STRINGS.DASHBOARD.HEADERS.NOTIFICATIONS.FILTERS.APPOINTMENTS}
-        </button>
-        <button className="px-4 py-1.5 border border-gray-200 text-gray-600 bg-white rounded-lg text-[13px] font-bold hover:bg-gray-50 whitespace-nowrap shadow-sm transition-colors">
-          {STRINGS.DASHBOARD.HEADERS.NOTIFICATIONS.FILTERS.AI}
-        </button>
-        <button className="px-4 py-1.5 border border-gray-200 text-gray-600 bg-white rounded-lg text-[13px] font-bold hover:bg-gray-50 whitespace-nowrap shadow-sm transition-colors">
-          {STRINGS.DASHBOARD.HEADERS.NOTIFICATIONS.FILTERS.INTEGRATION}
-        </button>
-        <button className="px-4 py-1.5 border border-gray-200 text-gray-600 bg-white rounded-lg text-[13px] font-bold hover:bg-gray-50 whitespace-nowrap shadow-sm transition-colors">
-          {STRINGS.DASHBOARD.HEADERS.NOTIFICATIONS.FILTERS.SYSTEM}
-        </button>
-        <button className="px-4 py-1.5 border border-gray-200 text-gray-600 bg-white rounded-lg text-[13px] font-bold hover:bg-gray-50 whitespace-nowrap shadow-sm transition-colors">
-          {STRINGS.DASHBOARD.HEADERS.NOTIFICATIONS.FILTERS.BILLING}
-        </button>
+      <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide pb-1">
+        {filterList.map((f) => {
+          const isActive = activeFilter === f.id;
+          return (
+            <button
+              key={f.id}
+              onClick={() => onFilterChange?.(f.id)}
+              className={`px-3 py-1 rounded-lg text-xs font-bold whitespace-nowrap transition-colors cursor-pointer ${
+                isActive
+                  ? 'bg-[#0066FF] text-white shadow-xs'
+                  : 'border border-gray-200 text-gray-600 bg-white hover:bg-gray-50 shadow-2xs'
+              }`}
+            >
+              {f.label}
+            </button>
+          );
+        })}
       </div>
     </div>
   );

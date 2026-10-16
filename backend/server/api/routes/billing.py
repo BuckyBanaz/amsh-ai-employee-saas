@@ -1,0 +1,517 @@
+"""Billing & Subscription API Routes.
+
+Implements Section 11 of the AMSh Architecture Specification:
+- Public billing & gateway configuration
+- Razorpay order creation and webhook/verification
+- Business subscription activation & status retrieval
+"""
+
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+from typing import Optional, Tuple
+
+from backend.server.api.routes._shared import require_membership, require_owner_or_admin
+from backend.server.auth.security import get_current_user
+from backend.server.database.models.user import User
+from backend.server.database.session import get_db
+from backend.server.common.config import get_settings
+from backend.server.database.models.business import Business
+from backend.server.database.models.plan import Plan
+from backend.server.services.audit import audit, client_ip
+from backend.server.services.plans import find_by_key
+from backend.server.billing.razorpay_gateway import RazorpayGateway
+
+router = APIRouter(prefix="/api/billing", tags=["billing"])
+
+
+class CreateOrderRequest(BaseModel):
+    # `amount` and `currency` are accepted for older clients but IGNORED: the price always comes from the plan.
+    amount: Optional[float] = None
+    currency: Optional[str] = None
+    plan_id: str = "starter"
+    cycle: str = "monthly"
+    business_id: Optional[str] = None
+
+
+class VerifyPaymentRequest(BaseModel):
+    razorpay_order_id: str
+    razorpay_payment_id: str
+    razorpay_signature: str
+    plan_id: str
+    business_id: Optional[str] = None
+
+
+def price_for(db: Session, plan_key: str, cycle: str) -> Tuple[Plan, float, str]:
+    """(plan, amount, currency) for buying `plan_key` online for `cycle`, from the plan catalog, or 400."""
+    plan = find_by_key(db, plan_key)
+    if not plan or plan.status != "active" or plan.kind != "catalog" or plan.custom_pricing:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This plan is not available for online purchase.")
+    if cycle not in ("monthly", "yearly"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Billing cycle must be monthly or yearly.")
+    if cycle == "monthly":
+        amount = plan.price if plan.cycle == "monthly" else None
+    else:
+        amount = plan.price if plan.cycle == "yearly" else plan.price_yearly
+    if not amount or amount <= 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"The {plan.name} plan cannot be bought with {cycle} billing.")
+    return plan, float(amount), plan.currency
+
+
+def _payments_configured() -> bool:
+    settings = get_settings()
+    return bool(settings.RAZORPAY_KEY_ID and settings.RAZORPAY_KEY_SECRET)
+
+
+def _require_policies(db: Session, biz: Business, user: User) -> None:
+    """Going live (a trial or a paid plan) needs the owner to have accepted the policies that apply to the business's region."""
+    from backend.server.services import policies
+
+    try:
+        policies.require_accepted(db, biz, user)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+
+
+@router.get("/config")
+def get_billing_config():
+    """Returns public payment gateway credentials for client-side checkout SDKs."""
+    return RazorpayGateway.get_public_config()
+
+
+def compute_charge(db: Session, target_plan: Plan, full_amount: float, cycle: str, business_id: Optional[str]) -> Tuple[float, bool, Optional[str], float]:
+    """(amount to charge, proration applied, current plan name, current plan price). An upgrade pays the difference to the
+    business's current plan; everything else pays the full price. Used by create-order AND verify so both agree on the amount."""
+    if not business_id:
+        return full_amount, False, None, 0.0
+    biz = db.query(Business).filter(Business.id == business_id).first()
+    if not biz or biz.status != "active":
+        return full_amount, False, None, 0.0
+    current_plan = find_by_key(db, biz.plan) if biz and biz.plan else None
+    if not current_plan or current_plan.key.lower() == target_plan.key.lower():
+        return full_amount, False, None, 0.0
+    current_price = float(current_plan.price if cycle == "monthly" else (current_plan.price_yearly or current_plan.price * 10))
+    if full_amount > current_price:
+        return round(full_amount - current_price, 2), True, current_plan.name, current_price
+    return full_amount, False, current_plan.name, current_price
+
+
+@router.post("/razorpay/create-order")
+async def create_razorpay_order(payload: CreateOrderRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Creates a Razorpay checkout order for a logged-in user. The price comes from the plan catalog (minus the proration for an
+    upgrade), never from the request. With a business_id the caller must be that business's owner or admin."""
+    if payload.business_id:
+        require_owner_or_admin(payload.business_id, current_user)
+        biz = db.query(Business).filter(Business.id == payload.business_id).first()
+        if biz:
+            _require_policies(db, biz, current_user)  # before any money moves: never take a payment we then refuse to activate
+    target_plan, full_amount, currency = price_for(db, payload.plan_id, payload.cycle)
+    charge_amount, proration_applied, current_plan_name, current_plan_price = compute_charge(db, target_plan, full_amount, payload.cycle, payload.business_id)
+
+    if not _payments_configured() and not get_settings().ALLOW_DEV_FALLBACKS:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Payments are not configured on this server.")
+
+    result = await RazorpayGateway.create_order(
+        amount=charge_amount,
+        currency=currency,
+        plan_id=target_plan.key,
+        cycle=payload.cycle,
+        business_id=payload.business_id,
+    )
+    if not result.get("success"):
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=result.get("error") or "The payment provider could not create the order.")
+
+    result["target_plan_key"] = target_plan.key
+    result["target_plan_name"] = target_plan.name
+    result["full_amount"] = full_amount
+    result["charge_amount"] = charge_amount
+    result["proration_applied"] = proration_applied
+    result["current_plan_name"] = current_plan_name
+    result["current_plan_price"] = current_plan_price
+    result["cycle"] = payload.cycle
+    return result
+
+
+@router.post("/razorpay/verify")
+async def verify_razorpay_payment(payload: VerifyPaymentRequest, request: Request, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Confirms a payment and activates the plan. Trusts only what Razorpay says about the order (plan, business, amount,
+    paid), not what the browser claims, so paying for a cheap plan cannot unlock an expensive one or another business."""
+    if payload.business_id:
+        require_owner_or_admin(payload.business_id, current_user)
+    live = _payments_configured()
+    if not live and not get_settings().ALLOW_DEV_FALLBACKS:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Payments are not configured on this server.")
+
+    if not RazorpayGateway.verify_signature(order_id=payload.razorpay_order_id, payment_id=payload.razorpay_payment_id, signature=payload.razorpay_signature):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid payment signature. Verification failed.")
+
+    plan = find_by_key(db, payload.plan_id)
+    if not plan:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unknown plan.")
+
+    from backend.server.database.models.transaction import Transaction
+
+    # The same payment verified twice (a double click, a retry) must not be recorded or applied twice.
+    if payload.business_id:
+        for earlier in db.query(Transaction).filter(Transaction.business_id == payload.business_id, Transaction.type == "payment").all():
+            if (earlier.details or {}).get("payment_id") == payload.razorpay_payment_id:
+                return {"success": True, "message": "Payment already verified.", "payment_id": payload.razorpay_payment_id, "plan_id": plan.key, "status": "active"}
+
+    amount_paid = 0.0
+    if live:
+        order = await RazorpayGateway.fetch_order(payload.razorpay_order_id)
+        if not order:
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Could not confirm the order with the payment provider.")
+        notes = order.get("notes") or {}
+        mismatch = HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This payment does not match the plan or business.")
+        if str(notes.get("plan_id", "")).lower() != plan.key.lower() or str(notes.get("business_id", "")) != (payload.business_id or "onboarding"):
+            raise mismatch
+        if order.get("status") != "paid":
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="The payment has not been completed.")
+        cycle = str(notes.get("cycle", "monthly"))
+        _, full_amount, currency = price_for(db, plan.key, cycle)
+        expected, _, _, _ = compute_charge(db, plan, full_amount, cycle, payload.business_id)  # same amount create-order asked for
+        if int(order.get("amount", -1)) != int(round(expected * 100)) or order.get("currency") != currency:
+            raise mismatch
+        amount_paid = expected
+
+    # Persist tenant subscription status into PostgreSQL
+    if payload.business_id:
+        biz = db.query(Business).filter(Business.id == payload.business_id).first()
+        if biz:
+            previous_plan, previous_status = biz.plan, (biz.status or "").lower()
+            biz.plan = plan.key
+            biz.status = "active"
+            db.add(Transaction(
+                business_id=biz.id,
+                type="payment",
+                status="confirmed",
+                details={
+                    "order_id": payload.razorpay_order_id,
+                    "payment_id": payload.razorpay_payment_id,
+                    "plan": plan.key,
+                    "plan_name": plan.name,
+                    "description": f"Subscription: {plan.name} Plan",
+                    "payment_method": "Razorpay Online",
+                    "amount": amount_paid,  # what Razorpay confirmed was paid (0 in dev mode, where nothing is charged)
+                    "currency": plan.currency,
+                },
+            ))
+            db.commit()
+            db.refresh(biz)
+            # Feeds the admin alerts: a trial turning into a paid plan is the moment the owner wants to hear about.
+            audit(db, "billing.plan_purchased", current_user, business_id=biz.id, target_type="business", target_id=biz.id, ip=client_ip(request),
+                  meta={"plan": plan.key, "plan_name": plan.name, "previous_plan": previous_plan, "from_trial": previous_status == "trial",
+                        "amount": amount_paid, "currency": plan.currency})
+
+    return {
+        "success": True,
+        "message": "Payment verified and AI Receptionist subscription activated successfully.",
+        "payment_id": payload.razorpay_payment_id,
+        "plan_id": plan.key,
+        "status": "active"
+    }
+
+
+def _payment_rows(db: Session, business_id: str) -> list:
+    """The business's recorded payments (including free trial activations), newest first."""
+    from backend.server.database.models.transaction import Transaction
+
+    rows = db.query(Transaction).filter(Transaction.business_id == business_id, Transaction.type == "payment").all()
+    return sorted(rows, key=lambda t: t.created_at.timestamp() if t.created_at else 0, reverse=True)
+
+
+def _last_payment_method(db: Session, business_id: str) -> Optional[dict]:
+    for row in _payment_rows(db, business_id):
+        details = row.details or {}
+        if float(details.get("amount") or 0) > 0:
+            return {"type": "gateway", "label": details.get("payment_method") or "Razorpay Online"}
+    return None
+
+
+@router.get("/businesses/{business_id}")
+def get_business_billing_status(business_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Returns current subscription plan, real usage, and billing metadata for a given business tenant."""
+    require_membership(business_id, current_user)
+    biz = db.query(Business).filter(Business.id == business_id).first()
+    if not biz:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Business {business_id} not found."
+        )
+
+    # Calculate real usage from calls table
+    from sqlalchemy import func
+    from backend.server.database.models.call import Call
+    total_calls = db.query(Call).filter(Call.business_id == biz.id).count()
+    total_seconds = db.query(func.coalesce(func.sum(Call.duration_seconds), 0)).filter(Call.business_id == biz.id).scalar() or 0
+    minutes_used = round(float(total_seconds) / 60.0, 1)
+
+    plan = find_by_key(db, biz.plan)
+    fallback_catalog = {
+        "starter": {
+            "name": "Starter",
+            "price": 99.0,
+            "price_yearly": 990.0,
+            "minutes_limit": 500,
+            "calls_limit": 1000,
+            "features": ["Calendar Sync", "Call Recording", "Standard Voice", "Email Support"]
+        },
+        "professional": {
+            "name": "Professional",
+            "price": 199.0,
+            "price_yearly": 1990.0,
+            "minutes_limit": 2000,
+            "calls_limit": 5000,
+            "features": ["Call Recording", "Multi-language AI", "Calendar Sync", "Instant Transcripts", "Priority Support"]
+        },
+        "business": {
+            "name": "Business",
+            "price": 399.0,
+            "price_yearly": 3990.0,
+            "minutes_limit": 6000,
+            "calls_limit": 20000,
+            "features": ["Call Recording", "Multi-language AI", "Custom Voice Clone", "Calendar Sync", "Dedicated Account Manager"]
+        }
+    }
+
+    current_plan_key = (biz.plan or "starter").lower()
+    fallback = fallback_catalog.get(current_plan_key, fallback_catalog["starter"])
+    plan_name = plan.name if plan else fallback["name"]
+    plan_price = float(plan.price) if plan and plan.price is not None else fallback["price"]
+    plan_price_yearly = float(plan.price_yearly) if plan and plan.price_yearly is not None else fallback["price_yearly"]
+    plan_currency = plan.currency if plan and plan.currency else "USD"
+    quotas = plan.quotas if plan and plan.quotas else {}
+    minutes_limit = quotas.get("voice_minutes") or fallback["minutes_limit"]
+    calls_limit = quotas.get("messages") or fallback["calls_limit"]
+
+    # Compute renewal date (next month on same day or end of month)
+    from datetime import datetime, timezone, timedelta
+    from backend.server.billing.trial_service import TrialService
+    now = datetime.now(timezone.utc)
+    trial_cfg = TrialService.get_config()
+    trial_total_days = trial_cfg.get("duration_days", 14)
+
+    renewal_date = (now + timedelta(days=22)).strftime("%B %d, %Y")
+
+    is_trial = (biz.status or "").lower() == "trial"
+    trial_days_left = trial_total_days
+    if is_trial:
+        elapsed = (now - biz.created_at).days if biz.created_at else 0
+        trial_days_left = max(0, trial_total_days - elapsed)
+        renewal_date = (biz.created_at + timedelta(days=trial_total_days)).strftime("%B %d, %Y") if biz.created_at else (now + timedelta(days=trial_total_days)).strftime("%B %d, %Y")
+
+    headline = trial_cfg.get("banner_headline", "{days}-Day Free Trial is Active ({days_left} days remaining)")
+    headline = headline.replace("{days}", str(trial_total_days)).replace("{days_left}", str(trial_days_left))
+    badge_text = trial_cfg.get("badge_text", "{days}-DAY FREE TRIAL").replace("{days}", str(trial_total_days))
+
+    return {
+        "business_id": biz.id,
+        "business_name": biz.name,
+        "plan": current_plan_key,
+        "plan_name": plan_name,
+        "status": biz.status or "active",
+        "is_trial": is_trial,
+        "trial_days_left": trial_days_left,
+        "currency": plan_currency,
+        "gateway": "Razorpay",
+        "renewal_date": renewal_date,
+        "trial_config": {
+            "enabled": trial_cfg.get("enabled", True),
+            "is_free": trial_cfg.get("is_free", True),
+            "price": trial_cfg.get("price", 0.0),
+            "currency": trial_cfg.get("currency", "USD"),
+            "duration_days": trial_total_days,
+            "voice_minutes": trial_cfg.get("voice_minutes", 50),
+            "messages": trial_cfg.get("messages", 100),
+            "card_required": trial_cfg.get("card_required", False),
+            "banner_headline": headline,
+            "banner_description": trial_cfg.get("banner_description", ""),
+            "badge_text": badge_text,
+            "upgrade_button_text": trial_cfg.get("upgrade_button_text", "Upgrade to Paid Plan")
+        },
+        "plan_details": {
+            "key": current_plan_key,
+            "name": plan_name,
+            "price": plan_price,
+            "price_yearly": plan_price_yearly,
+            "cycle": getattr(plan, "cycle", "monthly") if plan else "monthly",
+            "quotas": quotas,
+            "features": plan.features if plan and plan.features else fallback["features"]
+        },
+        "usage": {
+            "minutes_used": minutes_used,
+            "minutes_limit": minutes_limit,
+            "calls_count": total_calls,
+            "calls_limit": calls_limit,
+            "minutes_percentage": min(100, round((minutes_used / max(1, minutes_limit)) * 100, 1)),
+            "calls_percentage": min(100, round((total_calls / max(1, calls_limit)) * 100, 1))
+        },
+        # Razorpay never gives us card details, so there is no brand / last4: only whether a real payment exists.
+        "payment_method": _last_payment_method(db, biz.id),
+    }
+
+
+class UpdateTrialConfigRequest(BaseModel):
+    enabled: Optional[bool] = None
+    is_free: Optional[bool] = None
+    price: Optional[float] = None
+    currency: Optional[str] = None
+    duration_days: Optional[int] = None
+    voice_minutes: Optional[int] = None
+    messages: Optional[int] = None
+    card_required: Optional[bool] = None
+    banner_headline: Optional[str] = None
+    banner_description: Optional[str] = None
+    badge_text: Optional[str] = None
+    upgrade_button_text: Optional[str] = None
+
+
+@router.get("/trial-config")
+def get_trial_config():
+    """Returns dynamic free trial settings for user & admin apps."""
+    from backend.server.billing.trial_service import TrialService
+    return TrialService.get_config()
+
+
+@router.put("/trial-config")
+@router.post("/trial-config")
+def update_trial_config(payload: UpdateTrialConfigRequest, current_user: User = Depends(get_current_user)):
+    """Admin endpoint to dynamically update platform Free Trial settings (platform staff only)."""
+    if current_user.scope != "platform":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only platform admins can change trial settings")
+    from backend.server.billing.trial_service import TrialService
+    updates = {k: v for k, v in payload.model_dump().items() if v is not None}
+    updated = TrialService.save_config(updates)
+    return {
+        "success": True,
+        "message": "Free Trial configuration updated successfully.",
+        "config": updated
+    }
+
+
+class ChangePlanRequest(BaseModel):
+    plan_id: str
+    cycle: Optional[str] = "monthly"
+
+
+class StartTrialRequest(BaseModel):
+    plan_id: str = "starter"
+
+
+TRIAL_PAYMENT_ID = "trial_no_card_required"
+
+
+@router.post("/businesses/{business_id}/start-trial")
+def start_business_free_trial(business_id: str, request: Request, payload: StartTrialRequest = StartTrialRequest(), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Activates the free trial on the specified plan without a card. Owner or admin only, and once per business."""
+    require_owner_or_admin(business_id, current_user)
+    biz = db.query(Business).filter(Business.id == business_id).first()
+    if not biz:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Business {business_id} not found.")
+    if any((row.details or {}).get("payment_id") == TRIAL_PAYMENT_ID for row in _payment_rows(db, biz.id)):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="The free trial has already been used for this business.")
+    if (biz.status or "").lower() == "active" and any(float((row.details or {}).get("amount") or 0) > 0 for row in _payment_rows(db, biz.id)):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This business already has a paid subscription.")
+
+    _require_policies(db, biz, current_user)
+    target_plan = find_by_key(db, payload.plan_id)
+    plan_key = target_plan.key if target_plan else payload.plan_id.strip().lower()
+    plan_name = target_plan.name if target_plan else plan_key.capitalize()
+
+    from datetime import datetime, timezone, timedelta
+    from backend.server.database.models.transaction import Transaction
+    now = datetime.now(timezone.utc)
+
+    biz.plan = plan_key
+    biz.status = "trial"
+    db.add(Transaction(
+        business_id=biz.id,
+        type="payment",
+        status="confirmed",
+        details={
+            "order_id": "trial_order_free",
+            "payment_id": TRIAL_PAYMENT_ID,
+            "plan": plan_key,
+            "plan_name": f"{plan_name} (14-Day Free Trial)",
+            "description": f"14-Day Free Trial: Full AI Receptionist Access ({plan_name})",
+            "payment_method": "Free Trial (No Card Required)",
+            "amount": 0.0,
+        },
+    ))
+    db.commit()
+    db.refresh(biz)
+    audit(db, "billing.trial_started", current_user, business_id=biz.id, target_type="business", target_id=biz.id, ip=client_ip(request), meta={"plan": plan_key, "plan_name": plan_name})
+
+    return {
+        "success": True,
+        "message": f"14-Day Free Trial activated for {plan_name}! You now have full access to your AI Receptionist.",
+        "plan": biz.plan,
+        "status": "trial",
+        "trial_days": 14,
+        "trial_end_date": (now + timedelta(days=14)).strftime("%B %d, %Y"),
+    }
+
+
+@router.post("/businesses/{business_id}/change-plan")
+def change_business_plan(business_id: str, payload: ChangePlanRequest, request: Request, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Switch plan without paying. Owner or admin only, and only to a plan that costs the same or less: an upgrade has to go
+    through checkout (create-order / verify). Platform staff can set any plan."""
+    require_owner_or_admin(business_id, current_user)
+    biz = db.query(Business).filter(Business.id == business_id).first()
+    if not biz:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Business {business_id} not found.")
+
+    clean_plan = payload.plan_id.strip().lower()
+    target = find_by_key(db, clean_plan)
+    if not target:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid plan '{payload.plan_id}'.")
+    if current_user.scope != "platform":
+        current = find_by_key(db, biz.plan) if biz.plan else None
+        if target.status != "active" or target.kind != "catalog" or target.custom_pricing:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This plan cannot be selected here.")
+        if float(target.price or 0) > float(current.price if current and current.price is not None else 0):
+            raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail="Upgrading a plan requires payment. Use checkout.")
+
+    previous_plan = biz.plan
+    biz.plan = target.key
+    db.commit()
+    db.refresh(biz)
+    audit(db, "billing.plan_changed", current_user, business_id=biz.id, target_type="business", target_id=biz.id, ip=client_ip(request),
+          meta={"plan": target.key, "plan_name": target.name, "previous_plan": previous_plan, "by_platform": current_user.scope == "platform"})
+    return {
+        "success": True,
+        "message": f"Successfully switched subscription to {target.name} plan.",
+        "plan": biz.plan,
+        "status": biz.status,
+    }
+
+
+@router.get("/businesses/{business_id}/invoices")
+def get_business_invoices(business_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """The business's real payment records (nothing is invented: no payments, no invoices)."""
+    require_membership(business_id, current_user)
+    biz = db.query(Business).filter(Business.id == business_id).first()
+    if not biz:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Business {business_id} not found.")
+    invoices = []
+    for row in _payment_rows(db, biz.id):
+        details = row.details or {}
+        amount = float(details.get("amount") or 0)
+        currency = str(details.get("currency") or "USD")
+        paid_on = row.created_at.strftime("%b %d, %Y") if row.created_at else ""
+        number = f"INV-{row.created_at:%Y%m}-{row.id[:6].upper()}" if row.created_at else f"INV-{row.id[:6].upper()}"
+        invoices.append({
+            "id": f"inv_{row.id[:8]}",
+            "number": number,
+            "date": paid_on,
+            "period": paid_on,
+            "description": details.get("description") or details.get("plan_name") or "Subscription",
+            "amount": f"{amount:,.2f} {currency}",
+            "amount_raw": amount,
+            "currency": currency,
+            "status": "Paid" if amount > 0 else "Free trial",
+            "payment_method": details.get("payment_method") or "",
+            "receipt_url": f"/api/billing/businesses/{biz.id}/invoices/inv_{row.id[:8]}",
+        })
+    return {"business_id": biz.id, "total_invoices": len(invoices), "invoices": invoices}

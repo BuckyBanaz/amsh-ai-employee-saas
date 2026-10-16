@@ -1,22 +1,120 @@
 "use client";
-import React from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { CallLogsHeader } from '../../../components/dashboard/CallLogsHeader';
 import { CallLogsFilterBar } from '../../../components/dashboard/CallLogsFilterBar';
 import { CallLogsTable } from '../../../components/dashboard/CallLogsTable';
 import { CallDetailPanel } from '../../../components/dashboard/CallDetailPanel';
+import { DashboardController, CallLogItem } from '../../../controllers/dashboard.controller';
 
 export default function CallLogsPage() {
+  const [calls, setCalls] = useState<CallLogItem[]>([]);
+  const [selectedCall, setSelectedCall] = useState<CallLogItem | null>(null);
+  const [isLoadingList, setIsLoadingList] = useState<boolean>(true);
+  const [isLoadingDetail, setIsLoadingDetail] = useState<boolean>(false);
+
+  // Filters
+  const [search, setSearch] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState('');
+  const [selectedIntent, setSelectedIntent] = useState('');
+  const [hideTests, setHideTests] = useState(false);
+
+  const loadCalls = useCallback(async () => {
+    try {
+      setIsLoadingList(true);
+      const data = await DashboardController.getCalls(undefined, { limit: 50 });
+      const callList = data || [];
+      setCalls(callList);
+
+      if (callList.length > 0) {
+        // Fetch detailed record for the first call
+        setIsLoadingDetail(true);
+        try {
+          const detail = await DashboardController.getCallDetail(callList[0].id);
+          setSelectedCall(detail || callList[0]);
+        } catch {
+          setSelectedCall(callList[0]);
+        } finally {
+          setIsLoadingDetail(false);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load call logs:', err);
+    } finally {
+      setIsLoadingList(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadCalls();
+  }, [loadCalls]);
+
+  const handleSelectCall = async (call: CallLogItem) => {
+    setSelectedCall(call);
+    try {
+      setIsLoadingDetail(true);
+      const detail = await DashboardController.getCallDetail(call.id);
+      if (detail) {
+        setSelectedCall(detail);
+      }
+    } catch (err) {
+      console.warn('Failed to load full call detail:', err);
+    } finally {
+      setIsLoadingDetail(false);
+    }
+  };
+
+  const filteredCalls = useMemo(() => {
+    return calls.filter((c) => {
+      if (hideTests && c.is_test) return false;
+      if (search) {
+        const q = search.toLowerCase();
+        const matchesCaller = (c.caller_name || '').toLowerCase().includes(q);
+        const matchesNumber = (c.caller_number || '').includes(q);
+        const matchesSummary = (c.summary || '').toLowerCase().includes(q);
+        if (!matchesCaller && !matchesNumber && !matchesSummary) return false;
+      }
+      if (selectedStatus) {
+        if (c.outcome?.toLowerCase() !== selectedStatus.toLowerCase()) return false;
+      }
+      if (selectedIntent) {
+        if (!c.intent?.toLowerCase().includes(selectedIntent.toLowerCase())) return false;
+      }
+      return true;
+    });
+  }, [calls, search, selectedStatus, selectedIntent, hideTests]);
+
   return (
-    <div className="animate-in fade-in duration-500 pt-4 pb-6 flex flex-col h-full">
-      <CallLogsHeader />
-      <CallLogsFilterBar />
+    <div className="space-y-3.5 animate-in fade-in duration-300 pb-8 flex flex-col h-full">
+      <CallLogsHeader onRefresh={loadCalls} />
       
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 flex-1 min-h-[600px]">
-        <div className="xl:col-span-2 h-full min-w-0">
-          <CallLogsTable />
+      <CallLogsFilterBar
+        search={search}
+        onSearchChange={setSearch}
+        selectedStatus={selectedStatus}
+        onStatusChange={setSelectedStatus}
+        selectedIntent={selectedIntent}
+        onIntentChange={setSelectedIntent}
+      />
+      
+      <label className="flex items-center gap-2 text-xs text-gray-600 mb-3 cursor-pointer select-none w-fit">
+        <input type="checkbox" checked={hideTests} onChange={(e) => setHideTests(e.target.checked)} className="accent-[#0066FF]" />
+        Hide test calls (made from the AI Studio playground)
+      </label>
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
+        <div className="xl:col-span-2 min-w-0">
+          <CallLogsTable
+            calls={filteredCalls}
+            selectedCallId={selectedCall?.id}
+            onSelectCall={handleSelectCall}
+            isLoading={isLoadingList}
+          />
         </div>
-        <div className="h-full min-w-0">
-          <CallDetailPanel />
+        <div className="xl:col-span-1 min-w-0 sticky top-4">
+          <CallDetailPanel
+            call={selectedCall}
+            loading={isLoadingDetail}
+          />
         </div>
       </div>
     </div>
