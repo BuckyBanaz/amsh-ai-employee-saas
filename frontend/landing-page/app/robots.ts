@@ -23,9 +23,10 @@ export default function robots(): MetadataRoute.Robots {
   return {
     rules: [
       { userAgent: "*", allow: "/", disallow },
+      { userAgent: "Googlebot", allow: "/", disallow },
       { userAgent: AI_CRAWLERS, allow: "/", disallow },
     ],
     sitemap: `${SITE.url}/sitemap.xml`,
-    host: SITE.url,
+    host: "getamsh.com",
   };
 }

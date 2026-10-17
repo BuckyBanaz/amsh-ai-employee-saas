@@ -36,6 +36,8 @@ export const ROUTES: SiteRoute[] = [
   { path: "/ai-receptionist-whatsapp", name: "AI Receptionist for WhatsApp", summary: "AI receptionist on WhatsApp that answers patient questions, sends reminders and books appointments.", priority: 0.8, changeFrequency: "weekly" },
   { path: "/pilot", name: "Clinic Pilot Program", summary: "Apply for the 14-day guided AMSh pilot for medical and dental clinics.", priority: 0.9, changeFrequency: "weekly" },
   { path: "/docs", name: "Developer Docs", summary: "Developer documentation for AMSh voice and telephony APIs.", priority: 0.6, changeFrequency: "monthly" },
+  { path: "/privacy", name: "Privacy Policy", summary: "Privacy Policy for AMSh AI Receptionist and WhatsApp Cloud API services.", priority: 0.5, changeFrequency: "monthly" },
+  { path: "/terms", name: "Terms of Service", summary: "Terms of Service and acceptable use policy for AMSh AI Receptionist.", priority: 0.5, changeFrequency: "monthly" },
 ];
 
 export function absoluteUrl(path: string): string {
