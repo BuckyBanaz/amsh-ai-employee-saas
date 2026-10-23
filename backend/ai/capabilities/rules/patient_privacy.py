@@ -9,7 +9,7 @@ Two jobs for the agent's prompt:
 
 from backend.ai.prompts import load_prompts
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 PRIVACY_RULE = load_prompts("receptionist")["privacy_rule"]  # wording lives in ai/prompts/receptionist.json
 
@@ -24,16 +24,20 @@ def clean_name(name: Optional[str]) -> str:
     return re.sub(r"\s+", " ", cleaned)[:40].strip()
 
 
+def name_on_file(history: List[Dict[str, Any]]) -> str:
+    """The caller's name from their newest appointment that has a real one ("" for none / "Guest patient")."""
+    for row in history:
+        candidate = clean_name(row.get("customer_name"))
+        if candidate.lower() not in _GUEST:
+            return candidate
+    return ""
+
+
 def known_patient_block(history: List[Dict[str, Any]], profile_name: Optional[str] = None) -> str:
     """Prompt lines about the caller. `history` is the caller's own appointments, newest first (from
     ClinicReadOperations.get_patient_history). Empty string when there is nothing safe to say. Wording: engine_notes.json."""
     notes = load_prompts("engine_notes")["known_patient"]
-    name = ""
-    for row in history:
-        candidate = clean_name(row.get("customer_name"))
-        if candidate.lower() not in _GUEST:
-            name = candidate
-            break
+    name = name_on_file(history)
     if not history:
         profile = clean_name(profile_name)
         if not profile:
@@ -48,3 +52,16 @@ def known_patient_block(history: List[Dict[str, Any]], profile_name: Optional[st
     )
     who = notes["name_on_file"].format(name=name) if name else notes["no_name"]
     return notes["returning_patient"].format(who=who, visits=visits)
+
+
+def caller_memory(business_id: str, phone: Optional[str], profile_name: Optional[str] = None) -> Tuple[str, str]:
+    """Blocking (run it in a thread). What this business's own records say about the person on `phone`: (prompt block, name on
+    file). Matched on the caller's own number only, so nothing about anyone else can reach the prompt. ("", "") without a number."""
+    from backend.ai.capabilities.operations.clinic.read_operations import ClinicReadOperations
+    from backend.server.database.session import SessionLocal
+
+    if len(re.sub(r"\D", "", phone or "")) < 10:
+        return "", ""
+    with SessionLocal() as db:
+        history = ClinicReadOperations.get_patient_history(db, business_id, phone)
+    return known_patient_block(history, profile_name), name_on_file(history)

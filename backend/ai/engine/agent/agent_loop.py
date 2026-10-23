@@ -16,6 +16,7 @@ from datetime import datetime
 from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Tuple
 
 from backend.ai.capabilities.skills.emotional_tone import Sentiment, detect_sentiment
+from backend.ai.realtime.audio.paralinguistic import LAUGHTER_MIN
 from backend.ai.engine.agent.facts import DEFAULT_TRIGGERS, disabled_capabilities
 from backend.ai.engine.agent.grounding import CLAIM_NOTE, GUARD_NOTE, is_reasoning_leak, unbacked_claim, ungrounded
 from backend.ai.capabilities.rules.safety_emergency import EmergencyRule
@@ -26,7 +27,7 @@ from backend.ai.lexicon import language_pack, lexicon_languages, load_lexicon
 from backend.ai.verticals.context import resolve_business_context
 from backend.ai.engine.agent.controller import CallState, SentenceDeduper
 from backend.ai.engine.agent.progress import booking_note
-from backend.ai.engine.agent.hindi import caller_is_leaving, has_devanagari, language_escalation, looks_english, match_speaker_gender, normalize as normalize_hindi, requested_language
+from backend.ai.engine.agent.hindi import caller_is_leaving, has_devanagari, language_escalation, looks_english, match_speaker_gender, means_calling_number, normalize as normalize_hindi, requested_language
 from backend.ai.engine.agent.validator import is_affirmative
 from backend.ai.engine.agent.llm_backend import ChatBackend, LLMUnavailable
 from backend.ai.engine.agent.prompt_builder import build_system_prompt
@@ -105,6 +106,7 @@ def _ack_pattern(language: Optional[str] = None) -> "re.Pattern[str]":
     return re.compile(rf"\s*(?:{word}(?:\s+{word})*\s*(?:[!.,،।…]+\s*|$))+", re.IGNORECASE)
 _EMOJI = re.compile("[\U0001F000-\U0001FAFF\u2600-\u27BF\uFE0F\u200d]")
 _NO_REGREET_NOTE = _notes()["no_regreet"]
+_AFTER_TOOL_CONTINUE_NOTE = _notes()["after_tool_continue"]
 _LANGUAGE_RETRY_NOTE = _notes()["language_retry"]
 _LANGUAGE_NOTE = dict(_notes()["language_note"])
 def _scripted(table: Dict[str, str], key: str, language: str) -> str:
@@ -140,6 +142,7 @@ class AgentTurn:
     transferred: bool = False
     hangup: bool = False
     transfer_twiml: Optional[str] = None
+    transfer_to: Optional[Dict[str, Any]] = None  # phone_number / staff_name / department, for providers that need no TwiML (Plivo)
     tools: List[Dict[str, Any]] = field(default_factory=list)
     latency_ms: int = 0
     first_sentence_ms: Optional[int] = None
@@ -314,6 +317,7 @@ class AgentEngine:
         self.channel = channel  # "voice" (phone call, playground) or "chat" (WhatsApp text)
         self.emotion = EmotionState()  # the caller's mood and how the voice should react (agent/emotion.py)
         self._mood_note: Optional[str] = None
+        self.audio_cues: Optional[Dict[str, float]] = None  # the caller's sound for the next turn (phone gateway), used once
         self._cues: Dict[str, Tuple[Optional[str], bool]] = {}  # sentence -> (cue, laugh) the model asked for
         self._carry: Optional[Tuple[Optional[str], bool]] = None  # a cue that arrived alone, for the next sentence
         self._reply_started = False
@@ -323,6 +327,10 @@ class AgentEngine:
         self.facts = facts
         # What is already known about this call and what to ask next, kept in code (agent/controller.py); the model only words it.
         self.ctrl = CallState(services=list(getattr(facts, 'services', None) or []))
+        calling_digits = re.sub(r"\D", "", caller_number or "")
+        # A real number only: the phone gateway uses +15550000000 (a fictional 555 number) when the provider sent none.
+        if len(calling_digits) >= 10 and not calling_digits.endswith("5550000000"):
+            self.ctrl.calling_tail = calling_digits[-4:]
         self._dup = SentenceDeduper()  # per turn: the same sentence twice (retries, second tool round) is spoken once
         self._asked_slots: set = set()  # per turn: what we have already asked the caller for (one question per turn)
         self.vertical_config = vertical_config
@@ -334,6 +342,7 @@ class AgentEngine:
         self.now_fn = now_fn or (lambda: local_now(facts.timezone))
         self.gate = ActionGate()
         disabled_tools, disabled_notes = disabled_capabilities(capabilities or {})
+        self.remember_callers = (capabilities or {}).get("remember") is not False  # Behavior tab: greet returning callers by name
         self.tools = [s for s in TOOL_SCHEMAS if s["function"]["name"] not in disabled_tools]  # owner's switches
         self.toolbox = AgentToolbox(
             business_id, caller_number, call_id, facts, db_factory, self.gate, self.now_fn, dry_run,
@@ -436,7 +445,8 @@ class AgentEngine:
         """Yields {"type": "sentence", "text"} as replies form, then {"type": "done", "turn": AgentTurn}."""
         started = time.perf_counter()
         self.gate.turn += 1
-        self._mood_note = self.emotion.hear(utterance)
+        cues, self.audio_cues = self.audio_cues, None
+        self._mood_note = self.emotion.hear(utterance, laughed=bool(cues and cues.get("laughter", 0.0) >= LAUGHTER_MIN))
         self._reply_started = False
         self._wait_spoken = False
         self._ack_used = set()
@@ -451,11 +461,12 @@ class AgentEngine:
         self._devanagari_turn = has_devanagari(utterance)
         self.lang.observe(utterance, roman, asked, self.auto_detect_language)
         # The calling number may be used only once the caller agrees: they say "same number", or say yes to our offer.
-        if _SAME_NUMBER.search(roman) or (is_affirmative(roman) and self._offered_calling_number()):
+        if _SAME_NUMBER.search(roman) or means_calling_number(utterance, roman) or (is_affirmative(roman) and self._offered_calling_number()):
             self.toolbox.caller_number_ok = True
         self.toolbox.last_utterance = roman
         self.toolbox.said.append(roman)
         self.toolbox.language = self.active_language or "en"
+        self._service_pending = self.ctrl.next_needed() == "service"  # a booking already under way still needs its service
         self.ctrl.observe(utterance, self.now_fn().date(), language=self.active_language, emotion=self.emotion.mood,
                           calling_number_ok=self.toolbox.caller_number_ok)
         self._raw_said.append(utterance)
@@ -528,6 +539,10 @@ class AgentEngine:
         error: Optional[str] = None
         reply = ""
         guard_notes: List[str] = []  # one-shot corrections after the grounding guard blocked an invented time
+        # After a tool round, what the caller already heard this turn: the model otherwise re-says it in other words once the
+        # tool result arrives (the exact-match deduper cannot catch a paraphrase). Kept apart from guard_notes, whose
+        # non-emptiness means "a correction was already given".
+        continue_notes: List[str] = []
         round_no = 0
         lang_state = {"retried": False}  # the wrong-language guard corrects once per turn, then lets the reply through
         repeat_state = {"retried": False}  # same for asking again what the caller already told us
@@ -538,7 +553,7 @@ class AgentEngine:
                     reply = " ".join(spoken)
                     break
                 use_tools = round_no < MAX_TOOL_ROUNDS
-                messages = self._messages(group) + [{"role": "system", "content": n} for n in guard_notes]
+                messages = self._messages(group) + [{"role": "system", "content": n} for n in continue_notes + guard_notes]
                 tools = self.tools if use_tools else []
                 content, calls = "", []
                 invented: List[str] = []
@@ -639,7 +654,7 @@ class AgentEngine:
                         logger.warning("Guard blocked a multi-question sentence: %s", multis)
                         multi_state["retried"] = True
                         if spoken:
-                            guard_notes.append(_NO_REGREET_NOTE)
+                            guard_notes.append(_NO_REGREET_NOTE.format(spoken=" ".join(spoken)))
                         guard_notes.append(self.ctrl.multi_correction(",".join(multis).split(",")))
                         continue
                 if repeats := [x[7:] for x in invented if x.startswith("repeat:")]:
@@ -648,14 +663,14 @@ class AgentEngine:
                         logger.warning("Guard blocked a repeated question: %s", repeats)
                         repeat_state["retried"] = True
                         if spoken:
-                            guard_notes.append(_NO_REGREET_NOTE)
+                            guard_notes.append(_NO_REGREET_NOTE.format(spoken=" ".join(spoken)))
                         guard_notes.append(self.ctrl.repeat_correction(repeats))
                         continue
                 if invented and all(x == "lang:hi" for x in invented):
                     logger.warning("Guard blocked an English reply to a Hindi-speaking caller")
                     lang_state["retried"] = True
                     if spoken:
-                        guard_notes.append(_NO_REGREET_NOTE)
+                        guard_notes.append(_NO_REGREET_NOTE.format(spoken=" ".join(spoken)))
                     guard_notes.append(_LANGUAGE_RETRY_NOTE)
                     continue
                 invented[:] = [x for x in invented if x != "lang:hi"]
@@ -678,7 +693,7 @@ class AgentEngine:
                     if claimed:
                         notes.append(CLAIM_NOTE.format(kinds="/".join({"book": "booked or confirmed", "cancel": "cancelled", "reschedule": "rescheduled"}[k] for k in claimed)))
                     if spoken:
-                        notes.append(_NO_REGREET_NOTE)
+                        notes.append(_NO_REGREET_NOTE.format(spoken=" ".join(spoken)))
                     guard_notes.append(" ".join(notes))
                     continue  # same round: regenerate with the correction; nothing wrong was spoken
 
@@ -688,7 +703,10 @@ class AgentEngine:
                 if calls and use_tools:
                     if self.fillers_on and not spoken and not any(c["name"] in ("end_call", "transfer_to_human") for c in calls):
                         # Say something now: the next model call takes a moment and silence sounds like a dropped call.
-                        wait = wait_text(self._devanagari_turn or self.language_pref == "hi" or self.lang.active, language=self._pack_language())
+                        wait = wait_text(
+                            self._devanagari_turn or self.language_pref == "hi" or self.lang.active or self._last_reply_in_devanagari(),
+                            language=self._pack_language(),
+                        )
                         first_ms = first_ms if first_ms is not None else elapsed()
                         spoken.append(wait)
                         self._wait_spoken = True
@@ -706,6 +724,8 @@ class AgentEngine:
                     )
                     for c, result in zip(calls, await self._run_tools(calls)):
                         group.append({"role": "tool", "tool_call_id": c["id"], "content": json.dumps(result, default=str)})
+                    if spoken:
+                        continue_notes[:] = [_AFTER_TOOL_CONTINUE_NOTE.format(spoken=" ".join(spoken))]
                     round_no += 1
                     continue
 
@@ -841,7 +861,11 @@ class AgentEngine:
         now, today = time.monotonic(), self.now_fn().date()
         reads: List[Tuple[str, Dict[str, Any]]] = []
         days = dates_in(roman, today)
-        if "check_availability" in offered and len(days) == 1 and (day := next(iter(days))) >= today:
+        # Not while a booking that was already under way still needs its service: handed open slots, the model offers them before
+        # asking what the visit is for ("aaj bada khush hoon" read as today -> slots offered on a live call). An opening "any slot
+        # tomorrow?" still gets its read.
+        service_first = getattr(self, "_service_pending", False) and self.ctrl.next_needed() == "service"
+        if "check_availability" in offered and not service_first and len(days) == 1 and (day := next(iter(days))) >= today:
             if now - self._prefetched.get(day, -PREFETCH_REPEAT_S) >= PREFETCH_REPEAT_S:
                 self._prefetched[day] = now
                 reads.append(("check_availability", {"date": day.isoformat()}))
@@ -917,6 +941,16 @@ class AgentEngine:
         active = self.active_language
         return None if active in ("hi", "en") else active
 
+    def _last_reply_in_devanagari(self) -> bool:
+        """Our previous reply was in Devanagari. A Hindi call often has caller lines that speech-to-text writes in Roman
+        script (digits, "Dental consultation"); the wait filler must follow the language we are answering in, not that line."""
+        if self.language_pref == "en":
+            return False
+        for msg in reversed(self._turns[-1] if self._turns else []):
+            if msg.get("role") == "assistant" and msg.get("content"):
+                return has_devanagari(msg["content"])
+        return False
+
     def _expects_hindi(self) -> bool:
         """The caller asked for Hindi, or is speaking Devanagari (speech-to-text output) and has not asked for English."""
         return self.language_pref == "hi" or (self._devanagari_turn and self.auto_detect_language and self.language_pref != "en")
@@ -959,6 +993,7 @@ class AgentEngine:
             transferred=pending.get("type") == "transfer",
             hangup=pending.get("type") == "hangup",
             transfer_twiml=pending.get("twiml"),
+            transfer_to=pending.get("data") or None,
             tools=tools,
             latency_ms=int((time.perf_counter() - started) * 1000),
             first_sentence_ms=first_ms,

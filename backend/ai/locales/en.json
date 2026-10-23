@@ -1,5 +1,6 @@
 {
   "greeting": "Hello, thank you for calling {business_name}. I am the AI receptionist. How can I help you today?",
+  "greeting_returning": "Hi {name}, welcome back to {business_name}! I'm the AI receptionist. How can I help you today?",
   "ask_patient_name": "May I please have your full name?",
   "ask_phone_number": "What is the best phone number to reach you at?",
   "ask_doctor_name": "Would you like to see a specific doctor?",

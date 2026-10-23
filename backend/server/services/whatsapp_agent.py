@@ -169,17 +169,14 @@ class WhatsAppAgent:
         )
         if rt is None:
             return None
-        def known_patient() -> str:
-            from backend.ai.capabilities.operations.clinic.read_operations import ClinicReadOperations
-            from backend.ai.capabilities.rules.patient_privacy import known_patient_block
+        if rt.engine.remember_callers:  # the owner can switch memory off (Behavior tab)
+            from backend.ai.capabilities.rules.patient_privacy import caller_memory
 
-            with SessionLocal() as db:
-                return known_patient_block(ClinicReadOperations.get_patient_history(db, business_id, sender), sender_name)
-
-        try:
-            rt.engine.set_patient_context(await asyncio.to_thread(known_patient))
-        except Exception as e:  # memory is a nicety: never block the chat on it
-            logger.warning("[WHATSAPP] could not load patient history for %s: %s", call_id, e)
+            try:
+                block, _ = await asyncio.to_thread(caller_memory, business_id, sender, sender_name)
+                rt.engine.set_patient_context(block)
+            except Exception as e:  # memory is a nicety: never block the chat on it
+                logger.warning("[WHATSAPP] could not load patient history for %s: %s", call_id, e)
         prior = await asyncio.to_thread(load_call_turns, call_id)
         if prior:
             rt.engine.restore(prior)

@@ -1,5 +1,6 @@
 {
   "greeting": "Namaste, {business_name} me aapka swagat hai. Main AI receptionist hoon. Main aapki kya madad kar sakti hoon?",
+  "greeting_returning": "नमस्ते {name} जी, {business_name} में फिर से आपका स्वागत है! मैं AI रिसेप्शनिस्ट हूँ। आज मैं आपकी कैसे मदद कर सकती हूँ?",
   "ask_patient_name": "Aapka poora naam kya hai?",
   "ask_phone_number": "Aapka phone number kya hai?",
   "ask_doctor_name": "Kya aap kisi specific doctor se milna chahte hain?",

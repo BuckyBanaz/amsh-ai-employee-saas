@@ -7,6 +7,10 @@ RUN pip install --no-cache-dir -r backend/requirements.txt
 
 COPY backend ./backend
 
+# Caller laughter detection model (checksum-pinned), outside backend/ so the development bind mount does not hide it.
+ENV YAMNET_MODEL_PATH=/app/models/yamnet.tflite
+RUN python -m backend.scripts.fetch_yamnet /app/models/yamnet.tflite
+
 # Run as an unprivileged user.
 RUN useradd --create-home --uid 10001 app && chown -R app:app /app
 USER app

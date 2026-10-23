@@ -27,6 +27,7 @@ export function BehaviorTab() {
     { id: 'hours', name: 'Explain opening hours', enabled: true },
     { id: 'transfer', name: 'Transfer to human', enabled: true },
     { id: 'messages', name: 'Send appointment details by SMS', enabled: true },
+    { id: 'remember', name: 'Remember returning customers', enabled: true },
   ]);
 
   useEffect(() => {

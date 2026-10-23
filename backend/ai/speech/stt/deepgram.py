@@ -56,6 +56,7 @@ class DeepgramSTT:
 deepgram_stt = DeepgramSTT()
 
 
+RECENT_AUDIO_S = 30.0  # caller audio kept per call for the utterance's sound cues (about 240 KB of mulaw)
 ENDPOINTING_MS = 200  # silence Deepgram waits before it finalises an utterance (the endpointing= value in the URL below)
 DEEPGRAM_LIVE_URL_TEMPLATE = (
     "wss://api.deepgram.com/v1/listen"
@@ -102,6 +103,11 @@ class DeepgramLiveConnection:
         # Barge-in hook. When set, SpeechStarted calls it straight from the reader instead of queueing an event: the
         # queue's consumer is busy for the whole AI turn, so a queued event would only be seen after the AI finished.
         self.on_speech_started: Optional[Callable[[], Awaitable[None]]] = None
+        # The audio Deepgram actually received, last RECENT_AUDIO_S seconds, indexed like its word timestamps (seconds since
+        # the first byte it got), so the caller's own sound for an utterance can be cut out exactly (laughter detection).
+        self.bytes_per_second = 16000 if encoding == "linear16" else 8000
+        self._recent = bytearray()
+        self._recent_start = 0  # byte offset (since the first byte sent) of _recent[0]
 
     def is_configured(self) -> bool:
         return bool(self.api_key)
@@ -136,8 +142,21 @@ class DeepgramLiveConnection:
                 await self._ws.send(mulaw_bytes)
                 if self.audio_t0 is None:
                     self.audio_t0 = time.monotonic()
+                self._recent.extend(mulaw_bytes)
+                excess = len(self._recent) - int(RECENT_AUDIO_S * self.bytes_per_second)
+                if excess > 0:
+                    del self._recent[:excess]
+                    self._recent_start += excess
             except Exception as e:
                 logger.warning(f"[DEEPGRAM LIVE] Failed to send audio chunk: {e}")
+
+    def audio_between(self, start_s: float, end_s: Optional[float] = None) -> bytes:
+        """The audio Deepgram received between two of its own word offsets (seconds); clipped to what is still kept."""
+        bps = self.bytes_per_second
+        step = 2 if self.encoding == "linear16" else 1  # never split a PCM16 sample
+        lo = max(int(start_s * bps) // step * step - self._recent_start, 0)
+        hi = len(self._recent) if end_s is None else max(int(end_s * bps) // step * step - self._recent_start, 0)
+        return bytes(self._recent[lo:hi])
 
     async def _read_loop(self) -> None:
         assert self._ws is not None
@@ -167,6 +186,7 @@ class DeepgramLiveConnection:
                         speech_end = None
                         if words and self.audio_t0 is not None and isinstance(words[-1].get("end"), (int, float)):
                             speech_end = self.audio_t0 + float(words[-1]["end"])
+                        first_start = words[0].get("start") if words else None
                         await self._queue.put(
                             {
                                 "type": "transcript",
@@ -175,6 +195,7 @@ class DeepgramLiveConnection:
                                 "speech_final": bool(msg.get("speech_final")),
                                 "received_at": time.monotonic(),  # before any queueing delay in the consumer
                                 "speech_end_at": speech_end,  # estimated, see audio_t0
+                                "audio_start_s": first_start if isinstance(first_start, (int, float)) else None,  # see audio_between
                             }
                         )
         except Exception as e:

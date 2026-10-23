@@ -1,5 +1,6 @@
 {
   "greeting": "Hallo, bedankt voor uw oproep naar {business_name}. Ik ben de AI-receptionist. Hoe kan ik u vandaag helpen?",
+  "greeting_returning": "Hallo {name}, welkom terug bij {business_name}! Ik ben de AI-receptionist. Hoe kan ik u vandaag helpen?",
   "ask_patient_name": "Mag ik uw volledige naam alstublieft?",
   "ask_phone_number": "Wat is uw telefoonnummer?",
   "ask_doctor_name": "Wilt u een specifieke arts spreken?",

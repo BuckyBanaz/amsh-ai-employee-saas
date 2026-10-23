@@ -381,6 +381,18 @@ async def handle_recording_callback(
     return Response(content="", media_type="application/xml")
 
 
+async def alert_missed_transfer(db: Session, staff_phone: Optional[str], caller: str, call_id: str, department: str, status: str) -> None:
+    """Text the staff member a transfer did not reach, so the caller is called back (Twilio and Plivo transfers alike)."""
+    if not staff_phone:
+        logger.warning(f"[VOICE TRANSFER] No staff_phone to alert for call {call_id}")
+        return
+    await SendSmsTool().execute(
+        ToolContext(business_id="", caller_number=caller, call_id=call_id, db=db),
+        to_phone=staff_phone,
+        message_body=f"[AMSH P0 ALERT] Urgent callback needed for {caller}. Transfer to {department} went unanswered ({status}).",
+    )
+
+
 @router.post("/transfer-status", dependencies=[Depends(verify_twilio)])
 async def handle_transfer_status(
     DialCallStatus: str = Form(...),
@@ -406,18 +418,7 @@ async def handle_transfer_status(
         "</Response>"
     )
 
-    if staff_phone:
-        sms_tool = SendSmsTool()
-        await sms_tool.execute(
-            ToolContext(business_id="", caller_number=From, call_id=CallSid, db=db),
-            to_phone=staff_phone,
-            message_body=(
-                f"[AMSH P0 ALERT] Urgent callback needed for {From}. "
-                f"Transfer to {department} went unanswered ({DialCallStatus})."
-            ),
-        )
-    else:
-        logger.warning(f"[VOICE TRANSFER] No staff_phone to alert for call {CallSid}")
+    await alert_missed_transfer(db, staff_phone, From, CallSid, department, DialCallStatus)
 
     # NOTE: no call_logs/tickets table yet to persist a PENDING_CALLBACK record —
     # tracked as a gap against DOCS/11 §3 until backend/server ships call logs (DOCS/10 §1.4).

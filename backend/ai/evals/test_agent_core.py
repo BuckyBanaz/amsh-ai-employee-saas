@@ -75,7 +75,7 @@ def call(name, **args):
     return {"content": None, "tool_calls": [{"id": f"c_{name}", "name": name, "arguments": json.dumps(args)}]}
 
 
-def make_engine(backend, caller="+919876543210", language=None, languages=None, accent=None, auto_detect_language=True, real_clock=False, sandbox=None, **facts_override):
+def make_engine(backend, caller="+919876543210", language=None, languages=None, accent=None, auto_detect_language=True, real_clock=False, sandbox=None, capabilities=None, **facts_override):
     factory, biz = make_db_factory()
     facts, profile = load_all(factory, biz)
     if facts_override:
@@ -98,6 +98,7 @@ def make_engine(backend, caller="+919876543210", language=None, languages=None, 
         auto_detect_language=auto_detect_language,
         now_fn=None if real_clock else (lambda: FIXED_NOW),
         sandbox=sandbox,
+        capabilities=capabilities,
     )
     return engine, factory
 
@@ -410,6 +411,15 @@ class AvailabilityPrefetch(unittest.TestCase):
         run(engine.turn("can I come in tomorrow?"))
         self.assertFalse([m for m in backend.seen[0]["messages"] if m.get("role") == "tool"])
 
+    def test_no_slots_are_handed_over_while_the_booking_still_needs_its_service(self):
+        # Live call: "मैं ना आज बड़ा खुश हूं" during a booking read as "today" -> slots offered before the service was asked.
+        backend = ScriptedBackend(reply("Sure, which service would you like?"), reply("That's lovely to hear! Which service is it for?"))
+        engine, _ = make_engine(backend)
+        run(engine.turn("I want to book an appointment"))
+        self.assertEqual(engine.ctrl.next_needed(), "service")
+        run(engine.turn("main na aaj bada khush hoon yaar"))
+        self.assertFalse([m for m in backend.seen[-1]["messages"] if m.get("role") == "tool"])
+
     def test_move_or_cancel_reads_the_callers_own_appointments_first(self):
         from backend.ai.capabilities.operations.clinic import ClinicWriteOperations
 
@@ -586,6 +596,16 @@ class TransferGuard(unittest.TestCase):
         for no in ("Are you a robot or a real person?", "Aapka naam kya hai?", "kya aap robot ho", "Who is this?", "book me tomorrow"):
             self.assertFalse(req(no), no)
 
+    def test_hindi_human_request_needs_an_ask_not_just_a_mention(self):
+        from backend.ai.engine.agent.hindi import language_escalation
+
+        # Live call: musing "I was thinking I should talk to someone" was transferred straight to the front desk.
+        for musing in ("मैं बहुत सोच रहा था कि किसी से बात करो, किसी से बात करो", "मैं किसी इंसान से मिला था कल"):
+            self.assertIsNone(language_escalation(musing), musing)
+        for ask in ("मुझे किसी इंसान से बात करनी है", "किसी से बात कराओ यार", "मैनेजर से मिलाओ", "स्टाफ से बात करवा दो",
+                    "मैं किसी से बात करना चाहता हूँ", "mujhe kisi insaan se baat karni hai", "असली इंसान चाहिए"):
+            self.assertEqual(language_escalation(ask), "front_desk", ask)
+
     def test_llm_cannot_transfer_on_identity_question(self):
         self.tb.last_utterance = "Aapka naam kya hai?"
         self.gate.turn = 1
@@ -610,6 +630,21 @@ class TransferGuard(unittest.TestCase):
         engine, _ = make_engine(ScriptedBackend())
         engine.toolbox.last_utterance = "hello"
         self.assertEqual(run(engine.toolbox.execute("transfer_to_human", {"department": "emergency"}))["code"], "transferring")
+
+    def test_a_yes_to_our_connect_offer_transfers_at_once(self):
+        # Live call: the agent offered in its own words, the caller said "Yes.", and the gate asked "are you sure?" again.
+        for offer, yes in (("मैं आपको फ्रंट डेस्क से कनेक्ट करने के लिए तैयार हूँ। क्या मैं कनेक्ट कर दूँ?", "Yes."),
+                           ("Shall I connect you to the front desk?", "yes please"),
+                           ("क्या मैं आपकी बात फ्रंट डेस्क से करवा दूँ?", "haan karva do")):
+            self.tb.pending = None
+            self.tb.last_assistant, self.tb.last_utterance = offer, yes
+            self.gate.turn += 1
+            self.assertEqual(run(self.tb.execute("transfer_to_human", {"department": "front_desk"}))["code"], "transferring", offer)
+        self.tb.pending = None
+        self.tb.last_assistant, self.tb.last_utterance = "Shall I book you for 10 AM tomorrow?", "yes"  # a yes to something else
+        self.gate.turn += 1
+        self.assertEqual(run(self.tb.execute("transfer_to_human", {"department": "front_desk"}))["code"], "needs_confirmation")
+        self.assertIsNone(self.tb.pending)
 
 
 class Runtime(unittest.TestCase):
@@ -2188,6 +2223,29 @@ class ClaimsLeaksAndConsent(unittest.TestCase):
         run(engine4.turn("haan"))  # our reply quoted their number, so this yes is about it
         self.assertTrue(engine4.toolbox.caller_number_ok)
 
+    def test_hindi_use_the_number_i_called_from_is_consent(self):
+        # Said on a live Plivo call, where the agent kept asking for the number instead.
+        for said in ("अरे जिस number से मैंने आपको call की है वही number use कर लो मेरा भाई.",
+                     "यार तुम्हारे पास already है मेरा phone number.",
+                     "you already have my number"):
+            engine, _ = make_engine(ScriptedBackend(reply("Ok.")))
+            run(engine.turn(said))
+            self.assertTrue(engine.toolbox.caller_number_ok, said)
+        for said in ("मेरा number 98765 43210 है", "jis number se booking hui thi woh band hai"):
+            engine, _ = make_engine(ScriptedBackend(reply("Ok.")))
+            run(engine.turn(said))
+            self.assertFalse(engine.toolbox.caller_number_ok, said)
+
+    def test_calling_number_is_offered_even_when_phone_is_not_next(self):
+        from backend.ai.engine.agent.controller import CallState
+
+        ctrl = CallState(intent="book", service="Teeth Whitening", caller_name="Parikshit", calling_tail="4107")
+        self.assertEqual(ctrl.next_needed(), "date")
+        self.assertIn("ending 4107", ctrl.note())  # the model asks for the phone out of order: it must still offer this one
+        ctrl.phone = "calling number"
+        self.assertNotIn("ending 4107", ctrl.note())  # agreed: nothing left to offer
+        self.assertNotIn("ending 4107", CallState(intent="book", service="Teeth Whitening").note())  # no number from the provider
+
     def test_hindi_speaker_gets_a_devanagari_reply_instruction(self):
         backend = ScriptedBackend(reply("नमस्ते!"), reply("Hello!"), reply("ठीक है।"))
         engine, _ = make_engine(backend)
@@ -3069,6 +3127,26 @@ class WhatsAppChannel(unittest.TestCase):
         self.assertEqual(clean_name("A" * 100), "A" * 40)
         row = {"customer_name": "Guest Patient", "service_name": "Dental Cleaning", "preferred_date": "2026-10-03", "preferred_time": "10:00 AM", "status": "confirmed"}
         self.assertIn("no name on file", known_patient_block([row]))
+
+    def test_returning_caller_name_and_welcome_back_greeting_in_every_language(self):
+        from backend.ai.capabilities.rules.patient_privacy import caller_memory, name_on_file
+        from backend.ai.engine.conversation.i18n import t
+
+        guest = {"customer_name": "Guest Patient"}
+        self.assertEqual(name_on_file([guest, {"customer_name": "Parikshit Verma"}]), "Parikshit Verma")
+        self.assertEqual(name_on_file([guest]), "")
+        self.assertEqual(caller_memory("biz", "+1555"), ("", ""))  # no usable number: nothing is looked up
+        for code in ("en", "hi", "es", "ar", "de", "fr", "nl"):
+            line = t(code, "greeting_returning", name="Parikshit", business_name="Demo clinic")
+            self.assertIn("Parikshit", line, code)
+            self.assertIn("Demo clinic", line, code)
+            self.assertNotEqual(line, t("en", "greeting_returning", name="Parikshit", business_name="Demo clinic") if code != "en" else "", code)
+
+    def test_owner_can_switch_caller_memory_off(self):
+        engine, _ = make_engine(ScriptedBackend(reply("Hi.")))
+        self.assertTrue(engine.remember_callers)  # on unless switched off
+        off, _ = make_engine(ScriptedBackend(reply("Hi.")), capabilities={"remember": False})
+        self.assertFalse(off.remember_callers)
 
     def test_a_restarted_server_resumes_the_whatsapp_conversation(self):
         from backend.server.services.whatsapp_agent import Inbound

@@ -35,6 +35,7 @@ from backend.ai.llm.client import llm_client
 from backend.ai.memory.session_memory import session_memory
 from backend.ai.realtime import latency
 from backend.ai.realtime.audio.mulaw import FRAME_BYTES, FRAME_DURATION_S, PCM_FRAME_BYTES, frame_stream
+from backend.ai.realtime.audio.paralinguistic import capture_turn, cue_detector
 from backend.ai.realtime.barge_in.coordinator import BargeInCoordinator
 from backend.ai.realtime.barge_in.monitor import BargeInMonitor
 from backend.ai.realtime.call_tunnels.plivo_tunnel import (
@@ -43,6 +44,11 @@ from backend.ai.realtime.call_tunnels.plivo_tunnel import (
     plivo_play_audio_message,
 )
 from backend.ai.realtime.twilio.call_control import redirect_call
+from backend.ai.realtime.plivo.client import plivo_client, transfer_url as plivo_transfer_url
+from backend.ai.engine.agent.agent_loop import _NO_TRANSFER, _scripted
+from backend.ai.engine.agent.hindi import language_pack
+from backend.ai.capabilities.rules.patient_privacy import caller_memory
+from backend.server.cache.redis import get_redis_client
 from backend.server.auth.security import get_current_user
 from backend.server.auth.webhook_signatures import stream_token_ok
 from backend.server.common import ratelimit
@@ -68,8 +74,12 @@ router = APIRouter(tags=["voice"])
 vad = SimpleVAD(energy_threshold=1400)
 # Energy-VAD barge-in debounce: 20 consecutive voiced 20 ms frames (400 ms) of sustained speech.
 # Prevents phone line acoustic echo, breath, and background clicks from cutting off the AI.
+CUE_LEAD_S = 0.5  # the caller's sound is scored from this long before their first word (a laugh can open the turn)
+PICKUP_WINDOW_S = 0.8  # after the call is answered, before the first word: the handset reaches the caller's ear
+TRANSFER_PLAYBACK_WAIT_S = 8.0  # at most this long for the agent's last line to finish before a Plivo transfer
 BARGE_IN_GRACE_PERIOD_S = 0.4  # grace window after the AI starts speaking (device echo cancellation settling); measured from the response onset, not each sentence
 MIN_SILENCE_TIMEOUT_S = 10  # "are you still there?" never earlier than this on a phone line, whatever the tab says
+MEDIA_STATS_WINDOW_S = 5.0  # how often [MEDIA STATS] reports inbound audio timing for a call
 
 _WATCHDOG_LINES = {
     "en": {
@@ -96,6 +106,52 @@ class VoiceSimulateRequest(BaseModel):
 ACTIVE_CALL_SESSIONS: Dict[str, "CallSession"] = {}
 
 
+def tts_params(agent_settings: Dict[str, Any], text: str, pcm: bool = False, active_language: Optional[str] = None,
+               emotion: Optional[str] = None) -> Dict[str, Any]:
+    """Everything Cartesia is asked for besides the words (and the audio cache key): voice, encoding, language, speed, emotion.
+    The owner's explicit TTS language wins; otherwise the language the agent is speaking (primary language from /ai, or the one
+    the caller switched to). Hindi/English calls still pick per sentence so Hindi words are pronounced as Hindi."""
+    active = active_language or agent_settings.get("language")
+    return {
+        "voice_id": agent_settings.get("voice_id"),
+        "encoding": "pcm_s16le" if pcm else "pcm_mulaw",
+        "sample_rate": 8000,
+        "language": agent_settings.get("tts_language") or resolve_tts_language(active, text),
+        "speed": agent_settings.get("tts_speed"),  # Voice tab speed / personality default
+        "emotion": emotion or agent_settings.get("tts_emotion"),  # the sentence's own emotion wins over the Voice-tab default
+    }
+
+
+async def prewarm_opening_notices() -> int:
+    """Startup: synthesise the recording notice of every clinic with a live phone line into the TTS cache, with exactly the
+    parameters a call uses, so a call's first audio comes from memory. Returns how many were cached. Never raises."""
+    from backend.server.database.models.phone_number import PhoneNumber
+    from backend.server.database.session import SessionLocal
+
+    def clinics() -> List[str]:
+        with SessionLocal() as db:
+            return sorted({n.business_id for n in db.query(PhoneNumber).filter(PhoneNumber.status == "active").all() if n.business_id})
+
+    done = 0
+    try:
+        for business_id in await asyncio.to_thread(clinics):
+            settings = await asyncio.to_thread(load_agent_settings, business_id)
+            notice = await asyncio.to_thread(policy_service.notice_for, business_id, settings.get("language"))
+            if notice:
+                await cartesia_tts.prewarm(notice, **tts_params(settings, notice))
+                done += 1
+    except Exception as e:  # an optimisation: calls still work, the first one just synthesises its notice live
+        logger.warning(f"[WARMUP] recording notices not prewarmed: {e}")
+    logger.info(f"[WARMUP] recording notices cached for {done} clinic(s)")
+    return done
+
+
+def pack_line(key: str, language: Optional[str]) -> str:
+    """A fixed line from the caller's language pack (`strings.<key>`), English when that language has none."""
+    code = (language or "en").split("-")[0].lower()
+    return (language_pack(code).get("strings") or {}).get(key) or language_pack("en")["strings"][key]
+
+
 def get_active_call_session(call_id: str) -> Optional["CallSession"]:
     """Returns the active in-memory CallSession for a live call if connected via WebSocket."""
     return ACTIVE_CALL_SESSIONS.get(call_id)
@@ -109,6 +165,12 @@ class CallSession:
         self.pcm = pcm
         # "twilio" or "plivo", detected from the start event (Plivo puts streamId at the top level).
         self.provider = "twilio"
+        # Inbound media timing, logged every MEDIA_STATS_WINDOW_S: shows whether caller audio arrives in real time
+        # (late or bursty audio delays Deepgram's end-of-speech, so turns are answered seconds late).
+        self._media_first_at: Optional[float] = None
+        self._media_last_at: Optional[float] = None
+        self._media_audio_s = 0.0
+        self._media_window = {"start": 0.0, "frames": 0, "audio_s": 0.0, "max_gap_ms": 0.0}
         self.websocket = websocket
         self.business_id = business_id
         self.stream_sid: Optional[str] = None
@@ -131,6 +193,7 @@ class CallSession:
         self.last_activity = time.monotonic()
         self._silence_prompted = False
         self._busy = False
+        self._handing_off = False  # a dashboard takeover is connecting the caller to staff: the AI starts no new turn
         self._watchdog_task: Optional[asyncio.Task] = None
         self._is_greeting: bool = False
         self._greeting_until: float = 0.0
@@ -142,6 +205,7 @@ class CallSession:
         self._turn_worker: Optional[asyncio.Task] = None
         self._tts_lock = asyncio.Lock()  # ONE active spoken response per call: two streams must never write audio at once
         self._persist_tasks: set = set()  # turn-log DB writes in flight (awaited in stop())
+        self._playout_lag_ms: List[float] = []  # per sentence: how late the provider echoed "played" vs zero-delay playback
         self._last_warm = 0.0  # monotonic time provider connections were last warmed (see _warm_providers)
 
     @property
@@ -190,6 +254,12 @@ class CallSession:
         except Exception as e:
             logger.warning(f"[WS GATEWAY] Could not load business context: {e}")
             business_name, services, self.agent_settings = None, [], {}
+        # LATENCY: the recording notice is fixed per clinic and language, so its audio is cached (prewarmed at startup). It starts
+        # the moment the call is answered and plays while the rest of the setup (memory, agent, call log, STT) runs; the greeting
+        # follows it. Before, nothing played until all of that was done and the notice trailed the greeting.
+        notice = await asyncio.to_thread(policy_service.notice_for, self.business_id, self.agent_settings.get("language"))
+        self._is_greeting = True  # notice and greeting are not interruptible (echo / "hello?" over the opening)
+        opening = asyncio.create_task(self._play_opening_notice(notice))
         tone = self.agent_settings.get("tone")
         self.state_machine = ConversationStateMachine(
             call_id=call_id,
@@ -205,22 +275,38 @@ class CallSession:
             language=self.agent_settings.get("language"),
         )
         session_memory.store_session(call_id, self.state_machine)
-        greeting = self.state_machine.start_call(self.agent_settings.get("greeting"))
-        greeting = await asyncio.to_thread(policy_service.greeting_for, self.business_id, greeting, self.agent_settings.get("language"))  # recording notice where the region asks for it
+        # Returning caller (the provider gave their number and this clinic has their appointments): welcome them back by name
+        # and give the agent their last visits, as WhatsApp does. Owner switch: Behavior tab "Remember returning customers".
+        memory_block, returning_name = "", ""
+        if caller_number and self.agent_settings.get("remember_callers", True):
+            try:
+                memory_block, returning_name = await asyncio.to_thread(caller_memory, self.business_id, self.caller_number)
+            except Exception as e:  # memory is a nicety: never block the call on it
+                logger.warning(f"[WS GATEWAY] could not load caller history for {call_id}: {e}")
+        greeting_override = self.agent_settings.get("greeting")
+        if returning_name:
+            greeting_override = t(
+                self.state_machine.language, "greeting_returning",
+                name=returning_name.split()[0], business_name=business_name or self.state_machine.business_info["name"],
+            )
+        greeting = self.state_machine.start_call(greeting_override)
+        opening_text = f"{notice} {greeting}".strip()  # what the caller hears, in order: the transcript and the agent's history
         try:
             self.agent_rt = await AgentRuntime.create(
-                self.business_id, call_id, self.caller_number, vertical_cfg, greeting,
+                self.business_id, call_id, self.caller_number, vertical_cfg, opening_text,
                 self.agent_settings.get("language"),
                 force_agent=True,  # live calls always use the LLM agent (same as the playground)
             )
         except Exception as e:  # the agent is optional: any setup failure keeps the call on the legacy engine
             logger.warning(f"[AGENT] init failed, using state machine: {e}")
             self.agent_rt = None
+        if self.agent_rt and memory_block:
+            self.agent_rt.engine.set_patient_context(memory_block)
         if self.agent_rt:
             print(f"🧪 CONVERSATION ENGINE: {self.agent_rt.mode}", flush=True)
         print(f"\n==================== [CALL STARTED] ====================", flush=True)
         print(f"📞 CALL SID: {call_id} | Business: {self.business_id} | Caller: {self.caller_number}", flush=True)
-        print(f"🤖 AI GREETING: \"{greeting}\"", flush=True)
+        print(f"🤖 AI GREETING: \"{opening_text}\"", flush=True)
         print(f"========================================================\n", flush=True)
         logger.info(f"[TWILIO WS] Started call {call_id} for business {self.business_id}")
 
@@ -229,7 +315,8 @@ class CallSession:
             call_id=call_id,
             business_id=self.business_id,
             caller_number=self.caller_number,
-            greeting=greeting,
+            caller_name=returning_name or None,  # a returning caller shows by name in the call log, not "Unknown Caller"
+            greeting=opening_text,
         )
 
         # Connect STT in the background (language/accent from the Voice and Languages settings)
@@ -246,11 +333,8 @@ class CallSession:
         self._bg_tasks.add(prewarm)
         prewarm.add_done_callback(self._bg_tasks.discard)
 
-        # Natural human pickup window: give the user 0.8s to bring the handset to their ear
-        await asyncio.sleep(0.8)
-
-        self._is_greeting = True
         try:
+            await opening  # the notice (if any) has been spoken; the greeting follows without a gap
             await self._speak_turn(greeting)
         finally:
             self._is_greeting = False
@@ -261,6 +345,17 @@ class CallSession:
                 f"(mark={self._greeting_mark})"
             )
 
+    async def _play_opening_notice(self, notice: str) -> None:
+        """Pickup window, then the recording notice. Never raises: a failed notice must not stop the greeting."""
+        try:
+            await asyncio.sleep(PICKUP_WINDOW_S)  # natural pickup: the handset reaches the ear
+            if notice:
+                await self._speak_turn(notice)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            logger.warning(f"[WS GATEWAY] recording notice failed on call {self.call_id}: {e}")
+
     async def _connect_stt(self, call_id: str) -> None:
         assert self.stt is not None
         # Speech-started is handled from Deepgram's reader, so it still interrupts while a turn is being answered.
@@ -270,9 +365,33 @@ class CallSession:
         else:
             logger.warning(f"[TWILIO WS] Live STT unavailable for call {call_id}")
 
+    def _track_media(self, n_bytes: int) -> None:
+        """Measurement only. lag = wall time since the first frame minus seconds of audio received: it stays near 0 when
+        audio arrives in real time and grows when the provider/tunnel delivers it late or drops frames."""
+        now = time.monotonic()
+        audio_s = n_bytes / (2 * 8000 if self.pcm else 8000)
+        w = self._media_window
+        if self._media_first_at is None:
+            self._media_first_at = w["start"] = now
+        elif self._media_last_at is not None:
+            w["max_gap_ms"] = max(w["max_gap_ms"], (now - self._media_last_at) * 1000)
+        self._media_last_at = now
+        self._media_audio_s += audio_s
+        w["frames"] += 1
+        w["audio_s"] += audio_s
+        if now - w["start"] >= MEDIA_STATS_WINDOW_S:
+            logger.info(
+                "[MEDIA STATS] call=%s provider=%s window=%.1fs frames=%d audio=%.2fs max_gap=%.0fms lag=%.0fms",
+                self.call_id, self.provider, now - w["start"], w["frames"], w["audio_s"], w["max_gap_ms"],
+                ((now - self._media_first_at) - self._media_audio_s) * 1000,
+            )
+            self._media_window = {"start": now, "frames": 0, "audio_s": 0.0, "max_gap_ms": 0.0}
+
     async def handle_media(self, payload_b64: str) -> None:
+        audio = base64.b64decode(payload_b64)
+        self._track_media(len(audio))
         if self.stt:
-            await self.stt.send_audio(base64.b64decode(payload_b64))
+            await self.stt.send_audio(audio)
         # Fast energy-based barge-in. The threshold is calibrated on this call's own caller and echo levels (see
         # barge_in/monitor.py); greeting and grace window still block it, and their audio is what measures the echo.
         rms = vad.rms(payload_b64, pcm=self.pcm)
@@ -297,6 +416,7 @@ class CallSession:
         assert self.stt is not None
         pending: List[str] = []
         last: Optional[Dict[str, Any]] = None
+        first_start: Optional[float] = None
         try:
             async for event in self.stt.events():
                 if event["type"] == "speech_started":  # only queued when no on_speech_started hook is set
@@ -313,6 +433,8 @@ class CallSession:
                             await self._barge_in("words")
                     if not event.get("is_final"):
                         continue  # interim words may interrupt (above) but never start a turn: that was an empty-utterance LLM turn
+                    if not pending:
+                        first_start = event.get("audio_start_s")  # where the utterance's sound begins (Deepgram offset)
                     pending.append(event["text"].strip())
                     last = event
                     if not event.get("speech_final"):
@@ -321,7 +443,8 @@ class CallSession:
                     continue
                 utterance = " ".join(pending)
                 # word timing from the last segment; arrival = when the turn was actually closed (the UtteranceEnd, if that closed it)
-                final_event = dict(last or event, text=utterance, received_at=event.get("received_at") or (last or {}).get("received_at"))
+                final_event = dict(last or event, text=utterance, received_at=event.get("received_at") or (last or {}).get("received_at"),
+                                   audio_start_s=first_start)
                 pending, last = [], None
                 self._enqueue_turn(final_event)
                 await asyncio.sleep(0)  # an idle worker picks the turn up now, so back-to-back utterances stay separate turns
@@ -339,6 +462,8 @@ class CallSession:
         once (word-level barge-in), not after our last sentence. Exactly one worker answers, in order."""
         if not (final_event.get("text") or "").strip():
             return  # nothing was said: never spend an LLM turn on silence
+        if self._handing_off:
+            return  # staff are taking this call over: the AI must not answer over the hand-off
         self._busy = True  # we are thinking/answering: the watchdog must not call this silence
         if self._turn_worker is not None and not self._turn_worker.done():
             # Caller spoke over a turn that is still running. Same rule as the audio barge-in (greeting and grace period
@@ -369,6 +494,7 @@ class CallSession:
                 })
                 token = latency.start_turn(tracker)
                 try:
+                    await self._hear_cues(batch[0].get("audio_start_s"), final_event["text"])
                     await self._handle_transcript(final_event["text"])
                 except asyncio.CancelledError:
                     raise
@@ -383,6 +509,33 @@ class CallSession:
                     self.last_activity = time.monotonic()
         finally:
             self._busy = bool(self._turn_inbox)
+
+    async def _hear_cues(self, audio_start_s: Optional[float], transcript: str = "") -> None:
+        """How the caller sounded in this turn (laughter...), from their own audio: Deepgram's transcript drops a laugh. Scored
+        locally in ~20 ms and handed to the agent for this turn's mood. Any failure just means no cue."""
+        engine = getattr(self.agent_rt, "engine", None)
+        if engine is None or self.stt is None or audio_start_s is None:
+            return
+        try:
+            clip = self.stt.audio_between(max(audio_start_s - CUE_LEAD_S, 0.0))  # to now: a laugh after the last word counts too
+            cues = await asyncio.to_thread(cue_detector.score, clip, "pcm16" if self.pcm else "mulaw", 8000)
+        except Exception as e:
+            logger.warning(f"[CUES] call={self.call_id}: not scored: {e}")
+            return
+        if cues is None:
+            return
+        engine.audio_cues = cues
+        latency.mark("cues_scored", **cues)
+        tracker = latency.current()
+        if tracker is not None:
+            tracker.info["cues"] = cues
+        logger.info(f"[CUES] call={self.call_id} turn={self._turn_no} seconds={len(clip) / self.stt.bytes_per_second:.1f} {cues}")
+        settings = get_settings()
+        if settings.CAPTURE_CALLER_AUDIO and settings.ENV != "production":  # development aid only, see config.py
+            try:
+                await asyncio.to_thread(capture_turn, self.call_id or "call", self._turn_no, clip, "pcm16" if self.pcm else "mulaw", transcript, cues)
+            except Exception as e:
+                logger.warning(f"[CUES] capture failed: {e}")
 
     def _new_turn_tracker(self, event: Dict[str, Any]) -> latency.TurnLatency:
         """Per-utterance latency tracker. Origin = the caller's estimated end of speech (Deepgram word timing), clamped to
@@ -498,11 +651,9 @@ class CallSession:
         )
 
         if result.get("should_transfer"):
-            twiml = (result.get("tool_result") or {}).get("twiml")
-            if twiml and self.call_id:
-                print(f"🔄 TRANSFERRING CALL {self.call_id}...", flush=True)
-                await redirect_call(self.call_id, twiml)
-            self.should_close = True
+            target = result.get("tool_result") or {}
+            if await self._hand_off(target.get("twiml"), target):
+                self.should_close = True
         elif result.get("should_hangup"):
             print(f"📴 HANGING UP CALL {self.call_id}...", flush=True)
             self.should_close = True
@@ -595,15 +746,59 @@ class CallSession:
         self._persist_tasks.add(persist)
         persist.add_done_callback(self._persist_tasks.discard)
         if turn.transferred:
-            self.state_machine.current_state = CallState.ESCALATED
-            if turn.transfer_twiml and self.call_id:
-                print(f"🔄 TRANSFERRING CALL {self.call_id}...", flush=True)
-                await redirect_call(self.call_id, turn.transfer_twiml)
-            self.should_close = True
+            if await self._hand_off(turn.transfer_twiml, turn.transfer_to):
+                self.state_machine.current_state = CallState.ESCALATED
+                self.should_close = True
         elif turn.hangup:
             print(f"📴 HANGING UP CALL {self.call_id}...", flush=True)
             self.should_close = True
         return True
+
+    async def _hand_off(self, twiml: Optional[str], target: Optional[Dict[str, Any]], announce_failure: bool = True) -> bool:
+        """Connect the caller to clinic staff through the provider carrying this call: Twilio gets the transfer TwiML as a
+        live-call redirect, Plivo moves the call to our /plivo/transfer XML (a <Dial>). True once the provider accepted it.
+        When it cannot be done the caller is told so, in their language, and the call stays with the AI instead of dropping."""
+        lang = getattr(getattr(self.agent_rt, "engine", None), "active_language", None) or self.agent_settings.get("language") or "en"
+        ok = False
+        if self.call_id:
+            print(f"🔄 TRANSFERRING CALL {self.call_id} via {self.provider}...", flush=True)
+            if self.provider == "plivo":
+                phone = (target or {}).get("phone_number")
+                if phone:
+                    # The Plivo XML speaks nothing: let the agent's "connecting you now" finish playing first (bounded).
+                    remaining = self.barge_in.playback_until - time.monotonic()
+                    if remaining > 0:
+                        await asyncio.sleep(min(remaining, TRANSFER_PLAYBACK_WAIT_S))
+                    url = plivo_transfer_url(phone, target.get("staff_name") or "Staff", target.get("department") or "front_desk", lang)
+                    ok = await plivo_client.transfer_call(self.call_id, url)
+            elif twiml:
+                ok = await redirect_call(self.call_id, twiml)
+        if not ok:
+            logger.warning(f"[TRANSFER] call={self.call_id} provider={self.provider}: transfer not possible, staying on the line")
+            if announce_failure:
+                await self._speak_turn(_scripted(_NO_TRANSFER, "no_transfer", lang))
+        return ok
+
+    async def take_over(self, staff_phone: str, twiml: Optional[str]) -> bool:
+        """Dashboard "Take Over Call": silence the AI at once (running turn stopped, queued audio cleared), tell the caller in
+        their language that staff are joining, and move the call to `staff_phone` through this call's provider. Returns False
+        if the provider refused; the AI then simply carries on with the caller."""
+        self._handing_off = True
+        ok = False
+        try:
+            self._interrupt_active_turn()
+            await self.barge_in.handle_caller_speech(self.websocket, self.stream_sid, pcm=self.pcm, provider=self.provider)
+            if self.provider == "plivo":  # Twilio's takeover TwiML says this itself; Plivo's <Dial> XML says nothing
+                lang = getattr(getattr(self.agent_rt, "engine", None), "active_language", None) or self.agent_settings.get("language") or "en"
+                await self._speak_turn(pack_line("takeover_connecting", lang))
+            ok = await self._hand_off(twiml, {"phone_number": staff_phone, "staff_name": "Staff", "department": "front_desk"}, announce_failure=False)
+        finally:
+            self._handing_off = ok  # handed off: stay silent until the provider ends our stream; refused: the AI carries on
+        if ok:
+            if self.state_machine:
+                self.state_machine.current_state = CallState.ESCALATED
+            self.should_close = True
+        return ok
 
     async def _speak_turn(self, text: str, emotion: Optional[str] = None) -> bool:
         """Runs TTS playback as its own task so a barge-in can cancel just the
@@ -624,6 +819,13 @@ class CallSession:
             finally:
                 self.barge_in.mark_done()
                 self.last_activity = time.monotonic()  # silence is measured from the end of our own speech
+
+    def record_playout(self, mark: str, lag_s: float) -> None:
+        """Outbound delay the caller actually hears: the provider said "played" this long after our audio would have
+        finished with zero network delay (tunnel + carrier + jitter buffer + the echo's trip back). Never in [LATENCY]:
+        that report closes when the last frame is sent, before playback ends."""
+        self._playout_lag_ms.append(round(lag_s * 1000, 1))
+        logger.info(f"[PLAYOUT] call={self.call_id} mark={mark} lag_ms={lag_s * 1000:.0f}")
 
     async def _watchdog(self) -> None:
         """Enforces the Call Handling tab: after `silence_timeout_seconds` of quiet ask "are you still there?",
@@ -660,18 +862,8 @@ class CallSession:
             pass
 
     def _tts_params(self, text: str, emotion: Optional[str] = None) -> Dict[str, Any]:
-        """Everything Cartesia is asked for besides the words (and the audio cache key): voice, encoding, language, speed, emotion."""
-        # The owner's explicit TTS language wins; otherwise the language the agent is speaking (primary language from /ai, or the one the
-        # caller switched to). Hindi/English calls still pick per sentence so Hindi words are pronounced as Hindi.
-        active = getattr(getattr(self, "agent_rt", None) and self.agent_rt.engine, "active_language", None) or self.agent_settings.get("language")
-        return {
-            "voice_id": self.agent_settings.get("voice_id"),
-            "encoding": "pcm_s16le" if self.pcm else "pcm_mulaw",
-            "sample_rate": 8000,
-            "language": self.agent_settings.get("tts_language") or resolve_tts_language(active, text),
-            "speed": self.agent_settings.get("tts_speed"),  # Voice tab speed / personality default
-            "emotion": emotion or self.agent_settings.get("tts_emotion"),  # the sentence's own emotion wins over the Voice-tab default
-        }
+        active = getattr(getattr(self, "agent_rt", None) and self.agent_rt.engine, "active_language", None)
+        return tts_params(self.agent_settings, text, pcm=self.pcm, active_language=active, emotion=emotion)
 
     async def _prewarm_fillers(self) -> None:
         """LATENCY: synthesize this call's "one moment..." fillers while the greeting plays, so a turn that has to check the
@@ -734,6 +926,12 @@ class CallSession:
             self._turn_worker.cancel()
         if self.stt:
             await self.stt.close()
+        if self._playout_lag_ms:
+            lags = sorted(self._playout_lag_ms)
+            logger.info(
+                f"[PLAYOUT] call={self.call_id} sentences={len(lags)} median_ms={lags[len(lags) // 2]:.0f} "
+                f"p95_ms={lags[min(len(lags) - 1, int(0.95 * len(lags)))]:.0f} max_ms={lags[-1]:.0f}"
+            )
         pending_writes = [t for t in self._persist_tasks if not t.done()]
         if pending_writes:  # turn log writes still in flight: the call summary must see every turn
             await asyncio.wait(pending_writes, timeout=5)
@@ -793,6 +991,13 @@ async def twilio_media_stream(websocket: WebSocket, business_id: str) -> None:
                     stream_sid = data.get("streamId") or start.get("streamId") or "STREAM_LIVE"
                     call_id = start.get("callId") or stream_sid
                     custom_params = parse_extra_headers(data.get("extra_headers"))
+                    try:  # the answer route stored the patient's number under this call (digits only): make it E.164
+                        caller_digits = get_redis_client().get(f"plivo:caller:{call_id}") or ""
+                    except Exception as e:
+                        caller_digits = ""
+                        logger.warning(f"[WS GATEWAY] could not read the caller number for {call_id}: {e}")
+                    if caller_digits.isdigit():
+                        custom_params["caller_number"] = "+" + caller_digits
                 else:
                     stream_sid = start.get("streamSid") or start.get("stream_sid") or start.get("stream_id") or "STREAM_LIVE"
                     call_id = start.get("callSid") or start.get("call_sid") or start.get("call_id") or stream_sid
@@ -815,7 +1020,9 @@ async def twilio_media_stream(websocket: WebSocket, business_id: str) -> None:
 
             elif event_type in ("mark", "playedStream"):  # Twilio mark / Plivo playedStream: audio before this point has played
                 mark_name = data.get("name") if event_type == "playedStream" else (data.get("mark") or {}).get("name")
-                session.barge_in.on_mark(mark_name)
+                lag = session.barge_in.on_mark(mark_name)
+                if lag is not None:
+                    session.record_playout(mark_name, lag)
                 if mark_name and mark_name == getattr(session, "_greeting_mark", None):
                     session._greeting_until = 0.0
                     logger.info(f"[GREETING] Telephony completed playing greeting (echoed mark={mark_name})")
@@ -827,6 +1034,12 @@ async def twilio_media_stream(websocket: WebSocket, business_id: str) -> None:
     except WebSocketDisconnect:
         logger.info(f"[TWILIO WS] Disconnected {session.call_id}")
     finally:
+        # Close our end first: returning from here does not close the socket, and while it stays open Plivo treats the
+        # <Stream> as running. A transferred call then waited ~28 s for the stream to time out before ringing the staff phone.
+        try:
+            await websocket.close()
+        except Exception:  # already closed by the provider
+            pass
         await session.stop()
 
 

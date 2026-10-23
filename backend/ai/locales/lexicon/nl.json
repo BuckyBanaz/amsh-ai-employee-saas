@@ -52,6 +52,9 @@
  "strings": {
   "fallback": "Het spijt me, ik heb op dit moment een storing. Kunt u dat nog eens zeggen, of zal ik u doorverbinden met de balie?",
   "no_transfer": "Het spijt me, ik kan u nu niet doorverbinden. Zal ik een bericht voor de balie opnemen?",
+  "transfer_unanswered": "Het spijt me, ons team kon uw oproep nu niet aannemen. Ik heb het als dringend gemarkeerd en iemand belt u zo snel mogelijk terug op dit nummer.",
+  "takeover_connecting": "Blijft u aan de lijn, ik verbind u nu door met het team van de kliniek.",
+  "recording_notice": "Let op: dit gesprek kan worden opgenomen om u beter van dienst te zijn.",
   "billing": "Facturatie en terugbetalingen worden door onze balie afgehandeld. Ik verbind u meteen door.",
   "frustrated": "Het spijt me echt van het ongemak. Ik verbind u meteen door met iemand van onze balie.",
   "unsure_claim": "Laat me dit even met u controleren. Kunt u de gegevens nog een keer bevestigen?",

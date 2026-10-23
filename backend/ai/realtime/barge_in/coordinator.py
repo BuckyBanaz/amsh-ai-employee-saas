@@ -36,6 +36,10 @@ class BargeInCoordinator:
         self.generation = 0  # +1 on every barge-in; lets a multi-sentence turn notice it was interrupted between sentences
         self._mark_seq = 0
         self._last_mark: Optional[str] = None
+        # mark -> when its audio should finish playing with zero network delay (playback_until when it was sent). The echo's
+        # lateness against that is the outbound delay the caller hears (tunnel + carrier + jitter buffer), which the turn
+        # latency report cannot see: it stops at "frame sent".
+        self._mark_due: Dict[str, float] = {}
 
     @property
     def is_speaking(self) -> bool:
@@ -57,12 +61,18 @@ class BargeInCoordinator:
         """A unique mark name to send after a sentence's audio; its echo means everything up to it has played."""
         self._mark_seq += 1
         self._last_mark = f"turn_end:{self._mark_seq}"
+        self._mark_due[self._last_mark] = self.playback_until
+        while len(self._mark_due) > 32:  # a provider that never echoes must not grow this
+            self._mark_due.pop(next(iter(self._mark_due)))
         return self._last_mark
 
-    def on_mark(self, name: Optional[str]) -> None:
-        """Twilio/Plivo echoed a mark. Only the latest one proves the queue is empty; older ones are ignored."""
+    def on_mark(self, name: Optional[str]) -> Optional[float]:
+        """Twilio/Plivo echoed a mark. Only the latest one proves the queue is empty; older ones are ignored.
+        Returns how many seconds later than zero-delay playback the echo came (None for an unknown or cleared mark)."""
+        due = self._mark_due.pop(name, None) if name else None
         if name and name == self._last_mark:
             self.playback_until = min(self.playback_until, self._clock())
+        return None if due is None else self._clock() - due
 
     async def handle_caller_speech(self, websocket: WebSocket, stream_sid: Optional[str], pcm: bool = False, provider: str = "twilio") -> Optional[Dict[str, Any]]:
         """Called when STT/VAD detects the caller has started talking. Only
@@ -73,6 +83,7 @@ class BargeInCoordinator:
 
         self.generation += 1
         self.playback_until = 0.0
+        self._mark_due.clear()  # a clear makes the provider echo pending marks at once: not a playout measurement
         task = self._speaking_task
         self._speaking_task = None
         result: Dict[str, Any] = {"generation": self.generation, "tts_task_cancelled": bool(task and not task.done()), "clear_sent": False}

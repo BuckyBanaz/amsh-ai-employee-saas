@@ -1,5 +1,6 @@
 {
   "greeting": "Hola, gracias por llamar a {business_name}. Soy la recepcionista de inteligencia artificial. ¿Cómo puedo ayudarle hoy?",
+  "greeting_returning": "Hola {name}, ¡qué gusto tenerle de nuevo en {business_name}! Soy la recepcionista de inteligencia artificial. ¿En qué puedo ayudarle hoy?",
   "ask_patient_name": "¿Me puede dar su nombre completo, por favor?",
   "ask_phone_number": "¿Cuál es su número de teléfono de contacto?",
   "ask_doctor_name": "¿Desea consultar con un médico en específico?",

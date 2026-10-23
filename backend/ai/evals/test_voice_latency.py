@@ -513,6 +513,31 @@ class BargeInPlayback(unittest.TestCase):
         c.on_mark(latest)
         self.assertFalse(c.is_speaking)
 
+    def test_mark_echo_reports_lateness_against_zero_delay_playback(self):
+        c, now = self._coordinator()
+        c.audio_sent(2.0)  # due at 102.0
+        first = c.next_mark()
+        c.audio_sent(1.0)  # queued behind it: due at 103.0
+        second = c.next_mark()
+        now["t"] = 102.4
+        self.assertAlmostEqual(c.on_mark(first), 0.4)
+        now["t"] = 103.25
+        self.assertAlmostEqual(c.on_mark(second), 0.25)
+        self.assertIsNone(c.on_mark(second))  # an echo is measured once
+        self.assertIsNone(c.on_mark("unknown"))
+
+    def test_marks_echoed_by_a_clear_are_not_measured(self):
+        c, _ = self._coordinator()
+        c.audio_sent(3.0)
+        mark = c.next_mark()
+
+        class WS:
+            async def send_text(self, text):
+                pass
+
+        run(c.handle_caller_speech(WS(), "MS1"))
+        self.assertIsNone(c.on_mark(mark))
+
     def test_barge_in_during_playback_clears_twilio_and_bumps_generation(self):
         c, _ = self._coordinator()
         c.audio_sent(3.0)
@@ -1050,3 +1075,272 @@ class FirstTokenDeadline(unittest.TestCase):
         llm_backend._COOLDOWN_UNTIL.clear()
         self.assertEqual(said, ["Hello there, how can I help?"])
         self.assertLess(took, 1.5)
+
+
+class HumanTransfer(unittest.TestCase):
+    """A transfer goes out through the provider carrying the call; when it cannot, the caller is told and the call stays up."""
+
+    def _session(self, provider):
+        from backend.ai.realtime.twilio import gateway
+
+        gw = GatewayTurn()
+        s, _ = gw._session(ScriptedBackend(reply("Ok.")))
+        self.addCleanup(gw.tearDown)
+        s.provider = provider
+        spoken = []
+
+        async def speak(text, emotion=None):
+            spoken.append(text)
+            return True
+
+        s._speak_turn = speak
+        return s, spoken, gateway
+
+    def test_plivo_call_is_moved_to_our_dial_xml(self):
+        from unittest.mock import patch
+
+        s, spoken, gateway = self._session("plivo")
+        s.call_id = "uuid-1"
+        seen = {}
+
+        async def transfer(call_uuid, url):
+            seen.update(uuid=call_uuid, url=url)
+            return True
+
+        async def no_twilio(*a):
+            raise AssertionError("a Plivo call must not go through Twilio")
+
+        with patch.object(gateway.plivo_client, "transfer_call", transfer), patch.object(gateway, "redirect_call", no_twilio):
+            ok = run(s._hand_off("<Response/>", {"phone_number": "+919812345678", "staff_name": "Front desk", "department": "front_desk"}))
+        self.assertTrue(ok)
+        self.assertEqual(seen["uuid"], "uuid-1")
+        self.assertIn("/api/voice/plivo/transfer?", seen["url"])
+        self.assertIn("staff_phone=%2B919812345678", seen["url"])
+        self.assertEqual(spoken, [])
+
+    def test_twilio_call_keeps_the_twiml_redirect(self):
+        from unittest.mock import patch
+
+        s, _, gateway = self._session("twilio")
+        seen = []
+
+        async def redirect(call_sid, twiml):
+            seen.append((call_sid, twiml))
+            return True
+
+        with patch.object(gateway, "redirect_call", redirect):
+            self.assertTrue(run(s._hand_off("<Response><Dial>+1</Dial></Response>", {"phone_number": "+1"})))
+        self.assertEqual(seen, [("CA1", "<Response><Dial>+1</Dial></Response>")])
+
+    def test_a_failed_transfer_is_said_and_the_call_stays_up(self):
+        from unittest.mock import patch
+
+        s, spoken, gateway = self._session("plivo")
+
+        async def refused(call_uuid, url):
+            return False
+
+        with patch.object(gateway.plivo_client, "transfer_call", refused):
+            self.assertFalse(run(s._hand_off(None, {"phone_number": "+919812345678"})))
+            self.assertFalse(run(s._hand_off(None, None)))  # no staff number at all
+        self.assertEqual(len(spoken), 2)
+        self.assertTrue(all("connect" in line for line in spoken))  # the language pack's "can't connect you" line
+        self.assertFalse(s.should_close)
+
+    def test_dashboard_takeover_on_plivo_silences_the_ai_announces_and_transfers(self):
+        from unittest.mock import patch
+
+        s, spoken, gateway = self._session("plivo")
+        cleared = []
+
+        async def clear(ws, sid, pcm=False, provider="twilio"):
+            cleared.append(provider)
+
+        s.barge_in.handle_caller_speech = clear
+        seen = {}
+
+        async def transfer(call_uuid, url):
+            seen["url"] = url
+            return True
+
+        generation = s.barge_in.generation
+        with patch.object(gateway.plivo_client, "transfer_call", transfer):
+            self.assertTrue(run(s.take_over("+919812345678", "<Response/>")))
+        self.assertGreater(s.barge_in.generation, generation)  # the running AI turn is stopped
+        self.assertEqual(cleared, ["plivo"])  # queued AI audio is cleared at the caller's end
+        self.assertEqual(len(spoken), 1)  # "please stay on the line, connecting you to our staff"
+        self.assertIn("staff_phone=%2B919812345678", seen["url"])
+        self.assertTrue(s.should_close)
+        s._enqueue_turn({"text": "hello?"})  # the caller speaks during the hand-off: the AI must not answer
+        self.assertEqual(s._turn_inbox, [])
+
+    def test_refused_takeover_leaves_the_ai_on_the_call(self):
+        from unittest.mock import patch
+
+        s, spoken, gateway = self._session("plivo")
+
+        async def clear(*a, **k):
+            return None
+
+        s.barge_in.handle_caller_speech = clear
+
+        async def refused(call_uuid, url):
+            return False
+
+        with patch.object(gateway.plivo_client, "transfer_call", refused):
+            self.assertFalse(run(s.take_over("+919812345678", None)))
+        self.assertFalse(s.should_close)
+        self.assertFalse(s._handing_off)  # the AI answers the caller again
+        self.assertEqual(len(spoken), 1)  # only the "connecting you" line; no "can't connect you" for a staff-side failure
+
+
+class OpeningNotice(unittest.TestCase):
+    """The recording notice is the call's first audio and plays while the call is still being set up; the greeting follows."""
+
+    def test_notice_plays_during_setup_then_the_greeting(self):
+        from unittest.mock import patch
+
+        from backend.ai.realtime.twilio import gateway
+
+        events = []
+
+        class WS:
+            async def send_text(self, text):
+                pass
+
+        async def slow_agent(*a, **k):
+            await asyncio.sleep(0.3)  # the LLM agent takes a while to build (prompt, facts, tools)
+            events.append("agent_ready")
+            return None
+
+        class STT:
+            def __init__(self, *a, **k):
+                pass
+
+        async def nothing(*a, **k):
+            return None
+
+        s = gateway.CallSession(WS(), "biz")
+
+        async def speak(text, emotion=None):
+            events.append(text)
+            return True
+
+        s._speak_turn = speak
+        s._connect_stt = nothing
+        s._watchdog = nothing
+        s._prewarm_fillers = nothing
+        s._warm_providers = lambda force=False: None
+        with patch.object(gateway, "load_vertical_name", lambda b: "clinic"), \
+             patch.object(gateway, "load_business_context", lambda b: ("Demo clinic", [])), \
+             patch.object(gateway, "load_agent_settings", lambda b: {"language": "en", "greeting": "Hello from Demo clinic."}), \
+             patch.object(gateway.policy_service, "notice_for", lambda b, lang: "This call may be recorded."), \
+             patch.object(gateway, "caller_memory", lambda b, p: ("", "")), \
+             patch.object(gateway.AgentRuntime, "create", slow_agent), \
+             patch.object(gateway, "record_call_start", lambda **k: None), \
+             patch.object(gateway, "DeepgramLiveConnection", STT), \
+             patch.object(gateway, "PICKUP_WINDOW_S", 0.0):
+            run(s.start("MS1", "CA-notice", "+919876543210"))
+        self.assertEqual(events, ["This call may be recorded.", "agent_ready", "Hello from Demo clinic."])
+        self.assertFalse(s._is_greeting)
+
+
+class SoundCues(unittest.TestCase):
+    """A laugh the transcript drops is still heard: scored from the caller's own audio and turned into the turn's mood."""
+
+    def test_mulaw_decoder_matches_the_standard(self):
+        from backend.ai.realtime.audio.paralinguistic import _MULAW
+
+        try:
+            import audioop  # removed in Python 3.13: compare where it still exists
+        except ImportError:
+            self.skipTest("no audioop to compare with")
+        import numpy as np
+
+        self.assertTrue((np.frombuffer(audioop.ulaw2lin(bytes(range(256)), 2), dtype="<i2") == _MULAW).all())
+
+    def test_missing_model_means_no_cues_not_a_broken_call(self):
+        from pathlib import Path
+
+        from backend.ai.realtime.audio.paralinguistic import CueDetector
+
+        d = CueDetector(Path("/nonexistent/yamnet.tflite"))
+        self.assertFalse(d.available())
+        self.assertIsNone(d.score(b"\xff" * 8000))
+
+    def test_silence_scores_no_laughter(self):
+        from backend.ai.realtime.audio.paralinguistic import LAUGHTER_MIN, cue_detector
+
+        if not cue_detector.available():
+            self.skipTest("YAMNet model/runtime not installed here")
+        cues = cue_detector.score(b"\xff" * 16000)  # 2 s of mulaw silence
+        self.assertLess(cues["laughter"], LAUGHTER_MIN)
+        self.assertLess(cues["ms"], 500)
+
+    def test_deepgram_keeps_the_audio_it_heard_by_word_offset(self):
+        conn = DeepgramLiveConnection(encoding="mulaw")
+
+        class WS:
+            async def send(self, b):
+                pass
+
+        conn._ws = WS()
+        for i in range(4):  # 4 s of audio, one byte value per second
+            run(conn.send_audio(bytes([i]) * 8000))
+        self.assertEqual(conn.audio_between(1.0, 2.0), bytes([1]) * 8000)
+        self.assertEqual(conn.audio_between(3.5), bytes([3]) * 4000)  # to the end
+        from backend.ai.speech.stt import deepgram
+
+        conn._recent = bytearray(conn._recent[-8000:])  # as if only the last second were kept
+        conn._recent_start = 3 * 8000
+        self.assertEqual(conn.audio_between(0.0, 1.0), b"")  # older audio is gone, never mis-aligned
+        self.assertGreater(deepgram.RECENT_AUDIO_S, 10)
+
+    def test_a_heard_laugh_makes_the_turn_amused_unless_the_words_are_serious(self):
+        from backend.ai.engine.agent.emotion import EmotionState
+
+        e = EmotionState()
+        self.assertIsNone(e.hear("kya baat hai yaar"))
+        self.assertIsNotNone(e.hear("kya baat hai yaar", laughed=True))
+        self.assertEqual(e.mood, "amused")
+        e.hear("mere daant mein bahut dard ho raha hai", laughed=True)  # nervous laugh about pain: still serious
+        self.assertNotEqual(e.mood, "amused")
+
+    def test_cues_reach_the_agent_for_one_turn_only(self):
+        backend = ScriptedBackend(reply("Haha, thank you!"), reply("Sure."))
+        engine, _ = make_engine(backend)
+        engine.audio_cues = {"laughter": 0.3, "sigh": 0.0, "ms": 9.0}
+        run(engine.turn("kya baat hai yaar"))
+        notes = [m["content"] for m in backend.seen[0]["messages"] if m.get("role") == "system"]
+        self.assertTrue(any("laughing" in n for n in notes))  # the amused mood note
+        self.assertIsNone(engine.audio_cues)
+        run(engine.turn("ok"))
+        notes = [m["content"] for m in backend.seen[-1]["messages"] if m.get("role") == "system"]
+        self.assertFalse(any("laughing" in n for n in notes))
+
+    def test_gateway_scores_the_turn_audio_for_the_agent(self):
+        from unittest.mock import patch
+
+        gw = GatewayTurn()
+        s, _ = gw._session(ScriptedBackend(reply("Ok.")))
+        self.addCleanup(gw.tearDown)
+        conn = DeepgramLiveConnection(encoding="mulaw")
+        conn._recent = bytearray(b"\x01" * 8000 + b"\x02" * 8000)
+        s.stt = conn
+        seen = {}
+
+        def fake_score(audio, encoding="mulaw", rate=8000):
+            seen["audio"] = audio
+            return {"laughter": 0.4, "sigh": 0.0, "ms": 5.0}
+
+        from backend.ai.realtime.twilio import gateway
+
+        with patch.object(gateway.cue_detector, "score", fake_score):
+            run(s._hear_cues(1.5, "kya baat hai yaar"))
+        self.assertEqual(seen["audio"], b"\x02" * 8000)  # from 0.5 s before the first word to now
+        self.assertEqual(s.agent_rt.engine.audio_cues["laughter"], 0.4)
+
+    def test_caller_audio_capture_is_flagged_for_production(self):
+        from backend.server.common.config import Settings, production_problems
+
+        self.assertTrue(any("CAPTURE_CALLER_AUDIO" in p for p in production_problems(Settings(CAPTURE_CALLER_AUDIO=True))))

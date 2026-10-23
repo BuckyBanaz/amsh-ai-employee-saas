@@ -24,10 +24,14 @@ MIN_BODY = 40
 FRAMEWORKS = ("DPDP", "GDPR", "HIPAA")
 REGION_CHOICES = ["*", *REGION_PROFILES.keys(), *FRAMEWORKS]
 
-BUILTIN_RECORDING_NOTICE = {
-    "en": "Please note that this call may be recorded to help us serve you better.",
-    "hi": "कृपया ध्यान दें, सेवा बेहतर बनाने के लिए यह कॉल रिकॉर्ड की जा सकती है।",
-}
+def _builtin_recording_notices() -> Dict[str, str]:
+    """The platform's default notice in every language with a pack (`strings.recording_notice`); wording is data, not code."""
+    from backend.ai.lexicon import language_pack, pack_languages
+
+    return {code: text for code in pack_languages() if (text := (language_pack(code).get("strings") or {}).get("recording_notice"))}
+
+
+BUILTIN_RECORDING_NOTICE = _builtin_recording_notices()
 
 
 def _aware(dt: Optional[datetime]) -> Optional[datetime]:
@@ -175,6 +179,27 @@ def greeting_with_notice(db: Session, business: Business, greeting: str, record_
         return greeting
     notice = recording_notice(rule_data(db, business.country or "", business.vertical or ""), language)
     return f"{greeting} {notice}".strip() if notice else greeting
+
+
+def notice_for(business_id: str, language: Optional[str] = None) -> str:
+    """Blocking (run it in a thread). Only the recording notice this business's calls open with ("" when it does not record or its
+    region needs none). The phone gateway plays it the moment the call is answered, before the greeting, from cached audio.
+    Fails open like greeting_for: no notice rather than no call."""
+    import logging
+
+    from backend.ai.engine.agent.facts import load_profile
+    from backend.ai.engine.conversation.i18n import language_code
+    from backend.server.database.session import SessionLocal
+
+    try:
+        with SessionLocal() as db:
+            business = db.get(Business, business_id)
+            if not business or not load_profile(db, business_id).record:
+                return ""
+            return recording_notice(rule_data(db, business.country or "", business.vertical or ""), language_code(language))
+    except Exception:
+        logging.getLogger(__name__).exception("[POLICY] could not work out the recording notice for %s", business_id)
+        return ""
 
 
 def greeting_for(business_id: str, greeting: str, language: Optional[str] = None) -> str:

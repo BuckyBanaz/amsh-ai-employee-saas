@@ -92,6 +92,8 @@ def load_agent_settings(business_id: str) -> Dict[str, Any]:
             "max_duration_minutes": (cfg.get("limits") or {}).get("max_duration_minutes"),
             "tts_speed": resolve_speed((cfg.get("voice_settings") or {}).get("speed"), cfg.get("personality")),
             "tts_emotion": (cfg.get("voice_settings") or {}).get("emotion") or None,
+            # Behavior tab "Remember returning customers" (on unless switched off): greet by name, know their last visits
+            "remember_callers": (cfg.get("capabilities") or {}).get("remember") is not False,
         }
 
 

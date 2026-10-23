@@ -1,5 +1,6 @@
 {
   "greeting": "Bonjour, merci d'appeler {business_name}. Je suis la réceptionniste virtuelle. Comment puis-je vous aider aujourd'hui ?",
+  "greeting_returning": "Bonjour {name}, ravie de vous retrouver chez {business_name} ! Je suis la réceptionniste virtuelle. Comment puis-je vous aider aujourd'hui ?",
   "ask_patient_name": "Puis-je avoir votre nom complet, s'il vous plaît ?",
   "ask_phone_number": "À quel numéro de téléphone pouvons-nous vous joindre ?",
   "ask_doctor_name": "Souhaitez-vous voir un médecin en particulier ?",

@@ -18,6 +18,7 @@ from sqlalchemy import desc, select
 from sqlalchemy.orm import Session, joinedload
 
 from backend.ai.realtime.twilio.call_control import redirect_call
+from backend.ai.realtime.plivo.client import normalize_e164, plivo_client, transfer_url as plivo_transfer_url
 from backend.ai.realtime.twilio.gateway import get_active_call_session
 from backend.server.api.routes._shared import get_business_or_404, require_membership
 from backend.server.auth.security import get_current_user
@@ -449,7 +450,8 @@ async def takeover_call(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
-    """Take over a live call: silences the AI receptionist, bridges caller to staff phone line, and logs the handoff."""
+    """Take over a live call: the AI goes silent, the caller is connected to a staff phone through the call's own provider
+    (Twilio or Plivo), and the handoff is logged. If the provider refuses, nothing is marked and the AI keeps the call."""
     biz = get_business_or_404(business_id, db)
     require_membership(business_id, current_user)
 
@@ -457,55 +459,49 @@ async def takeover_call(
     if not call:
         raise HTTPException(status_code=404, detail="Call log not found")
 
-    # 1. Resolve destination phone number for the takeover
+    # 1. Who picks up: the number typed in the dashboard, else the Escalation-tab transfer number, a staff phone, the clinic line
     agent = db.execute(select(Agent).where(Agent.business_id == business_id).order_by(Agent.created_at.asc())).scalars().first()
     agent_cfg = (agent.config or {}) if agent else {}
-    target_phone = (payload.phone_number if payload and payload.phone_number else None)
+    target_phone = (payload.phone_number if payload and payload.phone_number else None) or agent_cfg.get("transfer_phone")
     if not target_phone:
-        target_phone = agent_cfg.get("transfer_phone")
-    if not target_phone:
-        staff_row = db.execute(select(Staff).where(Staff.business_id == business_id)).scalars().first()
-        if staff_row and getattr(staff_row, "phone", None):
-            target_phone = staff_row.phone
-    if not target_phone and getattr(biz, "business_phone", None):
-        target_phone = biz.business_phone
-    if not target_phone:
-        target_phone = getattr(current_user, "email", "Clinic Front Desk")
+        staff_row = db.execute(select(Staff).where(Staff.business_id == business_id, Staff.phone.isnot(None))).scalars().first()
+        target_phone = getattr(staff_row, "phone", None) or getattr(biz, "business_phone", None)
+    target_phone = normalize_e164(target_phone or "")
+    if len(target_phone) < 11:
+        raise HTTPException(status_code=400, detail="No staff phone number to connect the caller to. Add a transfer number in AI Studio > Escalation.")
 
-    # 2. Stop and silence active AI WebSocket session if active
+    # 2. Hand the call over through its provider. The live session (this process) also silences the AI first; without one the
+    #    provider is told directly. Twilio call SIDs start with "CA"; anything else here is a Plivo CallUUID.
+    twiml = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<Response>'
+        '<Say voice="Polly.Joanna">Connecting you to our clinic staff now, please stay on the line.</Say>'
+        f'<Dial timeout="25" record="record-from-answer"><Number>{target_phone}</Number></Dial>'
+        '</Response>'
+    )
     session = get_active_call_session(call_id)
     if session:
-        session.should_close = True
-        try:
-            if session.agent_rt and session.agent_rt.engine:
-                session.agent_rt.engine.request_stop()
-        except Exception as e:
-            logger.debug(f"[TAKEOVER] Engine stop error: {e}")
+        handed_off = await session.take_over(target_phone, twiml)
+    elif call_id.startswith("CA"):
+        handed_off = await redirect_call(call_id, twiml)
+    else:
+        handed_off = await plivo_client.transfer_call(call_id, plivo_transfer_url(target_phone, "Staff", "front_desk", None))
+    if not handed_off:
+        logger.warning(f"[TAKEOVER] Call {call_id}: the provider did not accept the transfer to {target_phone}; the AI keeps the call")
+        raise HTTPException(status_code=502, detail="Could not connect the caller to staff right now. The AI is still on the call.")
 
-    # 3. If live telephony (Twilio), execute real live call transfer
-    redirected = False
-    if call_id.startswith("CA") and target_phone and target_phone.startswith("+"):
-        twiml = (
-            '<?xml version="1.0" encoding="UTF-8"?>'
-            '<Response>'
-            '<Say voice="Polly.Joanna">Connecting you to our clinic staff now, please stay on the line.</Say>'
-            f'<Dial timeout="25" record="record-from-answer"><Number>{target_phone}</Number></Dial>'
-            '</Response>'
-        )
-        redirected = await redirect_call(call_id, twiml)
-
-    # 4. Update Call record outcome and summary
+    # 3. Log it
     call.outcome = "transferred"
     call.summary = f"Call taken over from dashboard by {current_user.email} and transferred to {target_phone}."
     db.commit()
 
-    logger.info(f"[TAKEOVER] Call {call_id} handed off to staff {target_phone} (telephony redirected={redirected})")
+    logger.info(f"[TAKEOVER] Call {call_id} handed off to staff {target_phone}")
     return {
         "success": True,
         "call_id": call_id,
         "transferred_to": target_phone,
-        "telephony_redirected": redirected,
-        "message": f"Call successfully taken over. Connecting caller to {target_phone}.",
+        "telephony_redirected": True,
+        "message": f"Call taken over. Connecting caller to {target_phone}.",
     }
 
 

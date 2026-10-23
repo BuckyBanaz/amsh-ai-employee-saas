@@ -84,6 +84,14 @@ def _controller_note() -> str:
     return load_prompts("engine_notes")["controller_note"]
 
 
+def _phone_offer_note() -> str:
+    return load_prompts("engine_notes")["phone_offer"]
+
+
+def _phone_hint_note() -> str:
+    return load_prompts("engine_notes")["phone_hint"]
+
+
 def _multi_note() -> str:
     return load_prompts("engine_notes")["multi_note"]
 
@@ -137,6 +145,7 @@ class CallState:
     last_ai_turn: str = ""
     caller_words: int = 0  # length of the caller's latest message
     booked: bool = False
+    calling_tail: Optional[str] = None  # last 4 digits of the number the caller is calling from, when the provider gave it
 
     # ------------------------------------------------------------------ reading the caller
     def observe(self, utterance: str, today: date, language: Optional[str] = None, emotion: Optional[str] = None,
@@ -238,11 +247,24 @@ class CallState:
             if self.caller_words and self.caller_words <= 4
             else "Keep it to one or two short sentences unless the caller asked for detail."
         )
-        return _controller_note().format(
+        if nxt == "phone" and self.calling_tail:
+            # The model kept asking callers to read out the number we already have: offer it instead (the agent then books
+            # on it once they agree, see caller_number_ok).
+            ask = _phone_offer_note().format(tail=self.calling_tail)
+        elif nxt:
+            ask = f"ask only for {nxt}, in one short question"
+        else:
+            ask = "nothing is missing for a booking; move to confirm or answer what was asked"
+        note = _controller_note().format(
             known=", ".join(f"{k}={v}" for k, v in known.items()) or "nothing yet",
-            next=(f"ask only for {nxt}, in one short question" if nxt else "nothing is missing for a booking; move to confirm or answer what was asked"),
+            next=ask,
             brevity=brevity,
         )
+        if self.calling_tail and nxt != "phone" and "phone" in self.missing():
+            # The model asks for the phone out of order (before the time is picked) and then claims it has no number: the
+            # calling number is on file whenever the provider gave it, whatever is asked next.
+            note += " " + _phone_hint_note().format(tail=self.calling_tail)
+        return note
 
     # ------------------------------------------------------------------ hesitation
     def is_hesitation(self, utterance: str) -> bool:
@@ -273,7 +295,11 @@ class CallState:
         return asked - {"time"} if {"date", "time"} <= asked else asked
 
     def multi_correction(self, slots: Iterable[str]) -> str:
-        return _multi_note().format(slots=", ".join(sorted(set(slots))))
+        """Names the one slot to ask, in booking order. Leaving the choice to the model ("the item the CALL STATE note names")
+        let it pick the first of an alphabetical list: it asked for the name before the service."""
+        ordered = sorted(set(slots), key=lambda s: SLOT_ORDER.index(s) if s in SLOT_ORDER else len(SLOT_ORDER))
+        nxt = self.next_needed() or (ordered[0] if ordered else "")
+        return _multi_note().format(slots=", ".join(ordered), next=nxt)
 
     # ------------------------------------------------------------------ repeated questions
     def repeat_ask(self, sentence: str) -> Optional[str]:

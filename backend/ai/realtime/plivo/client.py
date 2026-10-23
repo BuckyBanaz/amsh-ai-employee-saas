@@ -8,6 +8,8 @@ at our answer URL (/api/voice/plivo/incoming), which is where the call is bridge
 
 import logging
 from typing import Any, Dict, Optional
+from urllib.parse import urlencode
+
 import httpx
 
 from backend.server.common.config import get_settings
@@ -23,6 +25,14 @@ def normalize_e164(number: str, default_country_code: str = "91") -> str:
     if len(digits) == 10:
         digits = default_country_code + digits
     return f"+{digits}" if digits else ""
+
+
+def transfer_url(staff_phone: str, staff_name: str, department: str, language: Optional[str]) -> str:
+    """The XML URL a live Plivo call is moved to for a human transfer (routes/plivo.py /transfer: a <Dial> to the staff)."""
+    from backend.ai.realtime.twilio.call_control import build_base_url
+
+    query = urlencode({"staff_phone": staff_phone, "staff_name": staff_name, "department": department, "lang": language or "en"})
+    return f"{build_base_url()}/api/voice/plivo/transfer?{query}"
 
 
 class PlivoClient:
@@ -78,6 +88,28 @@ class PlivoClient:
                 return resp.json()
             logger.error(f"[PLIVO] Outbound call failed ({resp.status_code}): {resp.text}")
             return {"error": resp.text, "status_code": resp.status_code}
+
+    async def transfer_call(self, call_uuid: str, aleg_url: str) -> bool:
+        """Moves a live call (its caller leg) to new XML at `aleg_url`: Plivo ends the current <Stream> and runs what that
+        URL returns, e.g. a <Dial> to clinic staff. Plivo's counterpart of Twilio's live-call redirect."""
+        if not self.is_configured():
+            logger.warning("[PLIVO] credentials not configured: cannot transfer call %s", call_uuid)
+            return False
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.post(
+                    f"{self.base_url}/Call/{call_uuid}/",
+                    json={"legs": "aleg", "aleg_url": aleg_url, "aleg_method": "POST"},
+                    auth=(self.auth_id, self.auth_token),
+                )
+        except Exception as e:
+            logger.error(f"[PLIVO] Transfer of {call_uuid} failed: {e}")
+            return False
+        if resp.status_code in (200, 201, 202):
+            logger.info(f"[PLIVO] Call {call_uuid} transferred")
+            return True
+        logger.error(f"[PLIVO] Transfer of {call_uuid} failed ({resp.status_code}): {resp.text}")
+        return False
 
     async def send_sms(
         self,

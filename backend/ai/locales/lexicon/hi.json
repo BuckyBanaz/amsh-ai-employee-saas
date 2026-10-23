@@ -195,6 +195,9 @@
  "strings": {
   "fallback": "Maaf kijiye, mujhe abhi thodi dikkat aa rahi hai. Kya aap dobara bol sakte hain, ya main aapko front desk se connect kar doon?",
   "no_transfer": "Maaf kijiye, abhi main aapko connect nahi kar pa rahi hoon. Kya main front desk ke liye message le loon?",
+  "transfer_unanswered": "Maaf kijiye, abhi hamare staff call nahi utha paaye. Maine ise urgent mark kar diya hai, jaldi hi koi aapko isi number par call back karega.",
+  "takeover_connecting": "Kripya line par bane rahiye, main aapko abhi hamare clinic staff se connect kar rahi hoon.",
+  "recording_notice": "कृपया ध्यान दें, सेवा बेहतर बनाने के लिए यह कॉल रिकॉर्ड की जा सकती है।",
   "billing": "Billing aur refund front desk team dekhti hai. Main abhi aapko connect karti hoon.",
   "frustrated": "Takleef ke liye mujhe bahut khed hai. Main abhi aapko front desk se connect karti hoon.",
   "unsure_claim": "Ek baar main aapse details dobara confirm kar loon. Kya aap phir se bata sakte hain?",
@@ -203,13 +206,24 @@
  },
  "human_request": {
   "who": "(?:इंसान|इन्सान|असली\\s*(?:व्यक्ति|इंसान)|किसी\\s*(?:से|इंसान\\s*से)\\s*बात|मैनेजर|कर्मचारी|स्टाफ)|\\b(?:insaan|insan|kisi\\s+se\\s+baat|kisi\\s+insaan|asli\\s+insaan|manager\\s+se)\\b",
-  "ask": "बात|मिला|कनेक्ट|ट्रांसफर|चाहिए|चाहता|चाहती|baat|milao|connect|transfer|chahiye"
+  "ask": "बात\\s*(?:करा|करवा|करनी|करना\\s*(?:है|चाह))|मिला(?:ओ|इए|ईए|दो|दीजिए|\\s+दो)|मिलवा|कनेक्ट|ट्रांसफर|चाहिए|चाहता|चाहती|\\bbaat\\s+(?:kara|karwa|karva|karni|karna\\s+(?:hai|chah))|\\bmila(?:o|iye|do|\\s+do)\\b|\\bmilwa|\\bconnect|\\btransfer|\\bchahiye|\\bchahta|\\bchahti"
  },
  "ask_patterns": [
   "\\b(?:in|mein|me)\\s+hindi\\b|\\bhindi\\s+(?:mein|me|main)\\b|\\bhindi\\s+bol|हिंदी\\s*में|हिन्दी\\s*में|हिंदी\\s*बोल|हिन्दी\\s*बोल|इन\\s*हिं?न?्?दी"
  ],
  "farewell_patterns": [
   "\\b(?:alvida|phir\\s+milte|kal\\s+baat|baad\\s+mein\\s+baat|bas\\s+itna(?:\\s+hi)?|shukriya\\s+bye|theek\\s+hai\\s+bye)\\b|अलविदा|फिर\\s+मिलते|बाय|गुड\\s*नाइट|बस\\s+इतना|कल\\s+बात"
+ ],
+ "connect_offer_patterns": [
+  "कनेक्ट|ट्रांसफर|फ्रंट\\s*डेस्क|स्टाफ\\s+से|बात\\s+(?:करवा|करा)",
+  "\\b(?:connect|transfer|front\\s*desk|staff\\s+se|baat\\s+(?:karva|kara))"
+ ],
+ "same_number_patterns": [
+  "\\b(?:vahee|vahi|wahi|wohi|yahee|yahi|isee|isi|usee|usi)\\s+(?:vaalaa\\s+|waala\\s+|wala\\s+)?(?:phone\\s+|mobile\\s+)?(?:number|nambar)\\b",
+  "\\bjis\\s+(?:number|nambar)\\s+se\\s+(?:\\w+\\s+){0,4}(?:call|kol|phone)",
+  "\\b(?:paas|pass)\\s+(?:already\\s+|pahale\\s+se\\s+|pehle\\s+se\\s+)?(?:hai\\s+)?(?:meraa|mera)\\s+(?:phone\\s+|mobile\\s+)?(?:number|nambar)\\b",
+  "\\b(?:meraa|mera)\\s+(?:phone\\s+|mobile\\s+)?(?:number|nambar)\\s+(?:to\\s+)?(?:aapake|aapke|tumhaare|tumhare)\\s+paas\\b",
+  "वही\\s+नंबर|जिस\\s+नंबर\\s+से"
  ],
  "hangup_patterns": [
   "\\b(?:call\\s+(?:cut|kaat)|phone\\s+rakh|cut\\s+kar\\s+(?:do|sakti|sakte))\\b|कॉल\\s+(?:कट|काट)|फोन\\s+रख"

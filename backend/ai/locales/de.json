@@ -1,5 +1,6 @@
 {
   "greeting": "Hallo, danke für Ihren Anruf bei {business_name}. Ich bin die KI-Rezeptionistin. Wie kann ich Ihnen heute helfen?",
+  "greeting_returning": "Hallo {name}, willkommen zurück bei {business_name}! Ich bin die KI-Rezeptionistin. Wie kann ich Ihnen heute helfen?",
   "ask_patient_name": "Darf ich bitte Ihren vollständigen Namen haben?",
   "ask_phone_number": "Unter welcher Telefonnummer erreichen wir Sie am besten?",
   "ask_doctor_name": "Möchten Sie zu einer bestimmten Ärztin oder einem bestimmten Arzt?",

@@ -51,6 +51,9 @@
  "strings": {
   "fallback": "Lo siento, estoy teniendo un problema en este momento. ¿Podría repetirlo, o prefiere que le pase con recepción?",
   "no_transfer": "Lo siento, no puedo pasarle con recepción ahora mismo. ¿Quiere que le tome un mensaje para recepción?",
+  "transfer_unanswered": "Lo siento, nuestro personal no ha podido atender su llamada ahora mismo. La he marcado como urgente y alguien le devolverá la llamada a este número en breve.",
+  "takeover_connecting": "Por favor, no cuelgue; le estoy pasando ahora con el personal de la clínica.",
+  "recording_notice": "Le informamos de que esta llamada puede ser grabada para ofrecerle un mejor servicio.",
   "billing": "Los pagos y reembolsos los gestiona nuestro equipo de recepción. Le paso con ellos ahora mismo.",
   "frustrated": "Lamento mucho las molestias. Le paso ahora mismo con alguien de recepción.",
   "unsure_claim": "Permítame confirmar esto con usted primero. ¿Podría confirmarme los datos una vez más?",

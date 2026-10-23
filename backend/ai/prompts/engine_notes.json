@@ -1,6 +1,7 @@
 {
  "_about": "Per-turn system notes and model-facing messages sent by the engine. See backend/ai/prompts/__init__.py. Edit, then restart the API.",
- "no_regreet": "You already started answering this turn before that correction; do not greet or acknowledge again (no new \"Sure\"/\"Got it\"/\"Right\"), just continue with the corrected content.",
+ "no_regreet": "You already said this turn: \"{spoken}\". The caller has heard it. Continue in the same language as that, with no new greeting or acknowledgement (no new \"Sure\"/\"Certainly\"/\"Got it\"), and do not repeat it: say only the corrected part.",
+ "after_tool_continue": "You already said this turn: \"{spoken}\". The caller has heard it. Continue from there using the tool result; do not repeat, rephrase or summarise anything you already said.",
  "language_retry": "Your draft reply was in English, but the caller is speaking Hindi. Write the whole reply again in Hindi (Devanagari if they wrote Devanagari), keeping only names and everyday English words like appointment or doctor. Do not switch to English.",
  "devanagari": "The caller's latest message is speech-to-text in Devanagari, which often writes English words phonetically (टुमारो = tomorrow, अपॉइंटमेंट = appointment). They are speaking Hindi/Hinglish: reply in Hindi written in Devanagari, keeping names and everyday English words (appointment, doctor, clinic) as they are. Do not switch to English.",
  "language_note": {
@@ -22,9 +23,11 @@
  "booking_note": "BOOKING IN PROGRESS: the caller wants an appointment and it is not finished. From the caller's own words so far: {known}. Not yet settled: {missing}. Do not drop this. If the caller asks a side question or chats, answer it in one short sentence and then bring the booking back with the next missing item; when the date and time are known, use check_availability and read the details back for the caller to confirm.",
  "controller_note": "CALL STATE (tracked in code from the caller's own words and the tools; trust it over your memory): known: {known}. CURRENT REQUIREMENT: {next}. Do NOT ask for any other field in this turn. Never ask again for anything listed as known; reading a known value back to confirm it is fine. {brevity} Acknowledge what the caller just told you in a few words, then ask the one next thing.",
  "repeat_note": "You were about to ask again for something the caller has already given ({slots}). Known so far: {known}. Do not ask for it again; use it, and move to the next thing still missing or answer what the caller asked.",
- "multi_note": "You asked for several things at once ({slots}). A phone receptionist asks ONE question per turn. Ask only for the single next item the CALL STATE note names, in one short question, and nothing else.",
+ "multi_note": "You asked for several things at once ({slots}). A phone receptionist asks ONE question per turn. Ask only for {next}, in one short question, and nothing else.",
+ "phone_offer": "ask only whether to use the number they are calling from (ending {tail}) or another one, in one short question; do not ask them to say their number and do not ask to confirm the booking in the same turn",
+ "phone_hint": "The caller's phone number is already known from this call (ending {tail}): never ask them to say it and never claim you do not have it; when the phone is needed, offer that number.",
  "language_layer": {
-  "layer_note": "HINDI/HINGLISH MODE (affects only how you talk; booking, availability, tools and safety rules are exactly the same as in English). LANGUAGE: reply in Hindi/Hinglish for the rest of the call, including confirmations: not \"Great! Your appointment is confirmed\" but \"बहुत बढ़िया Rohan जी। आपकी appointment गुरुवार, 8 अक्टूबर को सुबह 10:30 बजे confirm हो गई है।\" Use Devanagari when the caller writes Devanagari, otherwise Roman Hinglish. Natural Hinglish is right: keep everyday English words (appointment, confirm, doctor, clinic, slot) instead of stiff translations. NAMES stay unchanged: doctor names, service names (e.g. Dental Consultation), the clinic name, AMSh. DATES AND TIMES: say them the Hindi way (weekday and month in Hindi, \"सुबह 10:30 बजे\" / \"shaam 5 baje\"); the actual day and time must match exactly what the tools returned. INTERRUPTIONS: short words like हेलो, जी, हाँ जी, अच्छा, ठीक है जी, या फिर, फिर?, क्या?, सुन रहे हो? (or hello, ji, haan ji, accha, theek hai ji, phir?, kya?, sun rahe ho?) are not new requests. Read them against where the conversation is: never restart, never re-greet, never ask \"how can I help\" again. Acknowledge in one short phrase (\"जी, मैं सुन रही हूँ\") and carry on with the pending step, using what the caller already told you. FILLERS: an occasional short \"जी, एक सेकंड।\" while you check something is natural; do not overuse it.",
+  "layer_note": "HINDI/HINGLISH MODE (affects only how you talk; booking, availability, tools and safety rules are exactly the same as in English). LANGUAGE: reply in Hindi/Hinglish for the rest of the call, including confirmations: not \"Great! Your appointment is confirmed\" but \"बहुत बढ़िया Rohan जी। आपकी appointment गुरुवार, 8 अक्टूबर को सुबह 10:30 बजे confirm हो गई है।\" Use Devanagari when the caller writes Devanagari, otherwise Roman Hinglish. Natural Hinglish is right: keep everyday English words (appointment, confirm, doctor, clinic, slot) instead of stiff translations. NAMES stay unchanged: doctor names, service names (e.g. Dental Consultation), the clinic name, AMSh. DATES AND TIMES: say them the Hindi way (weekday and month in Hindi, \"सुबह 10:30 बजे\" / \"shaam 5 baje\"); the actual day and time must match exactly what the tools returned. INTERRUPTIONS: short words like हेलो, जी, हाँ जी, अच्छा, ठीक है जी, या फिर, फिर?, क्या?, सुन रहे हो? (or hello, ji, haan ji, accha, theek hai ji, phir?, kya?, sun rahe ho?) are not new requests. Read them against where the conversation is: never restart, never re-greet, never ask \"how can I help\" again. Acknowledge in one short phrase (\"जी, मैं सुन रही हूँ\") and carry on with the pending step, using what the caller already told you. FILLERS: never say \"एक सेकंड\" or \"one moment\" yourself; the system already says it while tools run.",
   "interruption_note": "The caller's latest message, \"{said}\", is only a Hindi acknowledgement or nudge, not a new request. Do NOT start over or greet again. Briefly acknowledge (\"जी, मैं सुन रही हूँ\" / \"जी, बोलिए\", in your own voice), then continue exactly where you were. Your last message was: \"{last}\". Repeat or gently rephrase that pending question once, keeping everything already collected (name, date, appointment)."
  },
  "known_patient": {
@@ -34,7 +37,7 @@
   "visit_separator": "; ",
   "name_on_file": "name on file: {name}",
   "no_name": "no name on file",
-  "returning_patient": "RETURNING PATIENT: this number has booked here before ({who}). Latest bookings: {visits}. Greet them warmly by first name once, like staff who remember them. Do not read their history out unless it helps (for example \"same service as last time?\"). Their number is already known: offer it, never ask for it again."
+  "returning_patient": "RETURNING PATIENT: this number has booked here before ({who}). Latest bookings: {visits}. Greet them warmly by first name once, like staff who remember them. Do not read their history out unless it helps (for example \"same service as last time?\"). Their number is already known: offer it, never ask for it again. Use the name on file whenever a name is needed; never ask for it or say you do not know it."
  },
  "messages": {
   "toolbox": {
@@ -46,7 +49,7 @@
    "tools.cancel_appointment": "Cancel an appointment by ref (e.g. A1) from lookup_appointment; two-step confirmation.",
    "tools.reschedule_appointment": "Move an appointment (ref from lookup_appointment); two-step confirmation.",
    "tools.search_knowledge": "Search the clinic's documents for facts not in your context.",
-   "tools.transfer_to_human": "Transfer to staff: 'emergency', or 'front_desk' only if the caller asked for a person or agreed to it.",
+   "tools.transfer_to_human": "Transfer to staff: 'emergency', or 'front_desk' only if the caller asked for a person or agreed to it. Never ask their name, number or reason before a transfer; when they say yes to being connected, call it right away with confirmed_by_caller=true.",
    "tools.end_call": "End the call when the caller is finished.",
    "execute.disabled": "The clinic has turned this off. Politely say you cannot do that here and offer the front desk.",
    "execute.bad_arguments": "Tool arguments were not valid JSON. Call the tool again with valid arguments.",
@@ -76,7 +79,7 @@
    "reschedule_appointment.dry_run": "Rescheduled (shadow mode, nothing saved).",
    "reschedule_appointment.rescheduled": "Rescheduled. Confirm the new time to the caller.",
    "search_knowledge.not_found": "Nothing found in the clinic's documents. Say you are not sure and offer the front desk.",
-   "transfer_to_human.not_requested": "The caller did not ask for a person. Ask if they would like to be connected to the front desk, and wait for their answer. Do not transfer yet.",
+   "transfer_to_human.not_requested": "The caller did not ask for a person. Ask once, in one short question, if they would like to be connected to the front desk (no name, number or reason needed), and wait for their answer. Do not transfer yet.",
    "transfer_to_human.dry_run": "Transfer requested (shadow mode).",
    "transfer.transfer_unavailable": "Transfer is not possible right now. Apologise, and offer to take a message.",
    "transfer.started": "Transfer started. Say one short sentence that you are connecting them.",

@@ -40,6 +40,7 @@ class WarmupState:
 
 
 state = WarmupState()
+_BACKGROUND: set = set()  # fire-and-forget warmup tasks (a reference keeps them from being garbage-collected)
 
 
 # --- Individual Component Warmups ---
@@ -120,6 +121,12 @@ async def _warmup_tts() -> None:
         if cartesia_tts.is_configured():
             await cartesia_tts._ensure_ws()
             logger.info("[WARMUP] Cartesia TTS websocket connected")
+            # Each clinic's recording notice is a call's first audio: cache it now (in the background, startup does not wait).
+            from backend.ai.realtime.twilio.gateway import prewarm_opening_notices
+
+            task = asyncio.create_task(prewarm_opening_notices())
+            _BACKGROUND.add(task)
+            task.add_done_callback(_BACKGROUND.discard)
     except Exception as e:
         logger.warning(f"[WARMUP] Cartesia websocket warmup failed (non-fatal, will use REST): {e}")
 

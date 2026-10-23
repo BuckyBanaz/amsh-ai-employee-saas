@@ -138,6 +138,41 @@ class TelephonyWebhooks(unittest.TestCase):
             self.assertIn("<Stream", ok.text)
             self.assertIn('extraHeaders="token=', ok.text)  # the stream token rides in extraHeaders, which Plivo echoes in start
 
+    def _plivo_post(self, path, form):
+        with patch.object(ws, "get_settings", lambda: fake_settings()), \
+             patch("backend.ai.realtime.twilio.call_control.get_settings", lambda: fake_settings()):
+            unsigned = self.c.post(path, data=form)
+            signed = self.c.post(path, data=form, headers=self.plivo_sign(path, form))
+        return unsigned, signed
+
+    def test_plivo_transfer_dials_staff_from_the_clinic_line(self):
+        path = "/api/voice/plivo/transfer?staff_phone=%2B919812345678&staff_name=Front+desk&department=front_desk&lang=hi"
+        unsigned, ok = self._plivo_post(path, {"CallUUID": "U1", "From": "918901414107", "To": "918065392465", "Direction": "inbound"})
+        self.assertEqual(unsigned.status_code, 403)  # only Plivo may fetch the transfer XML
+        self.assertEqual(ok.status_code, 200)
+        self.assertIn("<Number>919812345678</Number>", ok.text)
+        self.assertIn('callerId="918065392465"', ok.text)  # inbound: the clinic's line is To
+        self.assertIn("/api/voice/plivo/transfer-status?", ok.text)
+        _, out = self._plivo_post(path, {"CallUUID": "U2", "From": "918065392465", "To": "918901414107", "Direction": "outbound"})
+        self.assertIn('callerId="918065392465"', out.text)  # outbound "call me": the clinic's line is From
+
+    def test_plivo_unanswered_transfer_tells_the_caller_and_alerts_staff(self):
+        from backend.server.api.routes import voice
+
+        alerts = []
+
+        async def fake_alert(db, staff_phone, caller, call_id, department, status):
+            alerts.append((staff_phone, caller, status))
+
+        path = "/api/voice/plivo/transfer-status?staff_phone=%2B919812345678&staff_name=Front+desk&department=front_desk&lang=hi"
+        with patch.object(voice, "alert_missed_transfer", fake_alert):
+            _, answered = self._plivo_post(path, {"CallUUID": "U1", "From": "918901414107", "DialStatus": "completed"})
+            _, missed = self._plivo_post(path, {"CallUUID": "U1", "From": "918901414107", "DialStatus": "no-answer"})
+        self.assertNotIn("<Speak", answered.text)
+        self.assertIn("Maaf kijiye", missed.text)  # the caller's language (lang=hi)
+        self.assertIn("<Hangup/>", missed.text)
+        self.assertEqual(alerts, [("+919812345678", "918901414107", "no-answer")])
+
 
 class PaidVoiceEndpoints(unittest.TestCase):
     def setUp(self):

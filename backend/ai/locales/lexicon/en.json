@@ -29,6 +29,9 @@
  "strings": {
   "fallback": "I'm sorry, I'm having trouble right now. Could you say that again, or would you like me to connect you to the front desk?",
   "no_transfer": "I'm sorry, I can't connect you right now. Can I take a message for the front desk?",
+  "transfer_unanswered": "I'm sorry, our staff could not take your call right now. I have marked it urgent and someone will call you back on this number shortly.",
+  "takeover_connecting": "Please stay on the line, I'm connecting you to our clinic staff now.",
+  "recording_notice": "Please note that this call may be recorded to help us serve you better.",
   "billing": "Billing and refunds are handled by our front desk team. Let me connect you right away.",
   "frustrated": "I'm really sorry about the trouble. Let me connect you to someone at our front desk right away.",
   "unsure_claim": "Let me just double-check that with you first. Could you confirm the details once more?",
@@ -40,6 +43,13 @@
  ],
  "farewell_patterns": [
   "\\b(?:good\\s*bye|bye(?:\\s*bye)?|good\\s*night|see\\s+you(?:\\s+(?:later|soon|tomorrow))?|talk\\s+(?:to\\s+you\\s+)?later|take\\s+care|that'?s\\s+all|that\\s+is\\s+all|nothing\\s+else)\\b"
+ ],
+ "connect_offer_patterns": [
+  "\\b(?:connect(?:ing)?\\s+you|transfer(?:ring)?\\s+you|put\\s+you\\s+through|front\\s+desk|(?:speak|talk)\\s+(?:to|with)\\s+(?:someone|a\\s+person|our\\s+(?:staff|team)))\\b"
+ ],
+ "same_number_patterns": [
+  "\\byou\\s+(?:already\\s+)?have\\s+my\\s+(?:phone\\s+|mobile\\s+)?number\\b",
+  "\\b(?:the\\s+)?number\\s+I(?:'m|\\s+am)?\\s+(?:calling|called)\\s+(?:you\\s+)?(?:from|with|on)\\b"
  ],
  "hangup_patterns": [
   "\\b(?:hang\\s*up|cut\\s+the\\s+call|end\\s+the\\s+call|disconnect\\s+the\\s+call)\\b"

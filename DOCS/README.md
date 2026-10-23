@@ -456,6 +456,7 @@ Still to do: blocking a suspended clinic's dashboard login, admin password reset
 | `25_AMSh_Competitive_Analysis_and_Roadmap.md` | Vapi, Retell and Bland compared with AMSh, gaps and the order to close them, sources | current |
 | `26_AMSh_Owner_Actions.md` | everything only the owner can do: secrets, accounts, tests, decisions | current |
 | `27_AMSh_Call_Concurrency_and_Scaling_Roadmap.md` | call concurrency, virtual number parallel channels (Exotel/Twilio), AI limits, post-MVP scaling roadmap | current (planned post-MVP) |
+| `30_AMSh_Multi_Vertical_Plan.md` | education and SMB (salon, spa) verticals next to healthcare: what is vertical-aware today, per-vertical workflows, phases 0-3, clinic guardrails | plan (2026-10-17) |
 | `22_AMSh_Language_Packs_and_Runtime_Context.md` | five independent dimensions (vertical, language, accent, region, timezone), language packs, RTL readiness, languages endpoint | current |
 | `21_AMSh_Language_Layer_and_Slot_Rules.md` | BusinessContext (vertical + region + language config), Hindi/Hinglish layer, slot rules, booking guard | current |
 | `18_AMSh_Completion_Plan_User_and_Admin.md` | phased plan for the user app, admin portal and server APIs (done / pending) | current |

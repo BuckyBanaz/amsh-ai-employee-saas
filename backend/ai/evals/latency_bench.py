@@ -86,11 +86,15 @@ class SimBackend:
 def _engine(backend: Any, early: bool) -> AgentEngine:
     factory, biz = make_db_factory()
     facts, profile = load_all(factory, biz)
-    return AgentEngine(
+    engine = AgentEngine(
         business_id=biz, caller_number="+919876543210", call_id=None, facts=facts,
         vertical_config=vertical_registry.get_vertical("clinic"), backend=backend, db_factory=factory,
         agent_name=profile.name, gender=profile.gender, now_fn=lambda: FIXED_NOW, early_chunking=early,
     )
+    for b in getattr(backend, "backends", None) or [backend]:
+        if hasattr(b, "usage_sink"):
+            b.usage_sink = None  # the fixture clinic is not in the real database: never meter benchmark spend there
+    return engine
 
 
 async def _turn(engine: AgentEngine, utterance: str, tts_ttfb_ms: Optional[float], live_tts: bool) -> Dict[str, Any]:

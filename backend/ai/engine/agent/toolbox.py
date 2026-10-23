@@ -18,6 +18,7 @@ from backend.ai.capabilities.operations.registry import get_operations
 from backend.ai.engine.agent.availability import Booked, booked_from_appointments, day_ranges, open_slots
 from backend.ai.engine.agent.datetime_utils import dates_in, format_time, parse_date, parse_time, speak_date
 from backend.ai.engine.agent.grounding import SUCCESS_CODES, times_in
+from backend.ai.engine.agent.hindi import offered_to_connect
 from backend.ai.engine.agent.validator import (
     ActionGate,
     BusinessFacts,
@@ -462,7 +463,9 @@ class AgentToolbox:
         reason = str(args.get("reason") or "Caller requested a human")
         # Emergencies always go through. Anything else needs the caller's explicit request, or a yes to
         # "shall I connect you?", so identity questions and small confusions never end a call by accident.
-        if department != "emergency" and not explicit_human_request(self.last_utterance):
+        # A yes to our own "shall I connect you?" is the confirmation: transfer this turn, without a second "are you sure?".
+        agreed = is_affirmative(self.last_utterance) and offered_to_connect(self.last_assistant)
+        if department != "emergency" and not explicit_human_request(self.last_utterance) and not agreed:
             gate_result = check_confirmation(
                 self.gate,
                 "transfer",

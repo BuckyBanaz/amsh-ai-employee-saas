@@ -14,3 +14,5 @@ httpx==0.28.1
 pyyaml==6.0.2
 websockets==14.1
 plivo==4.63.0
+numpy==2.5.4
+ai-edge-litert==2.3.0  # YAMNet laughter detection on the caller audio (ai/realtime/audio/paralinguistic.py)

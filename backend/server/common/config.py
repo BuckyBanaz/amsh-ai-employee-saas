@@ -49,6 +49,9 @@ class Settings(BaseSettings):
     # Development conveniences that are unsafe with several customers: an unmatched phone call is given to the newest
     # business, and the old hard-coded WhatsApp verify tokens are accepted. Set to false in production.
     ALLOW_DEV_FALLBACKS: bool = False
+    # Development only: save each caller turn's audio (WAV) with its transcript and sound-cue scores under
+    # backend/data/caller_audio, to check the laughter threshold on real speech. Callers' voices: never on in production.
+    CAPTURE_CALLER_AUDIO: bool = False
     # Appointment reminders message real patients, so the background loop is off unless this is true AND the clinic enabled it.
     REMINDERS_ENABLED: bool = False
     REMINDER_INTERVAL_SECONDS: int = 300
@@ -128,6 +131,8 @@ def production_problems(s: "Settings") -> list[str]:
         problems.append("DEBUG is on")
     if s.ALLOW_DEV_FALLBACKS:
         problems.append("ALLOW_DEV_FALLBACKS is on (unmatched calls go to the newest business; old WhatsApp verify tokens accepted)")
+    if s.CAPTURE_CALLER_AUDIO:
+        problems.append("CAPTURE_CALLER_AUDIO is on (callers' voices are saved to disk)")
     if "amsh:amsh@" in s.DATABASE_URL:
         problems.append("DATABASE_URL uses the default amsh/amsh password")
     if not s.TWILIO_AUTH_TOKEN and not s.PLIVO_AUTH_TOKEN:

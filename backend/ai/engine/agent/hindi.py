@@ -151,6 +151,20 @@ def _compile_key(key: str):
 
 
 _FAREWELL, _HANGUP = _compile_key("farewell_patterns"), _compile_key("hangup_patterns")
+_SAME_NUMBER_PACK = _compile_key("same_number_patterns")
+_CONNECT_OFFER_PACK = _compile_key("connect_offer_patterns")
+
+
+def offered_to_connect(text: Optional[str]) -> bool:
+    """Our reply offered to connect the caller to staff ("shall I connect you to the front desk?", "फ्रंट डेस्क से कनेक्ट
+    कर दूँ?"). Phrases are data in each language's pack (`connect_offer_patterns`)."""
+    return bool(text) and any(p.search(text) for p in _CONNECT_OFFER_PACK)
+
+
+def means_calling_number(*texts: Optional[str]) -> bool:
+    """The caller says to use the number they are calling from ("wahi number", "jis number se call ki", "you already have
+    my number"). Phrases are data in each language's pack (`same_number_patterns`); pass the raw and the romanised text."""
+    return any(p.search(t) for t in texts if t for p in _SAME_NUMBER_PACK)
 _SHORT_FAREWELL_WORDS = 8  # "ok good night" ends the call; a long sentence that merely contains "bye" does not
 
 

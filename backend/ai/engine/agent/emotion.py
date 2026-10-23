@@ -102,10 +102,12 @@ class EmotionState:
         self.last_laugh_turn = -99
         self.asked_laugh = False  # the caller asked to hear a laugh: the "not too often" limit does not apply
 
-    def hear(self, caller_text: str) -> Optional[str]:
-        """Call once per caller turn. Returns the mood hint for the model, if any."""
+    def hear(self, caller_text: str, laughed: bool = False) -> Optional[str]:
+        """Call once per caller turn. Returns the mood hint for the model, if any. `laughed`: a laugh was heard in the caller's
+        audio (realtime/audio/paralinguistic.py) that the transcript does not show. It only fills in a mood the words left
+        open: laughing while describing pain or anger stays serious."""
         self.turn += 1
-        self.mood = caller_mood(caller_text)
+        self.mood = caller_mood(caller_text) or ("amused" if laughed else None)
         self.asked_laugh = bool(_ASK_LAUGH.search(caller_text or "")) and self.mood not in SERIOUS
         return MOOD_NOTES.get(self.mood) if self.mood else None
 

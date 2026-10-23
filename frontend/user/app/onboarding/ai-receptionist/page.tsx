@@ -36,6 +36,7 @@ const initialCapabilities = [
   { id: 'hours', name: 'Explain opening hours', enabled: true },
   { id: 'transfer', name: 'Transfer to human', enabled: true },
   { id: 'messages', name: 'Send appointment details by SMS', enabled: true },
+  { id: 'remember', name: 'Remember returning customers', enabled: true },
 ];
 
 export default function AiReceptionistOnboardingPage() {
@@ -189,7 +190,7 @@ export default function AiReceptionistOnboardingPage() {
         personality: selectedPersonality,
         transfer_phone: transferPhone,
         escalation_policy: escalation,
-        capabilities: caps.filter(c => c.enabled).map(c => c.id),
+        capabilities: Object.fromEntries(caps.map(c => [c.id, c.enabled])),  // a switched-off capability must reach the backend as false
         languages: langs.filter(l => l.selected).map(l => l.id),
         primary_language: primaryLanguage,
       });

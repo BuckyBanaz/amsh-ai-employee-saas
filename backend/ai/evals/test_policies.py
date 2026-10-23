@@ -316,6 +316,18 @@ class RecordingNotice(Base):
         with patch("backend.server.database.session.SessionLocal", side_effect=RuntimeError("db down")):
             self.assertEqual(svc.greeting_for(self.biz, "Hello.", "en"), "Hello.")  # fails open, logged
 
+    def test_notice_alone_is_ready_for_the_opening_in_every_language(self):
+        from backend.ai.lexicon import pack_languages
+
+        for code in pack_languages():  # every language the agent speaks has its own built-in notice, none falls back to English
+            self.assertIn(code, svc.BUILTIN_RECORDING_NOTICE)
+        with patch("backend.server.database.session.SessionLocal", self.factory):
+            self.assertEqual(svc.notice_for(self.biz, "hi"), svc.BUILTIN_RECORDING_NOTICE["hi"])
+            self.assertEqual(svc.notice_for(self.biz, "es-ES"), svc.BUILTIN_RECORDING_NOTICE["es"])
+            self.assertEqual(svc.notice_for("no-such-business", "en"), "")
+        with patch("backend.server.database.session.SessionLocal", side_effect=RuntimeError("db down")):
+            self.assertEqual(svc.notice_for(self.biz, "en"), "")  # fails open: the call opens with the greeting
+
     def test_the_owner_sees_what_the_ai_will_do_for_their_region(self):
         ai = self.status()["ai"]
         self.assertEqual(ai["framework"], "DPDP Act (India) & DISHA")
