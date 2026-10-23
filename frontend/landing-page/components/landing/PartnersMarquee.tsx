@@ -73,7 +73,7 @@ const PARTNERS: PartnerDetail[] = [
     "changes": [{
       "value": {
         "messages": [{
-          "from": "+919876543210",
+          "from": "+14155552671",
           "text": { "body": "Book dental cleaning tomorrow" }
         }]
       }
@@ -101,14 +101,14 @@ const PARTNERS: PartnerDetail[] = [
     compliance: "Google Enterprise Security Certified",
     color: "#4285F4",
     description:
-      "When a caller requests Dr. Sharma at 2 PM, AMSh queries live free/busy windows, locks the slot, creates the calendar event, and sends instant calendar invites.",
+      "When a caller requests Dr. Miller at 2 PM, AMSh queries live free/busy windows, locks the slot, creates the calendar event, and sends instant calendar invites.",
     codeSnippet: `// 2-Way Google Calendar Slot Confirmation
 const event = await calendar.events.insert({
   calendarId: 'primary',
   requestBody: {
-    summary: 'Dental Checkup - Parikshit (AMSh)',
-    start: { dateTime: '2026-10-11T14:00:00+05:30' },
-    end: { dateTime: '2026-10-11T14:30:00+05:30' },
+    summary: 'Dental Checkup - David Miller (AMSh)',
+    start: { dateTime: '2026-10-11T14:00:00-04:00' },
+    end: { dateTime: '2026-10-11T14:30:00-04:00' },
     attendees: [{ email: 'patient@example.com' }]
   }
 });`,
@@ -151,7 +151,7 @@ const event = await calendar.events.insert({
   "category": "action",
   "intent": "book_appointment",
   "extracted_slots": {
-    "doctor": "Dr. Sharma",
+    "doctor": "Dr. Miller",
     "date": "2026-10-11",
     "time": "02:00 PM"
   },
@@ -215,12 +215,12 @@ const event = await calendar.events.insert({
     compliance: "Enterprise Voice Synthesis Agreement",
     color: "#0284C7",
     description:
-      "Generates warm, empathetic vocal responses in Hindi, Indian English, Hinglish and 20+ other languages with natural breathing, cadence, and medical tone.",
+      "Generates warm, empathetic vocal responses in English, Spanish, German, French, Dutch, Arabic and 20+ languages with natural breathing, cadence, and medical tone.",
     codeSnippet: `// Cartesia Sonic Streaming WebSocket Synthesis
 {
   "model_id": "sonic-multilingual",
-  "transcript": "Dr. Sharma kal dopahar do baje available hain.",
-  "voice": { "id": "priya-hi-in" },
+  "transcript": "Dr. Miller is available tomorrow at two in the afternoon.",
+  "voice": { "id": "sarah-en-us" },
   "output_format": { "sample_rate": 24000, "encoding": "pcm_s16le" }
 }`,
     renderLogo: () => (
@@ -232,22 +232,22 @@ const event = await calendar.events.insert({
   },
   {
     id: "stripe",
-    name: "Stripe & UPI Payments",
+    name: "Stripe Global Payments",
     category: "clinical",
     categoryLabel: "Payments & Copay",
     tagline: "Automated deposit collection, no-show fees & WhatsApp payment links",
     protocol: "Stripe API v2024 · PaymentIntents & Webhooks",
     latency: "<100ms checkout generation",
     chipLatency: "<100ms",
-    compliance: "PCI-DSS Level 1 · RBI Compliant",
+    compliance: "PCI-DSS Level 1 · PSD2 Compliant",
     color: "#635BFF",
     description:
       "Eliminates no-shows by automatically generating WhatsApp payment links for consultation deposits, aesthetic procedure booking fees, and copays.",
     codeSnippet: `// PaymentIntent Deposit Request
 const session = await stripe.checkout.sessions.create({
-  payment_method_types: ['card', 'upi'],
+  payment_method_types: ['card', 'apple_pay', 'google_pay'],
   line_items: [{
-    price_data: { currency: 'inr', unit_amount: 50000, product_data: { name: 'Consultation Deposit' } },
+    price_data: { currency: 'usd', unit_amount: 5000, product_data: { name: 'Consultation Deposit' } },
     quantity: 1,
   }],
   mode: 'payment'
@@ -280,7 +280,7 @@ const session = await stripe.checkout.sessions.create({
   "status": "booked",
   "serviceCategory": [{ "text": "Dental Care" }],
   "participant": [
-    { "actor": { "reference": "Practitioner/dr-sharma" }, "status": "accepted" },
+    { "actor": { "reference": "Practitioner/dr-miller" }, "status": "accepted" },
     { "actor": { "reference": "Patient/patient-49102" }, "status": "accepted" }
   ]
 }`,

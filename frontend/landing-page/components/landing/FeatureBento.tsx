@@ -21,10 +21,10 @@ function CardText({ eyebrow, title, body }: { eyebrow: string; title: string; bo
 
 // --- Voice -----------------------------------------------------------------
 const VOICE_LINES = [
-  { who: "Patient", text: "Is Dr. Sharma free tomorrow afternoon?" },
+  { who: "Patient", text: "Is Dr. Miller free tomorrow afternoon?" },
   { who: "AMSh", text: "Yes — 2:00 PM or 4:00 PM. Which works better for you?" },
   { who: "Patient", text: "2:00 PM. Can I book for teeth whitening?" },
-  { who: "AMSh", text: "Done! I've confirmed Dr. Sharma for teeth whitening at 2:00 PM." },
+  { who: "AMSh", text: "Done! I've confirmed Dr. Miller for teeth whitening at 2:00 PM." },
 ];
 
 function VoiceVisual() {
@@ -87,15 +87,14 @@ function VoiceVisual() {
 // --- Languages ---------------------------------------------------------------
 const GREETINGS = [
   { text: "Hello", lang: "English" },
-  { text: "नमस्ते", lang: "Hindi" },
   { text: "Hola", lang: "Spanish" },
   { text: "Bonjour", lang: "French" },
-  { text: "مرحبا", lang: "Arabic" },
   { text: "Hallo", lang: "German" },
-  { text: "Olá", lang: "Portuguese" },
-  { text: "你好", lang: "Mandarin" },
-  { text: "Ciao", lang: "Italian" },
   { text: "Hallo", lang: "Dutch" },
+  { text: "مرحبا", lang: "Arabic" },
+  { text: "Olá", lang: "Portuguese" },
+  { text: "Ciao", lang: "Italian" },
+  { text: "你好", lang: "Mandarin" },
 ];
 
 function LanguageVisual() {
@@ -118,7 +117,7 @@ function LanguageVisual() {
             exit={{ opacity: 0, y: -24, rotateX: 60, filter: "blur(6px)" }}
             transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
             className="font-sora absolute inset-x-0 text-4xl font-semibold tracking-tight text-slate-950 sm:text-5xl"
-            lang={g.lang === "Hindi" ? "hi" : g.lang === "Arabic" ? "ar" : g.lang === "Mandarin" ? "zh" : undefined}
+            lang={g.lang === "Arabic" ? "ar" : g.lang === "Mandarin" ? "zh" : undefined}
           >
             {g.text}
           </motion.p>
@@ -199,7 +198,7 @@ function HandoffVisual() {
       </div>
       <div className="mt-4 rounded-xl bg-white p-3 text-[13px] leading-snug text-slate-700 border border-slate-200 shadow-2xs">
         <p className="font-mono-ui text-[10.5px] font-bold uppercase tracking-wider text-emerald-700">
-          Transferred to Dr. Sharma · with summary
+          Transferred to Dr. Miller · with summary
         </p>
         <p className="mt-1 text-xs text-slate-600">
           Patient reports severe molar pain since yesterday. Finalized the 2:00 PM slot for teeth whitening &amp; checkup.
@@ -214,9 +213,9 @@ function DashboardVisual() {
   const bars = [38, 52, 44, 70, 58, 84, 76];
   const days = ["M", "T", "W", "T", "F", "S", "S"];
   const rows = [
-    { brand: "whatsapp" as const, who: "Riya S.", what: "Booked · Tomorrow 2 PM", tone: "bg-emerald-50 text-emerald-700 border border-emerald-200" },
-    { icon: "phone" as const, who: "+91 987•• ••210", what: "Consultation fees", tone: "bg-slate-100 text-slate-700 border border-slate-200" },
-    { icon: "phone" as const, who: "Dr. Sharma patient", what: "Rescheduled", tone: "bg-blue-50 text-blue-700 border border-blue-200" },
+    { brand: "whatsapp" as const, who: "Emily R.", what: "Booked · Tomorrow 2 PM", tone: "bg-emerald-50 text-emerald-700 border border-emerald-200" },
+    { icon: "phone" as const, who: "+1 (555) 349-8210", what: "Consultation fees", tone: "bg-slate-100 text-slate-700 border border-slate-200" },
+    { icon: "phone" as const, who: "Dr. Miller patient", what: "Rescheduled", tone: "bg-blue-50 text-blue-700 border border-blue-200" },
   ];
   return (
     <div className="mt-6 grid gap-4 sm:grid-cols-[1fr_1.1fr]">
@@ -261,7 +260,7 @@ function DashboardVisual() {
 
 // --- Always on + privacy strip ------------------------------------------
 function GuaranteeStrip() {
-  const points = ["HIPAA & DPDP Act compliant", "Access limited to clinic staff", "Full recording & transcript retention"];
+  const points = ["HIPAA & GDPR compliant", "Access limited to clinic staff", "Full recording & transcript retention"];
   return (
     <div className="grid gap-5 md:grid-cols-[auto_minmax(0,1fr)] md:items-center md:divide-x md:divide-slate-200">
       <div className="flex items-center gap-4">
@@ -300,14 +299,14 @@ export default function FeatureBento() {
     <Stagger as="div" className="mt-10 grid auto-rows-auto gap-4 md:grid-cols-3">
       <StaggerItem as="div" className="md:col-span-2">
         <SpotlightCard className={`${CARD} p-6`}>
-          <CardText eyebrow="VOICE AI" title="Sounds like your best receptionist" body="Natural, warm conversations. Callers can interrupt, switch from Hindi to English mid-sentence, or change their mind naturally." />
+          <CardText eyebrow="VOICE AI" title="Sounds like your best receptionist" body="Natural, warm conversations. Callers can interrupt, switch from Spanish to English mid-sentence, or change their mind naturally." />
           <VoiceVisual />
         </SpotlightCard>
       </StaggerItem>
 
       <StaggerItem as="div" className="md:row-span-2">
         <SpotlightCard className={`${CARD} flex flex-col p-6`}>
-          <CardText eyebrow="MULTILINGUAL" title="Speaks your patients' language" body="Hindi, Hinglish, Indian English, Spanish, Arabic and 20+ languages — AMSh adapts in real time." />
+          <CardText eyebrow="MULTILINGUAL" title="Speaks your patients' language" body="English, Spanish, German, French, Dutch, Arabic and 20+ languages — AMSh adapts in real time." />
           <LanguageVisual />
         </SpotlightCard>
       </StaggerItem>
@@ -328,7 +327,7 @@ export default function FeatureBento() {
 
       <StaggerItem as="div" className="md:col-span-3">
         <SpotlightCard className={`${CARD} p-6`}>
-          <CardText eyebrow="VISIBILITY" title="Every conversation, one dashboard" body="Calls, WhatsApp chats and bookings in one place — with recordings, Hindi transcripts, and patient logs." />
+          <CardText eyebrow="VISIBILITY" title="Every conversation, one dashboard" body="Calls, WhatsApp chats and bookings in one place — with audio recordings, full transcripts, and patient logs." />
           <DashboardVisual />
         </SpotlightCard>
       </StaggerItem>

@@ -70,7 +70,7 @@ const FAQS = [
   },
   {
     q: "Will AMSh integrate with our existing clinic phone number?",
-    a: "Yes. You keep your existing clinic phone number. You can forward calls to AMSh on overflow, after-hours, during lunch, or 24/7 with a simple carrier forwarding code (AT&T, Verizon, BT, Jio, Airtel).",
+    a: "Yes. You keep your existing clinic phone number. You can forward calls to AMSh on overflow, after-hours, during lunch, or 24/7 with a simple carrier forwarding code (AT&T, Verizon, T-Mobile, Vodafone, BT).",
   },
   {
     q: "Is AMSh HIPAA and GDPR compliant for patient records?",

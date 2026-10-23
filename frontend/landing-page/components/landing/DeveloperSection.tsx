@@ -28,11 +28,11 @@ const SAMPLES: Record<DocTab, CodeSample> = {
   -H "Authorization: Bearer amsh_live_sec_88329b" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "to": "+919876543210",
-    "persona_id": "priya",
-    "patient_name": "Rohan Verma",
+    "to": "+14155552671",
+    "persona_id": "sarah",
+    "patient_name": "David Miller",
     "context": {
-      "doctor": "Dr. Sharma",
+      "doctor": "Dr. Anderson",
       "service": "Dental Checkup",
       "preferred_time": "Tomorrow 2 PM"
     }
@@ -42,11 +42,11 @@ const SAMPLES: Record<DocTab, CodeSample> = {
 client = AmshClient(api_key="amsh_live_sec_88329b")
 
 call = client.calls.dispatch(
-    to="+919876543210",
-    persona_id="priya",
-    patient_name="Rohan Verma",
+    to="+14155552671",
+    persona_id="sarah",
+    patient_name="David Miller",
     context={
-        "doctor": "Dr. Sharma",
+        "doctor": "Dr. Anderson",
         "service": "Dental Checkup",
         "preferred_time": "Tomorrow 2 PM"
     }
@@ -58,11 +58,11 @@ print(f"Call Queued: {call.id} | Status: {call.status}")`,
 const amsh = new AmshClient({ apiKey: "amsh_live_sec_88329b" });
 
 const call = await amsh.calls.dispatch({
-  to: "+919876543210",
-  personaId: "priya",
-  patientName: "Rohan Verma",
+  to: "+14155552671",
+  personaId: "sarah",
+  patientName: "David Miller",
   context: {
-    doctor: "Dr. Sharma",
+    doctor: "Dr. Anderson",
     service: "Dental Checkup"
   }
 });
@@ -72,8 +72,8 @@ console.log(\`Call dispatched: \${call.id}\`);`,
     response: `{
   "status": "queued",
   "call_id": "call_amsh_9921b7a",
-  "to": "+919876543210",
-  "persona": "priya",
+  "to": "+14155552671",
+  "persona": "sarah",
   "estimated_latency": "140ms",
   "carrier": "twilio_media_streams"
 }`,
@@ -135,17 +135,17 @@ ws.on("message", (audioData) => {
   -H "Authorization: Bearer amsh_live_sec_88329b" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "doctor_id": "doc_sharma_01",
-    "patient_name": "Pooja Mehta",
-    "patient_phone": "+919811223344",
+    "doctor_id": "doc_anderson_01",
+    "patient_name": "Sarah Jenkins",
+    "patient_phone": "+14155558932",
     "slot_date": "2026-10-12",
     "slot_time": "14:00",
     "send_whatsapp": true
   }'`,
       python: `booking = client.appointments.book(
-    doctor_id="doc_sharma_01",
-    patient_name="Pooja Mehta",
-    patient_phone="+919811223344",
+    doctor_id="doc_anderson_01",
+    patient_name="Sarah Jenkins",
+    patient_phone="+14155558932",
     slot_date="2026-10-12",
     slot_time="14:00",
     send_whatsapp=True
@@ -153,9 +153,9 @@ ws.on("message", (audioData) => {
 
 print(f"Appointment Confirmed: {booking.id}")`,
       node: `const booking = await amsh.appointments.book({
-  doctorId: "doc_sharma_01",
-  patientName: "Pooja Mehta",
-  patientPhone: "+919811223344",
+  doctorId: "doc_anderson_01",
+  patientName: "Sarah Jenkins",
+  patientPhone: "+14155558932",
   slotDate: "2026-10-12",
   slotTime: "14:00",
   sendWhatsapp: true
@@ -166,8 +166,8 @@ console.log(\`Confirmed ID: \${booking.id}\`);`,
     response: `{
   "status": "confirmed",
   "appointment_id": "apt_89123b",
-  "doctor": "Dr. Sharma",
-  "slot": "2026-10-12T14:00:00+05:30",
+  "doctor": "Dr. Anderson",
+  "slot": "2026-10-12T14:00:00-04:00",
   "google_calendar_event_id": "gcal_evt_9918a",
   "whatsapp_message_status": "delivered"
 }`,
@@ -183,33 +183,33 @@ console.log(\`Confirmed ID: \${booking.id}\`);`,
   -H "Authorization: Bearer amsh_live_sec_88329b" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "to": "+919876543210",
+    "to": "+14155552671",
     "template_name": "clinic_booking_confirmation",
     "parameters": {
-      "patient": "Rohan",
+      "patient": "David",
       "date": "12 Oct 2026",
       "time": "2:00 PM",
-      "doctor": "Dr. Sharma"
+      "doctor": "Dr. Anderson"
     }
   }'`,
       python: `msg = client.whatsapp.send_template(
-    to="+919876543210",
+    to="+14155552671",
     template_name="clinic_booking_confirmation",
     parameters={
-        "patient": "Rohan",
+        "patient": "David",
         "date": "12 Oct 2026",
         "time": "2:00 PM",
-        "doctor": "Dr. Sharma"
+        "doctor": "Dr. Anderson"
     }
 )`,
       node: `await amsh.whatsapp.sendTemplate({
-  to: "+919876543210",
+  to: "+14155552671",
   templateName: "clinic_booking_confirmation",
   parameters: {
-    patient: "Rohan",
+    patient: "David",
     date: "12 Oct 2026",
     time: "2:00 PM",
-    doctor: "Dr. Sharma"
+    doctor: "Dr. Anderson"
   }
 });`,
     },

@@ -18,7 +18,7 @@ const SCENARIOS: Scenario[] = [
   {
     id: "dental",
     clinic: "Dental Practice",
-    location: "Mumbai, MH",
+    location: "Austin, TX",
     metric: "After-Hours Coverage",
     metricSub: "100% calls answered 24/7",
     specialty: "Dental Care",
@@ -29,9 +29,9 @@ const SCENARIOS: Scenario[] = [
   {
     id: "aesthetics",
     clinic: "Aesthetic & Skin Clinic",
-    location: "Delhi NCR",
+    location: "London, UK",
     metric: "Instant Replies",
-    metricSub: "Phone & WhatsApp in Hindi/English",
+    metricSub: "Phone & WhatsApp in English & Spanish",
     specialty: "Dermatology",
     initial: "A",
     summary:
@@ -40,7 +40,7 @@ const SCENARIOS: Scenario[] = [
   {
     id: "multi",
     clinic: "Multi-Specialty Center",
-    location: "Bengaluru, KA",
+    location: "Amsterdam, NL",
     metric: "Zero Busy Tones",
     metricSub: "5 concurrent calls handled",
     specialty: "Multi-Specialty",
@@ -51,7 +51,7 @@ const SCENARIOS: Scenario[] = [
   {
     id: "physio",
     clinic: "Physiotherapy & Rehab",
-    location: "Pune, MH",
+    location: "Berlin, DE",
     metric: "40% Fewer No-Shows",
     metricSub: "Automated WhatsApp reminders",
     specialty: "Rehab & Physio",
@@ -62,7 +62,7 @@ const SCENARIOS: Scenario[] = [
   {
     id: "eye",
     clinic: "Eye Care & Lasik Center",
-    location: "Hyderabad, TS",
+    location: "Miami, FL",
     metric: "Safety Triage",
     metricSub: "Emergencies transferred instantly",
     specialty: "Ophthalmology",
@@ -73,19 +73,19 @@ const SCENARIOS: Scenario[] = [
   {
     id: "womens",
     clinic: "Women's Wellness Care",
-    location: "Chandigarh",
+    location: "Toronto, ON",
     metric: "Multilingual Voice",
-    metricSub: "Hindi, English & Punjabi support",
+    metricSub: "English, Spanish & French support",
     specialty: "Gynecology",
     initial: "W",
     summary:
-      "Patients can switch between Hindi and English mid-conversation and AMSh seamlessly adapts, without needing multiple receptionists for different language callers.",
+      "Patients can switch between Spanish, French, and English mid-conversation and AMSh seamlessly adapts, without needing multiple receptionists for different language callers.",
   },
 ];
 
 const FACTS = [
   { value: "24/7", label: "Always Answering", sub: "Nights, Sundays & holidays" },
-  { value: "20+", label: "Languages & Accents", sub: "Hindi, English, Hinglish & more" },
+  { value: "20+", label: "Languages & Accents", sub: "English, Spanish, German & more" },
   { value: "2", label: "Core Channels", sub: "Voice calls & WhatsApp" },
   { value: "<180ms", label: "Turn Latency", sub: "Near-instant conversational speed" },
 ];

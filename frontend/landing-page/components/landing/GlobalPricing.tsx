@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { Icon } from "./icons";
 
-type Currency = "usd" | "inr" | "gbp" | "eur";
+type Currency = "usd" | "gbp" | "eur";
 
 interface PlanTier {
   name: string;
@@ -20,7 +20,6 @@ const TIERS: PlanTier[] = [
     featured: false,
     pricing: {
       usd: { monthly: "$49", annual: "$39", unit: "/ mo" },
-      inr: { monthly: "₹3,999", annual: "₹3,199", unit: "/ mo" },
       gbp: { monthly: "£39", annual: "£31", unit: "/ mo" },
       eur: { monthly: "€45", annual: "€36", unit: "/ mo" },
     },
@@ -30,7 +29,7 @@ const TIERS: PlanTier[] = [
       "Dedicated local clinic phone number",
       "Google Calendar 2-way sync",
       "Human doctor emergency transfer",
-      "English, Hindi & Spanish support",
+      "English, Spanish, German, French & Dutch support",
     ],
   },
   {
@@ -39,7 +38,6 @@ const TIERS: PlanTier[] = [
     featured: true,
     pricing: {
       usd: { monthly: "$299", annual: "$239", unit: "/ mo" },
-      inr: { monthly: "₹24,999", annual: "₹19,999", unit: "/ mo" },
       gbp: { monthly: "£239", annual: "£189", unit: "/ mo" },
       eur: { monthly: "€279", annual: "€219", unit: "/ mo" },
     },
@@ -50,7 +48,7 @@ const TIERS: PlanTier[] = [
       "Live call recordings & transcripts",
       "Automated WhatsApp booking reminders",
       "Custom clinic RAG knowledge base",
-      "HIPAA / GDPR / DPDP BAA agreement",
+      "HIPAA & GDPR sovereign BAA agreement",
       "Priority latency routing (<180ms)",
     ],
   },
@@ -60,7 +58,6 @@ const TIERS: PlanTier[] = [
     featured: false,
     pricing: {
       usd: { monthly: "$499", annual: "$399", unit: "/ mo" },
-      inr: { monthly: "₹39,999", annual: "₹31,999", unit: "/ mo" },
       gbp: { monthly: "£399", annual: "£319", unit: "/ mo" },
       eur: { monthly: "€460", annual: "€369", unit: "/ mo" },
     },
@@ -93,7 +90,7 @@ export default function GlobalPricing() {
             An autonomous employee for less than 1 day of front-desk salary.
           </h2>
           <p className="mt-4 text-slate-600 text-base leading-relaxed">
-            14-day free trial on every plan. Includes ₹1,000 / $10 in voice credits. No credit card required.
+            14-day free trial on every plan. Includes $10 / £10 in free voice credits. No credit card required.
           </p>
 
           {/* Controls: Currency Selector & Annual Toggle */}
@@ -102,7 +99,6 @@ export default function GlobalPricing() {
             <div className="flex items-center gap-1 p-1 rounded-xl bg-white border border-slate-200 shadow-2xs font-mono-ui">
               {[
                 { id: "usd", label: "🇺🇸 USD ($)" },
-                { id: "inr", label: "🇮🇳 INR (₹)" },
                 { id: "gbp", label: "🇬🇧 GBP (£)" },
                 { id: "eur", label: "🇪🇺 EUR (€)" },
               ].map((c) => (

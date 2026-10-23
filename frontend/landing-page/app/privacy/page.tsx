@@ -256,7 +256,7 @@ export default function PrivacyPolicyPage() {
                 Use the subject line: <strong>&ldquo;Personal Data Deletion Request - AMSh&rdquo;</strong>.
               </li>
               <li>
-                In the body of your message, state your <strong>Phone Number</strong> (in international format, e.g. +91... or +1...) and the <strong>Clinic Name</strong> you contacted.
+                In the body of your message, state your <strong>Phone Number</strong> (in international format, e.g. +1... or +44...) and the <strong>Clinic Name</strong> you contacted.
               </li>
               <li>
                 Our Data Protection Officer will verify your request and confirm deletion across active databases and backups within <strong>30 calendar days</strong>.

@@ -53,7 +53,7 @@ const CARRIERS = [
   { name: "T-Mobile", type: "**61* / **62* Forwarding" },
   { name: "British Telecom (BT)", type: "UK Clinic Direct Forwarding" },
   { name: "Twilio / Vonage / RingCentral", type: "SIP Trunking & Webhooks" },
-  { name: "Jio & Airtel", type: "India PRI / Cloud PBX Forwarding" },
+  { name: "Vodafone / Deutsche Telekom", type: "European Landline & PBX Forwarding" },
 ];
 
 export default function AiPhoneAnsweringServicePage() {

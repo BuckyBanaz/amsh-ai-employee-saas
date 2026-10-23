@@ -231,16 +231,15 @@ function CcpaBadge({ className = "w-12 h-12 shrink-0" }: { className?: string })
   );
 }
 
-/** 6. Official DPDP 2023 (India) National Security Seal */
-function DpdpIndiaBadge({ className = "w-12 h-12 shrink-0" }: { className?: string }) {
+/** 6. Official UK NHS DSPT & EU AI Act Readiness Badge */
+function UkDsptBadge({ className = "w-12 h-12 shrink-0" }: { className?: string }) {
   return (
     <svg viewBox="0 0 100 100" className={className} xmlns="http://www.w3.org/2000/svg">
-      <circle cx="50" cy="50" r="48" fill="#FFFFFF" stroke="#000080" strokeWidth="2.5" />
-      <circle cx="50" cy="50" r="42" fill="#FFFBEB" stroke="#F59E0B" strokeWidth="1" />
-      <circle cx="50" cy="50" r="28" fill="none" stroke="#000080" strokeWidth="1.2" strokeDasharray="2 1.5" />
-      <circle cx="50" cy="50" r="6" fill="#000080" />
-      <text x="50" y="32" textAnchor="middle" fill="#D97706" fontSize="8" fontWeight="800" fontFamily="system-ui, sans-serif" letterSpacing="0.08em">INDIA &bull; DPDP</text>
-      <text x="50" y="72" textAnchor="middle" fill="#000080" fontSize="10" fontWeight="900" fontFamily="system-ui, sans-serif" letterSpacing="0.04em">ACT 2023</text>
+      <circle cx="50" cy="50" r="48" fill="#005EB8" />
+      <circle cx="50" cy="50" r="43" fill="#FFFFFF" stroke="#005EB8" strokeWidth="1.5" />
+      <text x="50" y="42" textAnchor="middle" fill="#005EB8" fontSize="13" fontWeight="900" fontFamily="system-ui, sans-serif" letterSpacing="0.04em">DSPT</text>
+      <rect x="22" y="52" width="56" height="15" rx="3" fill="#005EB8" />
+      <text x="50" y="63" textAnchor="middle" fill="#FFFFFF" fontSize="7.5" fontWeight="800" fontFamily="system-ui, sans-serif" letterSpacing="0.08em">NHS STANDARDS</text>
     </svg>
   );
 }
@@ -278,18 +277,18 @@ const COMPLIANCE_ITEMS = [
     desc: "Patient data transparency, automated opt-out mechanisms, and privacy-first call logging and retention policies.",
   },
   {
-    name: "DPDP 2023",
-    sub: "Indian data protection readiness",
-    Badge: DpdpIndiaBadge,
-    desc: "Purpose-bound patient consent collection, zero third-party AI training data leakage, and sovereign Indian data storage.",
+    name: "NHS DSPT & EU AI",
+    sub: "UK & European clinical compliance",
+    Badge: UkDsptBadge,
+    desc: "Strict clinical governance, data sovereignty, patient consent verification, and zero unauthorized training leakage across European health systems.",
   },
 ];
 
 const GLOBAL_STATS = [
-  { label: "Country Coverage", value: "50+ Countries", sub: "Local DIDs in US, UK, IN, UAE, AU" },
+  { label: "Country Coverage", value: "50+ Countries", sub: "Local DIDs in US, UK, EU, UAE, AU" },
   { label: "Global Edge Latency", value: "<180ms", sub: "Anycast edge-accelerated STT/TTS" },
   { label: "Platform SLA", value: "99.99%", sub: "High-availability redundant clusters" },
-  { label: "Security Frameworks", value: "6 Standards", sub: "SOC 2, HIPAA, GDPR, ISO, CCPA, DPDP" },
+  { label: "Security Frameworks", value: "6 Standards", sub: "SOC 2, HIPAA, GDPR, ISO, CCPA, DSPT" },
 ];
 
 export default function GlobalPresence() {
@@ -306,7 +305,7 @@ export default function GlobalPresence() {
             Deployed across 50+ countries. Compliant worldwide.
           </h2>
           <p className="mt-4 text-slate-600 text-base leading-relaxed">
-            Whether your practice is a dental clinic in Mumbai, a medical spa in Beverly Hills, or a private Harley Street clinic in London, AMSh provides local phone numbers, native accents, and medical data compliance.
+            Whether your practice is a dental office in Manhattan, a medical spa in Beverly Hills, or a private Harley Street clinic in London, AMSh provides local phone numbers, native accents, and medical data compliance.
           </p>
         </div>
 
@@ -378,7 +377,7 @@ export default function GlobalPresence() {
                 <div className="text-xs">
                   <h5 className="font-sora font-bold text-slate-900">Keep your existing clinic number or get a local DID</h5>
                   <p className="text-slate-600 mt-0.5 leading-relaxed text-[11px]">
-                    Forward calls from Airtel, Jio, AT&amp;T, Verizon, Vodafone, or BT to AMSh. Dedicated local phone numbers available across North America, Europe, Australia, GCC, and Asia.
+                    Forward calls from AT&amp;T, Verizon, T-Mobile, Vodafone, BT, or local landlines to AMSh. Dedicated local phone numbers available across North America, Europe, Australia, GCC, and Asia.
                   </p>
                 </div>
               </div>

@@ -6,6 +6,26 @@ Running log of what Claude changes, plans, or reviews in this repo. Newest entry
 
 Status legend: `DONE` / `IN PROGRESS` / `PLANNED` / `BLOCKED`
 
+### Entry 103 - Landing Page Westernization: Removed INR, Indian Names & Added Dutch / German Personas (2026-10-23) - DONE
+- **Virtual Employee Personas Re-ordered & Expanded ([VirtualEmployeeCard.tsx](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/components/landing/VirtualEmployeeCard.tsx))**:
+  - Persona lineup set strictly to: 1. USA (Sarah Jenkins - Default), 2. UK (Emma Watson), 3. Dutch (Lotte de Jong), 4. German (Hannah Weber), 5. Arabic (Fatima Al-Mansoor).
+  - Priya/India completely removed from the landing page.
+  - Linked native audio samples: `/demo_audio/dutch.mp3` for Lotte and `/demo_audio/german.mp3` for Hannah.
+- **ROI Calculator & Pricing Currencies Westernized ([RoiCalculator.tsx](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/components/landing/RoiCalculator.tsx), [GlobalPricing.tsx](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/components/landing/GlobalPricing.tsx))**:
+  - Completely purged INR (`₹`) and India toggle.
+  - Multi-currency switcher standardized to: `🇺🇸 USD ($)`, `🇬🇧 GBP (£)`, `🇪🇺 EUR (€)` with realistic regional staffing costs and appointment value calculations.
+- **Removed Indian Doctors, Patients & Phone Numbers**:
+  - [FeatureBento.tsx](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/components/landing/FeatureBento.tsx): Changed Dr. Sharma to Dr. Miller, Riya S. to Emily R., `+91 987•• ••210` to `+1 (555) 349-8210`. Replaced DPDP badge with GDPR/HIPAA. Replaced Hindi greeting with Dutch & German.
+  - [WhatsAppPhone.tsx](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/components/landing/WhatsAppPhone.tsx): Replaced Dr. Mehta with Dr. Miller, Riya with Emily, Sunrise Clinic Andheri with Sunrise Medical Practice.
+  - [AuthShowcase.tsx](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/components/landing/AuthShowcase.tsx): Replaced Riya/Dr. Mehta/Arjun with Emily/Dr. Miller/James.
+  - [PartnersMarquee.tsx](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/components/landing/PartnersMarquee.tsx): Replaced UPI/INR Stripe with Stripe Global Payments (Apple Pay/Google Pay/USD), Cartesia audio sample from Hindi to English (Sarah), and removed Dr. Sharma.
+  - [DeveloperSection.tsx](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/components/landing/DeveloperSection.tsx): Replaced +91 phone numbers and Priya/Rohan/Sharma with US numbers (`+14155552671`), Sarah persona, and Dr. Anderson.
+  - [GlobalPresence.tsx](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/components/landing/GlobalPresence.tsx): Replaced DPDP 2023 with UK NHS DSPT & EU AI Act compliance badge; removed Airtel & Jio in favor of AT&T, Verizon, T-Mobile, Vodafone, BT.
+  - [Testimonials.tsx](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/components/landing/Testimonials.tsx): Westernized clinic cities (Austin, TX; London, UK; Amsterdam, NL; Berlin, DE; Miami, FL; Toronto, ON).
+  - [app/page.tsx](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/app/page.tsx), [docs/page.tsx](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/app/docs/page.tsx), [dental landing](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/app/ai-receptionist-for-dentists/page.tsx), [answering service landing](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/app/ai-phone-answering-service/page.tsx): Cleaned FAQs, carriers, and playground sandbox.
+
+---
+
 ### Entry 102 - SMTP Email Notifications for Pilot Leads & Vercel .env (2026-10-16) - DONE
 - **Founder Lead Notification via SMTP ([app/api/pilot/route.ts](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/app/api/pilot/route.ts))**:
   - Integrated transactional SMTP dispatch via `nodemailer` connecting to `mail.techycodex.com` (Port 587).

@@ -40,11 +40,11 @@ const ENDPOINTS: Record<string, EndpointDoc> = {
       "Initiates an autonomous outbound phone call to a patient using your clinic's AI Virtual Receptionist. Used for post-op checkups, recall reminders, and appointment re-confirmations.",
     auth: "Bearer amsh_live_...",
     parameters: [
-      { name: "to", type: "string", required: true, desc: "Patient phone number in E.164 format (e.g. +919876543210 or +14155552671)" },
+      { name: "to", type: "string", required: true, desc: "Patient phone number in E.164 format (e.g. +14155552671 or +442079460912)" },
       { name: "from_did", type: "string", required: false, desc: "Specific clinic DID to display on caller ID. Defaults to primary line." },
-      { name: "persona_id", type: "string", required: false, desc: "Virtual employee persona ('priya', 'sarah', 'emma', 'fatima')." },
+      { name: "persona_id", type: "string", required: false, desc: "Virtual employee persona ('sarah', 'emma', 'lotte', 'hannah', 'fatima')." },
       { name: "patient_name", type: "string", required: true, desc: "Patient full name for personalized greeting." },
-      { name: "context", type: "object", required: false, desc: "Clinical context e.g. { doctor: 'Dr. Sharma', service: 'Root Canal' }" },
+      { name: "context", type: "object", required: false, desc: "Clinical context e.g. { doctor: 'Dr. Anderson', service: 'Root Canal' }" },
       { name: "webhook_url", type: "string", required: false, desc: "Override default webhook endpoint for this specific call lifecycle." },
     ],
     snippets: {
@@ -52,12 +52,12 @@ const ENDPOINTS: Record<string, EndpointDoc> = {
   -H "Authorization: Bearer amsh_live_sec_9938217f2a" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "to": "+919876543210",
-    "patient_name": "Rohan Verma",
-    "persona_id": "priya",
+    "to": "+14155552671",
+    "patient_name": "David Miller",
+    "persona_id": "sarah",
     "context": {
       "clinic_name": "Sunrise Dental Care",
-      "doctor_name": "Dr. Sharma",
+      "doctor_name": "Dr. Anderson",
       "purpose": "Appointment Confirmation"
     }
   }'`,
@@ -67,12 +67,12 @@ from amsh import AmshClient
 client = AmshClient(api_key=os.environ.get("AMSH_API_KEY"))
 
 call = client.calls.dispatch(
-    to="+919876543210",
-    patient_name="Rohan Verma",
-    persona_id="priya",
+    to="+14155552671",
+    patient_name="David Miller",
+    persona_id="sarah",
     context={
         "clinic_name": "Sunrise Dental Care",
-        "doctor_name": "Dr. Sharma",
+        "doctor_name": "Dr. Anderson",
         "purpose": "Appointment Confirmation"
     }
 )
@@ -83,12 +83,12 @@ print(f"Call Queued: {call.id} | Status: {call.status}")`,
 const amsh = new AmshClient({ apiKey: process.env.AMSH_API_KEY });
 
 const call = await amsh.calls.dispatch({
-  to: "+919876543210",
-  patientName: "Rohan Verma",
-  personaId: "priya",
+  to: "+14155552671",
+  patientName: "David Miller",
+  personaId: "sarah",
   context: {
     clinicName: "Sunrise Dental Care",
-    doctorName: "Dr. Sharma",
+    doctorName: "Dr. Anderson",
     purpose: "Appointment Confirmation"
   }
 });
@@ -105,9 +105,9 @@ import (
 func main() {
 	c := client.New("amsh_live_sec_9938217f2a")
 	call, err := c.Calls.Dispatch(context.Background(), &client.DispatchParams{
-		To:          "+919876543210",
-		PatientName: "Rohan Verma",
-		PersonaID:   "priya",
+		To:          "+14155552671",
+		PatientName: "David Miller",
+		PersonaID:   "sarah",
 	})
 	if err != nil {
 		panic(err)
@@ -118,8 +118,8 @@ func main() {
     response: `{
   "status": "queued",
   "call_id": "call_amsh_8f912be4a",
-  "to": "+919876543210",
-  "persona_id": "priya",
+  "to": "+14155552671",
+  "persona_id": "sarah",
   "carrier": "twilio_sip_trunk",
   "created_at": "2026-10-10T15:45:00Z",
   "stream_url": "wss://stream.amsh.ai/v1/voice/call_amsh_8f912be4a"
@@ -137,25 +137,25 @@ func main() {
       { name: "doctor_id", type: "string", required: false, desc: "Doctor unique ID or 'all' for any available practitioner." },
       { name: "date", type: "string", required: true, desc: "Target date in ISO format YYYY-MM-DD (e.g. 2026-10-12)." },
       { name: "service_id", type: "string", required: false, desc: "Specific service ID (e.g. 'teeth_whitening', 'consultation')." },
-      { name: "timezone", type: "string", required: false, desc: "Clinic timezone (defaults to Asia/Kolkata or clinic profile setting)." },
+      { name: "timezone", type: "string", required: false, desc: "Clinic timezone (defaults to America/New_York or clinic profile setting)." },
     ],
     snippets: {
-      curl: `curl -X GET "https://api.amsh.ai/v1/appointments/available-slots?date=2026-10-12&doctor_id=doc_sharma_01" \\
+      curl: `curl -X GET "https://api.amsh.ai/v1/appointments/available-slots?date=2026-10-12&doctor_id=doc_miller_01" \\
   -H "Authorization: Bearer amsh_live_sec_9938217f2a"`,
       python: `slots = client.appointments.get_available_slots(
     date="2026-10-12",
-    doctor_id="doc_sharma_01"
+    doctor_id="doc_miller_01"
 )
 
 for slot in slots:
     print(f"Available: {slot.start_time} - {slot.doctor_name}")`,
       node: `const slots = await amsh.appointments.getAvailableSlots({
   date: "2026-10-12",
-  doctorId: "doc_sharma_01"
+  doctorId: "doc_miller_01"
 });
 
 console.log(slots.map(s => s.startTime));`,
-      go: `slots, err := c.Appointments.GetAvailableSlots(ctx, "2026-10-12", "doc_sharma_01")
+      go: `slots, err := c.Appointments.GetAvailableSlots(ctx, "2026-10-12", "doc_miller_01")
 if err != nil {
     panic(err)
 }
@@ -163,8 +163,8 @@ fmt.Println("Available slots:", len(slots))`,
     },
     response: `{
   "date": "2026-10-12",
-  "doctor_id": "doc_sharma_01",
-  "doctor_name": "Dr. Rohit Sharma (Orthodontist)",
+  "doctor_id": "doc_miller_01",
+  "doctor_name": "Dr. David Miller (Orthodontist)",
   "clinic_id": "clinic_sunrise_01",
   "slots": [
     { "start_time": "10:30", "end_time": "11:00", "status": "open" },
@@ -196,18 +196,18 @@ fmt.Println("Available slots:", len(slots))`,
   -H "Authorization: Bearer amsh_live_sec_9938217f2a" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "patient_name": "Ananya Roy",
-    "patient_phone": "+919811223344",
-    "doctor_id": "doc_sharma_01",
+    "patient_name": "Emily Watson",
+    "patient_phone": "+14155558932",
+    "doctor_id": "doc_miller_01",
     "slot_date": "2026-10-12",
     "slot_time": "14:00",
     "service_name": "Teeth Whitening Consultation",
     "send_whatsapp_confirmation": true
   }'`,
       python: `booking = client.appointments.book(
-    patient_name="Ananya Roy",
-    patient_phone="+919811223344",
-    doctor_id="doc_sharma_01",
+    patient_name="Emily Watson",
+    patient_phone="+14155558932",
+    doctor_id="doc_miller_01",
     slot_date="2026-10-12",
     slot_time="14:00",
     service_name="Teeth Whitening Consultation",
@@ -216,9 +216,9 @@ fmt.Println("Available slots:", len(slots))`,
 
 print(f"Booked ID: {booking.id} | WhatsApp Sent: {booking.whatsapp_sent}")`,
       node: `const booking = await amsh.appointments.book({
-  patientName: "Ananya Roy",
-  patientPhone: "+919811223344",
-  doctorId: "doc_sharma_01",
+  patientName: "Emily Watson",
+  patientPhone: "+14155558932",
+  doctorId: "doc_miller_01",
   slotDate: "2026-10-12",
   slotTime: "14:00",
   serviceName: "Teeth Whitening Consultation",
@@ -227,9 +227,9 @@ print(f"Booked ID: {booking.id} | WhatsApp Sent: {booking.whatsapp_sent}")`,
 
 console.log(\`Appointment booked: \${booking.id}\`);`,
       go: `booking, err := c.Appointments.Book(ctx, &client.BookParams{
-	PatientName:  "Ananya Roy",
-	PatientPhone: "+919811223344",
-	DoctorID:     "doc_sharma_01",
+	PatientName:  "Emily Watson",
+	PatientPhone: "+14155558932",
+	DoctorID:     "doc_miller_01",
 	SlotDate:     "2026-10-12",
 	SlotTime:     "14:00",
 	ServiceName:  "Teeth Whitening",
@@ -238,14 +238,14 @@ console.log(\`Appointment booked: \${booking.id}\`);`,
     response: `{
   "appointment_id": "apt_8832194b",
   "status": "confirmed",
-  "patient_name": "Ananya Roy",
-  "slot": "2026-10-12T14:00:00+05:30",
-  "doctor_name": "Dr. Rohit Sharma",
+  "patient_name": "Emily Watson",
+  "slot": "2026-10-12T14:00:00-04:00",
+  "doctor_name": "Dr. David Miller",
   "google_calendar_event_id": "gcal_evt_772189a",
   "whatsapp_confirmation": {
     "status": "sent",
     "message_id": "wamid.HBgLMzk...",
-    "delivered_to": "+919811223344"
+    "delivered_to": "+14155558932"
   }
 }`,
   },
@@ -257,8 +257,8 @@ export default function DocsPage() {
   const [copiedKey, setCopiedKey] = useState(false);
 
   // Playground simulation state
-  const [sandboxPhone, setSandboxPhone] = useState("+919876543210");
-  const [sandboxPersona, setSandboxPersona] = useState("priya");
+  const [sandboxPhone, setSandboxPhone] = useState("+14155552671");
+  const [sandboxPersona, setSandboxPersona] = useState("sarah");
   const [sandboxResponse, setSandboxResponse] = useState<string | null>(null);
   const [sandboxLoading, setSandboxLoading] = useState(false);
 
@@ -272,7 +272,7 @@ export default function DocsPage() {
             call_id: `call_sim_${Math.random().toString(36).substring(2, 9)}`,
             to: sandboxPhone,
             persona: sandboxPersona,
-            greeting_audio: "https://cdn.amsh.ai/samples/priya_greeting_sample.mp3",
+            greeting_audio: "https://cdn.amsh.ai/samples/sarah_greeting_sample.mp3",
             latency_ms: 148,
             timestamp: new Date().toISOString(),
           },
@@ -581,8 +581,8 @@ export default function DocsPage() {
   <Connect>
     <Stream url="wss://stream.amsh.ai/v1/voice/stream">
       <Parameter name="clinic_id" value="clinic_sunrise_01" />
-      <Parameter name="persona" value="priya" />
-      <Parameter name="language" value="auto_hindi_english" />
+      <Parameter name="persona" value="sarah" />
+      <Parameter name="language" value="auto_detect" />
     </Stream>
   </Connect>
 </Response>`}
@@ -821,9 +821,10 @@ async def handle_amsh_webhook(request: Request):
                     onChange={(e) => setSandboxPersona(e.target.value)}
                     className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs font-mono-ui text-slate-900 focus:outline-none focus:border-blue-500"
                   >
-                    <option value="priya">Priya (India · Hindi/English)</option>
                     <option value="sarah">Sarah (US · English/Spanish)</option>
                     <option value="emma">Emma (UK · British English)</option>
+                    <option value="lotte">Lotte (Netherlands · Dutch/English)</option>
+                    <option value="hannah">Hannah (Germany · German/English)</option>
                     <option value="fatima">Fatima (UAE · Arabic/English)</option>
                   </select>
                 </div>

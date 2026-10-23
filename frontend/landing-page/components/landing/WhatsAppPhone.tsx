@@ -12,8 +12,8 @@ type Msg =
   | { from: "clinic"; kind: "confirm"; time: string };
 
 const SCRIPT: Msg[] = [
-  { from: "patient", text: "Hi, is Dr. Mehta available this week? Knee pain 🙏", time: "9:41 PM" },
-  { from: "clinic", text: "Hi Riya! 👋 I'm AMSh, Sunrise Clinic's assistant. Dr. Mehta (Orthopaedics) has these slots:", time: "9:41 PM" },
+  { from: "patient", text: "Hi, is Dr. Miller available this week? Knee pain 🙏", time: "9:41 PM" },
+  { from: "clinic", text: "Hi Emily! 👋 I'm AMSh, Sunrise Medical's assistant. Dr. Miller (Orthopaedics) has these slots:", time: "9:41 PM" },
   { from: "clinic", kind: "slots", text: "Choose a time", time: "9:41 PM", options: ["Thu · 10:30 AM", "Fri · 4:15 PM", "Sat · 11:00 AM"] },
   { from: "patient", text: "Thu · 10:30 AM", time: "9:42 PM" },
   { from: "clinic", kind: "confirm", time: "9:42 PM" },
@@ -68,9 +68,9 @@ function Bubble({ m }: { m: Msg }) {
         <div className="-mx-1 mb-1.5 overflow-hidden rounded-md bg-[#f0f2f5]">
           <div className="bg-gradient-to-r from-[#008069] to-[#25D366] px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-white">Appointment confirmed ✅</div>
           <div className="space-y-0.5 px-3 py-2 text-[12.5px]">
-            <p><span className="text-[#667781]">Doctor</span> · Dr. Mehta</p>
+            <p><span className="text-[#667781]">Doctor</span> · Dr. Miller</p>
             <p><span className="text-[#667781]">When</span> · Thu, 10:30 AM</p>
-            <p><span className="text-[#667781]">Where</span> · Sunrise Clinic, Andheri</p>
+            <p><span className="text-[#667781]">Where</span> · Sunrise Medical Practice</p>
           </div>
         </div>
         <p>You&apos;re booked! I&apos;ll send a reminder the evening before. Reply here any time to reschedule.</p>
@@ -230,7 +230,7 @@ export default function WhatsAppPhone({ compact = false }: { compact?: boolean }
         <BrandIcon name="gcal" className="h-7 w-7" />
         <div>
           <p className="text-[11px] font-medium uppercase tracking-wider text-slate-500">Added to schedule</p>
-          <p className="text-sm font-semibold text-slate-900">Dr. Mehta · Thu 10:30</p>
+          <p className="text-sm font-semibold text-slate-900">Dr. Miller · Thu 10:30</p>
         </div>
       </motion.div>
     </div>

@@ -3,13 +3,13 @@
 import React, { useState } from "react";
 
 export default function RoiCalculator() {
-  const [currency, setCurrency] = useState<"usd" | "inr">("usd");
+  const [currency, setCurrency] = useState<"usd" | "gbp" | "eur">("usd");
   const [doctorsCount, setDoctorsCount] = useState(2);
   const [callsPerMonth, setCallsPerMonth] = useState(800);
 
   // Financial calculations
-  const humanSalaryMonthly = currency === "usd" ? 3200 : 28000;
-  const amshCostMonthly = currency === "usd" ? 49 : 3999;
+  const humanSalaryMonthly = currency === "usd" ? 3400 : currency === "gbp" ? 2600 : 2900;
+  const amshCostMonthly = currency === "usd" ? 49 : currency === "gbp" ? 39 : 45;
 
   // Extra human staffing needed as doctors scale
   const humanStaffNeeded = Math.max(1, Math.ceil(doctorsCount / 2));
@@ -21,14 +21,17 @@ export default function RoiCalculator() {
 
   // Estimated recovered appointments (15% of callers typically bounce on busy lines)
   const missedCallsRecovered = Math.round(callsPerMonth * 0.18);
-  const avgBookingValue = currency === "usd" ? 150 : 800;
+  const avgBookingValue = currency === "usd" ? 150 : currency === "gbp" ? 120 : 135;
   const annualRecoveredRevenue = missedCallsRecovered * avgBookingValue * 12;
 
   const formatCurrency = (val: number) => {
     if (currency === "usd") {
       return `$${val.toLocaleString()}`;
     }
-    return `₹${val.toLocaleString()}`;
+    if (currency === "gbp") {
+      return `£${val.toLocaleString()}`;
+    }
+    return `€${val.toLocaleString()}`;
   };
 
   return (
@@ -60,12 +63,21 @@ export default function RoiCalculator() {
           </button>
           <button
             type="button"
-            onClick={() => setCurrency("inr")}
+            onClick={() => setCurrency("gbp")}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-              currency === "inr" ? "bg-white text-slate-950 shadow-xs" : "text-slate-500 hover:text-slate-800"
+              currency === "gbp" ? "bg-white text-slate-950 shadow-xs" : "text-slate-500 hover:text-slate-800"
             }`}
           >
-            🇮🇳 INR (₹)
+            🇬🇧 GBP (£)
+          </button>
+          <button
+            type="button"
+            onClick={() => setCurrency("eur")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              currency === "eur" ? "bg-white text-slate-950 shadow-xs" : "text-slate-500 hover:text-slate-800"
+            }`}
+          >
+            🇪🇺 EUR (€)
           </button>
         </div>
       </div>

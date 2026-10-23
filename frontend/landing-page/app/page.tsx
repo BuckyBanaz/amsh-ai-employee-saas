@@ -154,7 +154,7 @@ const DAY = [
 const STEPS = [
   {
     title: "1. Hire & Configure",
-    body: "Choose your virtual employee persona (Priya, Sarah, Emma), input your doctors, fees, and working hours in 5 minutes.",
+    body: "Choose your virtual employee persona (Sarah, Emma, Lotte, Hannah, Fatima), input your doctors, fees, and working hours in 5 minutes.",
   },
   {
     title: "2. Connect Phone Line",
@@ -177,15 +177,15 @@ const FAQS = [
   },
   {
     q: "Which languages and accents does our AI Employee speak?",
-    a: "AMSh speaks Hindi, Hinglish, Indian English, US Neutral English, British English, Spanish, Arabic, French, and 20+ other languages, automatically adapting to the caller's language mid-call.",
+    a: "AMSh speaks US Neutral English, British English, Spanish, German, French, Dutch, Arabic, and 20+ other global languages, automatically adapting to the caller's language mid-call.",
   },
   {
-    q: "Can we use AMSh outside India (e.g. US, UK, Canada, UAE)?",
-    a: "Yes! AMSh is deployed globally with local phone numbers available across North America, Europe, Australia, GCC/Middle East, and Asia. All infrastructure is HIPAA, GDPR, and DPDP compliant.",
+    q: "Can we use AMSh across the US, UK, Europe, and UAE?",
+    a: "Yes! AMSh is deployed globally with local phone numbers available across North America, the UK, Europe, Australia, and the Middle East. All infrastructure is HIPAA, GDPR, and SOC 2 compliant.",
   },
   {
     q: "Can we keep our existing clinic phone number?",
-    a: "Yes! You can enable simple call forwarding from your existing Airtel, Jio, AT&T, Verizon, Vodafone, or landline number directly to your AMSh virtual receptionist.",
+    a: "Yes! You can enable simple call forwarding from your existing AT&T, Verizon, T-Mobile, Vodafone, BT, or local landline number directly to your AMSh virtual receptionist.",
   },
   {
     q: "How does appointment confirmation work?",
@@ -193,7 +193,7 @@ const FAQS = [
   },
   {
     q: "What happens during a medical emergency?",
-    a: "AMSh has strict deterministic clinical safety guardrails. If a caller reports chest pain, severe trauma, or acute distress, it immediately advises emergency services (112 / 911) and hot-transfers the call to your on-call emergency doctor.",
+    a: "AMSh has strict deterministic clinical safety guardrails. If a caller reports chest pain, severe trauma, or acute distress, it immediately advises emergency services (911 / 999 / 112) and hot-transfers the call to your on-call emergency doctor.",
   },
 ];
 
@@ -262,7 +262,7 @@ export default async function LandingPage() {
           </div>
         </section>
 
-        {/* 4. NEW: Virtual Employee Showcase (Priya, Sarah, Emma, Fatima) */}
+        {/* 4. NEW: Virtual Employee Showcase (Sarah, Emma, Lotte, Hannah, Fatima) */}
         <section id="employees" className="py-24 bg-white border-b border-slate-200/80">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="text-center max-w-3xl mx-auto mb-14">
