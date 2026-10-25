@@ -42,8 +42,8 @@ class EmergencyRule:
     def evaluate(user_text: str, emergency_numbers: Optional[Sequence[str]] = None) -> Tuple[bool, Optional[str]]:
         """Returns (is_emergency, message to speak). On an emergency the message is spoken at once and the call escalated."""
         text = user_text or ""
-        match = next((m for pattern in EMERGENCY_PATTERNS.values() if (m := pattern.search(text))), None)
-        if not match:
+        matched = next((language for language, pattern in EMERGENCY_PATTERNS.items() if pattern.search(text)), None)
+        if not matched:
             return False, None
-        logger.warning("SAFETY GUARDRAIL TRIGGERED: matched '%s' in caller input.", match.group(0))
+        logger.warning("SAFETY GUARDRAIL TRIGGERED: an emergency pattern (%s pack) matched the caller input.", matched)  # never the words: health data
         return True, emergency_message(emergency_numbers)

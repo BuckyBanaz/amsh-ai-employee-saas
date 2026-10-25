@@ -47,7 +47,8 @@ class ChatBackend(Protocol):
         """Returns {"content": str|None, "tool_calls": [{"id","name","arguments"}]}."""
 
     def chat_stream(self, messages: List[Dict[str, Any]], tools: List[Dict[str, Any]]) -> AsyncIterator[Dict[str, Any]]:
-        """Yields {"type": "text", "delta": str} then one {"type": "final", "content", "tool_calls"}."""
+        """Yields {"type": "text", "delta": str} then one {"type": "final", "content", "tool_calls"}. May yield one
+        {"type": "text_end"} before "final": the reply's words are complete (tool-call arguments may still be streaming)."""
 
 
 def parse_wait_seconds(text: str) -> Optional[float]:
@@ -212,7 +213,7 @@ class OpenAICompatBackend:
         # Latency marks (no-op outside a measured live turn). First "token" counts any delta, including hidden reasoning
         # and tool-call fragments; first "content" is the first word that can be spoken. The gap is reasoning cost.
         latency.mark("llm_request_start", provider=self.provider, tools=bool(tools))
-        first_token = first_content = False
+        first_token = first_content = text_ended = False
         try:
             # Nothing is yielded before the first token, so abandoning the request inside this window is invisible to the caller.
             async with asyncio.timeout(self.first_token_timeout) as first_token_deadline:
@@ -239,6 +240,11 @@ class OpenAICompatBackend:
                                 latency.mark("llm_first_content", provider=self.provider)
                             text_parts.append(delta["content"])
                             yield {"type": "text", "delta": delta["content"]}
+                        if not text_ended and (delta.get("tool_calls") or delta.get("finish_reason")):
+                            # LATENCY: no more words are coming, so the last sentence (usually the question) can be spoken
+                            # now instead of after the tool-call arguments, usage chunk and connection close.
+                            text_ended = True
+                            yield {"type": "text_end"}
                         for tc in delta.get("tool_calls") or []:
                             slot = acc.setdefault(tc.get("index", 0), {"id": None, "name": "", "arguments": "", "extra_content": None})
                             slot["id"] = tc.get("id") or slot["id"]
@@ -487,4 +493,9 @@ def parse_sse_line(line: str) -> Optional[Dict[str, Any]]:
         choices = json.loads(data).get("choices") or []
     except ValueError:
         return None
-    return (choices[0].get("delta") or {}) if choices else None
+    if not choices:
+        return None
+    delta = dict(choices[0].get("delta") or {})
+    if choices[0].get("finish_reason"):  # the model is done writing; usage / [DONE] / the connection close still follow
+        delta["finish_reason"] = choices[0]["finish_reason"]
+    return delta

@@ -9,6 +9,7 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict
 from backend.ai.tools.framework.base import BaseTool, ToolContext, ToolResult
+from backend.server.auth.crypto import CryptoManager
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +31,7 @@ async def dispatch_sms(to_phone: str, body: str) -> bool:
 
             res = await plivo_client.send_sms(to_phone, body)
             if not res.get("error"):
-                logger.info(f"[PLIVO SMS] Successfully dispatched to {to_phone}")
+                logger.info(f"[PLIVO SMS] Successfully dispatched to {CryptoManager.mask_phone(to_phone)}")
                 return True
         except Exception as e:
             logger.warning(f"[PLIVO SMS] Dispatch failed, trying fallback: {e}")
@@ -45,7 +46,7 @@ async def dispatch_sms(to_phone: str, body: str) -> bool:
                     data={"From": settings.TWILIO_PHONE_NUMBER, "To": to_phone, "Body": body},
                 )
             if resp.status_code in (200, 201):
-                logger.info(f"[TWILIO SMS] Sent to {to_phone} successfully.")
+                logger.info(f"[TWILIO SMS] Sent to {CryptoManager.mask_phone(to_phone)} successfully.")
                 return True
             logger.warning(f"[TWILIO SMS] Failed ({resp.status_code}): {resp.text}")
         except Exception as e:
@@ -57,7 +58,7 @@ def send_sms_sync(to_phone: str, body: str) -> Dict[str, Any]:
     """Fire-and-forget SMS for synchronous callers (booking confirmation, notifications).
     Returns immediately; the outcome is logged. Set AMSH_DISABLE_SMS=1 to turn sending off (tests, staging)."""
     if os.environ.get("AMSH_DISABLE_SMS"):
-        logger.info(f"[SMS DISABLED] would send to {to_phone}: {body}")
+        logger.info(f"[SMS DISABLED] would send {len(body or '')} chars to {CryptoManager.mask_phone(to_phone)}")
         return {"queued": False, "skipped": "AMSH_DISABLE_SMS"}
     if not to_phone:
         return {"queued": False, "skipped": "no recipient"}
@@ -65,9 +66,9 @@ def send_sms_sync(to_phone: str, body: str) -> Dict[str, Any]:
     def _job() -> None:
         try:
             if not asyncio.run(dispatch_sms(to_phone, body)):
-                logger.warning(f"[SMS] No provider accepted the message to {to_phone}: {body}")
+                logger.warning(f"[SMS] No provider accepted the {len(body or '')}-char message to {CryptoManager.mask_phone(to_phone)}")
         except Exception as e:
-            logger.error(f"[SMS] Background dispatch failed for {to_phone}: {e}")
+            logger.error(f"[SMS] Background dispatch failed for {CryptoManager.mask_phone(to_phone)}: {e}")
 
     _SMS_EXECUTOR.submit(_job)
     return {"queued": True}
@@ -101,7 +102,7 @@ class SendSmsTool(BaseTool):
         sent = False if os.environ.get("AMSH_DISABLE_SMS") else await dispatch_sms(to_phone, message_body)
 
         if not sent:
-            logger.info(f"[SMS DISPATCH LOG] To: {to_phone} | Msg: {message_body}")
+            logger.info(f"[SMS DISPATCH LOG] To: {CryptoManager.mask_phone(to_phone)} | {len(message_body or '')} chars")
             sent = True
 
         return ToolResult(

@@ -4,9 +4,8 @@ streamed sentence-by-sentence speaking with barge-in, and silent shadow comparis
 import asyncio
 import json
 import logging
-from backend.ai.capabilities.rules.compliance_pii import CompliancePIIRule
-from dataclasses import dataclass
-from typing import Any, Awaitable, Callable, Dict, Optional
+from dataclasses import dataclass, field
+from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 from backend.ai.engine.agent.agent_loop import AgentEngine, AgentTurn
 from backend.ai.engine.agent.facts import AgentProfile, load_all
@@ -17,7 +16,8 @@ from backend.ai.realtime import latency
 logger = logging.getLogger(__name__)
 
 MODES = ("state_machine", "shadow", "llm_agent")
-SpeakFn = Callable[..., Awaitable[Optional[bool]]]  # (text, emotion=None)  # returns False when the caller interrupted playback
+SpeakFn = Callable[..., Awaitable[Any]]  # (text, emotion=None) -> True/None played, False interrupted while playing, NOT_PLAYED
+NOT_PLAYED = "not_played"  # speak() result: the sentence was dropped before any of its audio went out (the turn was already interrupted)
 
 
 def resolve_mode(tenant_override: Optional[str], global_default: Optional[str]) -> str:
@@ -33,6 +33,7 @@ class TurnRun:
     turn: AgentTurn
     spoken_any: bool
     interrupted: bool
+    heard: List[str] = field(default_factory=list)  # the sentences handed to speak() that went out, in order
 
 
 class AgentRuntime:
@@ -118,17 +119,25 @@ class AgentRuntime:
 
         producer = asyncio.create_task(produce())
         spoken_any = interrupted = False
+        heard: list = []  # sentences at least part of which reached the caller; the engine runs ahead of playback
         try:
             while True:
                 event = await queue.get()
                 if event["type"] == "sentence" and not interrupted:
                     spoken_any = True
                     extra = {"emotion": event["emotion"]} if event.get("emotion") else {}
-                    if await speak(event.get("tts_text") or event["text"], **extra) is False:
+                    result = await speak(event.get("tts_text") or event["text"], **extra)
+                    if result is not NOT_PLAYED:
+                        heard.append(event["text"])
+                    if result is False or result is NOT_PLAYED:
                         interrupted = True
                         self.engine.request_stop()  # stop generating for a caller who is no longer listening (no more drain)
                 elif event["type"] == "done":
-                    return TurnRun(event["turn"], spoken_any, interrupted)
+                    turn = event["turn"]
+                    if interrupted and not turn.degraded:
+                        # Queued sentences that never played were committed as said: keep only what the caller heard.
+                        turn.reply = self.engine.amend_reply(" ".join(heard))
+                    return TurnRun(turn, spoken_any, interrupted, heard)
                 elif event["type"] == "error":
                     raise event["error"]
         finally:
@@ -145,9 +154,10 @@ class AgentRuntime:
                     json.dumps(
                         {
                             "call_id": call_id,
-                            "caller": CompliancePIIRule.redact(transcript),  # logs never carry phone numbers / emails / cards
-                            "legacy": CompliancePIIRule.redact(legacy_reply),
-                            "agent": CompliancePIIRule.redact(turn.reply),
+                            # Lengths only: logs never carry what a patient said or was told
+                            "caller_words": len(transcript.split()),
+                            "legacy_chars": len(legacy_reply or ""),
+                            "agent_chars": len(turn.reply or ""),
                             "agent_tools": [t.get("tool") for t in turn.tools],
                             "agent_latency_ms": turn.latency_ms,
                             "agent_degraded": turn.degraded,

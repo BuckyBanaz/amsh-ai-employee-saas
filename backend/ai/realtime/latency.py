@@ -6,8 +6,13 @@ change, because asyncio tasks copy the context they were created in. When the tu
 which logs one structured JSON line (`[LATENCY] {...}`, easy to grep / ship to a log pipeline) and a readable table.
 
 All times are milliseconds from the turn's origin: the caller's estimated end of speech when Deepgram gave word timings,
-otherwise the moment the final transcript arrived. Only the first occurrence of each mark is kept; repeated events
-(several tool calls, several LLM rounds) are also kept in order in `timeline`.
+otherwise the moment the final transcript arrived. Marks from before the origin (the caller's speech start, the first
+interim transcript) are negative. Only the first occurrence of each mark is kept; repeated events (several tool calls,
+several LLM rounds, one TTS request per sentence) are also kept in order in `timeline`.
+
+Turn 0 is the call's opening (recording notice + greeting), measured from the moment the call's media stream was accepted.
+"Sent" marks are when audio was handed to the telephony socket, not when the caller heard it; what was actually played is
+known only from the provider's mark echo ([PLAYOUT] log). Nothing here carries transcript text, audio, or caller details.
 """
 
 import asyncio
@@ -21,6 +26,10 @@ logger = logging.getLogger("backend.latency")
 
 # Order of the readable report. Marks not reached in a turn are simply absent.
 STAGES = (
+    "call_accepted",  # turn 0 only
+    "greeting_start",  # turn 0 only (after the recording notice, if any)
+    "caller_speech_start",  # Deepgram SpeechStarted for this utterance
+    "stt_first_interim",  # first transcript event (interim or final) for this utterance
     "speech_end",
     "deepgram_final",
     "llm_request_start",
@@ -32,6 +41,10 @@ STAGES = (
     "tts_request_start",
     "tts_first_audio",
     "first_audio_sent_to_telephony",
+    "barge_in_detected",
+    "playback_clear_sent",
+    "llm_stop_requested",
+    "tts_cancel_sent",
     "turn_end",
 )
 
@@ -75,10 +88,18 @@ class TurnLatency:
             "chunk_to_tts_request": gap("llm_first_chunk", "tts_request_start"),
             "tts_ttfb": gap("tts_request_start", "tts_first_audio"),
             "tts_to_telephony": gap("tts_first_audio", "first_audio_sent_to_telephony"),
+            "stt_interim_to_final": gap("stt_first_interim", "deepgram_final"),
+            "llm_first_token_to_first_sentence": gap("llm_first_token", "llm_first_chunk"),
+            "end_of_turn_to_first_audio_sent": gap("deepgram_final", "first_audio_sent_to_telephony"),
+            "greeting_to_first_audio_sent": self._after("greeting_start", "first_audio_sent_to_telephony"),
+            "barge_in_to_clear_sent": gap("barge_in_detected", "playback_clear_sent"),
+            "barge_in_to_turn_end": gap("barge_in_detected", "turn_end"),  # the interrupted turn's model/tools have stopped
         }
         tools = [(n, ms, d) for n, ms, d in self.timeline if n in ("tool_start", "tool_end")]
         if tools:
             out["tools"] = tools
+        if sentences := self.sentences():
+            out["sentences"] = sentences
         attempts = [d.get("provider") for n, _, d in self.timeline if n == "llm_request_start"]
         if attempts:
             # One entry per LLM request: tool rounds, guard retries and provider fallbacks (429 -> next provider) all
@@ -87,6 +108,32 @@ class TurnLatency:
             out["llm_attempts"] = attempts
         out["perceived_ms"] = self.ms("first_audio_sent_to_telephony")
         out.update(self.info)
+        return out
+
+    def _after(self, a: str, b: str) -> Optional[float]:
+        """ms from mark `a` to the first `b` that came after it (the notice's audio precedes the greeting's in turn 0)."""
+        start = self.marks.get(a)
+        if start is None:
+            return None
+        later = [ms for name, ms, _ in self.timeline if name == b and ms >= start]
+        return round(later[0] - start, 1) if later else None
+
+    def sentences(self) -> List[Dict[str, Any]]:
+        """One entry per spoken sentence, in order (sentences are synthesised one at a time): when its TTS was requested,
+        its first audio arrived (cached or not) and its first frame was sent. `queued_ms` is how much earlier audio was
+        still queued for playback when that frame was sent; negative means the caller had about that much silence first
+        (an estimate from frames sent, not from playback)."""
+        out: List[Dict[str, Any]] = []
+        for name, ms, data in self.timeline:
+            if name == "tts_request_start":
+                out.append({"tts_request_ms": ms, "chars": data.get("chars")})
+            elif out and name == "tts_first_audio" and "tts_first_audio_ms" not in out[-1]:
+                out[-1]["tts_first_audio_ms"] = ms
+                out[-1]["cached"] = bool(data.get("cached"))
+            elif out and name == "first_audio_sent_to_telephony" and "first_sent_ms" not in out[-1]:
+                out[-1]["first_sent_ms"] = ms
+                if data.get("queued_ms") is not None:
+                    out[-1]["queued_ms"] = data["queued_ms"]
         return out
 
     def report(self) -> Dict[str, Any]:
@@ -135,6 +182,17 @@ def create_detached_task(coro: Any) -> "asyncio.Task":
 
     def _spawn() -> "asyncio.Task":
         _current.set(None)
+        return asyncio.get_running_loop().create_task(coro)
+
+    return ctx.run(_spawn)
+
+
+def create_measured_task(coro: Any, tracker: Optional[TurnLatency]) -> "asyncio.Task":
+    """create_task() whose marks go to `tracker` (the call's opening), without making it the creator's current turn."""
+    ctx = contextvars.copy_context()
+
+    def _spawn() -> "asyncio.Task":
+        _current.set(tracker)
         return asyncio.get_running_loop().create_task(coro)
 
     return ctx.run(_spawn)

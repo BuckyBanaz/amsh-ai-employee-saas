@@ -76,7 +76,7 @@ class ClinicWriteOperations:
             db.add(transaction)
             db.commit()
             db.refresh(transaction)
-            logger.info("Successfully stored appointment %s in PostgreSQL for %s", booking_id, patient_name)
+            logger.info("Successfully stored appointment %s in PostgreSQL", booking_id)  # no patient name in logs
             calendar_sync.sync_appointment(db, business_id, transaction)
 
             # Trigger Instant Confirmation SMS if phone provided and source is voice receptionist

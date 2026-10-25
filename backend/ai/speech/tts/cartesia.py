@@ -204,6 +204,7 @@ class CartesiaTTS:
                 # even check a reply here.
                 try:
                     await self._ws.send(json.dumps({"context_id": context_id, "cancel": True}))
+                    latency.mark("tts_cancel_sent")
                 except Exception:
                     pass
 

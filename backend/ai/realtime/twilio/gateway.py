@@ -28,7 +28,7 @@ from backend.ai.engine.conversation.state_machine import ConversationStateMachin
 from backend.ai.engine.conversation.i18n import normalize_language, t
 from backend.ai.engine.conversation.states import CallState
 from backend.ai.engine.conversation.nlu import ConversationalNLU
-from backend.ai.engine.agent.runtime import AgentRuntime, get_sim_runtime, store_sim_runtime
+from backend.ai.engine.agent.runtime import NOT_PLAYED, AgentRuntime, get_sim_runtime, store_sim_runtime
 from backend.ai.engine.agent.sandbox import SandboxLedger
 from backend.server.services import policies as policy_service
 from backend.ai.llm.client import llm_client
@@ -49,6 +49,7 @@ from backend.ai.engine.agent.agent_loop import _NO_TRANSFER, _scripted
 from backend.ai.engine.agent.hindi import language_pack
 from backend.ai.capabilities.rules.patient_privacy import caller_memory
 from backend.server.cache.redis import get_redis_client
+from backend.server.auth.crypto import CryptoManager
 from backend.server.auth.security import get_current_user
 from backend.server.auth.webhook_signatures import stream_token_ok
 from backend.server.common import ratelimit
@@ -76,6 +77,7 @@ vad = SimpleVAD(energy_threshold=1400)
 # Prevents phone line acoustic echo, breath, and background clicks from cutting off the AI.
 CUE_LEAD_S = 0.5  # the caller's sound is scored from this long before their first word (a laugh can open the turn)
 PICKUP_WINDOW_S = 0.8  # after the call is answered, before the first word: the handset reaches the caller's ear
+NOTICE_MAX_WAIT_S = 20.0  # longest a caller who spoke over the recording notice waits for it to finish playing
 TRANSFER_PLAYBACK_WAIT_S = 8.0  # at most this long for the agent's last line to finish before a Plivo transfer
 BARGE_IN_GRACE_PERIOD_S = 0.4  # grace window after the AI starts speaking (device echo cancellation settling); measured from the response onset, not each sentence
 MIN_SILENCE_TIMEOUT_S = 10  # "are you still there?" never earlier than this on a phone line, whatever the tab says
@@ -152,6 +154,32 @@ def pack_line(key: str, language: Optional[str]) -> str:
     return (language_pack(code).get("strings") or {}).get(key) or language_pack("en")["strings"][key]
 
 
+_FRAME_IDS = ("event", "type", "sequenceNumber", "streamSid", "streamId", "callSid", "callId", "accountSid", "tracks", "mediaFormat", "track", "chunk", "timestamp")
+
+
+def ws_frame_shape(data: Dict[str, Any]) -> Dict[str, Any]:
+    """A provider websocket frame for the logs: ids, formats and mark names kept; the audio payload, the caller's
+    number, the stream token and every other custom parameter reduced to their key names or sizes."""
+    shape: Dict[str, Any] = {}
+    for scope, part in (("", data), ("start.", data.get("start")), ("media.", data.get("media")), ("stop.", data.get("stop"))):
+        if not isinstance(part, dict):
+            continue
+        for key in _FRAME_IDS:
+            if key in part:
+                shape[scope + key] = part[key]
+        for key in ("payload", "data"):
+            if isinstance(part.get(key), str):
+                shape[scope + key + "_len"] = len(part[key])
+        for key in ("customParameters", "custom_params", "extra_headers"):
+            if part.get(key):
+                shape[scope + key] = sorted(part[key]) if isinstance(part[key], dict) else "<redacted>"
+    if isinstance(data.get("mark"), dict):
+        shape["mark.name"] = data["mark"].get("name")
+    elif "name" in data:  # Plivo playedStream
+        shape["name"] = data["name"]
+    return shape
+
+
 def get_active_call_session(call_id: str) -> Optional["CallSession"]:
     """Returns the active in-memory CallSession for a live call if connected via WebSocket."""
     return ACTIVE_CALL_SESSIONS.get(call_id)
@@ -198,6 +226,22 @@ class CallSession:
         self._is_greeting: bool = False
         self._greeting_until: float = 0.0
         self._greeting_mark: Optional[str] = None
+        self._opening_task: Optional[asyncio.Task] = None  # pickup window + recording notice
+        self._greeting_task: Optional[asyncio.Task] = None  # notice, then greeting: runs beside the receive loop
+        self._notice_mark: Optional[str] = None  # the playback mark sent after the recording notice
+        self._notice_played = asyncio.Event()  # set when the provider echoes it: the notice has played at the caller's end
+        # Latency measurement (see realtime/latency.py): the opening's tracker (turn 0), the turn being answered (barge-in marks
+        # land on it), Deepgram's SpeechStarted for the utterance being heard, and which turn each playback mark belongs to.
+        self._opening_tracker: Optional[latency.TurnLatency] = None
+        self._active_tracker: Optional[latency.TurnLatency] = None
+        self._speech_started_at: Optional[float] = None
+        self._mark_turns: Dict[str, int] = {}
+        # The last agent turn whose audio may still be playing after the turn itself ended (frames go out faster than real
+        # time): its sentences, the playback mark sent after each, which marks the provider echoed as played, and its history
+        # group. A barge-in in that window keeps only what was heard (see _amend_unheard_tail).
+        self._tail: Optional[Dict[str, Any]] = None
+        self._last_mark_sent: Optional[str] = None
+        self._clear_sent_at: Optional[float] = None  # a barge-in clear awaiting the provider's first echo (measurement)
         self._speak_started_at = 0.0  # monotonic timestamp when AI began speaking current turn
         self._turn_no = 0  # numbering for the per-turn [LATENCY] log
         self._last_caller_voice = 0.0  # monotonic time of the last sign the caller is talking (STT words, speech start, voiced audio)
@@ -207,6 +251,7 @@ class CallSession:
         self._persist_tasks: set = set()  # turn-log DB writes in flight (awaited in stop())
         self._playout_lag_ms: List[float] = []  # per sentence: how late the provider echoed "played" vs zero-delay playback
         self._last_warm = 0.0  # monotonic time provider connections were last warmed (see _warm_providers)
+        self._frames_out = 0  # audio frames sent to telephony on this call (tells a partly played sentence from an unplayed one)
 
     @property
     def is_greeting_active(self) -> bool:
@@ -235,8 +280,64 @@ class CallSession:
     async def _barge_in(self, path: str) -> None:
         """The caller is talking over us: stop playback, clear Twilio's queue, invalidate the rest of the turn (generation),
         and log what was cancelled and how long it took."""
+        detected = time.monotonic()
+        tracker = self._active_tracker  # the turn being answered, if any
+        if tracker is not None:
+            tracker.mark("barge_in_detected", path=path)
+        # Most of a reply plays after its turn ended (frames go out faster than real time). Which of its sentences played
+        # is read now: the echoes a clear provokes are the provider flushing its queue, not playback.
+        tail, self._tail = (self._tail, None) if tracker is None else (None, self._tail)
+        played = set(tail["played"]) if tail else set()
+        pending_marks = len(self.barge_in._mark_due)  # marks the provider will echo at once on a clear
         result = await self.barge_in.handle_caller_speech(self.websocket, self.stream_sid, pcm=self.pcm, provider=self.provider)
+        clear_sent = bool(result and result.get("clear_sent"))
+        clear_at = time.monotonic()
+        if clear_sent and pending_marks:
+            self._clear_sent_at = clear_at  # its first echo measures the provider's acknowledgement
+        if tracker is not None and clear_sent:
+            tracker.mark("playback_clear_sent")
+        engine = getattr(self.agent_rt, "engine", None)
+        if result is not None and engine is not None:
+            # Stop the model now, not when its next sentence reaches speak(): no tokens or tool rounds for an answer nobody
+            # will hear. Idempotent; a stop that lands after the turn ended is cleared when the next turn starts.
+            engine.request_stop()
+            if tracker is not None:
+                tracker.mark("llm_stop_requested", by="barge_in")
+        heard = self._amend_unheard_tail(tail, played) if (tail and result is not None and engine is not None) else None
+        if result is not None:
+            # One line per barge-in, whether or not a turn was still running (the turn report misses the common case).
+            logger.info("[BARGE-IN] %s", json.dumps({
+                "call_id": self.call_id, "turn": tracker.turn if tracker else (tail or {}).get("turn", self._turn_no),
+                "path": path, "during": "turn" if tracker else ("playback_tail" if tail else "other"),
+                "detect_to_clear_sent_ms": round((clear_at - detected) * 1000, 1) if clear_sent else None,
+                "heard_sentences": heard[0] if heard else None, "of": heard[1] if heard else None,
+            }))
         self.barge_monitor.fired(path, result, turn=self._turn_no, generation=self.barge_in.generation)
+
+    def _amend_unheard_tail(self, tail: Dict[str, Any], played: set) -> Optional[Tuple[int, int]]:
+        """A barge-in after the turn ended: the sentences whose playback mark the provider echoed were heard, and so was
+        (part of) the one playing; the rest never played. Returns (heard, total) sentences."""
+        marks, sentences = tail["marks"], tail["sentences"]
+        playing = next((i for i, m in enumerate(marks) if m not in played), len(marks))
+        n_heard = min(playing + 1, len(sentences))
+        if n_heard < len(sentences):
+            self.agent_rt.engine.amend_reply(" ".join(sentences[:n_heard]), group=tail["group"])
+        return n_heard, len(sentences)
+
+    def note_mark_echo(self, mark: Optional[str]) -> None:
+        """The provider echoed a playback mark (Twilio mark / Plivo playedStream)."""
+        if mark is not None and mark == self._notice_mark:
+            self._notice_played.set()  # the caller has heard the whole recording notice
+        if self._clear_sent_at is not None:  # the first echo after a clear: the provider acknowledged it (measurement)
+            logger.info("[BARGE-IN] %s", json.dumps({"call_id": self.call_id, "clear_acknowledged_ms":
+                                                     round((time.monotonic() - self._clear_sent_at) * 1000, 1)}))
+            self._clear_sent_at = None
+            return
+        tail = self._tail
+        if tail is not None and mark in tail["marks"]:
+            tail["played"].add(mark)
+            if len(tail["played"]) == len(tail["marks"]):
+                self._tail = None  # all of it played
 
     async def start(self, stream_sid: str, call_id: str, caller_number: str) -> None:
         self.stream_sid = stream_sid
@@ -259,7 +360,11 @@ class CallSession:
         # follows it. Before, nothing played until all of that was done and the notice trailed the greeting.
         notice = await asyncio.to_thread(policy_service.notice_for, self.business_id, self.agent_settings.get("language"))
         self._is_greeting = True  # notice and greeting are not interruptible (echo / "hello?" over the opening)
-        opening = asyncio.create_task(self._play_opening_notice(notice))
+        # Turn 0 of the latency log: from the media stream being accepted to the opening's audio going out.
+        self._opening_tracker = latency.TurnLatency(call_id, 0, origin=self.call_started)
+        self._opening_tracker.mark("call_accepted", at=self.call_started)
+        self._opening_tracker.info["phase"] = "opening"
+        opening = self._opening_task = latency.create_measured_task(self._play_opening_notice(notice), self._opening_tracker)
         tone = self.agent_settings.get("tone")
         self.state_machine = ConversationStateMachine(
             call_id=call_id,
@@ -305,8 +410,8 @@ class CallSession:
         if self.agent_rt:
             print(f"🧪 CONVERSATION ENGINE: {self.agent_rt.mode}", flush=True)
         print(f"\n==================== [CALL STARTED] ====================", flush=True)
-        print(f"📞 CALL SID: {call_id} | Business: {self.business_id} | Caller: {self.caller_number}", flush=True)
-        print(f"🤖 AI GREETING: \"{opening_text}\"", flush=True)
+        print(f"📞 CALL SID: {call_id} | Business: {self.business_id} | Caller: {CryptoManager.mask_phone(self.caller_number)}", flush=True)
+        print(f"🤖 AI GREETING: {len(opening_text or '')} chars", flush=True)  # can be personalised from caller memory: length only
         print(f"========================================================\n", flush=True)
         logger.info(f"[TWILIO WS] Started call {call_id} for business {self.business_id}")
 
@@ -333,17 +438,40 @@ class CallSession:
         self._bg_tasks.add(prewarm)
         prewarm.add_done_callback(self._bg_tasks.discard)
 
+        # LATENCY: the greeting plays beside the receive loop. Awaiting it here held up the caller's audio (to STT and to
+        # barge-in detection) until the whole greeting had been synthesised and sent.
+        self._greeting_task = latency.create_measured_task(self._play_greeting(opening, greeting), self._opening_tracker)
+
+    async def _play_greeting(self, opening: asyncio.Task, greeting: str) -> None:
+        generation = self.barge_in.generation
+        skipped = False
         try:
             await opening  # the notice (if any) has been spoken; the greeting follows without a gap
+            if not self._is_greeting:
+                skipped = True  # the caller already spoke and is being answered: a greeting now would talk over the answer
+                return
+            latency.mark("greeting_start", chars=len(greeting))
             await self._speak_turn(greeting)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:  # the call goes on: the caller can still talk and be answered
+            logger.warning(f"[WS GATEWAY] greeting failed on call {self.call_id}: {e}")
         finally:
             self._is_greeting = False
-            self._greeting_until = self.barge_in.playback_until
+            # A caller who spoke over the greeting cleared it: nothing of it is left playing to protect.
+            interrupted = skipped or self.barge_in.generation != generation
+            self._greeting_until = 0.0 if interrupted else self.barge_in.playback_until
             self._greeting_mark = self.barge_in._last_mark
             logger.info(
                 f"[GREETING] Sent greeting to telephony. Audio playing until +{max(0.0, self._greeting_until - time.monotonic()):.2f}s "
-                f"(mark={self._greeting_mark})"
+                f"(mark={self._greeting_mark}, interrupted={interrupted})"
             )
+            if self._opening_tracker is not None:
+                self._opening_tracker.info["interrupted"] = interrupted
+                try:
+                    self._opening_tracker.report()
+                except Exception as e:  # measurement must never break a call
+                    logger.debug("opening latency report failed: %s", e)
 
     async def _play_opening_notice(self, notice: str) -> None:
         """Pickup window, then the recording notice. Never raises: a failed notice must not stop the greeting."""
@@ -351,10 +479,24 @@ class CallSession:
             await asyncio.sleep(PICKUP_WINDOW_S)  # natural pickup: the handset reaches the ear
             if notice:
                 await self._speak_turn(notice)
+                self._notice_mark = self.barge_in._last_mark  # echoed by the provider once the whole notice has played
         except asyncio.CancelledError:
             raise
         except Exception as e:
             logger.warning(f"[WS GATEWAY] recording notice failed on call {self.call_id}: {e}")
+
+    async def _let_notice_finish(self) -> None:
+        """The recording notice is a compliance line: a caller who talks over it is answered once it has played, never by
+        cutting it short. Only the greeting after it may be interrupted. "Played" is the provider's echo of the notice's mark,
+        not our estimate from frames sent: playout runs behind that by the network and jitter buffer."""
+        opening = self._opening_task
+        if opening is not None and not opening.done():
+            await asyncio.shield(opening)
+        if self._notice_mark is not None and not self._notice_played.is_set():
+            try:
+                await asyncio.wait_for(self._notice_played.wait(), NOTICE_MAX_WAIT_S)
+            except asyncio.TimeoutError:
+                logger.warning(f"[GREETING] call={self.call_id}: no playback echo for the recording notice after {NOTICE_MAX_WAIT_S:.0f}s")
 
     async def _connect_stt(self, call_id: str) -> None:
         assert self.stt is not None
@@ -406,6 +548,8 @@ class CallSession:
         # Pre-warm LLM & TTS connection pools while caller begins speaking;
         # do NOT flush the audio buffer on raw VAD to prevent acoustic echo self-interruption.
         self._last_caller_voice = time.monotonic()
+        if self._speech_started_at is None:  # the first speech start of the utterance (measurement only)
+            self._speech_started_at = self._last_caller_voice
         self._warm_providers()
 
     async def _consume_stt_events(self) -> None:
@@ -417,6 +561,7 @@ class CallSession:
         pending: List[str] = []
         last: Optional[Dict[str, Any]] = None
         first_start: Optional[float] = None
+        first_heard: Optional[float] = None  # when the utterance's first transcript (interim or final) arrived
         try:
             async for event in self.stt.events():
                 if event["type"] == "speech_started":  # only queued when no on_speech_started hook is set
@@ -424,6 +569,8 @@ class CallSession:
                     continue
                 if event["type"] == "transcript" and event.get("text", "").strip():
                     self._last_caller_voice = time.monotonic()  # words, even interim ones: the caller is talking, the watchdog must wait
+                    if first_heard is None:
+                        first_heard = event.get("received_at") or self._last_caller_voice
                     # Actual spoken words from caller: interrupt AI if playing outside grace period
                     if self.barge_in.is_speaking:
                         blocked = self.barge_in_block_reason
@@ -444,8 +591,10 @@ class CallSession:
                 utterance = " ".join(pending)
                 # word timing from the last segment; arrival = when the turn was actually closed (the UtteranceEnd, if that closed it)
                 final_event = dict(last or event, text=utterance, received_at=event.get("received_at") or (last or {}).get("received_at"),
-                                   audio_start_s=first_start)
-                pending, last = [], None
+                                   audio_start_s=first_start, first_heard_at=first_heard, speech_started_at=self._speech_started_at,
+                                   closed_by="utterance_end" if event["type"] == "utterance_end" else "speech_final")
+                pending, last, first_heard = [], None, None
+                self._speech_started_at = None
                 self._enqueue_turn(final_event)
                 await asyncio.sleep(0)  # an idle worker picks the turn up now, so back-to-back utterances stay separate turns
         finally:
@@ -479,15 +628,19 @@ class CallSession:
         engine = getattr(self.agent_rt, "engine", None)
         if engine is not None:
             engine.request_stop()  # stop streaming the LLM and never start another tool round; running tools finish
+            if self._active_tracker is not None:
+                self._active_tracker.mark("llm_stop_requested", by="next_utterance")
 
     async def _turn_worker_loop(self) -> None:
         try:
             while self._turn_inbox:
                 batch, self._turn_inbox = self._turn_inbox, []
                 # Utterances that piled up while the previous turn ran are one thought: answer them once, not one by one.
-                final_event = dict(batch[-1], text=" ".join(e["text"] for e in batch if e.get("text")))
+                final_event = dict(batch[-1], text=" ".join(e["text"] for e in batch if e.get("text")),
+                                   speech_started_at=batch[0].get("speech_started_at"), first_heard_at=batch[0].get("first_heard_at"))
                 received = final_event.get("received_at")
-                tracker = self._new_turn_tracker(final_event)
+                tracker = self._active_tracker = self._new_turn_tracker(final_event)
+                self._tail = None  # a new turn: the previous one's history is no longer amended
                 tracker.info.update({
                     "queue_wait_ms": round((time.monotonic() - received) * 1000, 1) if received else None,
                     "merged_utterances": len(batch),
@@ -497,11 +650,13 @@ class CallSession:
                     await self._hear_cues(batch[0].get("audio_start_s"), final_event["text"])
                     await self._handle_transcript(final_event["text"])
                 except asyncio.CancelledError:
+                    tracker.info["ended_by"] = "call_stopped"  # the call ended mid-turn (stop() cancels the worker)
                     raise
                 except Exception as e:  # one failed turn must not end the worker: the next utterance still gets answered
                     logger.error(f"[TURN] call={self.call_id} turn={self._turn_no} failed: {e}", exc_info=True)
                 finally:
                     latency.end_turn(token)
+                    self._active_tracker = None
                     try:
                         tracker.report()
                     except Exception as e:  # measurement must never break a call
@@ -551,10 +706,14 @@ class CallSession:
         if speech_end is not None:
             tracker.mark("speech_end", at=speech_end)
         tracker.mark("deepgram_final", at=received)
+        for name, key in (("caller_speech_start", "speech_started_at"), ("stt_first_interim", "first_heard_at")):
+            if event.get(key) is not None:
+                tracker.mark(name, at=event[key])
         tracker.info.update({
             "engine": self.agent_rt.mode if self.agent_rt else "state_machine",
             "transcript_words": len(event.get("text", "").split()),
             "speech_final": event.get("speech_final"),
+            "closed_by": event.get("closed_by"),  # speech_final (Deepgram's 200 ms endpointing) or utterance_end (its 1 s fallback)
         })
         return tracker
 
@@ -577,14 +736,15 @@ class CallSession:
         # If caller already spoke (e.g. "Hello?", "Hi"), immediately interrupt the greeting
         # and answer the caller directly instead of making them wait for a scripted greeting!
         if self.is_greeting_active:
-            logger.info(f"[TRANSCRIPT] Caller spoke ({transcript!r}) during greeting: interrupting greeting to answer caller")
+            logger.info(f"[TRANSCRIPT] call={self.call_id} caller spoke ({len(transcript.split())} words) during greeting: interrupting greeting to answer caller")
+            await self._let_notice_finish()
             self._greeting_until = 0.0
             self._is_greeting = False
             await self.barge_in.handle_caller_speech(self.websocket, self.stream_sid, pcm=self.pcm, provider=self.provider)
 
         print(f"\n==================== [LIVE CALL] ====================", flush=True)
         print(f"📞 CALL SID: {self.call_id}", flush=True)
-        print(f"👤 USER SPOKE: \"{transcript}\"", flush=True)
+        print(f"👤 USER SPOKE: {len(transcript.split())} words", flush=True)  # never the words themselves (patient data)
         self.last_activity = time.monotonic()  # the caller is talking: reset the silence clock
         self._silence_prompted = False
 
@@ -616,7 +776,7 @@ class CallSession:
             recent_turns=recent_turns,
         )
         latency.mark("nlu_end")
-        print(f"🧠 NLU CATEGORY: {nlu_result.category.value} | INTENT: {nlu_result.intent} | CONF: {nlu_result.confidence} | SLOTS: {nlu_result.slots}", flush=True)
+        print(f"🧠 NLU CATEGORY: {nlu_result.category.value} | INTENT: {nlu_result.intent} | CONF: {nlu_result.confidence} | SLOTS: {sorted(nlu_result.slots or {})}", flush=True)
 
         result = await self.state_machine.process_user_turn(
             user_transcript=transcript,
@@ -630,7 +790,7 @@ class CallSession:
         )
 
         bot_text = result.get("bot_response") or ""
-        print(f"🤖 AI RECEPTIONIST: \"{bot_text}\"", flush=True)
+        print(f"🤖 AI RECEPTIONIST: {len(bot_text)} chars", flush=True)
         print(f"=====================================================\n", flush=True)
 
         if self.agent_rt and self.agent_rt.mode == "shadow":  # silent comparison; never spoken, never writes
@@ -665,6 +825,7 @@ class CallSession:
         assert rt is not None and self.state_machine is not None
         generation = self.barge_in.generation
         turn_id = self._turn_no
+        marks: List[str] = []  # the playback mark sent after each fully sent sentence, in order
 
         async def speak(text: str, **extra: Any) -> bool:
             # A barge-in anywhere in this turn (even between sentences, while earlier audio was still playing) stops
@@ -672,12 +833,21 @@ class CallSession:
             # a response that outlived its turn is discarded here, whatever it arrives with.
             if self.barge_in.generation != generation or self._turn_no != turn_id:
                 logger.info(f"[TURN] call={self.call_id} discarded a stale sentence of turn {turn_id} (active turn {self._turn_no})")
-                return False
+                return NOT_PLAYED
+            frames_before = self._frames_out
             played = await self._speak_turn(text, **extra)
-            return played is not False and self.barge_in.generation == generation
+            if played is not False and self.barge_in.generation == generation:
+                marks.append(self._last_mark_sent)
+                return True
+            # Interrupted: the sentence counts as heard (in the agent's history) only if some of its audio went out.
+            return False if self._frames_out > frames_before else NOT_PLAYED
 
         try:
             run = await rt.run_turn(transcript, speak)
+            if not run.interrupted and run.heard and len(marks) == len(run.heard) and rt.engine._turns:
+                # Sent in full, but the caller may still be hearing it: a barge-in now must still drop what never played.
+                self._tail = {"turn": turn_id, "sentences": list(run.heard), "marks": marks, "played": set(),
+                              "group": rt.engine._turns[-1]}
         except Exception as e:
             logger.error(f"[AGENT] turn execution failed: {e}", exc_info=True)
             lang = getattr(self.state_machine, "language", "en") if self.state_machine else "en"
@@ -727,7 +897,7 @@ class CallSession:
             return True
 
         tools = [t.get("tool") for t in turn.tools]
-        print(f"🤖 AI RECEPTIONIST (agent): \"{turn.reply}\" | tools={tools} | {turn.latency_ms}ms (first sentence {turn.first_sentence_ms}ms) | llm={turn.provider}", flush=True)
+        print(f"🤖 AI RECEPTIONIST (agent): {len(turn.reply or '')} chars | tools={tools} | {turn.latency_ms}ms (first sentence {turn.first_sentence_ms}ms) | llm={turn.provider}", flush=True)
         print(f"=====================================================\n", flush=True)
 
         self.state_machine.sequence += 1  # keeps sequences unique even if a later turn falls back to the legacy path
@@ -825,7 +995,7 @@ class CallSession:
         finished with zero network delay (tunnel + carrier + jitter buffer + the echo's trip back). Never in [LATENCY]:
         that report closes when the last frame is sent, before playback ends."""
         self._playout_lag_ms.append(round(lag_s * 1000, 1))
-        logger.info(f"[PLAYOUT] call={self.call_id} mark={mark} lag_ms={lag_s * 1000:.0f}")
+        logger.info(f"[PLAYOUT] call={self.call_id} turn={self._mark_turns.get(mark)} mark={mark} lag_ms={lag_s * 1000:.0f}")
 
     async def _watchdog(self) -> None:
         """Enforces the Call Handling tab: after `silence_timeout_seconds` of quiet ask "are you still there?",
@@ -895,19 +1065,26 @@ class CallSession:
                 else:
                     media_msg["streamSid"] = self.stream_sid
                 await self.websocket.send_text(json.dumps(media_msg))
-            self.barge_in.audio_sent(FRAME_DURATION_S)  # keeps the AI interruptible until this frame has played
             if sent == 1:
-                latency.mark("first_audio_sent_to_telephony", chars=len(text))
+                # Earlier audio still queued for playback when this sentence starts (negative: estimated silence before it).
+                queued_ms = round((self.barge_in.playback_until - time.monotonic()) * 1000) if self.barge_in.playback_until else None
+                latency.mark("first_audio_sent_to_telephony", chars=len(text), queued_ms=queued_ms)
+            self.barge_in.audio_sent(FRAME_DURATION_S)  # keeps the AI interruptible until this frame has played
+            self._frames_out += 1
             # Yield to event loop without sleeping 20ms to keep telephony jitter buffer full
             await asyncio.sleep(0.005)
-        logger.info(f"[TTS OUT] call={self.call_id} frames={sent} text={text[:40]!r}")
+        logger.info(f"[TTS OUT] call={self.call_id} turn={self._turn_no} frames={sent} chars={len(text)}")
+        mark = self._last_mark_sent = self.barge_in.next_mark()
+        self._mark_turns[mark] = self._turn_no  # so the [PLAYOUT] echo can say which turn's audio finished playing
+        while len(self._mark_turns) > 64:
+            self._mark_turns.pop(next(iter(self._mark_turns)))
         if self.provider == "plivo":
             # checkpoint is echoed back as playedStream once played (see the "playedStream" branch below)
-            await self.websocket.send_text(plivo_checkpoint_message(self.stream_sid, self.barge_in.next_mark()))
+            await self.websocket.send_text(plivo_checkpoint_message(self.stream_sid, mark))
             return
         mark_msg: Dict[str, Any] = {
             "event": "mark",
-            "mark": {"name": self.barge_in.next_mark()},  # echoed by Twilio once played (see on_mark)
+            "mark": {"name": mark},  # echoed by Twilio once played (see on_mark)
         }
         if self.pcm:
             mark_msg["stream_sid"] = self.stream_sid
@@ -918,6 +1095,9 @@ class CallSession:
     async def stop(self) -> None:
         if self._watchdog_task:
             self._watchdog_task.cancel()
+        for task in (self._greeting_task, self._opening_task):  # the caller hung up during the opening
+            if task is not None and not task.done():
+                task.cancel()
         if self._stt_connect_task:
             self._stt_connect_task.cancel()
         if self._stt_task:
@@ -971,10 +1151,10 @@ async def twilio_media_stream(websocket: WebSocket, business_id: str) -> None:
             raw_msg = await websocket.receive_text()
             data = json.loads(raw_msg)
             event_type = data.get("event") or data.get("type")
-            # Log every non-media frame in full (start/stop/mark/etc.) and the first media frame,
-            # so we can see exactly what the provider sends and why it disconnects.
+            # Log every non-media frame (start/stop/mark/etc.) and the first media frame, so we can see what the
+            # provider sends and why it disconnects. Shape only: no audio, caller number or stream token.
             if event_type not in ("media", "audio") or not session.seen_media:
-                print(f"[WS RAW] {raw_msg[:500]}", flush=True)
+                print(f"[WS RAW] {json.dumps(ws_frame_shape(data))}", flush=True)
                 if event_type in ("media", "audio"):
                     session.seen_media = True
 
@@ -1023,6 +1203,7 @@ async def twilio_media_stream(websocket: WebSocket, business_id: str) -> None:
                 lag = session.barge_in.on_mark(mark_name)
                 if lag is not None:
                     session.record_playout(mark_name, lag)
+                session.note_mark_echo(mark_name)
                 if mark_name and mark_name == getattr(session, "_greeting_mark", None):
                     session._greeting_until = 0.0
                     logger.info(f"[GREETING] Telephony completed playing greeting (echoed mark={mark_name})")

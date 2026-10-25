@@ -13,7 +13,7 @@ import time
 from functools import lru_cache
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Tuple
+from typing import Any, AsyncIterator, Callable, Dict, Iterator, List, Optional, Tuple
 
 from backend.ai.capabilities.skills.emotional_tone import Sentiment, detect_sentiment
 from backend.ai.realtime.audio.paralinguistic import LAUGHTER_MIN
@@ -587,6 +587,30 @@ class AgentEngine:
                 one_q = OneQuestion()
                 splitter = SentenceSplitter(early=self.early_chunking and stream)
 
+                def emit(out: str) -> Dict[str, Any]:
+                    nonlocal first_ms
+                    first_ms = first_ms if first_ms is not None else elapsed()
+                    event = self._sentence_event(out)
+                    spoken.append(event["text"])
+                    return event
+
+                def release(sentences: List[str]) -> Iterator[Dict[str, Any]]:
+                    """Finished sentences -> sentence events, lazily: a stop requested while one is being spoken is seen
+                    before the next one is made. Ends at the first sentence a guard blocks (it is recorded in `invented`)."""
+                    for sentence in sentences:
+                        if self._stop_turn:
+                            return
+                        sentence = self._speech(sentence)
+                        if not sentence:
+                            continue
+                        if not check(sentence):
+                            return
+                        sentence = self._dedupe_ack(sentence)
+                        if not sentence or self._dup.is_dup(sentence) or self._second_ask(sentence):
+                            continue
+                        for out in one_q.feed(sentence):
+                            yield emit(out)
+
                 if stream:
                     event_stream = self.backend.chat_stream(messages, tools)
                     try:
@@ -594,24 +618,20 @@ class AgentEngine:
                             if self._stop_turn:
                                 break
                             if ev["type"] == "text":
-                                for sentence in splitter.feed(ev["delta"]):
-                                    if self._stop_turn:
-                                        break
-                                    sentence = self._speech(sentence)
-                                    if not sentence:
-                                        continue
-                                    if not check(sentence):
-                                        break
-                                    sentence = self._dedupe_ack(sentence)
-                                    if not sentence or self._dup.is_dup(sentence) or self._second_ask(sentence):
-                                        continue
-                                    for out in one_q.feed(sentence):
-                                        first_ms = first_ms if first_ms is not None else elapsed()
-                                        event = self._sentence_event(out)
-                                        spoken.append(event["text"])
-                                        yield event
+                                for event in release(splitter.feed(ev["delta"])):
+                                    yield event
                                 if invented:
                                     break
+                            elif ev["type"] == "text_end":
+                                # LATENCY: the model's words are complete. Speak the rest now, the held trailing question
+                                # included, instead of after the tool-call arguments, usage chunk and connection close.
+                                for event in release(splitter.flush()):
+                                    yield event
+                                if invented:
+                                    break
+                                if not self._stop_turn:
+                                    for out in one_q.flush():
+                                        yield emit(out)
                             else:
                                 content, calls = ev["content"] or "", ev["tool_calls"]
                     finally:
@@ -625,28 +645,11 @@ class AgentEngine:
                     text = self._speech(content)
                     tail = [] if (calls or not text) else splitter.feed(text + " ") + splitter.flush()
 
-                for sentence in tail:
-                    if self._stop_turn:
-                        break
-                    sentence = self._speech(sentence)
-                    if not sentence:
-                        continue
-                    if not check(sentence):
-                        break
-                    sentence = self._dedupe_ack(sentence)
-                    if not sentence or self._dup.is_dup(sentence) or self._second_ask(sentence):
-                        continue
-                    for out in one_q.feed(sentence):
-                        first_ms = first_ms if first_ms is not None else elapsed()
-                        event = self._sentence_event(out)
-                        spoken.append(event["text"])
-                        yield event
+                for event in release(tail):
+                    yield event
                 if not invented and not self._stop_turn:
                     for out in one_q.flush():  # a trailing question is released once nothing newer replaces it
-                        first_ms = first_ms if first_ms is not None else elapsed()
-                        event = self._sentence_event(out)
-                        spoken.append(event["text"])
-                        yield event
+                        yield emit(out)
 
                 if multis := [x[6:] for x in invented if x.startswith("multi:")]:
                     invented[:] = [x for x in invented if not x.startswith("multi:")]
@@ -980,6 +983,20 @@ class AgentEngine:
         if last.get("role") == "assistant" and last.get("content"):
             self.toolbox.last_assistant = last["content"]  # what a caller's next "yes" would be agreeing to
             self.ctrl.observe_reply(last["content"])
+
+    def amend_reply(self, heard: str, group: Optional[List[Dict[str, Any]]] = None) -> str:
+        """The caller interrupted after the turn was committed: replace its reply with what actually reached them ("…" when
+        nothing did), so the history, the call log and what a "yes" would accept never hold words they did not hear.
+        `group` is the turn to amend (default: the latest); what a "yes" accepts changes only while it is still the latest.
+        Tool calls and results stay: a booking that ran still happened, even if its confirmation was not heard."""
+        text = heard.strip() or "…"
+        group = group if group is not None else (self._turns[-1] if self._turns else None)
+        if group and group[-1].get("role") == "assistant":
+            group[-1]["content"] = text
+            if self._turns and self._turns[-1] is group:
+                self.toolbox.last_assistant = text
+                self.ctrl.observe_reply(text)
+        return text
 
     def _result(self, reply: str, started: float, tools: List[Dict[str, Any]], first_ms: Optional[int], degraded: bool = False, error: Optional[str] = None) -> AgentTurn:
         if (not self.toolbox.pending and not degraded and "?" not in reply and "end_call" not in self.toolbox.disabled_tools

@@ -57,6 +57,7 @@ deepgram_stt = DeepgramSTT()
 
 
 RECENT_AUDIO_S = 30.0  # caller audio kept per call for the utterance's sound cues (about 240 KB of mulaw)
+PRECONNECT_AUDIO_S = 3.0  # caller audio held (newest kept) while the connection is still opening, then sent first, in order
 ENDPOINTING_MS = 200  # silence Deepgram waits before it finalises an utterance (the endpointing= value in the URL below)
 DEEPGRAM_LIVE_URL_TEMPLATE = (
     "wss://api.deepgram.com/v1/listen"
@@ -108,6 +109,10 @@ class DeepgramLiveConnection:
         self.bytes_per_second = 16000 if encoding == "linear16" else 8000
         self._recent = bytearray()
         self._recent_start = 0  # byte offset (since the first byte sent) of _recent[0]
+        # Audio that arrived before the connection was open. The call's receive loop no longer waits for the greeting, so a
+        # caller who speaks at once would otherwise be lost while Deepgram connects.
+        self._preconnect = bytearray()
+        self._preconnect_t0: Optional[float] = None  # arrival time of _preconnect[0]
 
     def is_configured(self) -> bool:
         return bool(self.api_key)
@@ -120,11 +125,13 @@ class DeepgramLiveConnection:
         for attempt in (1, 2):
             try:
                 url = DEEPGRAM_LIVE_URL_TEMPLATE.format(model=model_for(language), encoding=self.encoding, language=language)
-                self._ws = await websockets.connect(
+                ws = await websockets.connect(
                     url,
                     additional_headers={"Authorization": f"Token {self.api_key}"},
                     ping_interval=5,
                 )
+                await self._flush_preconnect(ws)  # before publishing the connection, so live audio cannot overtake it
+                self._ws = ws
                 self.language = language
                 self._reader_task = asyncio.create_task(self._read_loop())
                 return True
@@ -137,18 +144,41 @@ class DeepgramLiveConnection:
         return False
 
     async def send_audio(self, mulaw_bytes: bytes) -> None:
-        if self._ws is not None:
-            try:
-                await self._ws.send(mulaw_bytes)
-                if self.audio_t0 is None:
-                    self.audio_t0 = time.monotonic()
-                self._recent.extend(mulaw_bytes)
-                excess = len(self._recent) - int(RECENT_AUDIO_S * self.bytes_per_second)
-                if excess > 0:
-                    del self._recent[:excess]
-                    self._recent_start += excess
-            except Exception as e:
-                logger.warning(f"[DEEPGRAM LIVE] Failed to send audio chunk: {e}")
+        if self._ws is None:
+            self._hold_preconnect(mulaw_bytes)
+            return
+        await self._send(self._ws, mulaw_bytes)
+
+    def _hold_preconnect(self, audio: bytes) -> None:
+        if self._preconnect_t0 is None:
+            self._preconnect_t0 = time.monotonic()
+        self._preconnect.extend(audio)
+        excess = len(self._preconnect) - int(PRECONNECT_AUDIO_S * self.bytes_per_second)
+        if excess > 0:
+            excess += excess % (2 if self.encoding == "linear16" else 1)  # never split a PCM16 sample
+            del self._preconnect[:excess]  # keep the newest audio
+            self._preconnect_t0 += excess / self.bytes_per_second
+
+    async def _flush_preconnect(self, ws: WebSocketClientProtocol) -> None:
+        # Audio arriving during a send is held again; loop until nothing is left, so it all goes out in arrival order.
+        while self._preconnect:
+            audio, arrived = bytes(self._preconnect), self._preconnect_t0
+            self._preconnect.clear()
+            self._preconnect_t0 = None
+            await self._send(ws, audio, arrived)
+
+    async def _send(self, ws: WebSocketClientProtocol, audio: bytes, arrived: Optional[float] = None) -> None:
+        try:
+            await ws.send(audio)
+            if self.audio_t0 is None:
+                self.audio_t0 = arrived if arrived is not None else time.monotonic()
+            self._recent.extend(audio)
+            excess = len(self._recent) - int(RECENT_AUDIO_S * self.bytes_per_second)
+            if excess > 0:
+                del self._recent[:excess]
+                self._recent_start += excess
+        except Exception as e:
+            logger.warning(f"[DEEPGRAM LIVE] Failed to send audio chunk: {e}")
 
     def audio_between(self, start_s: float, end_s: Optional[float] = None) -> bytes:
         """The audio Deepgram received between two of its own word offsets (seconds); clipped to what is still kept."""
