@@ -1,0 +1,13 @@
+%% Coaching institute: course enquiry (lead) and demo class (a booking of type demo_class). Implemented, unit-tested.
+flowchart TD
+  A["Caller asks about courses"] --> B{"wants a demo / trial class?"}
+  B -->|no| AN["coaching_enquiry.answer: batches, schedules, fees from catalogue"]
+  AN -->|resolved| D1["complete: answered"]
+  AN -->|interested| IN["interest: programme, batch preference (optional), name, phone"]
+  IN --> SL["capture_enquiry kind=admission"]
+  SL -->|saved / duplicate| D2["complete: lead_captured"]
+  B -->|yes| DC["demo_class.collect: service (demo class item), date, time, name, phone"]
+  DC --> CK["check_availability"]
+  CK -->|ok| CF["book_appointment: read-back, then confirmed"]
+  CK -->|closed / taken| DC
+  CF -->|booked| D3["complete: booked (booking_type demo_class)"]

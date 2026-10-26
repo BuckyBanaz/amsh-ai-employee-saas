@@ -34,9 +34,11 @@ class ClinicWriteOperations:
         source: str = "manual_dashboard",
         call_id: Optional[str] = None,
         status: str = "confirmed",
+        extra_details: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Stores confirmed appointment in PostgreSQL transactions table.
+        `extra_details` (other verticals: the room a session holds) is saved in the same row and commit.
         """
         # Find matching service price if available
         service = db.query(Service).filter(
@@ -61,6 +63,8 @@ class ClinicWriteOperations:
             "price_amount": price_amount,
             "booked_at": datetime.now(timezone.utc).isoformat(),
         }
+        if extra_details:
+            details_dict.update(extra_details)
 
         transaction = Transaction(
             id=booking_id,

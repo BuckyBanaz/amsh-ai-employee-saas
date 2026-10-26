@@ -15,17 +15,50 @@ from backend.server.services.audit import audit, client_ip
 
 router = APIRouter(prefix="/api/onboarding/businesses", tags=["businesses"])
 
-# Add a new vertical simply by dropping a new YAML file in backend/ai/verticals/configs/.
-# No code changes required anywhere else.
-ALLOWED_VERTICALS: set[str] = {"clinic", "hospital", "restaurant", "gym", "salon"}
+# The supported verticals are the reviewed definitions in backend/ai/workflows/definitions/ (DOCS/31): a business can only be
+# created for one the AI can actually serve. "hospital" was a vertical before subtypes existed: it is the clinic vertical's
+# "hospital" subtype now, accepted for existing API clients.
+LEGACY_VERTICALS = {"hospital": ("clinic", "hospital")}
+BUSINESS_TYPES = {"clinic": "healthcare", "education": "education", "salon": "beauty_personal_care", "wellness": "beauty_wellness"}
+
+
+def allowed_verticals() -> set[str]:
+    from backend.ai.workflows.registry import workflow_registry
+
+    return set(workflow_registry().verticals)
 
 
 def _validate_vertical(vertical: str) -> None:
-    if vertical not in ALLOWED_VERTICALS:
+    allowed = allowed_verticals()
+    if vertical not in allowed and vertical not in LEGACY_VERTICALS:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"vertical must be one of {sorted(ALLOWED_VERTICALS)}",
+            detail=f"vertical must be one of {sorted(allowed)}",
         )
+
+
+def _normalize_subtype(vertical: str, subtype: str | None) -> str | None:
+    """The subtype key for `subtype` (its key or display name). Healthcare also keeps older free-text values (the settings page
+    stored names like "Dental Clinic"; they run the default clinic workflows). Any other vertical needs one of its subtypes."""
+    from backend.ai.verticals.errors import UnknownVerticalError
+    from backend.ai.workflows.registry import workflow_registry
+
+    if subtype is None or not str(subtype).strip():
+        return None
+    text = str(subtype).strip()
+    try:
+        definition = workflow_registry().vertical(vertical)
+    except UnknownVerticalError:
+        return text
+    for sub in definition.subtypes:
+        if text.lower() in (sub.key, sub.name.lower()):
+            return sub.key
+    if not definition.workflow_runtime:
+        return text
+    raise HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        detail=f"business_subtype must be one of {[s.key for s in definition.subtypes]}",
+    )
 
 
 def _validate_business_type(business_type: str | None, business_subtype: str | None) -> None:
@@ -40,6 +73,7 @@ def _validate_business_type(business_type: str | None, business_subtype: str | N
 class BusinessCreate(BaseModel):
     name: str
     vertical: str = "clinic"       # Maps directly to configs/{vertical}.yaml
+    business_subtype: str | None = None  # a subtype key of the vertical (backend/ai/workflows/definitions)
     country: str | None = None
     website: str | None = None
     business_email: str | None = None
@@ -101,9 +135,13 @@ class BusinessOut(BaseModel):
 @router.post("", response_model=BusinessOut, status_code=status.HTTP_201_CREATED)
 def create_business(payload: BusinessCreate, request: Request, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     _validate_vertical(payload.vertical)
+    vertical, subtype = LEGACY_VERTICALS.get(payload.vertical, (payload.vertical, payload.business_subtype))
+    subtype = _normalize_subtype(vertical, payload.business_subtype or subtype)
     business = Business(
         name=payload.name,
-        vertical=payload.vertical,
+        vertical=vertical,
+        business_type=BUSINESS_TYPES.get(vertical, "healthcare"),
+        business_subtype=subtype,
         country=payload.country,
         website=payload.website,
         business_email=payload.business_email,
@@ -181,6 +219,8 @@ def update_business(
             updates.get("business_type", business.business_type),
             updates.get("business_subtype", business.business_subtype),
         )
+    if "business_subtype" in updates:
+        updates["business_subtype"] = _normalize_subtype(business.vertical, updates["business_subtype"])
 
     for field, value in updates.items():
         setattr(business, field, value)

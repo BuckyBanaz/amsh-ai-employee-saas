@@ -1,0 +1,16 @@
+%% Department routing for a university (implemented: services/department_routing.py).
+flowchart TD
+  A["transfer_to_human(department)"] --> B{"tenant has a department directory?"}
+  B -->|no| LEG["existing path: fallback number / business line (unchanged)"]
+  B -->|yes| C{"exact key?"}
+  C -->|yes| D["that department"]
+  C -->|no| E["match intents + context<br/>(applicant_type, study_level, topic)<br/>highest priority"]
+  E -->|none| G["general desk (human_request / general_enquiry)"]
+  E --> D
+  G --> D
+  D --> H{"open now (own hours or business hours)<br/>and valid E.164 number?"}
+  H -->|yes| DIAL["start_attempt (initiated) → Dial with timeout"]
+  H -->|no| FB["follow fallback_key (bounded, no cycles)"]
+  FB --> H
+  FB -->|chain exhausted| UN["record_unreachable (closed / no_destination)<br/>model told: offer callback"]
+  G -->|no general desk| UK["unknown_department"]

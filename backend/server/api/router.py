@@ -40,6 +40,7 @@ from backend.server.api.routes import (
     staff,
     stt,
     users,
+    verticals as vertical_routes,
     voice,
 )
 from backend.ai.realtime.twilio.gateway import router as voice_stream_router
@@ -78,6 +79,8 @@ api_router.include_router(voice_stream_router)
 api_router.include_router(voice.router)
 api_router.include_router(stt.router)
 api_router.include_router(plans_public.router)
+api_router.include_router(vertical_routes.catalog_router)
+api_router.include_router(vertical_routes.router)
 api_router.include_router(demo.router)
 api_router.include_router(languages.router)
 api_router.include_router(admin_plans.router)

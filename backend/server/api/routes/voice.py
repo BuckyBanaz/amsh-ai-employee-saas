@@ -7,6 +7,8 @@ Zero-Dropped-Calls 20-second transfer fallback, per DOCS/11.
 import logging
 import re
 from typing import Optional
+from urllib.parse import urlencode
+from xml.sax.saxutils import escape as xml_escape
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
 from sqlalchemy import select
@@ -401,11 +403,29 @@ async def handle_transfer_status(
     staff_name: str = Query("Staff"),
     staff_phone: Optional[str] = Query(None),
     department: str = Query("front_desk"),
+    attempt_id: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ) -> Response:
     """Called by Twilio when the <Dial> started by transfer_call completes or
     times out after 20s. DialCallStatus: 'completed' | 'busy' | 'no-answer' |
-    'failed' | 'canceled'. Implements DOCS/11 §3's zero-dropped-calls fallback."""
+    'failed' | 'canceled'. Implements DOCS/11 §3's zero-dropped-calls fallback.
+    With a department directory (attempt_id): the attempt's real result is recorded, then ONE fallback department is dialled
+    if it is open, else a callback task is created (server/services/department_routing.py)."""
+    if attempt_id:
+        from backend.server.services import department_routing as routing
+
+        outcome = routing.dial_result(db, attempt_id, DialCallStatus, From)
+        if outcome.fallback is not None and outcome.fallback_attempt is not None:
+            action = f"{build_base_url()}/api/voice/transfer-status?" + urlencode(
+                {"staff_name": outcome.fallback.name, "staff_phone": outcome.fallback.transfer_phone,
+                 "department": outcome.fallback.key, "attempt_id": outcome.fallback_attempt.id})
+            twiml = (
+                '<?xml version="1.0" encoding="UTF-8"?><Response>'
+                f'<Dial timeout="{int(outcome.fallback.timeout_seconds or 20)}" record="record-from-answer" action="{xml_escape(action)}">'
+                f"{xml_escape(outcome.fallback.transfer_phone)}</Dial></Response>"
+            )
+            logger.info("[VOICE TRANSFER] %s for %s: trying fallback %s", DialCallStatus, CallSid, outcome.fallback.key)
+            return Response(content=twiml, media_type="application/xml")
     if DialCallStatus == "completed":
         return Response(content="<Response></Response>", media_type="application/xml")
 

@@ -1,0 +1,19 @@
+%% Signup and dynamic onboarding (implemented in frontend/user; steps come from the vertical definition's "onboarding" list).
+flowchart TD
+  A["Create account / sign in"] --> B["/onboarding/business"]
+  B --> C["GET /api/verticals (catalog)"]
+  C --> D["Choose vertical"] --> E["Choose subtype (required)"]
+  E --> F["POST /api/onboarding/businesses<br/>vertical + business_subtype"]
+  F -->|422 unsupported vertical or subtype| B
+  F --> G["GET /api/businesses/{id}/vertical-config"]
+  G --> H{"Steps for this vertical"}
+  H -->|healthcare| H1["Services, Staff, Hours, AI, Knowledge, Integrations"]
+  H -->|education| H2["Courses + visit types, Departments, Counsellors, Hours, AI, Knowledge"]
+  H -->|salon| H3["Services and prices, Stylists, Hours, AI, Policies"]
+  H -->|wellness| H4["Treatments and packages, Therapists, Rooms, Hours, AI"]
+  H1 & H2 & H3 & H4 --> R["/onboarding/review"]
+  R --> V["POST vertical-config/validate"]
+  V -->|errors| FIX["Back to the step named in the problem"]
+  FIX --> R
+  V -->|ready| ACT["POST vertical-config/activate<br/>(audited)"]
+  ACT --> PL["Plans / Checkout"]

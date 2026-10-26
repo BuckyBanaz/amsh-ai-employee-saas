@@ -1,0 +1,16 @@
+%% Tenant isolation (implemented): every route checks membership; every row carries business_id.
+flowchart TD
+  REQ["HTTP request with JWT"] --> AUTH["get_current_user"]
+  AUTH --> M{"require_membership<br/>(platform scope or same business)"}
+  M -->|no| F403["403"]
+  M -->|yes| W{"write?"}
+  W -->|departments, resources, vertical-config| OA{"require_owner_or_admin"}
+  OA -->|no| F403
+  W -->|enquiry status, read| Q["query filtered by business_id"]
+  OA -->|yes| Q
+  Q --> R{"row.business_id == path business_id?"}
+  R -->|no| F404["404 (no existence leak)"]
+  R -->|yes| OK["result + audit log entry for writes"]
+  CALL["Live call"] --> NR["number_routing.resolve_business"] --> BID["business_id fixed for the call"]
+  BID --> TB["toolbox: business_id from runtime, never from model args"]
+  TB --> Q2["every read/write scoped to that business_id"]

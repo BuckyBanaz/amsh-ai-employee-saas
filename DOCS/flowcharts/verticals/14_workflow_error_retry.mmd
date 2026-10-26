@@ -1,0 +1,14 @@
+%% Error and retry paths (implemented).
+flowchart TD
+  A["Tool call"] --> B{"handler result"}
+  B -->|exception| E1["tool_error: model told to apologise; call continues"]
+  B -->|needs_confirmation| E2["read back; commit only on a later turn"]
+  B -->|bad / missing fields| E3["workflow returns to its collect step"]
+  B -->|ok| N["workflow advances"]
+  E3 --> V{"step visits > max_visits?"}
+  V -->|yes| LX["run failed: loop_exceeded (no endless loop)"]
+  V -->|no| A
+  S["workflow save fails (DB hiccup)"] --> S2["logged; run continues in memory"]
+  L["workflow load fails"] --> L2["start fresh in memory"]
+  D["duplicate capture / provider retry"] --> D2["idempotency key / finished attempt: no second row"]
+  RC["concurrent booking of the same room"] --> RC2["Postgres row lock (with_for_update); loser gets no_room"]

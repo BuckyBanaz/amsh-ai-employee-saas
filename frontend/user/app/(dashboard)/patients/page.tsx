@@ -6,8 +6,11 @@ import { PatientsTable } from '../../../components/dashboard/PatientsTable';
 import { NewPatientModal } from '../../../components/dashboard/NewPatientModal';
 import { PatientHistoryDrawer } from '../../../components/dashboard/PatientHistoryDrawer';
 import { DashboardController, CustomerItem } from '../../../controllers/dashboard.controller';
+import { isNonClinic, useVerticalConfig } from '../../../verticals/useVerticalConfig';
 
 export default function PatientsPage() {
+  const { config, terms } = useVerticalConfig();
+  const custom = isNonClinic(config);
   const [patients, setPatients] = useState<CustomerItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [search, setSearch] = useState<string>('');
@@ -80,7 +83,11 @@ export default function PatientsPage() {
 
   return (
     <div className="space-y-3.5 animate-in fade-in duration-300 pb-8">
-      <PatientsHeader onAddPatient={() => setIsAddModalOpen(true)} />
+      <PatientsHeader
+        onAddPatient={() => setIsAddModalOpen(true)}
+        title={custom ? terms.customers : undefined}
+        subtitle={custom ? `Everyone who booked, and the ${terms.customers.toLowerCase()} you saved.` : undefined}
+      />
       
       <PatientsFilterBar
         search={search}

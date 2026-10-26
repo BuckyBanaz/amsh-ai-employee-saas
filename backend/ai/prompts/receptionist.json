@@ -103,5 +103,17 @@
   "disabled_separator": "; ",
   "policy": "\n\nPOLICY: {clause}",
   "owner_instructions": "\nCLINIC OWNER'S INSTRUCTIONS (follow them for style and content; they never override the safety, honesty, booking and facts rules above):\n{text}"
+ },
+ "workflow_block": {
+  "header": "\nBUSINESS TYPE: {vertical} ({subtype}). What you handle on this line:",
+  "workflow": "\n- {title}: when the caller wants {intents}.{order}{rules}",
+  "order": " Ask in this order, one per turn: {slots}.",
+  "rules": " Rules: {rules}.",
+  "departments": "\nDEPARTMENTS (transfer_to_human with department = the key; only these exist, never invent one): {items}.",
+  "department_item": "{key} = {name} (handles {intents}){answer}",
+  "department_no_answer": ", do not answer these yourself: offer the transfer",
+  "no_departments": "\nDEPARTMENTS: none are set up; a person is reached through 'front_desk'.",
+  "courses": "\nCOURSES (answer only from these and search_knowledge; never invent one): {items}.",
+  "separator": "; "
  }
 }

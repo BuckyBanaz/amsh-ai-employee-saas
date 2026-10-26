@@ -122,6 +122,7 @@ async def handle_plivo_transfer(
     staff_name: str = Query("Staff"),
     department: str = Query("front_desk"),
     lang: str = Query("en"),
+    attempt_id: Optional[str] = Query(None),
     From: Optional[str] = Form(None),
     To: Optional[str] = Form(None),
     Direction: Optional[str] = Form(None),
@@ -135,9 +136,10 @@ async def handle_plivo_transfer(
     staff_digits = "".join(ch for ch in staff_phone if ch.isdigit())
     if not staff_digits:
         return _xml("<Hangup/>")
-    status_url = f"{build_base_url()}/api/voice/plivo/transfer-status?" + urlencode(
-        {"staff_phone": staff_phone, "staff_name": staff_name, "department": department, "lang": lang}
-    )
+    status_params = {"staff_phone": staff_phone, "staff_name": staff_name, "department": department, "lang": lang}
+    if attempt_id:  # department directory: the result is recorded against this attempt (and a fallback tried)
+        status_params["attempt_id"] = attempt_id
+    status_url = f"{build_base_url()}/api/voice/plivo/transfer-status?" + urlencode(status_params)
     caller_id = f' callerId="{clinic_line}"' if clinic_line else ""
     logger.info("[PLIVO TRANSFER] dialing %s (%s) for %s", staff_digits, department, From or qp.get("From"))
     return _xml(
@@ -152,6 +154,7 @@ async def handle_plivo_transfer_status(
     staff_name: str = Query("Staff"),
     department: str = Query("front_desk"),
     lang: str = Query("en"),
+    attempt_id: Optional[str] = Query(None),
     DialStatus: Optional[str] = Form(None),
     From: Optional[str] = Form(None),
     CallUUID: Optional[str] = Form(None),
@@ -162,6 +165,17 @@ async def handle_plivo_transfer_status(
     form = {k: str(v) for k, v in (await request.form()).items()} if request.method == "POST" else {}
     status = (DialStatus or request.query_params.get("DialStatus") or "").lower()
     logger.info("[PLIVO TRANSFER] dial ended: status=%r params=%s", status, sorted(form))
+    if attempt_id:
+        from backend.server.services import department_routing as routing
+
+        outcome = routing.dial_result(db, attempt_id, status or "completed", From or request.query_params.get("From"))
+        if outcome.fallback is not None and outcome.fallback_attempt is not None:
+            digits = "".join(ch for ch in outcome.fallback.transfer_phone or "" if ch.isdigit())
+            next_url = f"{build_base_url()}/api/voice/plivo/transfer-status?" + urlencode(
+                {"staff_phone": outcome.fallback.transfer_phone, "staff_name": outcome.fallback.name,
+                 "department": outcome.fallback.key, "lang": lang, "attempt_id": outcome.fallback_attempt.id})
+            logger.info("[PLIVO TRANSFER] %s: trying fallback %s", status, outcome.fallback.key)
+            return _xml(f'<Dial action="{escape(next_url)}" method="POST" timeout="{int(outcome.fallback.timeout_seconds or 20)}"><Number>{digits}</Number></Dial>')
     if status in ("", "completed", "answer", "answered"):  # unknown is treated as answered: never tell a served caller nobody came
         return _xml("")
     from backend.ai.engine.agent.hindi import language_pack

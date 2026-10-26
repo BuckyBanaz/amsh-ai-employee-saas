@@ -4,9 +4,11 @@ import { STRINGS } from '../../utils/strings/en';
 
 interface PatientsHeaderProps {
   onAddPatient?: () => void;
+  title?: string; // the business's own word (Clients); clinics keep the default
+  subtitle?: string;
 }
 
-export function PatientsHeader({ onAddPatient }: PatientsHeaderProps) {
+export function PatientsHeader({ onAddPatient, title, subtitle }: PatientsHeaderProps) {
   const todayStr = new Date().toLocaleDateString('en-US', {
     weekday: 'long',
     month: 'long',
@@ -18,10 +20,10 @@ export function PatientsHeader({ onAddPatient }: PatientsHeaderProps) {
     <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3 py-1">
       <div>
         <h1 className="text-xl font-extrabold text-gray-900 tracking-tight leading-tight flex items-center gap-2">
-          {STRINGS.HEADERS.PATIENTS.TITLE}
+          {title || STRINGS.HEADERS.PATIENTS.TITLE}
         </h1>
         <p className="text-xs text-gray-500 font-medium mt-0.5">
-          {STRINGS.HEADERS.PATIENTS.SUBTITLE}
+          {subtitle || STRINGS.HEADERS.PATIENTS.SUBTITLE}
         </p>
       </div>
 

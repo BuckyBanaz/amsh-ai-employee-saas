@@ -1,0 +1,16 @@
+%% How a call resolves its vertical, subtype, workflows, tools and wording (implemented).
+flowchart TD
+  A["Incoming call / chat"] --> B["Business row: vertical, business_subtype"]
+  B --> C["registry.get_vertical(vertical, language)<br/>language YAML (verticals/configs)"]
+  C -->|missing| X1["UnknownVerticalError: call refused,<br/>never treated as a clinic"]
+  B --> D["workflow_registry().vertical(vertical)"]
+  D -->|missing| X1
+  D --> E{"subtype known?"}
+  E -->|yes| F["subtype.workflows"]
+  E -->|no / legacy text| G["vertical.subtypes[0].workflows"]
+  F & G --> H["tools_for() = union of workflow tools"]
+  F & G --> I["booking_slot_order() = booking workflow's required slots"]
+  B --> J["load_prompts(pack, vertical)<br/>base + overlay (clinic: none)"]
+  H --> K["AgentEngine.tools = schemas(vertical) ∩ allowlist − owner switches"]
+  I --> L["CallState.slot_order"]
+  J --> M["system prompt (+ workflow block if workflow_runtime)"]

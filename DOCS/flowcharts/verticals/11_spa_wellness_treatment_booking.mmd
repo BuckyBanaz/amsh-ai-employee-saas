@@ -1,0 +1,14 @@
+%% wellness.treatment_booking (implemented, unit-tested). Rooms: ResourceAwareWriteOperations.
+flowchart TD
+  A["Caller wants a treatment"] --> HC{"health concern, pregnancy,<br/>injury, contraindication?"}
+  HC -->|yes| T["offer transfer: wellness_lead (no advice, no outcome claims)"]
+  HC -->|no| C["collect: treatment, (therapist), date, time, name, phone"]
+  C --> K["check_availability (hours, therapists)"]
+  K -->|ok| RM{"treatment has resource_kind?"}
+  RM -->|no| F["book_appointment: read-back, confirm"]
+  RM -->|yes| FR{"a room of that kind free for<br/>[start, start+duration)?"}
+  FR -->|no| NR["no_room: offer another time"] --> C
+  FR -->|yes| F
+  F -->|booked| OK["complete: booked; session holds resource_id"]
+  NOTE["Known limit: check_availability does not yet filter by rooms;<br/>the room is enforced at booking"]:::note
+  classDef note fill:#fff7e6,stroke:#e0a800

@@ -1,0 +1,14 @@
+%% Activation (tenant) and publication (platform definitions). Implemented.
+flowchart TD
+  subgraph Platform["Platform definitions (reviewed code)"]
+    Y["Edit definitions/*.yaml + overlays"] --> PR["Pull request review"]
+    PR --> T["Tests: test_workflows (validator, overlays),<br/>test_clinic_golden, test_vertical_runtime"]
+    T --> DEP["Deploy"] --> LD["API start: workflow_registry() validates;<br/>an invalid definition stops startup"]
+  end
+  subgraph Tenant["Tenant activation"]
+    C1["Configure: subtype, catalogue, departments, rooms, hours, agent"] --> V["POST validate: readiness problems"]
+    V -->|errors| C1
+    V -->|ready| A["POST activate (owner/admin) → vertical_settings.status=active, audited"]
+    A --> LOCK["vertical change now platform-only (409 for tenants)"]
+  end
+  LD -. "admin portal shows version, validation, activated count" .-> A

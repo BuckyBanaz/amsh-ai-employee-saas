@@ -6,12 +6,16 @@ import { STRINGS } from '../../../utils/strings/en';
 import { OnboardingController } from '../../../controllers/onboarding.controller';
 import { DashboardController } from '../../../controllers/dashboard.controller';
 import { StorageService } from '../../../services/storage.service';
+import { VerticalController } from '../../../controllers/vertical.controller';
+import { invalidateVerticalConfig } from '../../../verticals/useVerticalConfig';
+import type { VerticalSummary } from '../../../verticals/types';
 
 export default function BusinessOnboardingPage() {
   const router = useRouter();
   const [formData, setFormData] = useState({
     businessName: '',
     vertical: 'clinic',
+    subtype: '',
     country: 'India',
     address: '',
     website: '',
@@ -26,6 +30,17 @@ export default function BusinessOnboardingPage() {
   const [savedLogoName, setSavedLogoName] = useState<string>('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  // Business types come from the server's reviewed definitions: only types the AI can actually serve are offered.
+  const [catalog, setCatalog] = useState<VerticalSummary[]>([]);
+  const [catalogError, setCatalogError] = useState('');
+  const loadCatalog = React.useCallback(() => {
+    setCatalogError('');
+    VerticalController.catalog()
+      .then(setCatalog)
+      .catch((e: unknown) => setCatalogError(e instanceof Error ? e.message : 'Could not load business types'));
+  }, []);
+  React.useEffect(() => { loadCatalog(); }, [loadCatalog]);
+  const selectedVertical = catalog.find((v) => v.key === formData.vertical);
 
   React.useEffect(() => {
     try {
@@ -62,7 +77,7 @@ export default function BusinessOnboardingPage() {
 
   const handleNext = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.businessName || !formData.vertical || !formData.address || !formData.email || !formData.phone) {
+    if (!formData.businessName || !formData.vertical || !formData.subtype || !formData.address || !formData.email || !formData.phone) {
       setError(STRINGS.ONBOARDING.BUSINESS.ERROR_REQUIRED);
       return;
     }
@@ -73,6 +88,7 @@ export default function BusinessOnboardingPage() {
       const response = await OnboardingController.createBusiness({
         name: formData.businessName,
         vertical: formData.vertical,
+        business_subtype: formData.subtype,
         country: formData.country,
         address: formData.address,
         website: formData.website,
@@ -86,6 +102,7 @@ export default function BusinessOnboardingPage() {
 
       if (response && response.id) {
         StorageService.setBusinessId(response.id);
+        invalidateVerticalConfig(); // the next steps read this business's type from the server
         localStorage.setItem('onboarding_currency', formData.currency);
         localStorage.setItem('onboarding_business_data', JSON.stringify(formData));
 
@@ -155,18 +172,41 @@ export default function BusinessOnboardingPage() {
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs font-semibold text-gray-900">{STRINGS.ONBOARDING.BUSINESS.FIELDS.TYPE}</label>
-            <select 
+            <label htmlFor="business-vertical" className="text-xs font-semibold text-gray-900">{STRINGS.ONBOARDING.BUSINESS.FIELDS.TYPE}</label>
+            <select
+              id="business-vertical"
               value={formData.vertical}
-              onChange={(e) => setFormData({...formData, vertical: e.target.value})}
+              onChange={(e) => setFormData({...formData, vertical: e.target.value, subtype: ''})}
+              disabled={!catalog.length}
               className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#0066FF] focus:border-transparent transition-all appearance-none bg-white"
             >
-              <option value="clinic">Clinic / Dental Practice</option>
-              <option value="hospital">Hospital / Medical Center</option>
-              <option value="restaurant">Restaurant / Cafe</option>
-              <option value="gym">Gym / Fitness Center</option>
-              <option value="salon">Salon / Spa</option>
+              {catalog.map((v) => (
+                <option key={v.key} value={v.key}>{v.name}{v.status === 'beta' ? ' (beta)' : ''}</option>
+              ))}
             </select>
+            {catalogError && (
+              <p role="alert" className="text-[11px] text-red-600">
+                {catalogError} <button type="button" className="underline" onClick={loadCatalog}>Try again</button>
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-1">
+            <label htmlFor="business-subtype" className="text-xs font-semibold text-gray-900">What kind of business?</label>
+            <select
+              id="business-subtype"
+              required
+              value={formData.subtype}
+              onChange={(e) => setFormData({...formData, subtype: e.target.value})}
+              disabled={!selectedVertical}
+              className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#0066FF] focus:border-transparent transition-all appearance-none bg-white"
+            >
+              <option value="">Choose…</option>
+              {(selectedVertical?.subtypes || []).map((s) => <option key={s.key} value={s.key}>{s.name}</option>)}
+            </select>
+            {selectedVertical?.status === 'beta' && (
+              <p className="text-[11px] text-amber-700">This business type is in beta: its workflows are tested but not yet proven on live calls.</p>
+            )}
           </div>
 
           <div className="space-y-1">

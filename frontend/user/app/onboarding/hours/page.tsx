@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useOnboardingSteps } from '../../../verticals/onboardingSteps';
 import { STRINGS } from '../../../utils/strings/en';
 import { OnboardingController } from '../../../controllers/onboarding.controller';
 import { StorageService } from '../../../services/storage.service';
@@ -24,6 +25,7 @@ const initialSchedule = [
 
 export default function HoursOnboardingPage() {
   const router = useRouter();
+  const onboarding = useOnboardingSteps(); // next/back follow the business's type
   const [schedule, setSchedule] = useState(initialSchedule);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [isAddingHoliday, setIsAddingHoliday] = useState(false);
@@ -117,7 +119,7 @@ export default function HoursOnboardingPage() {
 
     try {
       await OnboardingController.updateBusiness(businessId, { working_hours });
-      router.push('/onboarding/ai-receptionist');
+      router.push(onboarding.next('/onboarding/hours'));
     } catch (err: any) {
       setError(err.message || 'Failed to save working hours');
     } finally {
@@ -318,7 +320,7 @@ export default function HoursOnboardingPage() {
       <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
         <button 
           type="button" 
-          onClick={() => router.push('/onboarding/staff')}
+          onClick={() => router.push(onboarding.prev('/onboarding/hours'))}
           disabled={loading}
           className="px-5 py-2 rounded-lg border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors shadow-sm disabled:opacity-50"
         >

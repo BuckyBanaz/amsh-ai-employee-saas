@@ -38,6 +38,9 @@ class BusinessFacts:
     city: str = ""
     country: str = ""
     vertical: str = ""  # required: no silent "clinic" (resolve_business_context raises when it is empty)
+    subtype: str = ""  # Business.business_subtype: picks the subtype's workflows (backend/ai/workflows); unknown = the vertical's first
+    courses: List[str] = field(default_factory=list)  # education catalogue (Service.kind == "course"): answered, never booked
+    departments: List[Dict[str, Any]] = field(default_factory=list)  # the tenant's active department directory (no phone numbers)
     slot_minutes: int = DEFAULT_SLOT_MINUTES  # visit length + the owner's buffer between visits
     notice_hours: float = 0.0  # minimum lead time before an appointment can start
     compliance_clause: str = ""  # the platform's privacy instruction for this region (admin: Policies & Privacy); empty = the built-in text

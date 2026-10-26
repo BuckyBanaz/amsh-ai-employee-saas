@@ -1,0 +1,30 @@
+%% Human transfer, provider result and fallback (implemented for Twilio and Plivo; live-test pending).
+sequenceDiagram
+  participant AI as AgentToolbox
+  participant R as department_routing
+  participant P as Provider (Twilio / Plivo)
+  participant CB as transfer-status callback
+  participant DB as transfer_attempts / enquiries
+  AI->>R: choose(department, context)
+  R-->>AI: department (open, has number) or unreachable
+  alt unreachable
+    AI->>DB: attempt closed / no_destination
+    AI-->>AI: tell model: offer callback (capture_enquiry)
+  else dial
+    AI->>DB: attempt initiated (last 4 digits only)
+    AI->>P: Dial number, timeout, action=…?attempt_id
+    P->>CB: DialCallStatus
+    alt completed
+      CB->>DB: attempt completed
+    else no-answer / busy / failed
+      CB->>DB: attempt no_answer / busy / failed
+      CB->>R: fallback department open, not tried on this call?
+      alt yes (one hop)
+        CB->>DB: new attempt initiated
+        CB->>P: Dial fallback (action with new attempt_id)
+      else no
+        CB->>DB: callback enquiry (idempotent per call + department)
+        CB->>P: "someone will call you back" + hang up
+      end
+    end
+  end

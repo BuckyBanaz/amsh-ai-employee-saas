@@ -23,3 +23,4 @@ from backend.server.database.models.admin_alert import AdminAlertState  # noqa: 
 from backend.server.database.models.spend import CostRate, UsageEvent  # noqa: F401
 from backend.server.database.models.policy import Policy, PolicyAcceptance, PolicyRule, PolicyVersion  # noqa: F401
 from backend.server.database.models.patient import Patient  # noqa: F401
+from backend.server.database.models.vertical import Department, Enquiry, Resource, TransferAttempt, WorkflowRun  # noqa: F401

@@ -18,7 +18,7 @@ from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from backend.server.api.routes.businesses import ALLOWED_VERTICALS
+from backend.server.api.routes.businesses import BUSINESS_TYPES, LEGACY_VERTICALS, _normalize_subtype, allowed_verticals
 from backend.server.auth.security import hash_password, require_platform_admin
 from backend.server.database.models.audit_log import AuditLog
 from backend.server.database.models.business import Business
@@ -64,8 +64,8 @@ class TenantCreate(BaseModel):
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 def create_tenant(payload: TenantCreate, request: Request, db: Session = Depends(get_db), admin: User = Depends(require_platform_admin)) -> Dict[str, Any]:
-    if payload.vertical not in ALLOWED_VERTICALS:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"vertical must be one of {sorted(ALLOWED_VERTICALS)}")
+    if payload.vertical not in allowed_verticals() and payload.vertical not in LEGACY_VERTICALS:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"vertical must be one of {sorted(allowed_verticals())}")
     email = payload.owner.email.lower()
     if db.scalar(select(User.id).where(func.lower(User.email) == email)):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="That owner email is already registered")
@@ -77,6 +77,9 @@ def create_tenant(payload: TenantCreate, request: Request, db: Session = Depends
         plan_key = plan.key
 
     fields = payload.model_dump(exclude={"owner", "plan", "working_hours", "business_type"})
+    fields["vertical"], legacy_subtype = LEGACY_VERTICALS.get(payload.vertical, (payload.vertical, None))
+    fields["business_subtype"] = _normalize_subtype(fields["vertical"], fields.get("business_subtype") or legacy_subtype)
+    fields["business_type"] = BUSINESS_TYPES.get(fields["vertical"], "healthcare")
     business = Business(**fields)
     if payload.business_type:
         business.business_type = payload.business_type

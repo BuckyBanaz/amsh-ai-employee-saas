@@ -1,0 +1,209 @@
+{
+ "_about": "Wording for the Institution vertical on top of the base packs (ai/prompts/__init__.py). Healthcare has no overlay. Lead capture and department routing come from backend/ai/workflows/definitions/education.yaml.",
+ "receptionist": {
+  "edits": {
+   "rules": [
+    [
+     "SCOPE: appointments, doctors, services, timings, location, clinic info.",
+     "SCOPE: courses and programmes, admissions, eligibility, deadlines, fees and scholarships (only from the approved information below or search_knowledge, never guessed: otherwise offer the right department or to take their details), campus visits or counselling, and reaching the right department. Never confirm or discuss an application's status or any student's record. For a child, ask only what is needed and take the parent's or guardian's name and number."
+    ],
+    [
+     "BOOKING: collect service, date, exact time, name, phone, optional doctor.",
+     "BOOKING (only campus visits, counselling or demo classes listed as bookable, and only if the caller asks): collect the visit type, date, exact time, name, phone. ENQUIRIES: when the caller wants to be contacted, cannot be connected, or asks for a callback, save it with capture_enquiry after reading back name, number and topic."
+    ]
+   ],
+   "runtime_context/region_known": [
+    [
+     "Medical emergency number(s)",
+     "Emergency number(s)"
+    ]
+   ],
+   "facts/block": [
+    [
+     "Services: {services}. Doctors: {doctors}.",
+     "Bookable: {services}. Counsellors: {doctors}."
+    ]
+   ]
+  },
+  "terms": [
+   [
+    "the clinic's",
+    "the institution's"
+   ],
+   [
+    "clinic's",
+    "institution's"
+   ],
+   [
+    "CLINIC OWNER'S",
+    "OWNER'S"
+   ],
+   [
+    "CLINIC",
+    "INSTITUTION"
+   ],
+   [
+    "Clinic",
+    "Institution"
+   ],
+   [
+    "other clinics",
+    "other businesses"
+   ],
+   [
+    "clinics",
+    "institutions"
+   ],
+   [
+    "clinic",
+    "institution"
+   ],
+   [
+    "NEW PATIENT",
+    "NEW CALLER"
+   ],
+   [
+    "RETURNING PATIENT",
+    "RETURNING CALLER"
+   ],
+   [
+    "patients",
+    "callers"
+   ],
+   [
+    "patient's",
+    "caller's"
+   ],
+   [
+    "patient",
+    "caller"
+   ],
+   [
+    "Doctors",
+    "Counsellors"
+   ],
+   [
+    "doctors",
+    "counsellors"
+   ],
+   [
+    "doctor",
+    "counsellor"
+   ],
+   [
+    "Doctor",
+    "Counsellor"
+   ]
+  ],
+  "term_keys": [
+   "rules",
+   "privacy_rule",
+   "small_talk_off",
+   "confirm_off",
+   "language_rule/fixed",
+   "language_rule/with_hindi",
+   "channel/chat_addendum",
+   "facts/block",
+   "facts/disabled",
+   "facts/no_transfer",
+   "facts/owner_instructions"
+  ]
+ },
+ "engine_notes": {
+  "edits": {
+   "spoken_line/emergency": [
+    [
+     "The caller described a medical emergency. Calmly tell them you are transferring them to emergency care immediately",
+     "The caller described an emergency. Calmly tell them you are connecting them to a member of staff immediately"
+    ]
+   ],
+   "messages/toolbox/tools.transfer_to_human": [
+    [
+     "Transfer to staff: 'emergency', or 'front_desk' only if the caller asked for a person or agreed to it.",
+     "Transfer to staff: 'emergency', or 'front_desk' or a department key listed under DEPARTMENTS (the one that handles what the caller needs) only if the caller asked for a person or agreed to it."
+    ]
+   ]
+  },
+  "terms": [
+   [
+    "the clinic's",
+    "the institution's"
+   ],
+   [
+    "clinic's",
+    "institution's"
+   ],
+   [
+    "CLINIC OWNER'S",
+    "OWNER'S"
+   ],
+   [
+    "CLINIC",
+    "INSTITUTION"
+   ],
+   [
+    "Clinic",
+    "Institution"
+   ],
+   [
+    "other clinics",
+    "other businesses"
+   ],
+   [
+    "clinics",
+    "institutions"
+   ],
+   [
+    "clinic",
+    "institution"
+   ],
+   [
+    "NEW PATIENT",
+    "NEW CALLER"
+   ],
+   [
+    "RETURNING PATIENT",
+    "RETURNING CALLER"
+   ],
+   [
+    "patients",
+    "callers"
+   ],
+   [
+    "patient's",
+    "caller's"
+   ],
+   [
+    "patient",
+    "caller"
+   ],
+   [
+    "Doctors",
+    "Counsellors"
+   ],
+   [
+    "doctors",
+    "counsellors"
+   ],
+   [
+    "doctor",
+    "counsellor"
+   ],
+   [
+    "Doctor",
+    "Counsellor"
+   ]
+  ],
+  "term_keys": [
+   "messages/toolbox/tools.search_knowledge",
+   "messages/toolbox/execute.disabled",
+   "messages/toolbox/check_availability.unknown_doctor",
+   "messages/toolbox/check_availability.closed",
+   "messages/toolbox/search_knowledge.not_found",
+   "messages/toolbox/tools.send_confirmation",
+   "known_patient/new_patient",
+   "known_patient/returning_patient",
+   "language_layer/layer_note"
+  ]
+ }
+}

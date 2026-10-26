@@ -1,0 +1,14 @@
+%% EdTech: sales vs support. No physical visits: a demo is a lead (demo_request). Implemented, unit-tested.
+flowchart TD
+  A["Caller"] --> B["identify: topic"]
+  B -->|technical_support| SC["support_contact: name, phone, account email"]
+  B -->|product_info, pricing, demo_request, billing, learner_support| AN["answer from catalogue / FAQ"]
+  AN -->|resolved| D1["complete: answered"]
+  AN -->|not resolved| Q["qualify: product, name, phone"]
+  SC --> RT["route: technical_support → fallback learner_support"]
+  Q --> RT2["route: sales / learner_support / billing"]
+  RT & RT2 -->|transferring| D2["complete: transferred"]
+  RT & RT2 -->|unavailable| SL["capture_enquiry (demo_request / support / callback)"]
+  SL -->|saved / duplicate| D3["complete: lead_captured"]
+  NOTE["The AI never reads or changes a learner's account"]:::note
+  classDef note fill:#fff7e6,stroke:#e0a800

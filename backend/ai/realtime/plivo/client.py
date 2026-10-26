@@ -27,11 +27,15 @@ def normalize_e164(number: str, default_country_code: str = "91") -> str:
     return f"+{digits}" if digits else ""
 
 
-def transfer_url(staff_phone: str, staff_name: str, department: str, language: Optional[str]) -> str:
-    """The XML URL a live Plivo call is moved to for a human transfer (routes/plivo.py /transfer: a <Dial> to the staff)."""
+def transfer_url(staff_phone: str, staff_name: str, department: str, language: Optional[str], attempt_id: Optional[str] = None) -> str:
+    """The XML URL a live Plivo call is moved to for a human transfer (routes/plivo.py /transfer: a <Dial> to the staff).
+    `attempt_id` (department directory) lets the dial's result be recorded and a fallback tried."""
     from backend.ai.realtime.twilio.call_control import build_base_url
 
-    query = urlencode({"staff_phone": staff_phone, "staff_name": staff_name, "department": department, "lang": language or "en"})
+    params = {"staff_phone": staff_phone, "staff_name": staff_name, "department": department, "lang": language or "en"}
+    if attempt_id:
+        params["attempt_id"] = attempt_id
+    query = urlencode(params)
     return f"{build_base_url()}/api/voice/plivo/transfer?{query}"
 
 

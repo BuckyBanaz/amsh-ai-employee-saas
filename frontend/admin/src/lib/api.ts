@@ -777,6 +777,22 @@ export interface VerticalItem {
   terminology: Record<string, string>;
   businesses: number;
   status: string;
+  definition?: VerticalDefinitionInfo | null;
+}
+
+// The reviewed workflow definitions (backend/ai/workflows/definitions): platform templates, never tenant-editable.
+export interface VerticalDefinitionInfo {
+  name: string;
+  version: string;
+  status: 'live' | 'beta' | 'designed';
+  workflow_runtime: boolean;
+  validation: string;
+  activated_businesses: number;
+  safety: Record<string, boolean | string>;
+  subtypes: { key: string; name: string; workflows: string[]; departments: string[]; differences: string[]; businesses: number }[];
+  workflows: { id: string; title: string; version: string; status: 'implemented' | 'designed'; tools: string[]; entry_intents: string[];
+    booking_type: string | null; slot_order: string[]; transfer_departments: string[] }[];
+  departments: { key: string; name: string; intents: string[]; may_answer: boolean; priority: number; default_fallback: string | null }[];
 }
 
 export interface VerticalDetail {

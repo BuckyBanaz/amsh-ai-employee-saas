@@ -1,0 +1,180 @@
+# Healthcare: the compatibility baseline. Business.vertical stays "clinic" (existing tenants and data are not renamed).
+# These workflows DESCRIBE what the clinic agent already does; the clinic golden test (ai/evals/test_clinic_golden.py) proves
+# that loading them changes nothing: same tools (all 9), same booking order (service, date, time, name, phone), same prompt.
+vertical:
+  key: clinic
+  name: Healthcare
+  version: 1.0.0
+  status: live
+  workflow_runtime: false  # the existing controller drives clinic calls unchanged; these workflows set its tool allowlist
+  description: Dental practices, general clinics and hospitals. Books, moves and cancels appointments; answers from approved clinic facts; hands emergencies and requests for a person to staff.
+  terminology:
+    customer: Patient
+    customers: Patients
+    staff: Doctor
+    staff_plural: Doctors
+    offering: Treatment
+    offerings: Treatments
+    booking: Appointment
+    bookings: Appointments
+  safety:
+    emergency_detection: true
+    emergency_wording: medical
+    health_privacy: true
+    minors_privacy: false
+    no_medical_advice: true
+  resources:
+    - {key: staff, name: Doctor}
+  departments:
+    - {key: front_desk, name: Front desk, intents: [human_request, general_enquiry, billing], priority: 50}
+    - {key: emergency, name: Emergency, intents: [emergency], may_answer: false, priority: 100, default_fallback: front_desk}
+    - {key: doctor, name: Doctor on duty, intents: [clinical_question], may_answer: false, priority: 70, default_fallback: front_desk}
+    - {key: billing, name: Billing, intents: [billing], priority: 40, default_fallback: front_desk}
+  subtypes:
+    - key: dental
+      name: Dental practice
+      workflows: [clinic.appointment_booking, clinic.appointment_change, clinic.enquiry]
+      departments: [front_desk, emergency, doctor]
+      resources: [staff]
+      differences: ["Shares every clinic workflow unchanged; only the catalogue (dental treatments) and doctors differ."]
+    - key: general_clinic
+      name: General clinic
+      workflows: [clinic.appointment_booking, clinic.appointment_change, clinic.enquiry]
+      departments: [front_desk, emergency, doctor]
+      resources: [staff]
+      differences: ["The reference clinic: today's behaviour, captured in the clinic golden."]
+    - key: hospital
+      name: Hospital or medical centre
+      workflows: [clinic.appointment_booking, clinic.appointment_change, clinic.enquiry]
+      departments: [front_desk, emergency, doctor, billing]
+      resources: [staff]
+      differences:
+        - "Same booking workflow (outpatient appointments)."
+        - "Usually configures several departments (billing, specialist desks) in the department directory; without one, transfers ring the existing fallback number exactly as today."
+  onboarding:
+    - {key: business, title: Business details}
+    - {key: services, title: Treatments}
+    - {key: staff, title: Doctors}
+    - {key: hours, title: Opening hours}
+    - {key: ai_receptionist, title: AI receptionist}
+    - {key: knowledge, title: Knowledge, required: false}
+    - {key: integrations, title: Channels and integrations, required: false}
+    - {key: review, title: Review and activate}
+  dashboard:
+    - {key: appointments, label: Appointments, route: /appointments}
+    - {key: customers, label: Patients, route: /patients}
+    - {key: staff, label: Doctors, route: /doctors}
+    - {key: offerings, label: Treatments, route: /services}
+    - {key: calls, label: Calls, route: /calls}
+    - {key: conversations, label: Conversations, route: /conversations}
+    - {key: knowledge, label: Knowledge, route: /knowledge}
+
+workflows:
+  - id: clinic.appointment_booking
+    version: 1.0.0
+    title: Book an appointment
+    status: implemented
+    description: The existing clinic booking flow, one item per turn, availability checked in code, booked only after the caller confirms.
+    entry_intents: [book_appointment]
+    slots:
+      - {id: service, type: text, description: Treatment or reason for the visit}
+      - {id: date, type: date}
+      - {id: time, type: time}
+      - {id: name, type: name, sensitive: true}
+      - {id: phone, type: phone, sensitive: true}
+      - {id: doctor, type: text, required: false, description: "Preferred doctor, if any"}
+    start: collect
+    steps:
+      - id: collect
+        kind: collect
+        slots: [service, date, time, name, phone]
+        next: [{to: check}]
+      - id: check
+        kind: tool
+        tool: check_availability
+        next:
+          - {to: confirm, when: {tool_code_in: [ok]}}
+          - {to: collect}
+      - id: confirm
+        kind: confirm
+        tool: book_appointment
+        next:
+          - {to: booked, when: {tool_code_in: [booked, already_booked, dry_run]}}
+          - {to: confirm, when: {tool_code_in: [needs_confirmation, no_matching_readback]}}
+          - {to: collect, when: {tool_code_in: [outside_hours, closed, past_date, past_time, too_soon, bad_date, bad_time, bad_name, bad_phone, unknown_service, unknown_doctor, missing_fields, not_from_caller]}}
+          - {to: not_booked}
+      - {id: booked, kind: complete, outcome: booked}
+      - {id: not_booked, kind: fail, outcome: not_booked}
+    tools: [check_availability, book_appointment, send_confirmation, search_knowledge, transfer_to_human, end_call]
+    knowledge: [business_facts, catalog, faq, documents]
+    answer_constraints: ["Never give medical advice or diagnose", "Prices and treatments only from the clinic's catalogue"]
+    transfer: {departments: [front_desk, emergency, doctor], require_caller_consent: true}
+    booking_type: appointment
+    resources: [staff]
+    follow_ups: [confirmation_message, reminder]
+    audit_events: [appointment.booked]
+    metrics: [bookings, booking_conversion]
+
+  - id: clinic.appointment_change
+    version: 1.0.0
+    title: Reschedule or cancel an appointment
+    status: implemented
+    entry_intents: [reschedule_appointment, cancel_appointment, appointment_status]
+    slots:
+      - {id: phone, type: phone, sensitive: true}
+      - {id: date, type: date, required: false}
+      - {id: time, type: time, required: false}
+    start: find
+    steps:
+      - id: find
+        kind: tool
+        tool: lookup_appointment
+        next:
+          - {to: change, when: {tool_code_in: [ok]}}
+          - {to: not_found}
+      - id: change
+        kind: confirm
+        tool: reschedule_appointment
+        next:
+          - {to: done, when: {tool_code_in: [rescheduled, cancelled, dry_run]}}
+          - {to: change, when: {tool_code_in: [needs_confirmation, no_matching_readback, outside_hours, closed, past_date, past_time, too_soon]}}
+          - {to: not_found}
+      - {id: done, kind: complete, outcome: changed}
+      - {id: not_found, kind: fail, outcome: not_found}
+    tools: [lookup_appointment, cancel_appointment, reschedule_appointment, check_availability, send_confirmation, transfer_to_human, end_call]
+    knowledge: [business_facts]
+    transfer: {departments: [front_desk], require_caller_consent: true}
+    booking_type: appointment
+    follow_ups: [confirmation_message]
+    audit_events: [appointment.rescheduled, appointment.cancelled]
+    metrics: [reschedules, cancellations]
+
+  - id: clinic.enquiry
+    version: 1.0.0
+    title: Answer a question or reach a person
+    status: implemented
+    entry_intents: [general_enquiry, opening_hours, pricing, human_request, emergency]
+    slots:
+      - {id: question, type: text}
+    start: answer
+    steps:
+      - id: answer
+        kind: answer
+        next:
+          - {to: answered, when: {resolved: true}}
+          - {to: transfer}
+      - id: transfer
+        kind: transfer
+        department: route
+        next:
+          - {to: transferred, when: {tool_code_in: [transferring]}}
+          - {to: unresolved}
+      - {id: answered, kind: complete, outcome: answered}
+      - {id: transferred, kind: complete, outcome: transferred}
+      - {id: unresolved, kind: fail, outcome: unresolved}
+    tools: [search_knowledge, transfer_to_human, end_call]
+    knowledge: [business_facts, catalog, faq, documents]
+    answer_constraints: ["Never give medical advice or diagnose", "Answer only from the clinic's facts and approved knowledge"]
+    transfer: {departments: [front_desk, emergency, doctor], require_caller_consent: true, on_unavailable: message}
+    audit_events: [call.transferred]
+    metrics: [answered, transfers]

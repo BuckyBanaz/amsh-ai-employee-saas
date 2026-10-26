@@ -33,10 +33,11 @@ def name_on_file(history: List[Dict[str, Any]]) -> str:
     return ""
 
 
-def known_patient_block(history: List[Dict[str, Any]], profile_name: Optional[str] = None) -> str:
+def known_patient_block(history: List[Dict[str, Any]], profile_name: Optional[str] = None, vertical: Optional[str] = None) -> str:
     """Prompt lines about the caller. `history` is the caller's own appointments, newest first (from
-    ClinicReadOperations.get_patient_history). Empty string when there is nothing safe to say. Wording: engine_notes.json."""
-    notes = load_prompts("engine_notes")["known_patient"]
+    ClinicReadOperations.get_patient_history). Empty string when there is nothing safe to say. Wording: engine_notes.json, in
+    the vertical's words (a salon's caller is a returning client, not a patient; healthcare: the base wording)."""
+    notes = load_prompts("engine_notes", vertical)["known_patient"]
     name = name_on_file(history)
     if not history:
         profile = clean_name(profile_name)
@@ -62,6 +63,10 @@ def caller_memory(business_id: str, phone: Optional[str], profile_name: Optional
 
     if len(re.sub(r"\D", "", phone or "")) < 10:
         return "", ""
+    from backend.server.database.models.business import Business
+
     with SessionLocal() as db:
         history = ClinicReadOperations.get_patient_history(db, business_id, phone)
-    return known_patient_block(history, profile_name), name_on_file(history)
+        business = db.get(Business, business_id)
+        vertical = business.vertical if business else None
+    return known_patient_block(history, profile_name, vertical), name_on_file(history)

@@ -1,0 +1,48 @@
+# Beauty aur Personal Care (Hindi). Language layer only: the workflows, departments and tool allowlist are in backend/ai/workflows/definitions/.
+name: salon
+version: 1.0.0
+language: hi
+display_name: Beauty aur Personal Care (Hindi)
+description: Salons, barbershops, nail salons aur lash & brow studios ke liye Hindi AI receptionist.
+terminology:
+  customer_label: Client
+  provider_label: Stylist
+  booking_label: Appointment
+  catalog_label: Services
+greeting_template: Namaste, {business_name} me aapka swagat hai. Main AI receptionist hoon. Main aapki kya madad kar sakti hoon?
+system_prompt_template: 'Aap {business_name} salon ke AI receptionist hain. Aap appointments book, change aur cancel karte hain aur services aur
+  prices ke sawalon ke jawab catalogue se dete hain.
+
+  '
+intents: []
+escalation_rules:
+- trigger_keywords:
+  - chhati me dard
+  - chest pain
+  - heart attack
+  - saans nahi aa rahi
+  - khoon beh raha hai
+  - behosh
+  - emergency
+  - aag
+  action: transfer
+  target_role: emergency
+  message: Ye ek emergency lagti hai. Main aapko abhi staff se jod rahi hoon. Agar koi turant khatre mein hai to kripya emergency number par call
+    karein.
+- trigger_keywords:
+  - insan
+  - real person
+  - agent
+  - baat karni hai
+  - human
+  action: transfer
+  target_role: front_desk
+  message: Ji zaroor, main aapko front desk se jod rahi hoon.
+default_tools:
+- check_availability
+- book_appointment
+- transfer_call
+- hangup
+- send_sms
+metadata:
+  note: Runtime workflows, intents and tools come from backend/ai/workflows/definitions/salon.yaml

@@ -1,0 +1,14 @@
+%% education.school_enquiry (implemented, unit-tested). Minors' privacy: guardian contact, child's first name only if needed.
+flowchart TD
+  A["Parent / guardian calls"] --> B["identify: topic"]
+  B -->|attendance| G["guardian: grade, guardian name, guardian phone"]
+  B -->|admissions, timings, term dates, fees, transport| AN["answer from approved information only"]
+  AN -->|resolved| D1["complete: answered"]
+  AN -->|not resolved| G
+  G --> RT["route: admissions / administration / accounts"]
+  RT -->|transferring| D2["complete: transferred"]
+  RT -->|unavailable| SL["capture_enquiry (guardian contact)"]
+  SL -->|saved / duplicate| D3["complete: lead_captured"]
+  SL -->|bad_phone / missing_fields| G
+  NOTE["Never disclosed: student records, attendance, contact details"]:::note
+  classDef note fill:#fff7e6,stroke:#e0a800

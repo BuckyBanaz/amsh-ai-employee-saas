@@ -1,6 +1,7 @@
 "use client";
 import React, { useEffect, useState, useCallback } from 'react';
 import { DoctorsHeader } from '../../../components/dashboard/DoctorsHeader';
+import { isNonClinic, useVerticalConfig } from '../../../verticals/useVerticalConfig';
 import { StaffCard, StaffCardProps } from '../../../components/dashboard/StaffCard';
 import { NewStaffModal, StaffFormData } from '../../../components/dashboard/NewStaffModal';
 import { StaffScheduleModal } from '../../../components/dashboard/StaffScheduleModal';
@@ -8,6 +9,8 @@ import { DashboardController, StaffItem, ServiceItem } from '../../../controller
 import { CardGridSkeleton } from '../../../components/common/ShimmerSkeleton';
 
 export default function DoctorsPage() {
+  const { config, terms } = useVerticalConfig();
+  const custom = isNonClinic(config);
   const [staffList, setStaffList] = useState<StaffCardProps[]>([]);
   const [availableServices, setAvailableServices] = useState<ServiceItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -130,7 +133,11 @@ export default function DoctorsPage() {
 
   return (
     <div className="space-y-3.5 animate-in fade-in duration-300 pb-8">
-      <DoctorsHeader onAddStaff={handleOpenAdd} />
+      <DoctorsHeader
+        onAddStaff={handleOpenAdd}
+        title={custom ? terms.staff_plural : undefined}
+        subtitle={custom ? `Your ${terms.staff_plural.toLowerCase()}, what they offer and how to reach them.` : undefined}
+      />
 
       {loading ? (
         <CardGridSkeleton count={6} />

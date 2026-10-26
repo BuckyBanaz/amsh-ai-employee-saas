@@ -1,0 +1,11 @@
+%% salon.appointment_booking (implemented, unit-tested). Stylist preference optional ("anyone" is fine).
+flowchart TD
+  A["Caller wants a service"] --> C["collect: service, (stylist), date, time, name, phone"]
+  C --> K["check_availability (hours, stylist slots)"]
+  K -->|ok| F["book_appointment: read-back"]
+  K -->|closed / outside hours| C
+  F -->|needs_confirmation| F2["caller says yes (later turn)"] --> F
+  F -->|booked / already_booked| OK["complete: booked → confirmation message, reminder"]
+  F -->|bad fields| C
+  F -->|other| NB["fail: not_booked"]
+  X["Reschedule / cancel"] --> L["lookup_appointment (caller's own number)"] --> R["reschedule / cancel with read-back"]

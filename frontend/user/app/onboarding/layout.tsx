@@ -4,24 +4,16 @@ import React from 'react';
 import { usePathname } from 'next/navigation';
 import { STRINGS } from '../../utils/strings/en';
 
-const ALL_STEPS = [
-  { id: 1, name: 'Account', href: '/onboarding/account' },
-  { id: 2, name: 'Business', href: '/onboarding/business' },
-  { id: 3, name: 'Services', href: '/onboarding/services' },
-  { id: 4, name: 'Staff', href: '/onboarding/staff' },
-  { id: 5, name: 'Hours', href: '/onboarding/hours' },
-  { id: 6, name: 'AI Receptionist', href: '/onboarding/ai-receptionist' },
-  { id: 7, name: 'Knowledge', href: '/onboarding/knowledge' },
-  { id: 8, name: 'Integrations', href: '/onboarding/integrations' },
-  { id: 9, name: 'Review', href: '/onboarding/review' },
-  { id: 10, name: 'Plans', href: '/onboarding/plans' },
-  { id: 11, name: 'Checkout', href: '/onboarding/checkout' },
-];
+// The steps follow the business's type (verticals/onboardingSteps.ts): extra steps such as Departments or Rooms appear
+// only for the types that need them; a clinic keeps exactly its flow.
 
 import { StorageService } from '../../services/storage.service';
+import { useOnboardingSteps } from '../../verticals/onboardingSteps';
 
 export default function OnboardingLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() || '';
+  const { steps: allSteps } = useOnboardingSteps();
+  const ALL_STEPS = allSteps.map((s, i) => ({ id: i + 1, name: s.name, href: s.href }));
 
   // Track and save active onboarding step for auto-resume
   React.useEffect(() => {

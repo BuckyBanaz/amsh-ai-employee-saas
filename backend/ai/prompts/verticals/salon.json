@@ -1,0 +1,209 @@
+{
+ "_about": "Wording for the Salon vertical on top of the base packs (ai/prompts/__init__.py). Healthcare has no overlay.",
+ "receptionist": {
+  "edits": {
+   "rules": [
+    [
+     "SCOPE: appointments, doctors, services, timings, location, clinic info.",
+     "SCOPE: appointments, stylists, services and prices, timings, location, salon info."
+    ],
+    [
+     "BOOKING: collect service, date, exact time, name, phone, optional doctor.",
+     "BOOKING: collect service, date, exact time, name, phone, optional stylist (\"anyone\" is fine)."
+    ]
+   ],
+   "runtime_context/region_known": [
+    [
+     "Medical emergency number(s)",
+     "Emergency number(s)"
+    ]
+   ],
+   "facts/block": [
+    [
+     "Services: {services}. Doctors: {doctors}.",
+     "Services: {services}. Stylists: {doctors}."
+    ]
+   ]
+  },
+  "terms": [
+   [
+    "the clinic's",
+    "the salon's"
+   ],
+   [
+    "clinic's",
+    "salon's"
+   ],
+   [
+    "CLINIC OWNER'S",
+    "OWNER'S"
+   ],
+   [
+    "CLINIC",
+    "SALON"
+   ],
+   [
+    "Clinic",
+    "Salon"
+   ],
+   [
+    "other clinics",
+    "other businesses"
+   ],
+   [
+    "clinics",
+    "salons"
+   ],
+   [
+    "clinic",
+    "salon"
+   ],
+   [
+    "NEW PATIENT",
+    "NEW CLIENT"
+   ],
+   [
+    "RETURNING PATIENT",
+    "RETURNING CLIENT"
+   ],
+   [
+    "patients",
+    "clients"
+   ],
+   [
+    "patient's",
+    "client's"
+   ],
+   [
+    "patient",
+    "client"
+   ],
+   [
+    "Doctors",
+    "Stylists"
+   ],
+   [
+    "doctors",
+    "stylists"
+   ],
+   [
+    "doctor",
+    "stylist"
+   ],
+   [
+    "Doctor",
+    "Stylist"
+   ]
+  ],
+  "term_keys": [
+   "rules",
+   "privacy_rule",
+   "small_talk_off",
+   "confirm_off",
+   "language_rule/fixed",
+   "language_rule/with_hindi",
+   "channel/chat_addendum",
+   "facts/block",
+   "facts/disabled",
+   "facts/no_transfer",
+   "facts/owner_instructions"
+  ]
+ },
+ "engine_notes": {
+  "edits": {
+   "spoken_line/emergency": [
+    [
+     "The caller described a medical emergency. Calmly tell them you are transferring them to emergency care immediately",
+     "The caller described an emergency. Calmly tell them you are connecting them to a member of staff immediately"
+    ]
+   ],
+   "messages/toolbox/tools.transfer_to_human": [
+    [
+     "Transfer to staff: 'emergency', or 'front_desk' only if the caller asked for a person or agreed to it.",
+     "Transfer to staff: 'emergency', or 'front_desk' or a department key listed under DEPARTMENTS (the one that handles what the caller needs) only if the caller asked for a person or agreed to it."
+    ]
+   ]
+  },
+  "terms": [
+   [
+    "the clinic's",
+    "the salon's"
+   ],
+   [
+    "clinic's",
+    "salon's"
+   ],
+   [
+    "CLINIC OWNER'S",
+    "OWNER'S"
+   ],
+   [
+    "CLINIC",
+    "SALON"
+   ],
+   [
+    "Clinic",
+    "Salon"
+   ],
+   [
+    "other clinics",
+    "other businesses"
+   ],
+   [
+    "clinics",
+    "salons"
+   ],
+   [
+    "clinic",
+    "salon"
+   ],
+   [
+    "NEW PATIENT",
+    "NEW CLIENT"
+   ],
+   [
+    "RETURNING PATIENT",
+    "RETURNING CLIENT"
+   ],
+   [
+    "patients",
+    "clients"
+   ],
+   [
+    "patient's",
+    "client's"
+   ],
+   [
+    "patient",
+    "client"
+   ],
+   [
+    "Doctors",
+    "Stylists"
+   ],
+   [
+    "doctors",
+    "stylists"
+   ],
+   [
+    "doctor",
+    "stylist"
+   ],
+   [
+    "Doctor",
+    "Stylist"
+   ]
+  ],
+  "term_keys": [
+   "messages/toolbox/tools.search_knowledge",
+   "messages/toolbox/execute.disabled",
+   "messages/toolbox/check_availability.unknown_doctor",
+   "messages/toolbox/check_availability.closed",
+   "messages/toolbox/search_knowledge.not_found",
+   "messages/toolbox/tools.send_confirmation",
+   "known_patient/new_patient",
+   "known_patient/returning_patient",
+   "language_layer/layer_note"
+  ]
+ }
+}

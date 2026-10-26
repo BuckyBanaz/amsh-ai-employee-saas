@@ -6,6 +6,9 @@ import { DashboardController } from '../../../controllers/dashboard.controller';
 import { StorageService } from '../../../services/storage.service';
 import { FormSkeleton } from '../../../components/common/ShimmerSkeleton';
 import { ASSET_BASE } from '../../../utils/api_endpoints';
+import { VerticalController } from '../../../controllers/vertical.controller';
+import { isNonClinic, useVerticalConfig } from '../../../verticals/useVerticalConfig';
+import type { SubtypeSummary } from '../../../verticals/types';
 
 interface DaySchedule {
   day: string;
@@ -24,6 +27,16 @@ const defaultSchedule: DaySchedule[] = [
 ];
 
 export function BusinessSettings({ focusDangerZone }: { focusDangerZone?: boolean }) {
+  // Non-healthcare businesses pick a real subtype (it selects their workflows); healthcare keeps the free-text field as before.
+  const { config: verticalConfig } = useVerticalConfig();
+  const typed = isNonClinic(verticalConfig);
+  const [subtypes, setSubtypes] = useState<SubtypeSummary[]>([]);
+  useEffect(() => {
+    if (!typed || !verticalConfig) return;
+    VerticalController.catalog()
+      .then((items) => setSubtypes(items.find((v) => v.key === verticalConfig.vertical)?.subtypes || []))
+      .catch(() => setSubtypes([]));
+  }, [typed, verticalConfig]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [tenantId, setTenantId] = useState('');
@@ -425,6 +438,16 @@ export function BusinessSettings({ focusDangerZone }: { focusDangerZone?: boolea
             <label className="block text-xs font-semibold text-gray-700 mb-1">
               Business Type / Vertical <span className="text-red-500">*</span>
             </label>
+            {typed ? (
+              <input
+                type="text"
+                readOnly
+                aria-readonly="true"
+                value={verticalConfig?.vertical_name || ''}
+                className="w-full border border-gray-200 rounded-md py-1.5 px-2.5 text-xs text-gray-600 bg-gray-50"
+                title="The business type is set at onboarding; contact support to change it after activation."
+              />
+            ) : (
             <div className="relative">
               <select
                 value={formData.vertical}
@@ -445,12 +468,23 @@ export function BusinessSettings({ focusDangerZone }: { focusDangerZone?: boolea
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
               </div>
             </div>
+            )}
           </div>
 
           <div>
             <label className="block text-xs font-semibold text-gray-700 mb-1">
               Sub-type / Specialization
             </label>
+            {typed ? (
+              <select
+                aria-label="Sub-type"
+                value={formData.businessSubtype}
+                onChange={(e) => handleInputChange('businessSubtype', e.target.value)}
+                className="w-full border border-gray-200 rounded-md py-1.5 px-2.5 text-xs text-gray-900 focus:outline-none focus:border-[#0066FF] focus:ring-1 focus:ring-[#0066FF] bg-white"
+              >
+                {subtypes.map((st) => <option key={st.key} value={st.key}>{st.name}</option>)}
+              </select>
+            ) : (
             <input
               type="text"
               value={formData.businessSubtype}
@@ -458,6 +492,7 @@ export function BusinessSettings({ focusDangerZone }: { focusDangerZone?: boolea
               className="w-full border border-gray-200 rounded-md py-1.5 px-2.5 text-xs text-gray-900 focus:outline-none focus:border-[#0066FF] focus:ring-1 focus:ring-[#0066FF]"
               placeholder="e.g. General Dentistry & Orthodontics"
             />
+            )}
           </div>
 
           <div>

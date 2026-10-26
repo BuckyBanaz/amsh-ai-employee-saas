@@ -6,6 +6,8 @@ import { STRINGS } from '../../utils/strings/en';
 import { StorageService } from '../../services/storage.service';
 import { DashboardController } from '../../controllers/dashboard.controller';
 import { ASSET_BASE } from '../../utils/api_endpoints';
+import { isNonClinic, useVerticalConfig } from '../../verticals/useVerticalConfig';
+import type { VerticalConfig } from '../../verticals/types';
 
 const navGroups = [
   {
@@ -47,6 +49,29 @@ const navGroups = [
   }
 ];
 
+// Icons for the routes a vertical's dashboard definition can list (backend/ai/workflows/definitions/*.yaml "dashboard").
+const ROUTE_ICONS: Record<string, string> = {
+  '/appointments': 'calendar', '/patients': 'activity', '/doctors': 'users', '/calls': 'phone', '/enquiries': 'inbox',
+  '/departments': 'sitemap', '/transfers': 'shuffle', '/resources': 'grid', '/services': 'list',
+};
+const OTHER_GROUP_ROUTES = new Set(['/services', '/conversations', '/knowledge', '/calls']); // already in their own groups
+
+/** The clinic keeps exactly its navigation. Other verticals: the main group comes from their definition, and the catalogue
+ * link is named in their words (Courses, Services, Treatments). */
+function groupsFor(config: VerticalConfig | null) {
+  if (!isNonClinic(config) || !config) return navGroups;
+  const fromDefinition = config.dashboard
+    .filter((n) => !OTHER_GROUP_ROUTES.has(n.route))
+    .map((n) => ({ label: n.label, href: n.route, icon: ROUTE_ICONS[n.route] || 'list' }));
+  const offerings = config.dashboard.find((n) => n.route === '/services');
+  return [
+    { ...navGroups[0], items: [navGroups[0].items[0], ...fromDefinition, navGroups[0].items.find((i) => i.href === '/calls')!] },
+    navGroups[1],
+    { ...navGroups[2], items: navGroups[2].items.map((i) => (i.href === '/services' && offerings ? { ...i, label: offerings.label } : i)) },
+    navGroups[3],
+  ];
+}
+
 const getIcon = (name: string) => {
   // Return standard feather-like svg icons based on name
   switch (name) {
@@ -66,6 +91,10 @@ const getIcon = (name: string) => {
     case 'help': return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>;
     case 'message': return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.3 8.5 8.5 0 0 1-3.8-.9L3 20l1.2-4.6A8.4 8.4 0 1 1 21 11.5z"/></svg>;
     case 'sliders': return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>;
+    case 'inbox': return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"></polyline><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path></svg>;
+    case 'sitemap': return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="2" width="6" height="5" rx="1"></rect><rect x="2" y="17" width="6" height="5" rx="1"></rect><rect x="16" y="17" width="6" height="5" rx="1"></rect><path d="M12 7v5M5 17v-3h14v3"></path></svg>;
+    case 'shuffle': return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 3 21 3 21 8"></polyline><line x1="4" y1="20" x2="21" y2="3"></line><polyline points="21 16 21 21 16 21"></polyline><line x1="15" y1="15" x2="21" y2="21"></line><line x1="4" y1="4" x2="9" y2="9"></line></svg>;
+    case 'grid': return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>;
     default: return null;
   }
 };
@@ -77,6 +106,8 @@ interface SidebarProps {
 
 export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
   const pathname = usePathname();
+  const { config: verticalConfig } = useVerticalConfig();
+  const groups = groupsFor(verticalConfig);
   const [unread, setUnread] = React.useState(0); // real count from the notifications feed, not a placeholder
   const [mounted, setMounted] = React.useState(false);
   const [business, setBusiness] = React.useState<any>(null);
@@ -208,7 +239,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
 
       {/* Main Navigation */}
       <nav className="flex-1 overflow-y-auto scrollbar-hide px-2.5 pb-4 space-y-4">
-        {navGroups.map((group, groupIdx) => (
+        {groups.map((group, groupIdx) => (
           <div key={groupIdx}>
             <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-2.5 mb-1">
               {group.title}

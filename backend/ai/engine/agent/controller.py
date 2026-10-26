@@ -146,6 +146,9 @@ class CallState:
     caller_words: int = 0  # length of the caller's latest message
     booked: bool = False
     calling_tail: Optional[str] = None  # last 4 digits of the number the caller is calling from, when the provider gave it
+    # The order the business's booking workflow asks for things (backend/ai/workflows); healthcare's is SLOT_ORDER. Only the slots
+    # this controller can read from speech are tracked; anything else in a workflow is left to the conversation.
+    slot_order: Tuple[str, ...] = SLOT_ORDER
 
     # ------------------------------------------------------------------ reading the caller
     def observe(self, utterance: str, today: date, language: Optional[str] = None, emotion: Optional[str] = None,
@@ -230,7 +233,7 @@ class CallState:
         if self.intent != "book" or self.booked:
             return []
         known = self.known()
-        return [s for s in SLOT_ORDER if s not in known]
+        return [s for s in self.slot_order if s in SLOTS and s not in known]
 
     def next_needed(self) -> Optional[str]:
         miss = self.missing()
@@ -297,7 +300,7 @@ class CallState:
     def multi_correction(self, slots: Iterable[str]) -> str:
         """Names the one slot to ask, in booking order. Leaving the choice to the model ("the item the CALL STATE note names")
         let it pick the first of an alphabetical list: it asked for the name before the service."""
-        ordered = sorted(set(slots), key=lambda s: SLOT_ORDER.index(s) if s in SLOT_ORDER else len(SLOT_ORDER))
+        ordered = sorted(set(slots), key=lambda s: self.slot_order.index(s) if s in self.slot_order else len(self.slot_order))
         nxt = self.next_needed() or (ordered[0] if ordered else "")
         return _multi_note().format(slots=", ".join(ordered), next=nxt)
 

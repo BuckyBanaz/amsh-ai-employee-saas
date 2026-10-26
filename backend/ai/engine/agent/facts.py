@@ -118,9 +118,19 @@ def load_facts(db: Session, business_id: str) -> BusinessFacts:
         raise MissingContextError(f"Business {business_id!r} was not found: refusing to guess a vertical, region or timezone.")
     staff = db.query(Staff).filter(Staff.business_id == business_id).all()
     clinical = [s.name for s in staff if _CLINICAL_ROLE.search(s.role or "")] or [s.name for s in staff]
-    services = db.query(Service).filter(Service.business_id == business_id).all()
+    rows = db.query(Service).filter(Service.business_id == business_id).all()
+    # Courses are answered and enquired about, never booked (DOCS/31); every other kind is bookable. Clinic rows are all "service".
+    services = [s for s in rows if (s.kind or "service") != "course"]
+    courses = [s.title for s in rows if s.kind == "course"]
     durations = [s.duration_minutes for s in services if s.duration_minutes]
     from backend.server.services.policies import rule_data
+    from backend.server.database.models.vertical import Department
+
+    departments = [
+        {"key": d.key, "name": d.name, "intents": list(d.intents or []), "may_answer": bool(d.may_answer)}
+        for d in db.query(Department).filter(Department.business_id == business_id, Department.active.is_(True))
+        .order_by(Department.priority.desc(), Department.name).all()
+    ]
 
     return BusinessFacts(
         name=business.name,
@@ -133,6 +143,9 @@ def load_facts(db: Session, business_id: str) -> BusinessFacts:
         city=business.city or "",
         country=business.country or "",
         vertical=(business.vertical or "").strip(),
+        subtype=(business.business_subtype or "").strip().lower(),
+        courses=courses,
+        departments=departments,
         slot_minutes=min(max(min(durations), 15), 60) if durations else DEFAULT_SLOT_MINUTES,
         compliance_clause=str(rule_data(db, business.country or "", (business.vertical or "").strip().lower()).get("compliance_clause") or ""),
     )

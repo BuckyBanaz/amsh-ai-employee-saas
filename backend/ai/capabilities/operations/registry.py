@@ -1,8 +1,7 @@
 """Operations registry: which read/write operations a vertical uses.
 
 The engine asks `get_operations(vertical)` instead of importing a vertical's classes, so a new vertical plugs in here (one
-entry) without touching the engine. Today only the clinic set exists (MVP is healthcare only). Any other vertical, or none, raises: it is
-never quietly run as a clinic.
+entry) without touching the engine. Any vertical not listed, or none, raises: it is never quietly run as a clinic.
 
 To add a vertical: write its `<vertical>/read_operations.py` and `write_operations.py` next to the clinic ones and register
 them below. The method names the toolbox calls (`get_appointments`, `get_appointment_by_id`, `store_appointment`,
@@ -13,6 +12,7 @@ from dataclasses import dataclass
 from typing import Dict, Optional, Type
 
 from backend.ai.capabilities.operations.clinic import ClinicReadOperations, ClinicWriteOperations
+from backend.ai.capabilities.operations.shared import BookingWriteOperations, ResourceAwareWriteOperations
 from backend.ai.verticals.errors import MissingContextError, UnknownVerticalError
 
 
@@ -24,6 +24,10 @@ class OperationsSet:
 
 OPERATIONS: Dict[str, OperationsSet] = {
     "clinic": OperationsSet(ClinicReadOperations, ClinicWriteOperations),
+    # An appointment is the same record everywhere; reads are shared, writes differ only where the vertical does (DOCS/31).
+    "salon": OperationsSet(ClinicReadOperations, BookingWriteOperations),
+    "education": OperationsSet(ClinicReadOperations, BookingWriteOperations),  # campus visits, counselling, demo classes
+    "wellness": OperationsSet(ClinicReadOperations, ResourceAwareWriteOperations),  # a session also holds a free room
 }
 
 

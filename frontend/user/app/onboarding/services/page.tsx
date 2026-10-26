@@ -2,9 +2,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useOnboardingSteps } from '../../../verticals/onboardingSteps';
 import { STRINGS } from '../../../utils/strings/en';
 import { OnboardingController } from '../../../controllers/onboarding.controller';
 import { StorageService } from '../../../services/storage.service';
+import { useVerticalConfig, isNonClinic } from '../../../verticals/useVerticalConfig';
+import { CATALOG_KINDS } from '../../../verticals/catalogKinds';
 
 // Duration options — value = integer minutes (matches backend duration_minutes: int)
 const DURATION_OPTIONS = [
@@ -33,14 +36,21 @@ type Service = {
   description: string;
   duration_minutes: number;
   price_amount: number;
+  kind?: string;
+  resource_kind?: string;
 };
 
 const initialServices: Service[] = [];
 
-const emptyForm = { title: '', description: '', duration_minutes: 30, price_amount: '' as number | '' };
+const emptyForm = { title: '', description: '', duration_minutes: 30, price_amount: '' as number | '', kind: 'service', resource_kind: '' };
 
 export default function ServicesOnboardingPage() {
   const router = useRouter();
+  const onboarding = useOnboardingSteps(); // next/back follow the business's type
+  const { config } = useVerticalConfig();
+  const kindOptions = config ? CATALOG_KINDS[config.vertical] || [] : [];
+  const roomKinds = (config?.resources || []).filter((r) => r.key !== 'staff' && r.key !== 'campus');
+  const stepTitle = isNonClinic(config) ? config?.onboarding.find((s) => s.key === 'services')?.title : undefined;
   const [servicesList, setServicesList] = useState<Service[]>(initialServices);
   const [isAdding, setIsAdding]         = useState(false);
   const [editingId, setEditingId]       = useState<number | null>(null);
@@ -77,7 +87,7 @@ export default function ServicesOnboardingPage() {
     if (!newService.title.trim()) return;
     setServicesList([
       ...servicesList,
-      { ...newService, id: Date.now(), price_amount: Number(newService.price_amount) || 0 },
+      { ...newService, id: Date.now(), price_amount: Number(newService.price_amount) || 0, kind: newService.kind || kindOptions[0]?.value || 'service' },
     ]);
     setNewService(emptyForm);
     setIsAdding(false);
@@ -86,7 +96,7 @@ export default function ServicesOnboardingPage() {
   // ── Edit ─────────────────────────────────────────────────────────────
   const startEdit = (service: Service) => {
     setEditingId(service.id);
-    setEditForm({ title: service.title, description: service.description, duration_minutes: service.duration_minutes, price_amount: service.price_amount });
+    setEditForm({ title: service.title, description: service.description, duration_minutes: service.duration_minutes, price_amount: service.price_amount, kind: service.kind || 'service', resource_kind: service.resource_kind || '' });
     setIsAdding(false); // close add form if open
   };
 
@@ -94,7 +104,7 @@ export default function ServicesOnboardingPage() {
     if (!editForm.title.trim()) return;
     setServicesList(servicesList.map(s =>
       s.id === editingId
-        ? { ...s, title: editForm.title, description: editForm.description, duration_minutes: editForm.duration_minutes, price_amount: Number(editForm.price_amount) || 0 }
+        ? { ...s, title: editForm.title, description: editForm.description, duration_minutes: editForm.duration_minutes, price_amount: Number(editForm.price_amount) || 0, kind: editForm.kind, resource_kind: editForm.resource_kind }
         : s
     ));
     setEditingId(null);
@@ -125,9 +135,11 @@ export default function ServicesOnboardingPage() {
           duration_minutes: Number(svc.duration_minutes) || 30,
           price_amount: Number(svc.price_amount) || 0,
           price_currency: currency,
+          kind: svc.kind || 'service',
+          resource_kind: svc.resource_kind || null,
         });
       }
-      router.push('/onboarding/staff');
+      router.push(onboarding.next('/onboarding/services'));
     } catch (err: any) {
       setError(err.message || 'Failed to save services');
     } finally {
@@ -167,6 +179,29 @@ export default function ServicesOnboardingPage() {
           className="w-full px-3 py-1.5 rounded-md border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#0066FF] text-xs"
         />
       </div>
+      {kindOptions.length > 0 && (
+        <div className="md:col-span-2">
+          <label htmlFor="svc-kind" className="text-[11px] font-semibold text-gray-700 mb-1 block">Type</label>
+          <select
+            id="svc-kind"
+            value={values.kind || kindOptions[0].value}
+            onChange={e => onChange({ ...values, kind: e.target.value })}
+            className="w-full px-3 py-1.5 rounded-md border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#0066FF] text-xs bg-white"
+          >
+            {kindOptions.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}
+          </select>
+        </div>
+      )}
+      {roomKinds.length > 0 && (
+        <label className="md:col-span-2 flex items-center gap-2 text-[11px] text-gray-700">
+          <input
+            type="checkbox"
+            checked={!!values.resource_kind}
+            onChange={e => onChange({ ...values, resource_kind: e.target.checked ? roomKinds[0].key : '' })}
+          />
+          Needs a free {roomKinds[0].name.toLowerCase()} (booked only when one is available)
+        </label>
+      )}
       <div>
         <label className="text-[11px] font-semibold text-gray-700 mb-1 block">Duration</label>
         <select
@@ -210,7 +245,7 @@ export default function ServicesOnboardingPage() {
   return (
     <div className="w-full max-w-3xl bg-white rounded-xl shadow-sm border border-gray-100 p-4 sm:p-6 md:p-8">
       <div className="mb-5 sm:mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 tracking-tight mb-1.5">{STRINGS.ONBOARDING.SERVICES.TITLE}</h1>
+        <h1 className="text-2xl font-bold text-gray-900 tracking-tight mb-1.5">{stepTitle || STRINGS.ONBOARDING.SERVICES.TITLE}</h1>
         <p className="text-sm text-gray-500">{STRINGS.ONBOARDING.SERVICES.SUBTITLE}</p>
       </div>
 

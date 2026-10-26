@@ -1,0 +1,37 @@
+%% Multi-vertical system architecture (implemented, 2026-10-25). Source of truth: DOCS/31 §2.
+flowchart LR
+  subgraph Clients
+    U["frontend/user<br/>onboarding + dashboard"]
+    A["frontend/admin<br/>platform portal"]
+    L["frontend/landing-page"]
+    P["Caller on a phone / WhatsApp"]
+  end
+  subgraph Server["backend/server (FastAPI)"]
+    API["routes/verticals.py<br/>catalog, vertical-config,<br/>departments, enquiries,<br/>transfers, resources"]
+    BIZ["routes/businesses.py<br/>create: vertical + subtype"]
+    ADM["routes/admin_verticals.py<br/>read-only definitions"]
+    VOICE["routes/voice.py / plivo.py<br/>transfer-status callbacks"]
+    ROUTE["services/department_routing.py"]
+    SETUP["services/vertical_setup.py<br/>readiness"]
+  end
+  subgraph AI["backend/ai"]
+    DEF["workflows/definitions/*.yaml<br/>(reviewed platform data)"]
+    REG["workflows/registry.py<br/>validate at load"]
+    ENG["engine/agent/agent_loop.py<br/>AgentEngine"]
+    WF["workflows/session.py + engine.py<br/>tracked, persisted runs"]
+    TB["engine/agent/toolbox.py<br/>allowlisted tools"]
+    PR["prompts/*.json + prompts/verticals/*.json<br/>base + overlays"]
+    OPS["capabilities/operations<br/>clinic / shared / resource-aware"]
+  end
+  DB[("Postgres<br/>businesses, services, transactions,<br/>departments, enquiries, transfer_attempts,<br/>workflow_runs, resources")]
+  U --> API & BIZ
+  A --> ADM
+  P --> VOICE
+  VOICE --> ENG
+  ENG --> TB & WF & PR
+  REG --> DEF
+  ENG --> REG
+  TB --> OPS & ROUTE
+  API --> SETUP & REG
+  ADM --> REG
+  OPS & ROUTE & WF & API --> DB

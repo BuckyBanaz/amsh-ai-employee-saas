@@ -4,17 +4,19 @@ import { STRINGS } from '../../utils/strings/en';
 
 interface DoctorsHeaderProps {
   onAddStaff?: () => void;
+  title?: string; // the business's own word (Stylists, Therapists); clinics keep the default
+  subtitle?: string;
 }
 
-export function DoctorsHeader({ onAddStaff }: DoctorsHeaderProps) {
+export function DoctorsHeader({ onAddStaff, title, subtitle }: DoctorsHeaderProps) {
   return (
     <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3 py-1">
       <div>
         <h1 className="text-xl font-extrabold text-gray-900 tracking-tight leading-tight flex items-center gap-2">
-          {STRINGS.DASHBOARD.HEADERS.DOCTORS.TITLE}
+          {title || STRINGS.DASHBOARD.HEADERS.DOCTORS.TITLE}
         </h1>
         <p className="text-xs text-gray-500 font-medium mt-0.5">
-          {STRINGS.DASHBOARD.HEADERS.DOCTORS.SUBTITLE}
+          {subtitle || STRINGS.DASHBOARD.HEADERS.DOCTORS.SUBTITLE}
         </p>
       </div>
 

@@ -1,0 +1,433 @@
+# Education & EdTech. NOT an appointment workflow: most calls end in an answer, a captured lead or a transfer to the right
+# department; a campus visit / counselling / demo class is a separate, explicitly typed booking.
+vertical:
+  key: education
+  name: Education & EdTech
+  version: 1.0.0
+  status: beta
+  description: Schools, colleges and universities, coaching and training institutes, and EdTech companies. Answers enquiries from approved information, captures admission leads, books visits, counselling or demo classes, and connects callers to the right department.
+  terminology:
+    customer: Enquirer
+    customers: Enquiries
+    staff: Counsellor
+    staff_plural: Counsellors
+    offering: Course
+    offerings: Courses
+    booking: Visit
+    bookings: Visits
+  safety:
+    emergency_detection: true
+    emergency_wording: general
+    health_privacy: false
+    minors_privacy: true
+    no_medical_advice: true
+  resources:
+    - {key: staff, name: Counsellor}
+    - {key: campus, name: Campus or visit slot}
+  departments:
+    # universities / colleges
+    - {key: general_enquiries, name: General enquiries, intents: [general_enquiry, human_request, programme_info], priority: 10}
+    - key: ug_admissions
+      name: Undergraduate admissions
+      intents: [admissions, eligibility, application_process, programme_info, deadlines]
+      match: {study_level: undergraduate}
+      required_slots: [programme]
+      priority: 50
+      default_fallback: general_enquiries
+    - key: pg_admissions
+      name: Postgraduate admissions
+      intents: [admissions, eligibility, application_process, programme_info, deadlines]
+      match: {study_level: postgraduate}
+      required_slots: [programme]
+      priority: 50
+      default_fallback: general_enquiries
+    - key: international_admissions
+      name: International admissions
+      intents: [admissions, eligibility, application_process, visa, international_admissions, deadlines]
+      match: {applicant_type: international}
+      priority: 60
+      default_fallback: general_enquiries
+    - {key: finance, name: Finance and tuition, intents: [fees, payment, refund], priority: 40, default_fallback: general_enquiries}
+    - {key: scholarships, name: Scholarships and financial aid, intents: [scholarships, financial_aid], priority: 45, default_fallback: finance}
+    - {key: faculty_office, name: Faculty or department office, intents: [course_content, faculty_question], priority: 30, default_fallback: general_enquiries}
+    - {key: student_support, name: Student support, intents: [student_support, wellbeing], priority: 55, default_fallback: general_enquiries}
+    - {key: application_support, name: Application support, intents: [application_status, application_problem], may_answer: false, required_slots: [name, phone], priority: 55, default_fallback: general_enquiries}
+    - {key: campus_visits, name: Campus visits, intents: [campus_visit], priority: 35, default_fallback: general_enquiries}
+    - {key: complaints, name: Complaints and urgent cases, intents: [complaint, urgent], may_answer: false, required_slots: [name, phone], priority: 90, default_fallback: general_enquiries}
+    # schools
+    - {key: admissions, name: Admissions office, intents: [admissions, enrolment, programme_info, campus_visit, deadlines], priority: 50, default_fallback: administration}
+    - {key: administration, name: School administration, intents: [general_enquiry, human_request, timings, term_dates, transport, attendance], priority: 20}
+    - {key: accounts, name: Accounts, intents: [fees, payment, refund], priority: 40, default_fallback: administration}
+    # coaching / training institutes
+    - {key: counsellor, name: Course counsellor, intents: [admissions, course_selection, programme_info, fees, human_request], priority: 40}
+    - {key: instructor, name: Instructor, intents: [course_content, faculty_question], may_answer: false, priority: 30, default_fallback: counsellor}
+    # EdTech companies
+    - {key: sales, name: Sales, intents: [pricing, demo_request, sales, product_info, human_request], priority: 40}
+    - {key: technical_support, name: Technical support, intents: [technical_support, account_access, platform_issue], may_answer: false, required_slots: [email], priority: 60, default_fallback: learner_support}
+    - {key: learner_support, name: Learner support, intents: [learner_support, account_support, certificate], priority: 50, default_fallback: sales}
+    - {key: billing, name: Billing, intents: [billing, refund, payment], priority: 45, default_fallback: learner_support}
+  subtypes:
+    - key: university
+      name: College or university
+      workflows: [education.university_enquiry, education.campus_visit]
+      departments: [general_enquiries, ug_admissions, pg_admissions, international_admissions, finance, scholarships, faculty_office, student_support, application_support, campus_visits, complaints]
+      resources: [campus, staff]
+      differences:
+        - "Routes across many departments by intent, study level and domestic/international applicant."
+        - "Application status is never read by the AI (no student-records integration): it collects name and number and routes to application support."
+        - "Campus visits and counselling are bookings of their own type."
+    - key: school
+      name: School
+      workflows: [education.school_enquiry, education.campus_visit]
+      departments: [admissions, administration, accounts]
+      resources: [campus]
+      differences:
+        - "Callers are usually parents or guardians: the guardian's name and number are collected, the child's only as a first name and grade when needed."
+        - "Private student records are never disclosed; attendance and transport answers only from approved information."
+    - key: coaching
+      name: Coaching or training institute
+      workflows: [education.coaching_enquiry, education.demo_class]
+      departments: [counsellor, instructor, accounts]
+      resources: [staff]
+      differences:
+        - "Course and batch discovery; a trial/demo class is a booking of type demo_class, not a campus visit."
+    - key: edtech
+      name: EdTech company
+      workflows: [education.edtech_enquiry]
+      departments: [sales, technical_support, learner_support, billing]
+      resources: []
+      differences:
+        - "No physical visits: a demo or trial is captured as a lead (demo_request) for the sales team."
+        - "Splits sales enquiries from platform/account support; support needs the learner's account email."
+  onboarding:
+    - {key: business, title: Institution details}
+    - {key: services, title: Courses and programmes}
+    - {key: departments, title: Departments and transfer routing}
+    - {key: staff, title: Counsellors, required: false}
+    - {key: hours, title: Office hours}
+    - {key: ai_receptionist, title: AI receptionist}
+    - {key: knowledge, title: "Approved information (fees, deadlines, FAQs)"}
+    - {key: integrations, title: Channels and integrations, required: false}
+    - {key: review, title: Review and activate}
+  dashboard:
+    - {key: enquiries, label: Enquiries, route: /enquiries}
+    - {key: offerings, label: Courses, route: /services}
+    - {key: departments, label: Departments, route: /departments}
+    - {key: appointments, label: Visits, route: /appointments}
+    - {key: transfers, label: Transfers, route: /transfers}
+    - {key: calls, label: Calls, route: /calls}
+    - {key: conversations, label: Conversations, route: /conversations}
+    - {key: knowledge, label: Knowledge, route: /knowledge}
+
+workflows:
+  - id: education.university_enquiry
+    version: 1.0.0
+    title: University enquiry, admissions and department routing
+    status: implemented
+    entry_intents: [programme_info, admissions, eligibility, deadlines, fees, scholarships, international_admissions, application_status, complaint, human_request]
+    slots:
+      - {id: topic, type: enum, allowed_values: [programme_info, admissions, fees, scholarships, international_admissions, application_status, complaint, other]}
+      - {id: applicant_type, type: enum, allowed_values: [domestic, international], required: false}
+      - {id: study_level, type: enum, allowed_values: [undergraduate, postgraduate, doctoral], required: false}
+      - {id: programme, type: text, required: false, description: Course or programme of interest}
+      - {id: name, type: name, sensitive: true}
+      - {id: phone, type: phone, sensitive: true}
+      - {id: email, type: email, required: false, sensitive: true}
+    start: identify
+    steps:
+      - id: identify
+        kind: collect
+        slots: [topic]
+        next:
+          - {to: identity, when: {slot_equals: {topic: application_status}}}
+          - {to: identity, when: {slot_equals: {topic: complaint}}}
+          - {to: answer}
+      - id: answer
+        kind: answer
+        description: Answer from approved information only (catalogue, FAQs, documents); fees and deadlines never guessed.
+        next:
+          - {to: answered, when: {resolved: true}}
+          - {to: context}
+      - id: context
+        kind: collect
+        slots: [applicant_type, study_level, programme]
+        next: [{to: route}]
+      - id: identity
+        kind: collect
+        slots: [name, phone]
+        next: [{to: route}]
+      - id: route
+        kind: transfer
+        department: route
+        next:
+          - {to: transferred, when: {tool_code_in: [transferring]}}
+          - {to: lead_contact, when: {tool_code_in: [transfer_unavailable, department_closed, unknown_department, needs_confirmation, declined]}}
+          - {to: lead_contact}
+      - id: lead_contact
+        kind: collect
+        slots: [name, phone]
+        next: [{to: save_lead}]
+      - id: save_lead
+        kind: tool
+        tool: capture_enquiry
+        next:
+          - {to: lead_captured, when: {tool_code_in: [saved, duplicate]}}
+          - {to: save_lead, when: {tool_code_in: [needs_confirmation]}}
+          - {to: lead_contact, when: {tool_code_in: [bad_phone, missing_fields]}}
+          - {to: not_saved}
+      - {id: answered, kind: complete, outcome: answered}
+      - {id: transferred, kind: complete, outcome: transferred}
+      - {id: lead_captured, kind: complete, outcome: lead_captured}
+      - {id: not_saved, kind: fail, outcome: not_saved}
+    tools: [search_knowledge, capture_enquiry, transfer_to_human, end_call]
+    knowledge: [business_facts, catalog, faq, documents]
+    answer_constraints:
+      - "Fees, scholarships, deadlines and eligibility only from the institution's approved information; otherwise route to the department"
+      - "Never confirm or reveal an application's status"
+    transfer:
+      departments: [route, general_enquiries, ug_admissions, pg_admissions, international_admissions, finance, scholarships, faculty_office, student_support, application_support, campus_visits, complaints]
+      require_caller_consent: true
+      collect_before_transfer: [applicant_type, study_level, programme]
+      on_unavailable: fallback_then_callback
+    follow_ups: [callback_task]
+    audit_events: [enquiry.captured, transfer.attempted, transfer.completed, transfer.fallback]
+    metrics: [enquiries, leads, transfers_by_department, transfer_success_rate]
+
+  - id: education.campus_visit
+    version: 1.0.0
+    title: Campus visit or counselling session
+    status: implemented
+    entry_intents: [campus_visit, counselling]
+    slots:
+      - {id: service, type: text, description: Campus visit or counselling session (a bookable item in the catalogue)}
+      - {id: date, type: date}
+      - {id: time, type: time}
+      - {id: name, type: name, sensitive: true}
+      - {id: phone, type: phone, sensitive: true}
+    start: collect
+    steps:
+      - id: collect
+        kind: collect
+        slots: [service, date, time, name, phone]
+        next: [{to: check}]
+      - id: check
+        kind: tool
+        tool: check_availability
+        next:
+          - {to: confirm, when: {tool_code_in: [ok]}}
+          - {to: collect}
+      - id: confirm
+        kind: confirm
+        tool: book_appointment
+        next:
+          - {to: booked, when: {tool_code_in: [booked, already_booked, dry_run]}}
+          - {to: confirm, when: {tool_code_in: [needs_confirmation, no_matching_readback]}}
+          - {to: collect, when: {tool_code_in: [outside_hours, closed, past_date, past_time, too_soon, bad_date, bad_time, bad_name, bad_phone, unknown_service, missing_fields]}}
+          - {to: not_booked}
+      - {id: booked, kind: complete, outcome: booked}
+      - {id: not_booked, kind: fail, outcome: not_booked}
+    tools: [check_availability, book_appointment, lookup_appointment, cancel_appointment, reschedule_appointment, send_confirmation, search_knowledge, transfer_to_human, end_call]
+    knowledge: [business_facts, catalog, faq]
+    transfer: {departments: [campus_visits, admissions, general_enquiries, administration], require_caller_consent: true}
+    booking_type: campus_visit
+    resources: [campus]
+    follow_ups: [confirmation_message, reminder]
+    audit_events: [appointment.booked]
+    metrics: [visits_booked]
+
+  - id: education.school_enquiry
+    version: 1.0.0
+    title: School admissions and parent enquiry
+    status: implemented
+    entry_intents: [admissions, enrolment, timings, term_dates, fees, transport, attendance, human_request]
+    slots:
+      - {id: topic, type: enum, allowed_values: [admissions, timings, term_dates, fees, transport, attendance, other]}
+      - {id: grade, type: text, required: false, description: Grade or year group the enquiry is about}
+      - {id: name, type: name, sensitive: true, description: The parent's or guardian's name}
+      - {id: phone, type: phone, sensitive: true, description: The parent's or guardian's number}
+      - {id: student_first_name, type: name, required: false, sensitive: true, about_minor: true}
+    start: identify
+    steps:
+      - id: identify
+        kind: collect
+        slots: [topic]
+        next:
+          - {to: guardian, when: {slot_equals: {topic: attendance}}}
+          - {to: answer}
+      - id: answer
+        kind: answer
+        description: Timings, term dates, fees and transport only from approved information; never a private student record.
+        next:
+          - {to: answered, when: {resolved: true}}
+          - {to: guardian}
+      - id: guardian
+        kind: collect
+        slots: [grade, name, phone]
+        next: [{to: route}]
+      - id: route
+        kind: transfer
+        department: route
+        next:
+          - {to: transferred, when: {tool_code_in: [transferring]}}
+          - {to: save_lead}
+      - id: save_lead
+        kind: tool
+        tool: capture_enquiry
+        next:
+          - {to: lead_captured, when: {tool_code_in: [saved, duplicate]}}
+          - {to: save_lead, when: {tool_code_in: [needs_confirmation]}}
+          - {to: guardian, when: {tool_code_in: [bad_phone, missing_fields]}}
+          - {to: not_saved}
+      - {id: answered, kind: complete, outcome: answered}
+      - {id: transferred, kind: complete, outcome: transferred}
+      - {id: lead_captured, kind: complete, outcome: lead_captured}
+      - {id: not_saved, kind: fail, outcome: not_saved}
+    tools: [search_knowledge, capture_enquiry, transfer_to_human, end_call]
+    knowledge: [business_facts, catalog, faq, documents]
+    answer_constraints:
+      - "Never disclose a student's record, attendance or contact details"
+      - "Ask for a child's details only when the enquiry needs them; the guardian's number is the contact"
+    transfer: {departments: [route, admissions, administration, accounts], require_caller_consent: true, collect_before_transfer: [grade]}
+    follow_ups: [callback_task]
+    audit_events: [enquiry.captured, transfer.attempted]
+    metrics: [enquiries, leads, transfers_by_department]
+
+  - id: education.coaching_enquiry
+    version: 1.0.0
+    title: Course and batch enquiry
+    status: implemented
+    entry_intents: [course_selection, programme_info, batches, fees, admissions, human_request]
+    slots:
+      - {id: programme, type: text, description: Course of interest}
+      - {id: batch_preference, type: text, required: false, description: "Weekday or weekend, morning or evening, online or offline"}
+      - {id: name, type: name, sensitive: true}
+      - {id: phone, type: phone, sensitive: true}
+    start: answer
+    steps:
+      - id: answer
+        kind: answer
+        next:
+          - {to: answered, when: {resolved: true}}
+          - {to: interest}
+      - id: interest
+        kind: collect
+        slots: [programme, batch_preference, name, phone]
+        next: [{to: save_lead}]
+      - id: save_lead
+        kind: tool
+        tool: capture_enquiry
+        next:
+          - {to: lead_captured, when: {tool_code_in: [saved, duplicate]}}
+          - {to: save_lead, when: {tool_code_in: [needs_confirmation]}}
+          - {to: interest, when: {tool_code_in: [bad_phone, missing_fields]}}
+          - {to: not_saved}
+      - {id: answered, kind: complete, outcome: answered}
+      - {id: lead_captured, kind: complete, outcome: lead_captured}
+      - {id: not_saved, kind: fail, outcome: not_saved}
+    tools: [search_knowledge, capture_enquiry, transfer_to_human, end_call]
+    knowledge: [business_facts, catalog, faq]
+    answer_constraints: ["Batches, schedules and fees only from the institute's catalogue and FAQs"]
+    transfer: {departments: [route, counsellor, instructor, accounts], require_caller_consent: true}
+    follow_ups: [callback_task]
+    audit_events: [enquiry.captured]
+    metrics: [enquiries, leads]
+
+  - id: education.demo_class
+    version: 1.0.0
+    title: Trial or demo class booking
+    status: implemented
+    entry_intents: [demo_class, trial_class]
+    slots:
+      - {id: service, type: text, description: The demo class (a bookable item in the catalogue)}
+      - {id: date, type: date}
+      - {id: time, type: time}
+      - {id: name, type: name, sensitive: true}
+      - {id: phone, type: phone, sensitive: true}
+    start: collect
+    steps:
+      - id: collect
+        kind: collect
+        slots: [service, date, time, name, phone]
+        next: [{to: check}]
+      - id: check
+        kind: tool
+        tool: check_availability
+        next:
+          - {to: confirm, when: {tool_code_in: [ok]}}
+          - {to: collect}
+      - id: confirm
+        kind: confirm
+        tool: book_appointment
+        next:
+          - {to: booked, when: {tool_code_in: [booked, already_booked, dry_run]}}
+          - {to: confirm, when: {tool_code_in: [needs_confirmation, no_matching_readback]}}
+          - {to: collect, when: {tool_code_in: [outside_hours, closed, past_date, past_time, too_soon, bad_date, bad_time, bad_name, bad_phone, unknown_service, missing_fields]}}
+          - {to: not_booked}
+      - {id: booked, kind: complete, outcome: booked}
+      - {id: not_booked, kind: fail, outcome: not_booked}
+    tools: [check_availability, book_appointment, lookup_appointment, cancel_appointment, reschedule_appointment, send_confirmation, search_knowledge, transfer_to_human, end_call]
+    knowledge: [business_facts, catalog]
+    transfer: {departments: [counsellor], require_caller_consent: true}
+    booking_type: demo_class
+    resources: [staff]
+    follow_ups: [confirmation_message, reminder]
+    audit_events: [appointment.booked]
+    metrics: [demo_classes_booked]
+
+  - id: education.edtech_enquiry
+    version: 1.0.0
+    title: EdTech sales and support
+    status: implemented
+    entry_intents: [product_info, pricing, demo_request, technical_support, account_access, learner_support, billing, human_request]
+    slots:
+      - {id: topic, type: enum, allowed_values: [product_info, pricing, demo_request, technical_support, learner_support, billing, other]}
+      - {id: product, type: text, required: false, description: Course or product of interest}
+      - {id: name, type: name, sensitive: true}
+      - {id: phone, type: phone, sensitive: true}
+      - {id: email, type: email, required: false, sensitive: true, description: Account email (support)}
+    start: identify
+    steps:
+      - id: identify
+        kind: collect
+        slots: [topic]
+        next:
+          - {to: support_contact, when: {slot_equals: {topic: technical_support}}}
+          - {to: answer}
+      - id: answer
+        kind: answer
+        next:
+          - {to: answered, when: {resolved: true}}
+          - {to: qualify}
+      - id: qualify
+        kind: collect
+        slots: [product, name, phone]
+        next: [{to: route}]
+      - id: support_contact
+        kind: collect
+        slots: [name, phone, email]
+        next: [{to: route}]
+      - id: route
+        kind: transfer
+        department: route
+        next:
+          - {to: transferred, when: {tool_code_in: [transferring]}}
+          - {to: save_lead}
+      - id: save_lead
+        kind: tool
+        tool: capture_enquiry
+        next:
+          - {to: lead_captured, when: {tool_code_in: [saved, duplicate]}}
+          - {to: save_lead, when: {tool_code_in: [needs_confirmation]}}
+          - {to: qualify, when: {tool_code_in: [bad_phone, missing_fields]}}
+          - {to: not_saved}
+      - {id: answered, kind: complete, outcome: answered}
+      - {id: transferred, kind: complete, outcome: transferred}
+      - {id: lead_captured, kind: complete, outcome: lead_captured}
+      - {id: not_saved, kind: fail, outcome: not_saved}
+    tools: [search_knowledge, capture_enquiry, transfer_to_human, end_call]
+    knowledge: [business_facts, catalog, faq, documents]
+    answer_constraints: ["Prices and plans only from the catalogue", "Never access or change a learner's account"]
+    transfer: {departments: [route, sales, technical_support, learner_support, billing], require_caller_consent: true}
+    follow_ups: [callback_task]
+    audit_events: [enquiry.captured, transfer.attempted]
+    metrics: [leads, demo_requests, support_transfers]

@@ -288,6 +288,15 @@ export default function PilotModal() {
                       <option value="Aesthetic / Med spa">Aesthetic / Med spa</option>
                       <option value="Physiotherapy / Rehab">Physiotherapy / Rehab</option>
                       <option value="Multi-specialty hospital">Multi-specialty hospital</option>
+                      {/* Beta verticals: workflows tested, not yet proven on live calls, so offered as pilots only */}
+                      <optgroup label="Pilot (beta)">
+                        <option value="Salon / barbershop (pilot)">Salon / barbershop</option>
+                        <option value="Spa / wellness centre (pilot)">Spa / wellness centre</option>
+                        <option value="School (pilot)">School</option>
+                        <option value="College / university (pilot)">College / university</option>
+                        <option value="Coaching / training institute (pilot)">Coaching / training institute</option>
+                        <option value="EdTech company (pilot)">EdTech company</option>
+                      </optgroup>
                       <option value="Other">Other</option>
                     </select>
                     <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-400">

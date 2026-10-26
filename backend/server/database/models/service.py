@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, ForeignKey, Numeric, String, Table, Column
+from sqlalchemy import JSON, DateTime, ForeignKey, Numeric, String, Table, Column
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.server.database.session import Base
@@ -26,6 +26,11 @@ class Service(Base):
     duration_minutes: Mapped[int] = mapped_column(default=30)
     price_amount: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True)
     price_currency: Mapped[str] = mapped_column(String(3), default="USD")
+    # What the item is (DOCS/31): "service" (bookable; every row before 0015), "course" (an education programme: answered and
+    # enquired about, never booked), "visit" / "counselling" / "demo_class" (education bookings), "package" (wellness bundle).
+    kind: Mapped[str] = mapped_column(String(20), default="service")
+    attributes: Mapped[dict] = mapped_column(JSON, default=dict)  # course level, intake, deadline, mode, eligibility...
+    resource_kind: Mapped[str | None] = mapped_column(String(30), nullable=True)  # a booking also holds one free resource of this kind
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     business = relationship("Business", back_populates="services")

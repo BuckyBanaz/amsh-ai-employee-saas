@@ -939,7 +939,8 @@ class CallSession:
                     remaining = self.barge_in.playback_until - time.monotonic()
                     if remaining > 0:
                         await asyncio.sleep(min(remaining, TRANSFER_PLAYBACK_WAIT_S))
-                    url = plivo_transfer_url(phone, target.get("staff_name") or "Staff", target.get("department") or "front_desk", lang)
+                    url = plivo_transfer_url(phone, target.get("staff_name") or "Staff", target.get("department") or "front_desk", lang,
+                                             attempt_id=target.get("attempt_id"))
                     ok = await plivo_client.transfer_call(self.call_id, url)
             elif twiml:
                 ok = await redirect_call(self.call_id, twiml)

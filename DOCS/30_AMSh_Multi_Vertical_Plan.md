@@ -1,6 +1,8 @@
 # 30. Multi-Vertical Plan: education and SMB (salon, spa) next to healthcare
 
-Status: **PLAN** (written 2026-10-17). Nothing here is built yet.
+Status: **PLAN** (written 2026-10-17). **Update 2026-10-25:** built on branch `version-0.5` as described in
+[`31_AMSh_Multi_Vertical_Architecture.md`](31_AMSh_Multi_Vertical_Architecture.md) (vertical keys `clinic`, `education`, `salon`,
+`wellness`; spa is the separate `wellness` vertical because it adds rooms and health escalation). The rest of this file is the original plan.
 Decision owner: Parikshit. Related: `04_AMSh_MVP_Scope_and_Roadmap.md` (healthcare-first MVP), `21_AMSh_Language_Layer_and_Slot_Rules.md`
 (BusinessContext, slot rules), `22_AMSh_Language_Packs_and_Runtime_Context.md` (vertical / language / region dimensions),
 `20_AMSh_Returning_Patient_Memory_and_Privacy.md` (memory and privacy rules).

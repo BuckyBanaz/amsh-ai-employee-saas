@@ -1,9 +1,10 @@
 """Onboarding "Services" step: frontend/user/app/onboarding/services/page.tsx."""
 
 from datetime import datetime
+from typing import Dict, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from backend.server.api.routes._shared import get_business_or_404, require_membership, require_owner_or_admin
@@ -16,12 +17,20 @@ from backend.server.services.service_suggestions import suggestions_for
 router = APIRouter(prefix="/api/onboarding/businesses/{business_id}/services", tags=["services"])
 
 
+# What a catalogue item is (DOCS/31): "service" is bookable (every clinic item); "course" is answered and enquired about, never
+# booked; "visit" / "counselling" / "demo_class" are education bookings; "package" a wellness bundle.
+ServiceKind = Literal["service", "course", "visit", "counselling", "demo_class", "package"]
+
+
 class ServiceCreate(BaseModel):
     title: str
     description: str | None = None
     duration_minutes: int = 30
     price_amount: float | None = None
     price_currency: str = "USD"
+    kind: ServiceKind = "service"
+    attributes: Dict[str, str] = Field(default_factory=dict, max_length=20)  # level, intake, deadline, mode, eligibility...
+    resource_kind: str | None = Field(default=None, max_length=30)  # a booking also holds a free resource of this kind (a room)
 
 
 class ServiceUpdate(BaseModel):
@@ -30,6 +39,26 @@ class ServiceUpdate(BaseModel):
     duration_minutes: int | None = None
     price_amount: float | None = None
     price_currency: str | None = None
+    kind: ServiceKind | None = None
+    attributes: Dict[str, str] | None = Field(default=None, max_length=20)
+    resource_kind: str | None = Field(default=None, max_length=30)
+
+
+def _check_resource_kind(db: Session, business_id: str, kind: str | None) -> None:
+    """A service can only need a resource kind its vertical defines (not "staff": people are booked as staff)."""
+    if not kind:
+        return
+    from backend.ai.verticals.errors import UnknownVerticalError
+    from backend.ai.workflows.registry import workflow_registry
+    from backend.server.database.models.business import Business
+
+    business = db.get(Business, business_id)
+    try:
+        allowed = {r.key for r in workflow_registry().vertical(business.vertical).resources if r.key != "staff"}
+    except UnknownVerticalError:
+        allowed = set()
+    if kind not in allowed:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"resource_kind must be one of {sorted(allowed)}")
 
 
 class ServiceOut(BaseModel):
@@ -40,6 +69,9 @@ class ServiceOut(BaseModel):
     duration_minutes: int
     price_amount: float | None
     price_currency: str
+    kind: str = "service"
+    attributes: Dict[str, str] | None = None
+    resource_kind: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -54,6 +86,7 @@ def create_service(
 ):
     get_business_or_404(business_id, db)
     require_owner_or_admin(business_id, current_user)
+    _check_resource_kind(db, business_id, payload.resource_kind)
     service = Service(business_id=business_id, **payload.model_dump())
     db.add(service)
     db.commit()
@@ -86,7 +119,10 @@ def update_service(
     get_business_or_404(business_id, db)
     require_owner_or_admin(business_id, current_user)
     service = _get_service_or_404(business_id, service_id, db)
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    updates = payload.model_dump(exclude_unset=True)
+    if "resource_kind" in updates:
+        _check_resource_kind(db, business_id, updates["resource_kind"])
+    for field, value in updates.items():
         setattr(service, field, value)
     db.commit()
     db.refresh(service)

@@ -31,7 +31,9 @@ from backend.ai.engine.agent.hindi import caller_is_leaving, has_devanagari, lan
 from backend.ai.engine.agent.validator import is_affirmative
 from backend.ai.engine.agent.llm_backend import ChatBackend, LLMUnavailable
 from backend.ai.engine.agent.prompt_builder import build_system_prompt
-from backend.ai.engine.agent.toolbox import TOOL_SCHEMAS, AgentToolbox
+from backend.ai.engine.agent.toolbox import AgentToolbox, tool_schemas
+from backend.ai.workflows.registry import workflow_registry
+from backend.ai.workflows.session import WorkflowSession
 from backend.ai.engine.agent.validator import ActionGate, BusinessFacts
 from backend.ai.engine.agent.datetime_utils import dates_in, local_now
 from backend.ai.engine.conversation.i18n import language_code
@@ -326,7 +328,13 @@ class AgentEngine:
         self._devanagari_turn = False  # the caller's latest message is in Devanagari (speech-to-text output)
         self.facts = facts
         # What is already known about this call and what to ask next, kept in code (agent/controller.py); the model only words it.
-        self.ctrl = CallState(services=list(getattr(facts, 'services', None) or []))
+        # The business's workflows (backend/ai/workflows): which tools exist for it and the order a booking is asked for.
+        # Healthcare resolves to every tool of today and SLOT_ORDER (the clinic golden test guards this).
+        workflows = workflow_registry()
+        subtype = getattr(facts, "subtype", None)
+        self.allowed_tools = set(workflows.tools_for(facts.vertical, subtype))
+        slot_order = workflows.booking_slot_order(facts.vertical, subtype)
+        self.ctrl = CallState(services=list(getattr(facts, 'services', None) or []), slot_order=slot_order)  # () = this business does not book
         calling_digits = re.sub(r"\D", "", caller_number or "")
         # A real number only: the phone gateway uses +15550000000 (a fictional 555 number) when the provider sent none.
         if len(calling_digits) >= 10 and not calling_digits.endswith("5550000000"):
@@ -343,13 +351,23 @@ class AgentEngine:
         self.gate = ActionGate()
         disabled_tools, disabled_notes = disabled_capabilities(capabilities or {})
         self.remember_callers = (capabilities or {}).get("remember") is not False  # Behavior tab: greet returning callers by name
-        self.tools = [s for s in TOOL_SCHEMAS if s["function"]["name"] not in disabled_tools]  # owner's switches
+        self.tools = [  # in the vertical's wording; only the business's workflows' tools, minus the owner's switches
+            s for s in tool_schemas(facts.vertical)
+            if s["function"]["name"] in self.allowed_tools and s["function"]["name"] not in disabled_tools
+        ]
         self.toolbox = AgentToolbox(
             business_id, caller_number, call_id, facts, db_factory, self.gate, self.now_fn, dry_run,
             require_confirmation=require_confirmation, disabled_tools=disabled_tools, transfer_phone=transfer_phone,
-            sandbox=sandbox,
+            sandbox=sandbox, allowed_tools=self.allowed_tools,
         )
         self.toolbox.channel = channel
+        # Verticals on the workflow runtime track each workflow run from the toolbox's real results and persist it (resumable);
+        # healthcare stays on the controller alone (definitions/healthcare.yaml: workflow_runtime false).
+        self.workflow: Optional[WorkflowSession] = None
+        if workflows.vertical(facts.vertical).workflow_runtime:
+            self.workflow = WorkflowSession(business_id, call_id, facts.vertical, subtype, db_factory,
+                                            persist=sandbox is None and not dry_run)
+            self.toolbox.route_context = self.workflow.context  # department routing reads validated slots, never the model's prose
         self._system = build_system_prompt(
             facts, agent_name, self.now_fn(), caller_number, tone, gender,
             instructions=instructions, small_talk=small_talk, require_confirmation=require_confirmation, disabled=disabled_notes,
@@ -911,7 +929,7 @@ class AgentEngine:
         conversation so it matches the caller's language and tone. The same guards as a normal reply apply (no invented time, no
         unconfirmed booking, the caller's language, no thinking out loud); `must_say_one_of` must appear (emergency numbers).
         `fallback` (the language pack's fixed line) is returned when the model fails, is slower than `timeout`, or breaks a rule."""
-        notes = _notes()["spoken_line"]
+        notes = load_prompts("engine_notes", self.facts.vertical)["spoken_line"]  # e.g. "an emergency", not "a medical emergency", outside healthcare
         numbers = [n for n in (must_say_one_of or []) if n]
         instruction = notes[kind].format(numbers=" / ".join(numbers) or notes["no_numbers"])
         messages = self._messages(group) + [{"role": "system", "content": f"{notes['common']} {instruction}"}]
@@ -975,6 +993,10 @@ class AgentEngine:
         self.ctrl.observe_tools(self.toolbox.calls, self.toolbox.succeeded)
         if note := self.ctrl.note():  # what is already known, and the one thing to ask next (right after the static prompt, so the
             messages.insert(1, {"role": "system", "content": note})  # trailing notes and tool results stay the last messages)
+        if self.workflow is not None:  # where this call's workflow stands, from real tool results (never the model's prose)
+            self.workflow.sync(self.toolbox.calls, self.ctrl.known())
+            if wf_note := self.workflow.note():
+                messages.insert(1, {"role": "system", "content": wf_note})
         return messages
 
     def _commit(self, group: List[Dict[str, Any]]) -> None:

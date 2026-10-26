@@ -46,9 +46,12 @@ class TransferCallTool(BaseTool):
                 data={"department": department, "reason": reason},
             )
 
-        action_query = urlencode(
-            {"staff_name": staff_name, "staff_phone": phone_number, "department": department}
-        )
+        meta = context.metadata or {}
+        query = {"staff_name": staff_name, "staff_phone": phone_number, "department": department}
+        if meta.get("attempt_id"):  # department directory: the callback records this attempt's real result (and any fallback)
+            query["attempt_id"] = meta["attempt_id"]
+        timeout = int(meta.get("timeout") or 20)
+        action_query = urlencode(query)
         action_url = f"{build_base_url()}/api/voice/transfer-status?{action_query}"
         # XML-escape the query string's '&' separators for use as an attribute value.
         action_url_xml = action_url.replace("&", "&amp;")
@@ -57,7 +60,7 @@ class TransferCallTool(BaseTool):
             '<?xml version="1.0" encoding="UTF-8"?>'
             "<Response>"
             f'<Say voice="Polly.Joanna">Transferring you to {staff_name} right now, please stay on the line.</Say>'
-            f'<Dial timeout="20" record="record-from-answer" action="{action_url_xml}">'
+            f'<Dial timeout="{timeout}" record="record-from-answer" action="{action_url_xml}">'
             f"{phone_number}"
             "</Dial>"
             "</Response>"
@@ -72,6 +75,7 @@ class TransferCallTool(BaseTool):
                 "phone_number": phone_number,
                 "staff_name": staff_name,
                 "twiml": twiml,
+                "attempt_id": meta.get("attempt_id"),
             },
             should_transfer=True,
             transfer_target=department,
@@ -83,9 +87,10 @@ class TransferCallTool(BaseTool):
         on-call/escalation table yet): 'front_desk' rings the business's main
         line; every other department rings the first roster entry with a
         phone number on file, falling back to the business line."""
-        override = (context.metadata or {}).get("transfer_phone")  # owner's Escalation-tab fallback number
+        override = (context.metadata or {}).get("transfer_phone")  # a routed department's number, or the owner's fallback number
         if override:
-            return override, ("our front desk" if department == "front_desk" else department.replace("_", " ").title())
+            named = (context.metadata or {}).get("staff_name")  # the department's own name (department directory)
+            return override, named or ("our front desk" if department == "front_desk" else department.replace("_", " ").title())
         if not context.db:
             return None, department.replace("_", " ").title()
 

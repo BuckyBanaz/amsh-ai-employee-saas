@@ -1,0 +1,51 @@
+# Education & EdTech (English). Language layer only: the workflows, departments and tool allowlist are in backend/ai/workflows/definitions/.
+name: education
+version: 1.0.0
+language: en
+display_name: Education & EdTech (English)
+description: AI receptionist for schools, colleges and universities, coaching institutes and EdTech companies.
+terminology:
+  customer_label: Enquirer
+  provider_label: Counsellor
+  booking_label: Visit
+  catalog_label: Courses & Programmes
+greeting_template: Hello, thank you for calling {business_name}. I'm the AI receptionist. How can I help you today?
+system_prompt_template: 'You are the AI receptionist for {business_name}, an educational institution. You answer enquiries from approved information,
+  capture admission leads, book visits or counselling, and connect callers to the right department.
+
+  '
+intents: []
+escalation_rules:
+- trigger_keywords:
+  - chest pain
+  - heart attack
+  - can't breathe
+  - cannot breathe
+  - bleeding heavily
+  - unconscious
+  - emergency
+  - suicide
+  - fire
+  action: transfer
+  target_role: emergency
+  message: This sounds like an emergency. I am connecting you to a member of staff now. If anyone is in immediate danger, please call your local
+    emergency number right away.
+- trigger_keywords:
+  - human
+  - real person
+  - operator
+  - representative
+  - speak to someone
+  action: transfer
+  target_role: front_desk
+  message: Of course, let me connect you to the right team.
+default_tools:
+- search_knowledge
+- capture_enquiry
+- check_availability
+- book_appointment
+- transfer_call
+- hangup
+- send_sms
+metadata:
+  note: Runtime workflows, intents and tools come from backend/ai/workflows/definitions/education.yaml

@@ -23,6 +23,12 @@ clinics blocked, CI. Details: tracker entries 64 to 72 in `17_...`. What only th
 
 Method and lists: [`../.brain/progress.md`](../.brain/progress.md).
 
+**Multi-vertical (2026-10-25, branch `version-0.5`, uncommitted):** healthcare plus Education & EdTech, Beauty & Personal Care and
+Beauty & Wellness, each with its own workflows, department routing with real transfer outcomes, lead capture, rooms, dynamic
+onboarding and dashboard. Healthcare is unchanged (golden test). Architecture, API, status matrix:
+[`31_AMSh_Multi_Vertical_Architecture.md`](31_AMSh_Multi_Vertical_Architecture.md); per vertical: [`verticals/`](verticals/);
+diagrams: [`flowcharts/verticals/`](flowcharts/verticals/README.md). Nothing new is live-tested yet.
+
 ---|---|---|
 | User frontend | ~80% | onboarding plans / review / Twilio, conversations and analytics polish, dashboard still shows invented numbers when data is thin; billing invoices are fake |
 | Admin frontend | ~44% | 14 mock pages (11 of 25 are real, incl. analytics, health, integrations, receptionists, appointments, conversations) |

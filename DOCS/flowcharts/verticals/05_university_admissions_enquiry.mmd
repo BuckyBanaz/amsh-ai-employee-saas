@@ -1,0 +1,16 @@
+%% education.university_enquiry (implemented, unit-tested; not live-tested).
+flowchart TD
+  A["Incoming university call"] --> B["identify: collect topic"]
+  B -->|application_status or complaint| ID["identity: collect name, phone"]
+  B -->|other topics| AN["answer from approved knowledge<br/>(catalog, FAQ, documents)"]
+  AN -->|resolved| DONE1["complete: answered"]
+  AN -->|not resolved| CX["context: applicant_type, study_level, programme<br/>(optional, asked if relevant)"]
+  CX --> RT["route: transfer_to_human(department=route or key)"]
+  ID --> RT
+  RT -->|"transferring (dial placed)"| DONE2["complete: transferred<br/>(real result recorded by provider callback)"]
+  RT -->|department_closed / unavailable / declined| LC["lead_contact: name, phone"]
+  LC --> SL["save_lead: capture_enquiry<br/>read-back, then confirmed"]
+  SL -->|saved / duplicate| DONE3["complete: lead_captured"]
+  SL -->|needs_confirmation| SL
+  SL -->|bad_phone / missing_fields| LC
+  SL -->|other| FAIL["fail: not_saved"]

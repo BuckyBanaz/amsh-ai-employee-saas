@@ -1,0 +1,10 @@
+%% Test and deployment flow for multi-vertical changes.
+flowchart LR
+  A["Change"] --> B["Backend unit tests<br/>pytest backend/ai/evals"]
+  B --> C["Clinic golden<br/>(character-for-character)"]
+  C --> D["Migration up/down on SQLite<br/>(Postgres: pending)"]
+  D --> E["Frontend: tsc + eslint + next build<br/>(user, admin)"]
+  E --> F["API smoke (testing/api_smoke.py)"]
+  F --> G["Staging: demo tenant per vertical"]
+  G --> H["Live test calls per vertical<br/>(NOT done yet)"]
+  H --> I["Production deploy; rollback = previous image<br/>(migration 0015 is additive)"]

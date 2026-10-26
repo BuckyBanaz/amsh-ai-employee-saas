@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useOnboardingSteps } from '../../../verticals/onboardingSteps';
 import { STRINGS } from '../../../utils/strings/en';
 import { OnboardingController } from '../../../controllers/onboarding.controller';
 import { StorageService } from '../../../services/storage.service';
@@ -10,6 +11,7 @@ const initialStaffMembers: any[] = [];
 
 export default function StaffOnboardingPage() {
   const router = useRouter();
+  const onboarding = useOnboardingSteps(); // next/back follow the business's type
   const [staffList, setStaffList] = useState(initialStaffMembers);
   const [isAdding, setIsAdding]   = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -103,7 +105,7 @@ export default function StaffOnboardingPage() {
           phone: member.phone,
         });
       }
-      router.push('/onboarding/hours');
+      router.push(onboarding.next('/onboarding/staff'));
     } catch (err: any) {
       setError(err.message || 'Failed to save staff');
     } finally {
@@ -310,7 +312,7 @@ export default function StaffOnboardingPage() {
       <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
         <button 
           type="button"
-          onClick={() => router.push('/onboarding/services')}
+          onClick={() => router.push(onboarding.prev('/onboarding/staff'))}
           disabled={loading}
           className="px-5 py-2 rounded-lg border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors shadow-sm disabled:opacity-50"
         >

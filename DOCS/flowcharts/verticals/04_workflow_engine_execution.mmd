@@ -1,0 +1,21 @@
+%% Workflow engine execution for one run (implemented: backend/ai/workflows/engine.py + session.py).
+flowchart TD
+  S["start(): enter start step, visits=1"] --> T{"current step kind"}
+  T -->|collect| C{"all required slots present?"}
+  C -->|no| ASK["note: ask only for next_slot()"] --> W["wait for next turn"]
+  C -->|yes| TR["first transition whose condition holds"]
+  T -->|answer| AN{"resolved observed?"}
+  AN -->|no| W
+  AN -->|yes / no| TR
+  T -->|tool, confirm, transfer| TL{"that tool's real result code?"}
+  TL -->|not yet| W
+  TL -->|code| TR
+  TR --> EN["enter target: visits+1"]
+  EN --> MX{"visits > max_visits?"}
+  MX -->|yes| FL["status failed, outcome loop_exceeded"]
+  MX -->|no| TM{"terminal?"}
+  TM -->|complete| OK["status completed, outcome"]
+  TM -->|fail| FL2["status failed, outcome"]
+  TM -->|no| T
+  W --> SY["sync(): toolbox audit trail + controller slots"] --> T
+  OK & FL & FL2 & EN --> SV["save (ordered background thread)<br/>workflow_runs upsert"]

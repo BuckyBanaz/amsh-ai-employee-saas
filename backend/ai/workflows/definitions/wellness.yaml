@@ -1,0 +1,184 @@
+# Beauty & Wellness: treatments and packages with session lengths, therapists and rooms; health concerns go to a person.
+vertical:
+  key: wellness
+  name: Beauty & Wellness
+  version: 1.0.0
+  status: beta
+  description: Day spas, massage spas, wellness centres and sauna / relaxation centres. Books treatments with an optional therapist and a free room, answers questions only from approved business information, and hands health concerns to staff.
+  terminology:
+    customer: Client
+    customers: Clients
+    staff: Therapist
+    staff_plural: Therapists
+    offering: Treatment
+    offerings: Treatments
+    booking: Session
+    bookings: Sessions
+  safety:
+    emergency_detection: true
+    emergency_wording: general
+    health_privacy: false
+    minors_privacy: false
+    no_medical_advice: true
+    no_outcome_claims: true
+  resources:
+    - {key: staff, name: Therapist}
+    - {key: room, name: Treatment room}
+  departments:
+    - {key: front_desk, name: Front desk, intents: [human_request, general_enquiry, pricing, packages, booking_problem], priority: 50}
+    - {key: manager, name: Spa manager, intents: [complaint, refund, special_request], priority: 70, default_fallback: front_desk}
+    - {key: wellness_lead, name: Senior therapist (health questions), intents: [health_concern, contraindication, pregnancy, injury], may_answer: false, priority: 80, default_fallback: front_desk}
+  subtypes:
+    - key: day_spa
+      name: Day spa
+      workflows: [wellness.treatment_booking, wellness.booking_change, wellness.enquiry]
+      departments: [front_desk, manager, wellness_lead]
+      resources: [staff, room]
+      differences: ["Packages combine several treatments; rooms are shared across treatments."]
+    - key: massage_spa
+      name: Massage spa
+      workflows: [wellness.treatment_booking, wellness.booking_change, wellness.enquiry]
+      departments: [front_desk, wellness_lead]
+      resources: [staff, room]
+      differences: ["Therapist preference (and gender preference) is common; health questions go to the senior therapist."]
+    - key: wellness_centre
+      name: Wellness centre
+      workflows: [wellness.treatment_booking, wellness.booking_change, wellness.enquiry]
+      departments: [front_desk, manager, wellness_lead]
+      resources: [staff, room]
+      differences: ["Same workflows; programmes and memberships are answered from approved information only."]
+    - key: sauna
+      name: Sauna and relaxation centre
+      workflows: [wellness.treatment_booking, wellness.booking_change, wellness.enquiry]
+      departments: [front_desk, manager]
+      resources: [room]
+      differences: ["Sessions book a room/time slot; usually no therapist."]
+  onboarding:
+    - {key: business, title: Spa details}
+    - {key: services, title: Treatments and packages}
+    - {key: staff, title: Therapists, required: false}
+    - {key: resources, title: Rooms, required: false}
+    - {key: hours, title: Opening hours}
+    - {key: ai_receptionist, title: AI receptionist}
+    - {key: knowledge, title: Policies and FAQs, required: false}
+    - {key: integrations, title: Channels and integrations, required: false}
+    - {key: review, title: Review and activate}
+  dashboard:
+    - {key: appointments, label: Sessions, route: /appointments}
+    - {key: customers, label: Clients, route: /patients}
+    - {key: staff, label: Therapists, route: /doctors}
+    - {key: offerings, label: Treatments, route: /services}
+    - {key: resources, label: Rooms, route: /resources}
+    - {key: calls, label: Calls, route: /calls}
+    - {key: conversations, label: Conversations, route: /conversations}
+    - {key: knowledge, label: Knowledge, route: /knowledge}
+
+workflows:
+  - id: wellness.treatment_booking
+    version: 1.0.0
+    title: Book a treatment session
+    status: implemented
+    entry_intents: [book_appointment]
+    slots:
+      - {id: service, type: text, description: Treatment or package}
+      - {id: therapist, type: text, required: false}
+      - {id: date, type: date}
+      - {id: time, type: time}
+      - {id: name, type: name, sensitive: true}
+      - {id: phone, type: phone, sensitive: true}
+    start: collect
+    steps:
+      - id: collect
+        kind: collect
+        slots: [service, therapist, date, time, name, phone]
+        next: [{to: check}]
+      - id: check
+        kind: tool
+        tool: check_availability
+        description: A slot is free only when a therapist (if needed) AND a room of the treatment's kind are free.
+        next:
+          - {to: confirm, when: {tool_code_in: [ok]}}
+          - {to: collect}
+      - id: confirm
+        kind: confirm
+        tool: book_appointment
+        next:
+          - {to: booked, when: {tool_code_in: [booked, already_booked, dry_run]}}
+          - {to: confirm, when: {tool_code_in: [needs_confirmation, no_matching_readback]}}
+          - {to: collect, when: {tool_code_in: [outside_hours, closed, past_date, past_time, too_soon, bad_date, bad_time, bad_name, bad_phone, unknown_service, unknown_doctor, missing_fields, not_from_caller, no_room]}}
+          - {to: not_booked}
+      - {id: booked, kind: complete, outcome: booked}
+      - {id: not_booked, kind: fail, outcome: not_booked}
+    tools: [check_availability, book_appointment, send_confirmation, search_knowledge, transfer_to_human, end_call]
+    knowledge: [business_facts, catalog, faq]
+    answer_constraints:
+      - "No medical advice and no claims about treatment results"
+      - "Contraindications, pregnancy, injuries or medical conditions: offer the senior therapist instead of answering"
+    transfer: {departments: [front_desk, manager, wellness_lead], require_caller_consent: true}
+    booking_type: treatment
+    resources: [staff, room]
+    follow_ups: [confirmation_message, reminder]
+    audit_events: [appointment.booked]
+    metrics: [sessions_booked, room_utilisation]
+
+  - id: wellness.booking_change
+    version: 1.0.0
+    title: Reschedule or cancel a session
+    status: implemented
+    entry_intents: [reschedule_appointment, cancel_appointment]
+    slots:
+      - {id: phone, type: phone, sensitive: true}
+    start: find
+    steps:
+      - id: find
+        kind: tool
+        tool: lookup_appointment
+        next:
+          - {to: change, when: {tool_code_in: [ok]}}
+          - {to: not_found}
+      - id: change
+        kind: confirm
+        tool: reschedule_appointment
+        next:
+          - {to: done, when: {tool_code_in: [rescheduled, cancelled, dry_run]}}
+          - {to: change, when: {tool_code_in: [needs_confirmation, no_matching_readback, outside_hours, closed, past_date, past_time, too_soon, no_room]}}
+          - {to: not_found}
+      - {id: done, kind: complete, outcome: changed}
+      - {id: not_found, kind: fail, outcome: not_found}
+    tools: [lookup_appointment, cancel_appointment, reschedule_appointment, check_availability, send_confirmation, transfer_to_human, end_call]
+    knowledge: [business_facts]
+    transfer: {departments: [front_desk], require_caller_consent: true}
+    booking_type: treatment
+    follow_ups: [confirmation_message]
+    audit_events: [appointment.rescheduled, appointment.cancelled]
+    metrics: [reschedules, cancellations]
+
+  - id: wellness.enquiry
+    version: 1.0.0
+    title: Treatments, packages and health questions
+    status: implemented
+    entry_intents: [pricing, packages, general_enquiry, health_concern, human_request, complaint]
+    slots:
+      - {id: question, type: text}
+    start: answer
+    steps:
+      - id: answer
+        kind: answer
+        next:
+          - {to: answered, when: {resolved: true}}
+          - {to: transfer}
+      - id: transfer
+        kind: transfer
+        department: route
+        next:
+          - {to: transferred, when: {tool_code_in: [transferring]}}
+          - {to: unresolved}
+      - {id: answered, kind: complete, outcome: answered}
+      - {id: transferred, kind: complete, outcome: transferred}
+      - {id: unresolved, kind: fail, outcome: unresolved}
+    tools: [search_knowledge, transfer_to_human, end_call]
+    knowledge: [business_facts, catalog, faq]
+    answer_constraints: ["No medical advice and no claims about treatment results"]
+    transfer: {departments: [route, front_desk, manager, wellness_lead], require_caller_consent: true, on_unavailable: message}
+    audit_events: [transfer.attempted]
+    metrics: [answered, transfers]

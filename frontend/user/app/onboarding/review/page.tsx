@@ -6,6 +6,7 @@ import { STRINGS } from '../../../utils/strings/en';
 import { StorageService } from '../../../services/storage.service';
 import { PolicyAcceptance } from '../../../components/policies/PolicyAcceptance';
 import { WHATSAPP_ENABLED } from '../../../utils/features';
+import { ActivationPanel } from '../../../components/verticals/ActivationPanel';
 
 export default function ReviewOnboardingPage() {
   const router = useRouter();
@@ -497,6 +498,13 @@ export default function ReviewOnboardingPage() {
         </div>
 
       </div>
+
+      {businessId && (
+        <div className="mt-6">
+          <h2 className="mb-2 text-base font-bold text-gray-900">Validate and activate</h2>
+          <ActivationPanel />
+        </div>
+      )}
 
       {businessId && (
         <div className="mt-6">

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { VerticalDetail, VerticalItem, fetchVertical, fetchVerticals } from '@/lib/api';
+import { VerticalDefinitionInfo, VerticalDetail, VerticalItem, fetchVertical, fetchVerticals } from '@/lib/api';
 import { Card, Chip, Empty, ErrorBox, Loading, PageHeader, errorText, label } from '@/components/admin/ui';
 
 export default function VerticalsPage() {
@@ -39,7 +39,7 @@ export default function VerticalsPage() {
             <Card key={v.name} className="p-4">
               <div className="flex items-start justify-between gap-3">
                 <div><h2 className="text-sm font-bold text-[#0F172A]">{Object.values(v.languages)[0]?.display_name.replace(/\s*\([^)]*\)\s*$/, '') ?? v.name}</h2><p className="font-mono text-[11px] uppercase tracking-wide text-[#64748B]">{v.name}</p></div>
-                <Chip tone="green">Live</Chip>
+                <Chip tone={v.status === 'live' ? 'green' : 'amber'}>{v.status === 'live' ? 'Live' : v.status === 'beta' ? 'Beta' : 'Designed'}</Chip>
               </div>
               <p className="mt-2 text-xs text-[#475569]">{v.description}</p>
               <dl className="my-3 grid grid-cols-3 gap-2 text-center">
@@ -54,6 +54,7 @@ export default function VerticalsPage() {
                 ))}
               </div>
               <p className="mt-3 text-[11px] text-[#94A3B8]">Tools: {v.tools.map(label).join(', ') || 'none'}</p>
+              {v.definition && <DefinitionSummary d={v.definition} />}
             </Card>
           ))}
         </div>
@@ -79,6 +80,46 @@ export default function VerticalsPage() {
             </div>
           )}
         </Card>
+      )}
+    </div>
+  );
+}
+
+
+/** Subtypes, workflows (with version and whether they are implemented), department templates and activation: read-only. */
+function DefinitionSummary({ d }: { d: VerticalDefinitionInfo }) {
+  return (
+    <div className="mt-3 space-y-2 border-t border-[#F1F5F9] pt-3">
+      <p className="text-[11px] text-[#64748B]">
+        Definition v{d.version} · validation <b className={d.validation === 'ok' ? 'text-green-700' : 'text-red-700'}>{d.validation}</b> ·
+        {' '}{d.activated_businesses} activated · {d.workflow_runtime ? 'workflow runtime' : 'existing controller (unchanged)'}
+      </p>
+      <details>
+        <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-wide text-[#94A3B8]">Subtypes ({d.subtypes.length})</summary>
+        <ul className="mt-1 space-y-1">
+          {d.subtypes.map((s) => (
+            <li key={s.key} className="text-xs text-[#475569]"><b className="text-[#1E293B]">{s.name}</b> · {s.businesses} business{s.businesses === 1 ? '' : 'es'} · {s.workflows.length} workflows
+              {s.differences.length > 0 && <span className="block text-[11px] text-[#94A3B8]">{s.differences.join(' ')}</span>}</li>
+          ))}
+        </ul>
+      </details>
+      <details>
+        <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-wide text-[#94A3B8]">Workflows ({d.workflows.length})</summary>
+        <ul className="mt-1 space-y-1">
+          {d.workflows.map((w) => (
+            <li key={w.id} className="text-xs text-[#475569]"><b className="text-[#1E293B]">{w.title}</b> <span className="font-mono text-[10px]">{w.id} v{w.version}</span>{' '}
+              <Chip tone={w.status === 'implemented' ? 'green' : 'amber'}>{w.status}</Chip>
+              <span className="block text-[11px] text-[#94A3B8]">Tools: {w.tools.map(label).join(', ')}{w.slot_order.length ? ` · asks: ${w.slot_order.join(', ')}` : ''}</span></li>
+          ))}
+        </ul>
+      </details>
+      {d.departments.length > 0 && (
+        <details>
+          <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-wide text-[#94A3B8]">Department templates ({d.departments.length})</summary>
+          <ul className="mt-1 space-y-0.5">
+            {d.departments.map((dep) => <li key={dep.key} className="text-xs text-[#475569]">{dep.name} <span className="text-[#94A3B8]">({dep.intents.map(label).join(', ')}{dep.default_fallback ? `; falls back to ${dep.default_fallback}` : ''})</span></li>)}
+          </ul>
+        </details>
       )}
     </div>
   );
