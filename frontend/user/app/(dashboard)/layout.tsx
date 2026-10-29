@@ -69,11 +69,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </button>
 
             <div className="flex items-center gap-2">
-              <div className="w-6 h-6 bg-[#0066FF] rounded-md flex items-center justify-center">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
-                  <path d="M12 4v16m-4-10v4m8-8v12" />
-                </svg>
-              </div>
+              <img
+                src="/landing/amsh_logo.png"
+                alt="AMSh Logo"
+                className="w-6 h-6 object-contain shrink-0"
+              />
               <span className="text-sm font-bold text-gray-900 tracking-tight">Amsh</span>
             </div>
           </div>

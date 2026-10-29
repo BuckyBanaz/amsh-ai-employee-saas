@@ -28,3 +28,12 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     business = relationship("Business", back_populates="users")
+
+    @property
+    def onboarding_completed(self) -> bool:
+        """The server's answer to "send them to the dashboard or back to onboarding". Onboarding ends at checkout (a free trial or a
+        paid plan moves the business out of "pending"); having a business only means the first step was done. Anyone invited into
+        a clinic joins one the owner set up, and a platform-created clinic is never "pending"."""
+        if self.business_id is None or self.business is None:
+            return False
+        return (self.business.status or "pending").lower() != "pending" or self.role != "owner"

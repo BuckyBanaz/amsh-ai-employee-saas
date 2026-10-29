@@ -41,15 +41,13 @@ export default function LoginPage() {
 
     try {
       const res = await AuthController.login(email, password);
-      const hasBusiness = Boolean(res?.user?.business_id || StorageService.getBusinessId());
-      const isCompleted = hasBusiness || StorageService.isOnboardingCompleted();
-
-      if (isCompleted) {
-        StorageService.setOnboardingCompleted(true);
+      if (res?.user?.onboarding_completed) {
         router.push('/dashboard');
       } else {
-        const pendingStep = StorageService.getOnboardingStep() || '/onboarding/business';
-        router.push(pendingStep);
+        // Unfinished onboarding: back to the step they left (this browser remembers it), else the first one. The business step
+        // updates an existing business instead of creating a second one.
+        const pendingStep = (res?.user?.business_id && StorageService.getOnboardingStep()) || '/onboarding/business';
+        router.push(pendingStep.startsWith('/onboarding') ? pendingStep : '/onboarding/business');
       }
     } catch (err: any) {
       setError(err.message || 'Failed to login');

@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from backend.ai.realtime.twilio.call_control import build_base_url, to_ws_url
 from backend.server.cache.redis import get_redis_client
 from backend.server.auth.webhook_signatures import business_route_ok, create_stream_token, verify_plivo
+from backend.server.billing import entitlement
 from backend.server.services.number_routing import resolve_business
 from backend.server.common.config import get_settings
 from backend.server.database.models.business import Business
@@ -85,8 +86,9 @@ async def handle_plivo_incoming_call(
         logger.warning(f"[PLIVO INCOMING] No business found for call {call_uuid}")
         return _xml("<Speak>No business configured.</Speak><Hangup/>")
 
-    if business.status == "suspended":  # set by a platform admin: no AI answers for this clinic
-        logger.info("[INCOMING] Business %s is suspended: refusing the call", business.id)
+    if business.status == "suspended" or not entitlement.answers_calls(business):  # admin switch, or trial/plan over past its grace
+        logger.info("[INCOMING] Business %s is %s: refusing the call", business.id,
+                    "suspended" if business.status == "suspended" else "past its billing period")
         return _xml("<Speak>This service is temporarily unavailable. Goodbye.</Speak><Hangup/>")
 
     if not quotas.voice_allowed(db, business, get_settings().ENFORCE_VOICE_QUOTA):

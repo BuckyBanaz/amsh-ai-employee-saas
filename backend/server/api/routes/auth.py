@@ -51,6 +51,7 @@ class UserOut(BaseModel):
     role: str
     business_id: str | None
     email_verified_at: datetime | None = None  # null until the owner clicks the link in the verification email
+    onboarding_completed: bool = False  # from the business's status (User.onboarding_completed), never from the browser
 
     model_config = {"from_attributes": True}
 

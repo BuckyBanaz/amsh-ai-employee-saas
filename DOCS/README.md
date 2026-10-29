@@ -29,6 +29,11 @@ onboarding and dashboard. Healthcare is unchanged (golden test). Architecture, A
 [`31_AMSh_Multi_Vertical_Architecture.md`](31_AMSh_Multi_Vertical_Architecture.md); per vertical: [`verticals/`](verticals/);
 diagrams: [`flowcharts/verticals/`](flowcharts/verticals/README.md). Nothing new is live-tested yet.
 
+**2026-10-25/26 (tracker entries 125 to 127):** voice latency and interruption pass with per-turn timing logs and log privacy (branch
+`version-0.4`, commit `0b89a05`, offline tests only); F5 fixed in phase 1: trials and paid plans now end, with a 3-day grace period before
+calls are refused (branch `version-0.5`, uncommitted, migration `0016`); a live Hindi call review (several open issues) and a capacity audit
+(nothing measured). **Open work:** [`32_AMSh_Pending_Work_2026-10-26.md`](32_AMSh_Pending_Work_2026-10-26.md).
+
 ---|---|---|
 | User frontend | ~80% | onboarding plans / review / Twilio, conversations and analytics polish, dashboard still shows invented numbers when data is thin; billing invoices are fake |
 | Admin frontend | ~44% | 14 mock pages (11 of 25 are real, incl. analytics, health, integrations, receptionists, appointments, conversations) |

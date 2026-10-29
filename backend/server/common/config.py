@@ -58,6 +58,8 @@ class Settings(BaseSettings):
     # Stop answering a clinic's calls once its plan's monthly voice minutes are used up. Off: the minutes are reported but never cut off
     # (overage billing does not exist yet, so this is the owner's business decision).
     ENFORCE_VOICE_QUOTA: bool = False
+    # Days a clinic keeps its AI after its trial or paid period ends (the owner is warned), before its calls are refused.
+    BILLING_GRACE_DAYS: int = 3
 
     # Third-party providers — intentionally optional/unset until real keys
     # are supplied. Nothing in the realtime/engine layer should be built

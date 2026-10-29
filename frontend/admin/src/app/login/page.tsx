@@ -42,9 +42,11 @@ export default function AdminLoginPage() {
       <div className="w-full max-w-[360px] bg-white rounded-xl shadow-2xs border border-[#E2E8F0] p-6 space-y-5">
         {/* Header */}
         <div className="flex flex-col items-center text-center space-y-2.5">
-          <div className="w-9 h-9 bg-[#2563EB] rounded-lg flex items-center justify-center shadow-2xs">
-            <span className="text-white text-base font-bold">A</span>
-          </div>
+          <img
+            src="/landing/amsh_logo.png"
+            alt="AMSh Logo"
+            className="w-11 h-11 object-contain drop-shadow-sm"
+          />
           <div className="space-y-0.5">
             <h1 className="text-lg font-bold text-[#0F172A] tracking-tight">Admin Portal</h1>
             <p className="text-xs text-[#64748B]">Secure access to Amsh platform administration.</p>

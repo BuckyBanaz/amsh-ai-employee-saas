@@ -106,7 +106,7 @@ Fix (`realtime/barge_in/coordinator.py`, `twilio/gateway.py`, `speech/stt/deepgr
 - Energy-VAD barge-in now needs 3 consecutive voiced frames (60 ms), because the interruptible window is much longer and a single click must not cut the AI off.
 - The silence watchdog counts from the end of playback, not the end of sending.
 
-Still open: after a barge-in the interrupted turn's full reply (including unspoken sentences) is saved to history and the call record, as before.
+Update 2026-10-25 (section 7): the agent's history now keeps only what the caller heard. The stored call record (`messages` rows) still has the full reply when the caller interrupts after the reply was fully sent.
 
 ### 6.7 LLM-first wording and fewer model rounds (2026-10-05, branch `version-0.1`)
 
@@ -120,3 +120,43 @@ Measured offline only (scripted model, `test_voice_latency`, `test_agent_core`);
 | **LLM-worded fixed moments.** Transfers, emergencies, a failed transfer and a twice-blocked reply are worded by the model (engine_notes.json `spoken_line`) while the transfer is set up | `engine/agent/agent_loop.py` (`_spoken_line`) | No canned sentences while the model is up. Costs one short model call on those turns, bounded: after 2.5 s (1.5 s for emergencies) the language pack's line is spoken |
 
 Fixed lines are now only the model-down fallback, and every offered language has all of them (`test_language_coverage`).
+
+## 7. Pass of 2026-10-25 (branch `version-0.4`, commit `0b89a05`): implemented, not live-tested
+
+Changes (details: tracker entry 125 in `17_...`): the last sentence is spoken when the model's words are complete (`text_end`), not after the
+tool-call arguments and connection close; a barge-in stops the model at once; the history keeps only what was heard (playback marks decide after
+the reply was sent); the greeting no longer holds up the caller's audio; caller audio is kept while Deepgram connects; the recording notice is
+never cut short (answered after the provider confirms it played).
+
+### 7.1 What the logs record (no transcript text, audio or caller number in any of them)
+
+- `[LATENCY] {json}`, one per turn; turn 0 is the call opening, timed from the media stream being accepted.
+  `marks_ms`: `call_accepted`, `greeting_start`, `caller_speech_start`, `stt_first_interim`, `speech_end`, `deepgram_final`, `llm_request_start`,
+  `llm_first_token`, `llm_first_content`, `llm_first_chunk`, `tool_start`, `tool_end`, `tts_request_start`, `tts_first_audio`,
+  `first_audio_sent_to_telephony`, `barge_in_detected`, `playback_clear_sent`, `llm_stop_requested`, `tts_cancel_sent`, `turn_end`.
+  `stages_ms`: `stt_endpointing`, `pre_llm_processing`, `llm_ttft_any`, `llm_reasoning`, `llm_first_content_to_chunk`, `chunk_to_tts_request`,
+  `tts_ttfb`, `tts_to_telephony`, `stt_interim_to_final`, `llm_first_token_to_first_sentence`, `end_of_turn_to_first_audio_sent`,
+  `greeting_to_first_audio_sent`, `barge_in_to_clear_sent`, `barge_in_to_turn_end`. Per sentence: `tts_request_ms`, `chars`, `tts_first_audio_ms`,
+  `cached`, `first_sent_ms`, `queued_ms`. Also `perceived_ms`, `llm_attempts`, `closed_by`, `queue_wait_ms`, `interrupted`, `ended_by`.
+- `[BARGE-IN] {json}`: `path`, `during` (turn / playback_tail / other), `detect_to_clear_sent_ms`, `heard_sentences` of `of`; a second line gives
+  `clear_acknowledged_ms` (the provider's first echo after the clear).
+- `[PLAYOUT]`: per-sentence playback lag from the provider's mark echo, and a per-call median / p95 / max at hang-up.
+
+"Sent" is not "heard": `first_audio_sent_to_telephony` is when audio reached Twilio's socket. Only the mark echo says it played.
+One call's lines: `docker compose logs api --since 60m --no-log-prefix | grep <CallSid>`. Save the logs **before** recreating the container.
+
+### 7.2 Live benchmark plan (owner places the calls; not run yet)
+
+Test clinic with fake patient names, `AMSH_DISABLE_SMS=1` applied with `docker compose up -d --force-recreate api`, no calendar connected; cancel
+the test bookings afterwards.
+
+| # | Scenario | Pass |
+| :--- | :--- | :--- |
+| 1-3 | Normal booking, 5-7 turns, no interruption | Every turn has `[LATENCY]` with `perceived_ms`; one booking per call; `[PLAYOUT]` lines |
+| 4 | Talk over the recording notice | The whole notice is heard; then answered; `[TRANSCRIPT] ... during greeting` |
+| 5 | Interrupt the greeting | Greeting stops; answered; turn 0 has `greeting_to_first_audio_sent` |
+| 6 | Interrupt in the first second of a long reply | `[BARGE-IN]` `during: "turn"`; the turn has `barge_in_to_turn_end` |
+| 7 | Interrupt ~1.5 s into a slot proposal, then say "yes" | `during: "playback_tail"`, `heard_sentences` < `of`; the AI asks again instead of booking |
+| 8 | Hang up during a reply | Last turn ends with `ended_by: "call_stopped"` (or a normal line); call summary saved |
+
+Report median and p95 of `perceived_ms` and the stages above. Until then no improvement is claimed.

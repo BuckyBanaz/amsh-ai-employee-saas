@@ -126,7 +126,7 @@ export default function BillingPage() {
   const minutesLimit = billingData?.usage?.minutes_limit ?? 2000;
   const callsCount = billingData?.usage?.calls_count ?? 8;
   const callsLimit = billingData?.usage?.calls_limit ?? 5000;
-  const renewalDate = billingData?.renewal_date || 'October 22, 2026';
+  const renewalDate = billingData?.renewal_date || '—'; // null: the plan has no end date (set by staff) — never a made-up date
   const planPrice = billingData?.plan_details?.price ?? (currentPlanKey === 'starter' ? 99 : currentPlanKey === 'business' ? 399 : 199);
   const planCycle = billingData?.plan_details?.cycle ?? 'monthly';
   const paymentMethod = billingData?.payment_method;

@@ -32,7 +32,11 @@ class Business(Base):
     currency: Mapped[str] = mapped_column(String(3), default="USD")
     working_hours: Mapped[dict] = mapped_column(JSON, default=dict)
     plan: Mapped[str] = mapped_column(String(50), default="starter")
-    status: Mapped[str] = mapped_column(String(20), default="pending")  # active | paused | suspended | pending
+    status: Mapped[str] = mapped_column(String(20), default="pending")  # active | trial | paused | suspended | pending
+    # How long the plan lasts (backend/server/billing/entitlement.py): calls are refused after the end plus a grace period.
+    trial_ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    current_period_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    billing_cycle: Mapped[str | None] = mapped_column(String(20), nullable=True)  # monthly | yearly | manual (no end)
     config_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)
     # Per-business workflow configuration (DOCS/31): {"status": "draft"|"active", "definition_version", "activated_at",
     # "activated_by", "validation": [...]}. Departments, resources and the catalogue live in their own tables.

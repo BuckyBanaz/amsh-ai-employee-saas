@@ -20,6 +20,7 @@ from backend.ai.realtime.twilio.call_control import build_base_url, to_ws_url
 from backend.ai.tools.common.send_sms import SendSmsTool
 from backend.ai.tools.framework.base import ToolContext
 from backend.server.auth.security import create_media_token, get_voice_user
+from backend.server.billing import entitlement
 from backend.server.auth.webhook_signatures import create_stream_token, sign_business_route, verify_twilio
 from backend.server.services.number_routing import resolve_business
 from backend.server.common import ratelimit
@@ -238,6 +239,9 @@ async def trigger_test_call(payload: CallMeRequest, db: Session = Depends(get_db
         business_id = user.business_id
         biz = db.get(Business, business_id)
     biz_name = biz.name if biz else "your business"
+    if biz and (biz.status == "suspended" or not entitlement.answers_calls(biz)):
+        return {"success": False, "message": "This clinic's plan has ended. Renew it under Billing to place calls again."
+                if biz.status != "suspended" else "This clinic is suspended."}
 
     # The clinic's assigned AI line and provider settings
     from backend.server.database.models.phone_number import PhoneNumber
@@ -303,8 +307,9 @@ async def handle_incoming_call(
         )
         return Response(content=twiml, media_type="application/xml")
 
-    if business.status == "suspended":  # set by a platform admin: no AI answers for this clinic
-        logger.info("[%s] Business %s is suspended: refusing the call", "INCOMING", business.id)
+    if business.status == "suspended" or not entitlement.answers_calls(business):  # admin switch, or trial/plan over past its grace
+        logger.info("[%s] Business %s is %s: refusing the call", "INCOMING", business.id,
+                    "suspended" if business.status == "suspended" else "past its billing period")
         return Response(
             content='<?xml version="1.0" encoding="UTF-8"?><Response><Say>This service is temporarily unavailable. Goodbye.</Say><Hangup/></Response>',
             media_type="application/xml",

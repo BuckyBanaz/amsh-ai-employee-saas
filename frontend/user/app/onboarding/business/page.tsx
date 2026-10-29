@@ -48,6 +48,25 @@ export default function BusinessOnboardingPage() {
       if (saved) {
         const parsed = JSON.parse(saved);
         setFormData((prev) => ({ ...prev, ...parsed }));
+      } else if (StorageService.getBusinessId()) {
+        // Resuming on another browser: the business already exists, so show what the server has instead of an empty form.
+        DashboardController.getBusinessInfo(StorageService.getBusinessId() as string)
+          .then((b) => setFormData((prev) => ({
+            ...prev,
+            businessName: b.name || prev.businessName,
+            vertical: b.vertical || prev.vertical,
+            subtype: b.business_subtype || prev.subtype,
+            country: b.country || prev.country,
+            address: b.address || prev.address,
+            website: b.website || prev.website,
+            city: b.city || prev.city,
+            email: b.business_email || prev.email,
+            postalCode: b.postal_code || prev.postalCode,
+            phone: b.business_phone || prev.phone,
+            timezone: b.timezone || prev.timezone,
+            currency: b.currency || prev.currency,
+          })))
+          .catch(() => { /* the form stays editable; saving still updates the existing business */ });
       }
       const savedLogo = localStorage.getItem('onboarding_logo_name');
       if (savedLogo) {
@@ -85,10 +104,8 @@ export default function BusinessOnboardingPage() {
     setLoading(true);
 
     try {
-      const response = await OnboardingController.createBusiness({
+      const details = {
         name: formData.businessName,
-        vertical: formData.vertical,
-        business_subtype: formData.subtype,
         country: formData.country,
         address: formData.address,
         website: formData.website,
@@ -98,7 +115,17 @@ export default function BusinessOnboardingPage() {
         postal_code: formData.postalCode,
         timezone: formData.timezone,
         currency: formData.currency,
-      });
+      };
+      // Coming back to this step (Back button, or a sign-in before onboarding was finished) must update the business made the
+      // first time, not create a second one. The type and subtype go through the vertical config, which validates them.
+      const existingId = StorageService.getBusinessId();
+      let response: any;
+      if (existingId) {
+        await VerticalController.setSubtype(formData.subtype, formData.vertical, existingId);
+        response = await OnboardingController.updateBusiness(existingId, details);
+      } else {
+        response = await OnboardingController.createBusiness({ ...details, vertical: formData.vertical, business_subtype: formData.subtype });
+      }
 
       if (response && response.id) {
         StorageService.setBusinessId(response.id);

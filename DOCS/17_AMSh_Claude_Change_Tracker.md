@@ -1442,39 +1442,9 @@ Run it: `python -m backend.ai.evals.runner` (`--live`, `--only persona,safety`, 
     - Updated `SMTP_PASS=Hello@007` & `SMTP_PASSWORD=Hello@007`.
     - Updated `SMTP_FROM_NAME="Parikshit Verma"`.
     - Updated `SMTP_FROM_EMAIL=no-replay@techycodex.com`.
-### Entry 125 - Multi-Vertical Platform Landing Page Transformation (Healthcare, Education, Salons & Spas) (2026-10-29)
-- **Problem**:
-  - The marketing landing page (`frontend/landing-page`) previously focused exclusively on clinics and dentists.
-  - The AMSh platform core recently expanded to full multi-vertical capability (Healthcare, Education, Salons, Spas & Wellness).
-  - User requested transforming `frontend/landing-page` into a premium multi-vertical platform landing page with dedicated industry sections, interactive voice simulators, dynamic ROI calculator, and dedicated SEO landing pages.
-- **Root Cause & Fix**:
-  - **`frontend/landing-page/components/landing/VerticalMatrix.tsx`**:
-    - Created a high-end Bento Grid multi-vertical showcase for the 4 core verticals (`clinic`, `education`, `salon`, `wellness`).
-    - Implemented interactive tab switching with dynamic live call dialogue streams, telemetry latency badges, specialty workflow cards, and 1-click pilot modal triggers.
-  - **`frontend/landing-page/components/landing/Hero.tsx`**:
-    - Upgraded hero with an industry capsule pill strip (`[ 🏥 Clinics ] [ 🎓 Education ] [ ✂️ Salons ] [ 🌿 Spas ]`).
-    - Multi-vertical headline: *"Autonomous 24/7 Front-Desk AI for Service Businesses."*
-    - Removed outdated Indian WhatsApp contact link and replaced with direct multi-vertical navigation.
-  - **`frontend/landing-page/components/landing/VoiceCallScope.tsx`**:
-    - Added an industry selector pill bar (`[ 🏥 Clinic ] [ 🎓 Education ] [ ✂️ Salon ] [ 🌿 Spa ]`).
-    - Configured realistic conversation flows for all 4 verticals: Dental new patient intake, University admissions inquiry & tour booking, Salon balayage with stylist Chloe & WhatsApp deposit, and Spa couples massage & steam suite reservation.
-  - **`frontend/landing-page/components/landing/RoiCalculator.tsx`**:
-    - Added industry switcher buttons (`Healthcare & Clinic`, `Education & EdTech`, `Salon & Personal Care`, `Spa & Wellness`).
-    - Dynamically updates staff/practitioner labels, inquiry volumes, and average ticket/booking values ($150 clinic vs $320 student acquisition vs $85 salon ticket vs $135 spa package).
-  - **`frontend/landing-page/components/landing/Nav.tsx`**:
-    - Added direct `#industries` anchor link in desktop and mobile menus.
-  - **`frontend/landing-page/components/landing/PilotModal.tsx`**:
-    - Removed "India" from location dropdown, added Germany and Netherlands alongside USA, UK, Canada, Australia, and UAE.
-    - Expanded practice/business types into clean optgroups across Healthcare, Education, Salons, and Spas.
-  - **Dedicated SEO Landing Pages**:
-    - `frontend/landing-page/app/ai-receptionist-for-salons/page.tsx`: Full SEO landing page for hair salons, barbershops, and nail/lash studios.
-    - `frontend/landing-page/app/ai-receptionist-for-education/page.tsx`: Full SEO landing page for universities, private schools, and EdTech institutes.
-    - `frontend/landing-page/app/ai-receptionist-for-wellness/page.tsx`: Full SEO landing page for day spas, massage centers, and recovery lounges.
-  - **`frontend/landing-page/app/page.tsx`**:
-    - Embedded `<VerticalMatrix />` directly below `<Hero />`.
-    - Expanded `AUDIENCES` array to include all 4 industries.
-    - Updated page metadata and schemas in `lib/schema.ts` and `lib/site.ts`.
-
+  - **`frontend/landing-page/app/api/pilot/route.ts`**:
+    - Updated env variable parsing to support all aliases (`SMTP_PASS` vs `SMTP_PASSWORD`, `SMTP_FROM_EMAIL` vs `FROM_EMAIL`, `SMTP_FROM_NAME` vs `FROM_NAME`).
+    - Added quote-stripping (`.replace(/^["']|["']$/g, "")`) so passwords wrapped in quotes like `"Hello@007"` are cleanly decoded without quote contamination.
 
 
 

@@ -65,11 +65,21 @@ export const AuthController = {
       if (response.access_token) {
         StorageService.setToken(response.access_token);
         if (response.user) {
+          // Another account used this browser before: its business, half-filled onboarding form and step are not this user's.
+          const previous = StorageService.getBusinessId();
+          if (previous !== (response.user.business_id || null)) {
+            StorageService.removeBusinessId();
+            StorageService.removeBusiness();
+            localStorage.removeItem('onboarding_business_data');
+            StorageService.setOnboardingStep('/onboarding/business');  // also resets the step cookie the middleware reads
+          }
           StorageService.setUser(response.user);
           if (response.user.business_id) {
             StorageService.setBusinessId(response.user.business_id);
-            StorageService.setOnboardingCompleted(true);
           }
+          // The server decides (the business's status after checkout), in both directions: having a business only means the
+          // first onboarding step was done, and a stale "completed" cookie from another account must not carry over.
+          StorageService.setOnboardingCompleted(Boolean(response.user.onboarding_completed));
         }
       }
       return response;
@@ -89,6 +99,10 @@ export const AuthController = {
       
       if (response.access_token) {
         StorageService.setToken(response.access_token);
+        // A new account has no business yet: one left in this browser by another account must not be edited as theirs.
+        StorageService.removeBusinessId();
+        StorageService.removeBusiness();
+        localStorage.removeItem('onboarding_business_data');
         if (response.user) {
           StorageService.setUser(response.user);
         }

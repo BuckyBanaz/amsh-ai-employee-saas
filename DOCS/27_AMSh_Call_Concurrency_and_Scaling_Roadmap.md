@@ -91,6 +91,7 @@ The physical phone number dialled by the patient is the first gatekeeper:
   * Server memory per call: ~15MB to 25MB (in-memory buffer, session tracking).
   * CPU: Low (~1-2% core per call) because audio frames (8kHz mulaw / PCM16) are streamed asynchronously via `asyncio` without heavy on-server transcoding.
 * **Single Container Capacity:** A single 2-core / 4GB RAM FastAPI container can comfortably maintain **50 to 100 concurrent live calls** simultaneously.
+  * **Not measured (audit 2026-10-26).** No load test exists in the repo; this figure is an estimate. The code runs one uvicorn process, a 15-connection database pool, one shared Cartesia connection and one locked laughter scorer for all calls. Verified limits, first likely failure points and a staged load-test plan: `32_AMSh_Pending_Work_2026-10-26.md` section E.
 
 ---
 

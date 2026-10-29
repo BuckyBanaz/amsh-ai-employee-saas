@@ -20,6 +20,8 @@ from backend.server.database.models.business import Business
 from backend.server.database.models.plan import Plan
 from backend.server.services.audit import audit, client_ip
 from backend.server.services.plans import find_by_key
+from backend.server.billing import entitlement
+from backend.server.billing.entitlement import CYCLES
 from backend.server.billing.razorpay_gateway import RazorpayGateway
 
 router = APIRouter(prefix="/api/billing", tags=["billing"])
@@ -40,6 +42,7 @@ class VerifyPaymentRequest(BaseModel):
     razorpay_signature: str
     plan_id: str
     business_id: Optional[str] = None
+    cycle: Optional[str] = None  # used only in dev mode; a live payment's cycle is read from its Razorpay order
 
 
 def price_for(db: Session, plan_key: str, cycle: str) -> Tuple[Plan, float, str]:
@@ -158,6 +161,8 @@ async def verify_razorpay_payment(payload: VerifyPaymentRequest, request: Reques
                 return {"success": True, "message": "Payment already verified.", "payment_id": payload.razorpay_payment_id, "plan_id": plan.key, "status": "active"}
 
     amount_paid = 0.0
+    cycle = payload.cycle if payload.cycle in CYCLES else "monthly"  # dev mode (no Razorpay order to read it from)
+    prorated = False
     if live:
         order = await RazorpayGateway.fetch_order(payload.razorpay_order_id)
         if not order:
@@ -170,7 +175,7 @@ async def verify_razorpay_payment(payload: VerifyPaymentRequest, request: Reques
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="The payment has not been completed.")
         cycle = str(notes.get("cycle", "monthly"))
         _, full_amount, currency = price_for(db, plan.key, cycle)
-        expected, _, _, _ = compute_charge(db, plan, full_amount, cycle, payload.business_id)  # same amount create-order asked for
+        expected, prorated, _, _ = compute_charge(db, plan, full_amount, cycle, payload.business_id)  # same amount create-order asked for
         if int(order.get("amount", -1)) != int(round(expected * 100)) or order.get("currency") != currency:
             raise mismatch
         amount_paid = expected
@@ -181,7 +186,9 @@ async def verify_razorpay_payment(payload: VerifyPaymentRequest, request: Reques
         if biz:
             previous_plan, previous_status = biz.plan, (biz.status or "").lower()
             biz.plan = plan.key
-            biz.status = "active"
+            # A full payment adds one cycle (from the current end when renewing early); an upgrade that paid only the difference
+            # keeps the period already paid for.
+            entitlement.paid_period(biz, cycle, keep_end=prorated)
             db.add(Transaction(
                 business_id=biz.id,
                 type="payment",
@@ -195,6 +202,8 @@ async def verify_razorpay_payment(payload: VerifyPaymentRequest, request: Reques
                     "payment_method": "Razorpay Online",
                     "amount": amount_paid,  # what Razorpay confirmed was paid (0 in dev mode, where nothing is charged)
                     "currency": plan.currency,
+                    "cycle": cycle,
+                    "period_end": biz.current_period_end.isoformat() if biz.current_period_end else None,
                 },
             ))
             db.commit()
@@ -285,21 +294,16 @@ def get_business_billing_status(business_id: str, db: Session = Depends(get_db),
     minutes_limit = quotas.get("voice_minutes") or fallback["minutes_limit"]
     calls_limit = quotas.get("messages") or fallback["calls_limit"]
 
-    # Compute renewal date (next month on same day or end of month)
-    from datetime import datetime, timezone, timedelta
+    # The real end of the trial or paid period (stored, see billing/entitlement.py); None when nothing ends it.
     from backend.server.billing.trial_service import TrialService
-    now = datetime.now(timezone.utc)
     trial_cfg = TrialService.get_config()
     trial_total_days = trial_cfg.get("duration_days", 14)
-
-    renewal_date = (now + timedelta(days=22)).strftime("%B %d, %Y")
+    period = entitlement.summary(biz)
+    end = entitlement.ends_at(biz)
+    renewal_date = end.strftime("%B %d, %Y") if end else None
 
     is_trial = (biz.status or "").lower() == "trial"
-    trial_days_left = trial_total_days
-    if is_trial:
-        elapsed = (now - biz.created_at).days if biz.created_at else 0
-        trial_days_left = max(0, trial_total_days - elapsed)
-        renewal_date = (biz.created_at + timedelta(days=trial_total_days)).strftime("%B %d, %Y") if biz.created_at else (now + timedelta(days=trial_total_days)).strftime("%B %d, %Y")
+    trial_days_left = period["days_left"] if is_trial and period["days_left"] is not None else trial_total_days
 
     headline = trial_cfg.get("banner_headline", "{days}-Day Free Trial is Active ({days_left} days remaining)")
     headline = headline.replace("{days}", str(trial_total_days)).replace("{days_left}", str(trial_days_left))
@@ -316,6 +320,11 @@ def get_business_billing_status(business_id: str, db: Session = Depends(get_db),
         "currency": plan_currency,
         "gateway": "Razorpay",
         "renewal_date": renewal_date,
+        "billing_cycle": biz.billing_cycle,
+        "access": period["access"],  # ok | grace (period over, calls still answered) | expired (calls refused)
+        "expires_at": period["expires_at"],
+        "grace_ends_at": period["grace_ends_at"],
+        "days_left": period["days_left"],
         "trial_config": {
             "enabled": trial_cfg.get("enabled", True),
             "is_free": trial_cfg.get("is_free", True),
@@ -419,12 +428,12 @@ def start_business_free_trial(business_id: str, request: Request, payload: Start
     plan_key = target_plan.key if target_plan else payload.plan_id.strip().lower()
     plan_name = target_plan.name if target_plan else plan_key.capitalize()
 
-    from datetime import datetime, timezone, timedelta
+    from backend.server.billing.trial_service import TrialService
     from backend.server.database.models.transaction import Transaction
-    now = datetime.now(timezone.utc)
+    days = max(1, int(TrialService.get_config().get("duration_days", 14)))
 
     biz.plan = plan_key
-    biz.status = "trial"
+    entitlement.start_trial(biz, days)  # status "trial" until trial_ends_at, then the grace period, then calls are refused
     db.add(Transaction(
         business_id=biz.id,
         type="payment",
@@ -433,8 +442,8 @@ def start_business_free_trial(business_id: str, request: Request, payload: Start
             "order_id": "trial_order_free",
             "payment_id": TRIAL_PAYMENT_ID,
             "plan": plan_key,
-            "plan_name": f"{plan_name} (14-Day Free Trial)",
-            "description": f"14-Day Free Trial: Full AI Receptionist Access ({plan_name})",
+            "plan_name": f"{plan_name} ({days}-Day Free Trial)",
+            "description": f"{days}-Day Free Trial: Full AI Receptionist Access ({plan_name})",
             "payment_method": "Free Trial (No Card Required)",
             "amount": 0.0,
         },
@@ -445,11 +454,11 @@ def start_business_free_trial(business_id: str, request: Request, payload: Start
 
     return {
         "success": True,
-        "message": f"14-Day Free Trial activated for {plan_name}! You now have full access to your AI Receptionist.",
+        "message": f"{days}-Day Free Trial activated for {plan_name}! You now have full access to your AI Receptionist.",
         "plan": biz.plan,
         "status": "trial",
-        "trial_days": 14,
-        "trial_end_date": (now + timedelta(days=14)).strftime("%B %d, %Y"),
+        "trial_days": days,
+        "trial_end_date": biz.trial_ends_at.strftime("%B %d, %Y"),
     }
 
 

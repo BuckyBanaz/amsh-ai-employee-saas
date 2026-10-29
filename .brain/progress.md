@@ -28,6 +28,19 @@ revenue, profit, margin, trial and testing burn, plans near limits, editable rat
 2026-10-04: **policy and privacy management** (row 77): admin Policies & Privacy (documents by region and vertical, versions, publish, acceptances; AI privacy rules and recording notice by region),
 consent at sign-up and at the onboarding review step (enforced before a trial or payment), public `/legal/*` pages, re-accept banner, and the AI now speaks a recording notice at the start of recorded calls.
 
+## Latest (2026-10-26, branch `version-0.5`)
+
+- **Done, offline tests only:** voice latency and interruption pass (branch `version-0.4`, commit `0b89a05`): trailing question spoken
+  as soon as the model's words end, barge-in stops the model, history keeps only what the caller heard, greeting no longer blocks caller
+  audio, recording notice never cut short, per-turn `[LATENCY]` / `[BARGE-IN]` / `[PLAYOUT]` logs, transcripts and caller details removed
+  from logs (tracker 125, `DOCS/07` section 7).
+- **Done, uncommitted:** F5 phase 1, trials and paid plans end; 3 days grace, then Twilio / Plivo / call-me calls refused; real renewal
+  date; migration `0016` (tracker 126). Multi-vertical platform committed as `fb7171a`.
+- **Reviewed, not fixed:** live Hindi call of 2026-10-26 (empty-reply fallback said 4 times, wrong number read back, no booking) and a
+  capacity audit (no load test exists) (tracker 127).
+- **Open list:** `DOCS/32_AMSh_Pending_Work_2026-10-26.md` (billing phase 2 and the INR payment bug, live-call issues, live benchmark,
+  log privacy leftovers, capacity, the 5 old failing tests). Checks: 757 offline tests with the same 5 old failures, API smoke 54/54.
+
 ## Changes since the 2026-09-28 version
 
 - **2026-09-30:** user billing page is real (current plan, usage, plans catalog, invoices, Razorpay upgrade with proration, 14-day
@@ -83,14 +96,14 @@ Pending: **real phone-call test (also the only way to confirm the latency and ba
 Deepgram in the playgrounds, outbound calls, regional languages beyond Hindi/Hinglish, live human take-over (UI
 exists, backend not confirmed), agent versions, RAG (Qdrant is down), cost metrics, retiring the old engine, listening tests.
 Open question: whether to switch `GROQ_MODEL` to `llama-3.3-70b-versatile` (removes reasoning delay; tool calling must be re-checked first).
-Known small issue: after a barge-in the full reply, including unspoken sentences, is still saved to history.
+Barge-in history fixed 2026-10-25 (only heard sentences are kept); the stored call log can still hold the full reply after a playback interruption.
 
 ## Server (~88%, Claude, except analytics / notifications / billing by Antigravity)
 Done: auth and hardening, businesses / onboarding CRUD, calls + recordings + analysis, Alembic migrations (0001 to 0011), audit log, admin auth / tenants / tenant data / plans / overview,
 secure Razorpay order and verify, billing status with real usage, invoices, change-plan, start-trial, trial config, admin integrations API, tenant integrations API, admin health / settings,
 Twilio and Exotel signature checks, stream tokens, rate limits, production startup guard, message templates and messenger, quotas and suspended-clinic block, support tickets and announcements,
 admin users / audit / security / verticals / SEO APIs, **admin alerts feed (per-admin unread, muting), spend and profit report with rate card, LLM token metering, playground sandbox**.
-Pending: alerts by email or push, an alert when a trial expires, exact LLM token counts for streamed replies, tracking of post-call analysis / previews / WhatsApp fees / number rental in spend,
+Pending: alerts by email or push, an email when a trial or plan expires (expiry itself is enforced since 2026-10-26), Razorpay auto-recurring, exact LLM token counts for streamed replies, tracking of post-call analysis / previews / WhatsApp fees / number rental in spend,
 retention enforcement and lawyer-reviewed policy text, overage billing, a cross-clinic customers API, delivery webhooks for messages, portal-saved provider keys used by live calls (checks only today), Postgres run of the new migrations.
 
 ## Security - full list in `DOCS/23`

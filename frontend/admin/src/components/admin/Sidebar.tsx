@@ -118,11 +118,11 @@ export function Sidebar() {
       {/* Brand Header */}
       <div className="p-3 border-b border-[#F1F5F9] space-y-2">
         <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 bg-[#2563EB] rounded-lg flex items-center justify-center shadow-xs shrink-0">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-            </svg>
-          </div>
+          <img
+            src="/landing/amsh_logo.png"
+            alt="AMSh Logo"
+            className="w-7 h-7 object-contain shrink-0"
+          />
           <span className="text-base font-bold tracking-tight text-[#0F172A]">Amsh</span>
         </div>
 

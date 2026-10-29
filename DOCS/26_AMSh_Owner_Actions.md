@@ -36,6 +36,8 @@ Status as of 2026-10-03.
 | 15 | Listen to the voices: laughter, fillers, Indian accent | Quality is by ear |
 | 15a | In **both** playgrounds (the clinic's and the admin's `/playground`), book, move and cancel an appointment by talking to the AI with a real model key; then check the clinic's calendar is unchanged and the list "What the AI would have done" shows each step | The sandbox is tested with scripted replies; no live model has driven it yet |
 | 16 | Send a real WhatsApp message from a real number | The Meta test number works; a clinic number has not been tried |
+| 16a | **Voice benchmark: 5 to 10 test calls** (2026-10-26). Plan and pass criteria: `07_...` section 7.2. Save `docker compose logs api` before recreating the container | The latency and interruption changes of 2026-10-25 are not measured; the logs of the 2026-10-26 test call were lost on a container recreate |
+| 16b | **Before restarting the API on `version-0.5`:** migration `0016` gives every trial and paid clinic an end date (Demo clinic -> no end, Mayo Clinic -> a month). Read `32_...` section A first | After the end plus 3 days, a clinic's calls are refused |
 
 ## D. Decisions
 
@@ -44,6 +46,10 @@ Status as of 2026-10-03.
 | 17 | Patient messages: from a shared AMSh number or the clinic's own? (DOCS/24 question 1) | Whatever channel is connected |
 | 18 | May a clinic edit consent and privacy wording? (question 2) | Yes, everything clinic-owned is editable |
 | 19 | How long is message text kept? (question 3) | Kept; no deletion job yet |
+| 19a | Razorpay auto-recurring (chosen 2026-10-26): enable Subscriptions on the Razorpay account, say whether it accepts USD, create a webhook secret and a public webhook URL, and approve creating plans in the account | Phase 1 (end dates and grace) works with one-off payments |
+| 19b | Expiry decisions made in phase 1: paying during a trial ends the trial at once; staff-activated clinics never expire; WhatsApp is not cut off; `pending` clinics still answer calls | As listed |
+| 19c | Capacity: host vCPU / RAM / region, replicas, Postgres `max_connections`, and provider plan limits (Twilio, Deepgram, Cartesia, Groq, Gemini) | No capacity number can be given without them (`32_...` section E) |
+| 19d | `backup_before_0015.sql` in the repo root is a database dump (likely patient data): keep it out of git, move it somewhere safe | Untracked today |
 | 20 | Which regions need registered SMS templates first? (question 4) | India (DLT id field exists) |
 | 21 | Charge for messages beyond the plan, or stop at the limit? (question 5) | Reported only, never cut off |
 | 22 | **Stop answering calls when a clinic's plan minutes run out?** Set `ENFORCE_VOICE_QUOTA=true` to enable | Off: minutes are shown, calls are never cut |

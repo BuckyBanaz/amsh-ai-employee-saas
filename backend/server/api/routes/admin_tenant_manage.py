@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 
 from backend.server.api.routes.businesses import BUSINESS_TYPES, LEGACY_VERTICALS, _normalize_subtype, allowed_verticals
 from backend.server.auth.security import hash_password, require_platform_admin
+from backend.server.billing import entitlement
 from backend.server.database.models.audit_log import AuditLog
 from backend.server.database.models.business import Business
 from backend.server.database.models.call import Call
@@ -81,6 +82,8 @@ def create_tenant(payload: TenantCreate, request: Request, db: Session = Depends
     fields["business_subtype"] = _normalize_subtype(fields["vertical"], fields.get("business_subtype") or legacy_subtype)
     fields["business_type"] = BUSINESS_TYPES.get(fields["vertical"], "healthcare")
     business = Business(**fields)
+    if business.status == "active":  # created live by staff, with no paid period on record: no end date until staff change it
+        business.billing_cycle = entitlement.MANUAL
     if payload.business_type:
         business.business_type = payload.business_type
     if payload.working_hours is not None:

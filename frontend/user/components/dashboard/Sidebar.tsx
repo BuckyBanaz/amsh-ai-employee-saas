@@ -187,11 +187,11 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
       <div className="p-3.5 pb-2">
         <div className="flex items-center justify-between mb-3.5">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 bg-[#0066FF] rounded-md flex items-center justify-center">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
-                <path d="M12 4v16m-4-10v4m8-8v12" />
-              </svg>
-            </div>
+            <img
+              src="/landing/amsh_logo.png"
+              alt="AMSh Logo"
+              className="w-7 h-7 object-contain shrink-0"
+            />
             <span className="text-base font-bold tracking-tight text-gray-900">{STRINGS.APP.NAME}</span>
           </div>
 

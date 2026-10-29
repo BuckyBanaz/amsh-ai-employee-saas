@@ -14,11 +14,11 @@ type Invite = { name: string; email: string; role: string; business_name: string
 function Logo() {
   return (
     <div className="flex justify-center mb-3">
-      <div className="w-10 h-10 bg-[#0066FF] rounded-xl flex items-center justify-center shadow-md">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
-          <path d="M12 4v16m-4-10v4m8-8v12" />
-        </svg>
-      </div>
+      <img
+        src="/landing/amsh_logo.png"
+        alt="AMSh Logo"
+        className="w-11 h-11 object-contain drop-shadow-sm"
+      />
     </div>
   );
 }

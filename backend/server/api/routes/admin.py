@@ -18,6 +18,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from backend.server.api.routes.auth import LoginRequest, TOO_MANY_ATTEMPTS, TokenOut, UserOut, login_locked
+from backend.server.billing import entitlement
 from backend.server.auth.security import MIN_PASSWORD_LENGTH, create_access_token, hash_password, require_platform_admin, verify_password
 from backend.server.database.models.agent import Agent
 from backend.server.database.models.business import Business
@@ -334,6 +335,10 @@ def update_tenant(
         plan = chosen.key
     before = {"status": b.status, "plan": b.plan}
     if payload.status is not None:
+        if payload.status == "active" and b.current_period_end is None and b.billing_cycle is None:
+            # Staff turned on a clinic with no paid period on record: it runs until staff change it, marked as such (not a NULL
+            # that silently means "forever"). A paid clinic (suspended, then reactivated) keeps its own period.
+            b.billing_cycle = entitlement.MANUAL
         b.status = payload.status
     if plan is not None:
         b.plan = plan
