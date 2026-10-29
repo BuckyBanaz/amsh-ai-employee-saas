@@ -12,97 +12,292 @@ interface Turn {
   endMs: number;
 }
 
-const TURNS: Turn[] = [
-  {
-    id: "t1",
-    speaker: "agent",
-    speakerName: "AMSh (AI Receptionist)",
-    text: "Hello. Thanks for calling Smiles Orthodontics. How can I help you?",
-    actionNote: "Inbound call answered on 1st ring · Sub-150ms latency",
-    startMs: 0,
-    endMs: 4500,
-  },
-  {
-    id: "t2",
-    speaker: "caller",
-    speakerName: "Jennifer Robinson (Caller)",
-    text: "Hi, I need to know if you're accepting new patients?",
-    actionNote: "Intent classified: New Patient Intake",
-    startMs: 4500,
-    endMs: 8200,
-  },
-  {
-    id: "t3",
-    speaker: "agent",
-    speakerName: "AMSh (AI Receptionist)",
-    text: "Yes, we are currently accepting new patients. I can help you schedule your first appointment or answer any insurance questions.",
-    actionNote: "Verified clinic intake policy via Knowledge Base (RAG)",
-    startMs: 8200,
-    endMs: 16500,
-  },
-  {
-    id: "t4",
-    speaker: "caller",
-    speakerName: "Jennifer Robinson (Caller)",
-    text: "Great, do you take Delta Dental?",
-    actionNote: "Payer lookup: Delta Dental PPO / Premier",
-    startMs: 16500,
-    endMs: 19800,
-  },
-  {
-    id: "t5",
-    speaker: "agent",
-    speakerName: "AMSh (AI Receptionist)",
-    text: "Yes, we accept Delta Dental and most major insurance providers. You can fill out and submit our patient intake form on our website at www.smilesortho.com.",
-    actionNote: "In-network payer verified · Patient intake form link ready",
-    startMs: 19800,
-    endMs: 30500,
-  },
-  {
-    id: "t6",
-    speaker: "caller",
-    speakerName: "Jennifer Robinson (Caller)",
-    text: "Awesome, can I go ahead and schedule an appointment?",
-    actionNote: "Booking schedule workflow triggered",
-    startMs: 30500,
-    endMs: 34200,
-  },
-  {
-    id: "t7",
-    speaker: "agent",
-    speakerName: "AMSh (AI Receptionist)",
-    text: "Yes, let me get some information from you first. Can I get your name, phone number, and date of birth?",
-    actionNote: "Collecting mandatory EHR patient intake fields",
-    startMs: 34200,
-    endMs: 42000,
-  },
-  {
-    id: "t8",
-    speaker: "caller",
-    speakerName: "Jennifer Robinson (Caller)",
-    text: "Yep, it's Jennifer Robinson, 123-456-7890, September 8th, 1987.",
-    actionNote: "Captured: Jennifer Robinson · DOB 09/08/1987 · +1 123-456-7890",
-    startMs: 42000,
-    endMs: 49500,
-  },
-  {
-    id: "t9",
-    speaker: "agent",
-    speakerName: "AMSh (AI Receptionist)",
-    text: "Thank you. Let's go ahead and get you scheduled.",
-    actionNote: "Calendar slot locked · Confirmation SMS dispatched",
-    startMs: 49500,
-    endMs: 53580,
-  },
-];
+export type ScopeVertical = "clinic" | "education" | "salon" | "wellness";
 
-const TOTAL_DURATION_MS = 53580;
-const AUDIO_SRC = "/demo_audio/air-healthcare.mp3";
+interface Scenario {
+  id: ScopeVertical;
+  businessName: string;
+  callerName: string;
+  badge: string;
+  turns: Turn[];
+  totalDurationMs: number;
+  audioSrc?: string;
+  audioLabel: string;
+}
+
+const SCENARIOS: Record<ScopeVertical, Scenario> = {
+  clinic: {
+    id: "clinic",
+    businessName: "Smiles Orthodontics",
+    callerName: "Jennifer Robinson",
+    badge: "Healthcare",
+    audioSrc: "/demo_audio/air-healthcare.mp3",
+    audioLabel: "Listen to Live Clinic Call (53s)",
+    totalDurationMs: 53580,
+    turns: [
+      {
+        id: "t1",
+        speaker: "agent",
+        speakerName: "AMSh (AI Receptionist)",
+        text: "Hello. Thanks for calling Smiles Orthodontics. How can I help you?",
+        actionNote: "Inbound call answered on 1st ring · Sub-150ms latency",
+        startMs: 0,
+        endMs: 4500,
+      },
+      {
+        id: "t2",
+        speaker: "caller",
+        speakerName: "Jennifer Robinson (Caller)",
+        text: "Hi, I need to know if you're accepting new patients?",
+        actionNote: "Intent classified: New Patient Intake",
+        startMs: 4500,
+        endMs: 8200,
+      },
+      {
+        id: "t3",
+        speaker: "agent",
+        speakerName: "AMSh (AI Receptionist)",
+        text: "Yes, we are currently accepting new patients. I can help you schedule your first appointment or answer any insurance questions.",
+        actionNote: "Verified clinic intake policy via Knowledge Base (RAG)",
+        startMs: 8200,
+        endMs: 16500,
+      },
+      {
+        id: "t4",
+        speaker: "caller",
+        speakerName: "Jennifer Robinson (Caller)",
+        text: "Great, do you take Delta Dental?",
+        actionNote: "Payer lookup: Delta Dental PPO / Premier",
+        startMs: 16500,
+        endMs: 19800,
+      },
+      {
+        id: "t5",
+        speaker: "agent",
+        speakerName: "AMSh (AI Receptionist)",
+        text: "Yes, we accept Delta Dental and most major insurance providers. You can fill out and submit our patient intake form on our website at www.smilesortho.com.",
+        actionNote: "In-network payer verified · Patient intake form link ready",
+        startMs: 19800,
+        endMs: 30500,
+      },
+      {
+        id: "t6",
+        speaker: "caller",
+        speakerName: "Jennifer Robinson (Caller)",
+        text: "Awesome, can I go ahead and schedule an appointment?",
+        actionNote: "Booking schedule workflow triggered",
+        startMs: 30500,
+        endMs: 34200,
+      },
+      {
+        id: "t7",
+        speaker: "agent",
+        speakerName: "AMSh (AI Receptionist)",
+        text: "Yes, let me get some information from you first. Can I get your name, phone number, and date of birth?",
+        actionNote: "Collecting mandatory EHR patient intake fields",
+        startMs: 34200,
+        endMs: 42000,
+      },
+      {
+        id: "t8",
+        speaker: "caller",
+        speakerName: "Jennifer Robinson (Caller)",
+        text: "Yep, it's Jennifer Robinson, 123-456-7890, September 8th, 1987.",
+        actionNote: "Captured: Jennifer Robinson · DOB 09/08/1987 · +1 123-456-7890",
+        startMs: 42000,
+        endMs: 49500,
+      },
+      {
+        id: "t9",
+        speaker: "agent",
+        speakerName: "AMSh (AI Receptionist)",
+        text: "Thank you. Let's go ahead and get you scheduled.",
+        actionNote: "Calendar slot locked · Confirmation SMS dispatched",
+        startMs: 49500,
+        endMs: 53580,
+      },
+    ],
+  },
+  education: {
+    id: "education",
+    businessName: "Westfield University",
+    callerName: "David Kim",
+    badge: "Admissions",
+    audioSrc: "/demo_audio/english.mp3",
+    audioLabel: "Listen to Admissions Call (28s)",
+    totalDurationMs: 28000,
+    turns: [
+      {
+        id: "e1",
+        speaker: "agent",
+        speakerName: "AMSh Admissions AI",
+        text: "Thank you for calling Westfield University Admissions. How may I assist you today?",
+        actionNote: "Admissions line answered · Student inquiry intent",
+        startMs: 0,
+        endMs: 4500,
+      },
+      {
+        id: "e2",
+        speaker: "caller",
+        speakerName: "David Kim (Applicant)",
+        text: "Hi, what is the deadline for the Fall 2026 MBA program and can I schedule a campus visit?",
+        actionNote: "Intent: Application deadline + Campus visit booking",
+        startMs: 4500,
+        endMs: 11000,
+      },
+      {
+        id: "e3",
+        speaker: "agent",
+        speakerName: "AMSh Admissions AI",
+        text: "The Fall 2026 MBA priority deadline is November 15th. We have campus tours running this Saturday at 11 AM. Shall I register you and your family?",
+        actionNote: "Knowledge base matched: MBA deadlines · Tour calendar checked",
+        startMs: 11000,
+        endMs: 20000,
+      },
+      {
+        id: "e4",
+        speaker: "caller",
+        speakerName: "David Kim (Applicant)",
+        text: "Yes, please reserve 2 spots for Saturday morning.",
+        actionNote: "Party size: 2 · Saturday 11:00 AM slot locked",
+        startMs: 20000,
+        endMs: 23500,
+      },
+      {
+        id: "e5",
+        speaker: "agent",
+        speakerName: "AMSh Admissions AI",
+        text: "You are all set for Saturday at 11 AM! I've sent the parking pass and tour guide details to your email.",
+        actionNote: "CRM updated · Parking permit dispatched",
+        startMs: 23500,
+        endMs: 28000,
+      },
+    ],
+  },
+  salon: {
+    id: "salon",
+    businessName: "Maison Hair Studio",
+    callerName: "Sarah Jenkins",
+    badge: "Salon & Hair",
+    audioSrc: "/demo_audio/english-gb.mp3",
+    audioLabel: "Listen to Salon Booking Call (24s)",
+    totalDurationMs: 24000,
+    turns: [
+      {
+        id: "s1",
+        speaker: "agent",
+        speakerName: "AMSh Salon AI",
+        text: "Hello, thanks for calling Maison Hair Studio. How can I help you today?",
+        actionNote: "Front desk live · Stylist booking mode",
+        startMs: 0,
+        endMs: 4000,
+      },
+      {
+        id: "s2",
+        speaker: "caller",
+        speakerName: "Sarah Jenkins (Client)",
+        text: "Hi! Can I book a full balayage and haircut with Chloe this Saturday afternoon?",
+        actionNote: "Service: Balayage + Haircut · Preferred Stylist: Chloe",
+        startMs: 4000,
+        endMs: 10000,
+      },
+      {
+        id: "s3",
+        speaker: "agent",
+        speakerName: "AMSh Salon AI",
+        text: "Chloe has an opening at 1:30 PM this Saturday. That appointment is 2.5 hours. Would you like me to reserve Chloe's chair for you?",
+        actionNote: "Stylist rota checked · 150 min block available at 1:30 PM",
+        startMs: 10000,
+        endMs: 17500,
+      },
+      {
+        id: "s4",
+        speaker: "caller",
+        speakerName: "Sarah Jenkins (Client)",
+        text: "Yes, 1:30 PM works great!",
+        actionNote: "Client confirmed 1:30 PM slot",
+        startMs: 17500,
+        endMs: 20000,
+      },
+      {
+        id: "s5",
+        speaker: "agent",
+        speakerName: "AMSh Salon AI",
+        text: "Perfect! You're booked with Chloe for Saturday at 1:30 PM. I just sent the booking confirmation and deposit link to your WhatsApp.",
+        actionNote: "Salon CRM booked · WhatsApp payment deposit link sent",
+        startMs: 20000,
+        endMs: 24000,
+      },
+    ],
+  },
+  wellness: {
+    id: "wellness",
+    businessName: "Lotus Spa & Wellness",
+    callerName: "Michael Chang",
+    badge: "Spa & Massage",
+    audioSrc: "/demo_audio/english.mp3",
+    audioLabel: "Listen to Spa Reservation Call (26s)",
+    totalDurationMs: 26000,
+    turns: [
+      {
+        id: "w1",
+        speaker: "agent",
+        speakerName: "AMSh Spa AI",
+        text: "Warm greetings from Lotus Spa & Wellness. How may I assist your relaxation today?",
+        actionNote: "Whisper-quiet line answered · Spa concierge active",
+        startMs: 0,
+        endMs: 4500,
+      },
+      {
+        id: "w2",
+        speaker: "caller",
+        speakerName: "Michael Chang (Guest)",
+        text: "Hello, do you have room for a 90-minute couples deep tissue massage this Sunday?",
+        actionNote: "Service: Couples Deep Tissue (90 min) · Target: Sunday",
+        startMs: 4500,
+        endMs: 11000,
+      },
+      {
+        id: "w3",
+        speaker: "agent",
+        speakerName: "AMSh Spa AI",
+        text: "We have our Orchid Couples Suite open Sunday at 3:00 PM with eucalyptus steam access included. Would 3:00 PM work for you?",
+        actionNote: "Suite availability confirmed · 2 Therapists allocated",
+        startMs: 11000,
+        endMs: 19000,
+      },
+      {
+        id: "w4",
+        speaker: "caller",
+        speakerName: "Michael Chang (Guest)",
+        text: "3:00 PM is ideal. Please book that for us.",
+        actionNote: "Guest confirmed Sunday 3:00 PM",
+        startMs: 19000,
+        endMs: 22000,
+      },
+      {
+        id: "w5",
+        speaker: "agent",
+        speakerName: "AMSh Spa AI",
+        text: "You are confirmed for Sunday at 3:00 PM in the Orchid Suite. I've sent the booking summary and health intake form to your phone.",
+        actionNote: "Spa suite locked · Digital intake & calendar sync complete",
+        startMs: 22000,
+        endMs: 26000,
+      },
+    ],
+  },
+};
 
 export default function VoiceCallScope() {
+  const [activeVertical, setActiveVertical] = useState<ScopeVertical>("clinic");
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTimeMs, setCurrentTimeMs] = useState(0);
   const [viewMode, setViewMode] = useState<"live" | "transcript">("live");
+
+  const scenario = SCENARIOS[activeVertical];
+  const TURNS = scenario.turns;
+  const TOTAL_DURATION_MS = scenario.totalDurationMs;
+  const AUDIO_SRC = scenario.audioSrc || "/demo_audio/air-healthcare.mp3";
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -130,6 +325,16 @@ export default function VoiceCallScope() {
     }
     setIsPlaying(false);
   }, []);
+
+  const switchVertical = (v: ScopeVertical) => {
+    stopAudio();
+    if (audioRef.current) {
+      audioRef.current.src = "";
+      audioRef.current = null;
+    }
+    setActiveVertical(v);
+    setCurrentTimeMs(0);
+  };
 
   useEffect(() => {
     return () => {
@@ -200,11 +405,39 @@ export default function VoiceCallScope() {
     <div className="relative w-full max-w-[500px] mx-auto rounded-3xl border border-slate-200/90 bg-white p-4.5 sm:p-5 shadow-[0_20px_50px_-20px_rgba(15,23,42,0.12)]">
       
       {/* ========================================================= */}
+      {/* 0. INDUSTRY PILL SWITCHER TABS */}
+      {/* ========================================================= */}
+      <div className="grid grid-cols-4 gap-1 p-1 bg-slate-100 rounded-2xl mb-3.5 border border-slate-200/80 font-mono-ui text-[10.5px]">
+        {(
+          [
+            { id: "clinic", label: "Clinic", icon: "🏥" },
+            { id: "education", label: "Education", icon: "🎓" },
+            { id: "salon", label: "Salon", icon: "✂️" },
+            { id: "wellness", label: "Spa", icon: "🌿" },
+          ] as const
+        ).map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => switchVertical(item.id)}
+            className={`flex items-center justify-center gap-1 py-1.5 px-1 rounded-xl font-bold transition-all cursor-pointer ${
+              activeVertical === item.id
+                ? "bg-white text-slate-950 shadow-xs scale-[1.02]"
+                : "text-slate-500 hover:text-slate-900"
+            }`}
+          >
+            <span>{item.icon}</span>
+            <span className="truncate">{item.label}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* ========================================================= */}
       {/* 1. CALL HEADER: ZERO-OVERFLOW RESPONSIVE ARCHITECTURE */}
       {/* ========================================================= */}
       <div className="pb-3.5 border-b border-slate-100">
         <div className="flex items-start justify-between gap-2.5">
-          {/* Clinic Brand & Caller Meta */}
+          {/* Brand & Caller Meta */}
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100 shrink-0 shadow-2xs">
               <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
@@ -219,11 +452,11 @@ export default function VoiceCallScope() {
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
                 <h4 className="text-[15px] sm:text-base font-bold text-slate-950 font-sora tracking-tight leading-none truncate">
-                  Smiles Orthodontics
+                  {scenario.businessName}
                 </h4>
               </div>
               <p className="text-xs text-slate-500 mt-1 font-mono-ui truncate">
-                Caller: <span className="text-slate-800 font-semibold">Jennifer Robinson</span>
+                Caller: <span className="text-slate-800 font-semibold">{scenario.callerName}</span>
               </p>
             </div>
           </div>
@@ -231,7 +464,7 @@ export default function VoiceCallScope() {
           {/* Clean Live Badge */}
           <div className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold uppercase tracking-wider font-mono-ui whitespace-nowrap">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            <span>Live Call</span>
+            <span>{scenario.badge} Call</span>
           </div>
         </div>
       </div>
@@ -404,7 +637,7 @@ export default function VoiceCallScope() {
                 <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
                   <path d="M8 5v14l11-7z" />
                 </svg>
-                <span>Listen to Call Audio (53s)</span>
+                <span>{scenario.audioLabel}</span>
               </>
             )}
           </button>

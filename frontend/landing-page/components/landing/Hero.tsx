@@ -79,18 +79,50 @@ export default function Hero() {
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600" />
               </span>
-              <span className="font-semibold text-blue-700 shrink-0">14-Day Clinic Pilot</span>
+              <span className="font-semibold text-blue-700 shrink-0">14-Day Business Pilot</span>
               <span className="text-blue-300 select-none">&bull;</span>
               <span className="text-slate-600 truncate sm:overflow-visible text-[11.5px] sm:text-xs">
-                Guided Onboarding for Practices
+                Clinics &bull; Education &bull; Salons &bull; Spas
               </span>
             </div>
 
+            {/* Industry Capsule Strip */}
+            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+              <a
+                href="#industries"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 text-[11px] font-mono-ui font-medium text-slate-700 hover:text-blue-700 transition-colors"
+              >
+                <span>🏥</span>
+                <span>Clinics</span>
+              </a>
+              <a
+                href="#industries"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 hover:bg-violet-50 border border-slate-200 hover:border-violet-300 text-[11px] font-mono-ui font-medium text-slate-700 hover:text-violet-700 transition-colors"
+              >
+                <span>🎓</span>
+                <span>Education</span>
+              </a>
+              <a
+                href="#industries"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 hover:bg-amber-50 border border-slate-200 hover:border-amber-300 text-[11px] font-mono-ui font-medium text-slate-700 hover:text-amber-700 transition-colors"
+              >
+                <span>✂️</span>
+                <span>Salons</span>
+              </a>
+              <a
+                href="#industries"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 hover:bg-emerald-50 border border-slate-200 hover:border-emerald-300 text-[11px] font-mono-ui font-medium text-slate-700 hover:text-emerald-700 transition-colors"
+              >
+                <span>🌿</span>
+                <span>Spas &amp; Wellness</span>
+              </a>
+            </div>
+
             {/* Sora Main Headline with Curved Underline Accent */}
-            <h1 className="font-sora text-4xl sm:text-5xl md:text-6xl font-bold leading-[1.16] tracking-tight text-slate-950">
-              Be One of the First Clinics to Hire an{" "}
+            <h1 className="font-sora text-4xl sm:text-5xl md:text-6xl font-bold leading-[1.14] tracking-tight text-slate-950">
+              Autonomous 24/7 Front-Desk AI for{" "}
               <span className="relative inline-block text-blue-600">
-                AI Employee.
+                Service Businesses.
                 {/* Signature decorative underline */}
                 <svg
                   className="absolute -bottom-2 left-0 w-full h-3.5 text-blue-400/80"
@@ -110,7 +142,7 @@ export default function Hero() {
 
             {/* Subtitle */}
             <p className="max-w-xl text-[16px] leading-relaxed text-slate-600 sm:text-[17px]">
-              Join the AMSh Pilot Program to test an AI front-desk employee that answers calls, assists with appointment booking, and helps reduce missed enquiries for your practice.
+              Meet AMSh — the autonomous AI employee that answers phone calls on the 1st ring, books appointments directly into your calendar, handles client enquiries, and eliminates missed calls 24/7.
             </p>
 
             {/* Guided Pilot Highlights */}
@@ -121,11 +153,11 @@ export default function Hero() {
               </div>
               <div className="flex items-center gap-2 bg-slate-50 border border-slate-200/80 rounded-lg p-2.5">
                 <span className="text-blue-600 font-bold text-sm">✓</span>
-                <span>Direct team feedback channel</span>
+                <span>Instant calendar &amp; CRM sync</span>
               </div>
               <div className="flex items-center gap-2 bg-slate-50 border border-slate-200/80 rounded-lg p-2.5">
                 <span className="text-blue-600 font-bold text-sm">✓</span>
-                <span>Agreed pilot terms</span>
+                <span>Sub-180ms voice latency</span>
               </div>
             </div>
 
@@ -155,15 +187,10 @@ export default function Hero() {
               </button>
 
               <a
-                href="https://wa.me/918901414107?text=Hi%20TechyCodex%20%2F%20AMSh%20Team%2C%20I%20am%20interested%20in%20the%2014-Day%20AI%20Receptionist%20Pilot%20for%20my%20clinic.%20Please%20share%20details."
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 hover:border-emerald-300 px-5 py-3.5 text-[13px] font-mono-ui font-medium text-slate-700 hover:text-emerald-700 transition-colors shadow-2xs group"
+                href="#industries"
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 px-5 py-3.5 text-[13px] font-mono-ui font-medium text-slate-700 hover:text-blue-600 transition-colors shadow-2xs"
               >
-                <svg viewBox="0 0 24 24" className="h-4 w-4 fill-[#25D366] shrink-0" aria-hidden="true">
-                  <path d="M19.05 4.91A9.816 9.816 0 0 0 12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01zm-7.01 15.24c-1.48 0-2.93-.4-4.2-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.264 8.264 0 0 1-1.26-4.38c0-4.54 3.7-8.24 8.25-8.24 2.2 0 4.27.86 5.82 2.42a8.183 8.183 0 0 1 2.41 5.83c.02 4.54-3.68 8.23-8.23 8.23zm4.52-6.16c-.25-.12-1.47-.72-1.69-.81-.23-.08-.39-.12-.56.12-.17.25-.64.81-.78.98-.15.17-.29.19-.54.07-.25-.12-1.05-.39-2-1.23-.74-.66-1.23-1.47-1.38-1.72-.15-.25-.02-.38.11-.51.11-.11.25-.29.37-.43.12-.15.17-.25.25-.41.08-.17.04-.31-.02-.43s-.56-1.34-.76-1.84c-.2-.48-.41-.42-.56-.43h-.48c-.17 0-.44.06-.66.3-.23.25-.86.84-.86 2.06s.88 2.39 1 2.56c.12.17 1.73 2.64 4.19 3.7.59.25 1.05.4 1.41.51.59.19 1.13.16 1.56.1.48-.07 1.47-.6 1.67-1.18.21-.58.21-1.07.15-1.18-.07-.1-.23-.17-.48-.29z" />
-                </svg>
-                <span>Chat on WhatsApp</span>
+                <span>See All Verticals ↓</span>
               </a>
             </div>
 

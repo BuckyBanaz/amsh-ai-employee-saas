@@ -6,9 +6,9 @@ import type { Metadata } from "next";
 export const SITE = {
   name: "AMSh",
   url: "https://getamsh.com",
-  tagline: "AI Receptionist for Clinics & Dentists",
+  tagline: "Autonomous 24/7 AI Employee for Clinics, Salons, Education & Spas",
   description:
-    "AMSh is an AI virtual front-desk employee for clinics and dental practices. It answers patient calls and WhatsApp messages 24/7, books and reschedules appointments, answers clinic FAQs and hands urgent calls to your staff.",
+    "AMSh is an autonomous AI front-desk employee platform for healthcare clinics, hair salons, educational institutions, and luxury spas. Answers calls & WhatsApp 24/7, books appointments, captures student leads, and eliminates missed revenue.",
   logo: "/landing/amsh_logo.png",
   locale: "en_US",
   email: "info@techycodex.com",
@@ -26,9 +26,12 @@ export interface SiteRoute {
 }
 
 export const ROUTES: SiteRoute[] = [
-  { path: "/", name: "Home", summary: "Overview of AMSh, the AI receptionist and virtual front-desk employee for clinics and dentists.", priority: 1.0, changeFrequency: "weekly" },
+  { path: "/", name: "Home", summary: "Overview of AMSh, the autonomous 24/7 AI employee platform for clinics, salons, education, and spas.", priority: 1.0, changeFrequency: "weekly" },
   { path: "/ai-receptionist-for-clinics", name: "AI Receptionist for Clinics", summary: "AI front-desk employee for medical clinics: answers patient calls, books doctor appointments, handles follow-ups.", priority: 0.9, changeFrequency: "weekly" },
   { path: "/ai-receptionist-for-dentists", name: "AI Receptionist for Dentists", summary: "AI dental receptionist: answers every patient call, triages dental emergencies and books chair appointments.", priority: 0.9, changeFrequency: "weekly" },
+  { path: "/ai-receptionist-for-salons", name: "AI Receptionist for Salons", summary: "24/7 AI front-desk receptionist for hair salons, barbershops and beauty studios: books stylist slots and collects deposit links via WhatsApp.", priority: 0.9, changeFrequency: "weekly" },
+  { path: "/ai-receptionist-for-education", name: "AI Receptionist for Education", summary: "AI admissions assistant and front-desk employee for universities, schools, and coaching academies: captures student leads and schedules campus visits.", priority: 0.9, changeFrequency: "weekly" },
+  { path: "/ai-receptionist-for-wellness", name: "AI Receptionist for Spas & Wellness", summary: "24/7 AI concierge for day spas, wellness centres, and recovery lounges: coordinates treatment rooms, therapists and packages.", priority: 0.9, changeFrequency: "weekly" },
   { path: "/ai-appointment-booking", name: "AI Appointment Booking", summary: "AI scheduling assistant that books, confirms and reschedules patient appointments on phone and WhatsApp.", priority: 0.9, changeFrequency: "weekly" },
   { path: "/ai-phone-answering-service", name: "AI Phone Answering Service", summary: "24/7 AI phone answering for healthcare practices that answers on the first ring and books appointments.", priority: 0.8, changeFrequency: "weekly" },
   { path: "/ai-answering-service-medical", name: "AI Answering Service for Medical Offices", summary: "AI medical answering service that replaces call centers with 24/7 patient intake and scheduling.", priority: 0.8, changeFrequency: "weekly" },

@@ -249,7 +249,7 @@ export default function PilotModal() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block font-medium text-slate-700 mb-1">
-                    Clinic Location <span className="text-blue-600 font-bold">&bull;</span>
+                    Business Location <span className="text-blue-600 font-bold">&bull;</span>
                   </label>
                   <div className="relative">
                     <select
@@ -257,9 +257,10 @@ export default function PilotModal() {
                       onChange={(e) => setFormData({ ...formData, location: e.target.value })}
                       className="w-full appearance-none rounded-lg border border-slate-200 bg-slate-50/60 hover:bg-white hover:border-slate-300 focus:bg-white px-3 py-2 text-slate-900 focus:border-blue-600 focus:ring-2 focus:ring-blue-500/15 outline-none transition-all text-xs sm:text-sm cursor-pointer"
                     >
-                      <option value="United Kingdom">United Kingdom</option>
                       <option value="United States">United States</option>
-                      <option value="India">India</option>
+                      <option value="United Kingdom">United Kingdom</option>
+                      <option value="Germany">Germany</option>
+                      <option value="Netherlands">Netherlands</option>
                       <option value="Canada">Canada</option>
                       <option value="Australia">Australia</option>
                       <option value="UAE / Middle East">UAE / Middle East</option>
@@ -275,7 +276,7 @@ export default function PilotModal() {
 
                 <div>
                   <label className="block font-medium text-slate-700 mb-1">
-                    Practice Type <span className="text-blue-600 font-bold">&bull;</span>
+                    Business / Practice Type <span className="text-blue-600 font-bold">&bull;</span>
                   </label>
                   <div className="relative">
                     <select
@@ -283,21 +284,32 @@ export default function PilotModal() {
                       onChange={(e) => setFormData({ ...formData, practiceType: e.target.value })}
                       className="w-full appearance-none rounded-lg border border-slate-200 bg-slate-50/60 hover:bg-white hover:border-slate-300 focus:bg-white px-3 py-2 text-slate-900 focus:border-blue-600 focus:ring-2 focus:ring-blue-500/15 outline-none transition-all text-xs sm:text-sm cursor-pointer"
                     >
-                      <option value="Dental clinic">Dental clinic</option>
-                      <option value="General medical clinic">General medical clinic</option>
-                      <option value="Aesthetic / Med spa">Aesthetic / Med spa</option>
-                      <option value="Physiotherapy / Rehab">Physiotherapy / Rehab</option>
-                      <option value="Multi-specialty hospital">Multi-specialty hospital</option>
-                      {/* Beta verticals: workflows tested, not yet proven on live calls, so offered as pilots only */}
-                      <optgroup label="Pilot (beta)">
-                        <option value="Salon / barbershop (pilot)">Salon / barbershop</option>
-                        <option value="Spa / wellness centre (pilot)">Spa / wellness centre</option>
-                        <option value="School (pilot)">School</option>
-                        <option value="College / university (pilot)">College / university</option>
-                        <option value="Coaching / training institute (pilot)">Coaching / training institute</option>
-                        <option value="EdTech company (pilot)">EdTech company</option>
+                      <optgroup label="Healthcare & Clinics">
+                        <option value="Dental clinic">Dental clinic</option>
+                        <option value="General medical clinic">General medical clinic</option>
+                        <option value="Aesthetic / Dermatology">Aesthetic / Dermatology</option>
+                        <option value="Physiotherapy / Rehab">Physiotherapy / Rehab</option>
+                        <option value="Multi-specialty hospital">Multi-specialty hospital</option>
                       </optgroup>
-                      <option value="Other">Other</option>
+                      <optgroup label="Education & Academics">
+                        <option value="University / College">University / College</option>
+                        <option value="Private / International School">Private / International School</option>
+                        <option value="Coaching / Training Institute">Coaching / Training Institute</option>
+                        <option value="EdTech Company">EdTech Company</option>
+                      </optgroup>
+                      <optgroup label="Salons & Personal Care">
+                        <option value="Hair Salon / Color Studio">Hair Salon / Color Studio</option>
+                        <option value="Barbershop">Barbershop</option>
+                        <option value="Nail & Beauty Boutique">Nail & Beauty Boutique</option>
+                        <option value="Aesthetic Beauty Studio">Aesthetic Beauty Studio</option>
+                      </optgroup>
+                      <optgroup label="Spas & Wellness">
+                        <option value="Day Spa & Wellness Center">Day Spa & Wellness Center</option>
+                        <option value="Massage & Ayurvedic Clinic">Massage & Ayurvedic Clinic</option>
+                        <option value="Sauna, Cold Plunge & Recovery">Sauna, Cold Plunge & Recovery</option>
+                        <option value="Holistic Health Studio">Holistic Health Studio</option>
+                      </optgroup>
+                      <option value="Other">Other Enterprise</option>
                     </select>
                     <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-400">
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

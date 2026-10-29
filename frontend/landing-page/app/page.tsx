@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import Nav from "@/components/landing/Nav";
 import Hero from "@/components/landing/Hero";
+import VerticalMatrix from "@/components/landing/VerticalMatrix";
 import VirtualEmployeeCard from "@/components/landing/VirtualEmployeeCard";
 import RoiCalculator from "@/components/landing/RoiCalculator";
 import GlobalPresence from "@/components/landing/GlobalPresence";
@@ -27,18 +28,20 @@ export async function generateMetadata(): Promise<Metadata> {
   const page = (await getSeo())?.pages?.["/"];
   return pageMetadata({
     path: "/",
-    title: page?.full_title || page?.title || "AI Receptionist for Clinics & Dentists | AMSh",
+    title: page?.full_title || page?.title || "Autonomous 24/7 AI Receptionist for Clinics, Schools, Salons & Spas | AMSh",
     description:
       page?.description ||
-      "Meet AMSh, your AI virtual front-desk employee. Answer clinic calls 24/7, manage appointment requests, handle follow-ups and help your team respond faster.",
+      "Meet AMSh, your autonomous 24/7 AI front-desk employee. Answer phone calls on the 1st ring, book calendar appointments, and handle customer enquiries across healthcare, education, salons, and wellness spas.",
     keywords: [
       "AI receptionist",
       "AI receptionist for clinics",
-      "AI receptionist for dentists",
-      "virtual receptionist for doctors",
-      "medical answering service",
+      "AI receptionist for salons",
+      "AI receptionist for schools",
+      "AI receptionist for spas",
+      "virtual receptionist for businesses",
       "AI appointment booking",
       "WhatsApp AI receptionist",
+      "multi-vertical AI employee",
     ],
     noindex: page?.noindex,
   });
@@ -46,15 +49,17 @@ export async function generateMetadata(): Promise<Metadata> {
 
 const AUDIENCES = [
   "Dental Clinics",
-  "Aesthetic & Skin Clinics",
-  "Primary Care Medical",
-  "Multi-Location Groups",
-  "Dermatology",
+  "Medical & Primary Care",
+  "Universities & Colleges",
+  "Private & K-12 Schools",
+  "Hair Salons & Color Studios",
+  "Barbershops & Grooming",
+  "Day Spas & Retreats",
+  "Massage & Bodywork",
+  "Dermatology & Med Spas",
   "Physiotherapy & Rehab",
-  "Ophthalmology & Eye Care",
-  "Pediatrics",
-  "Orthopedics",
-  "Diagnostic Centers",
+  "EdTech & Coaching Academies",
+  "Sauna & Cryo Centers",
 ];
 
 const OUTCOMES: {
@@ -212,18 +217,21 @@ export default async function LandingPage() {
         {/* 2. Hero Section with Live AI Receptionist Simulator */}
         <Hero />
 
-        {/* 3. Three Outcome Pillars */}
+        {/* 3. Multi-Vertical Matrix: Healthcare, Education, Salons & Spas */}
+        <VerticalMatrix />
+
+        {/* 4. Three Outcome Pillars */}
         <section className="py-20 bg-slate-50/60 border-b border-slate-200/80">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="text-center max-w-2xl mx-auto mb-14">
               <span className="font-mono-ui text-xs uppercase tracking-[0.16em] text-blue-600 font-bold">
-                BUILT FOR CLINICS &amp; HEALTHCARE PRACTICES
+                HIGH-TOUCH SERVICE BUSINESS OUTCOMES
               </span>
               <h2 className="font-sora text-3xl sm:text-4xl font-semibold tracking-tight text-slate-950 mt-3">
-                Stop losing patients to missed calls.
+                Stop losing high-value clients to missed calls.
               </h2>
               <p className="mt-3 text-slate-600 text-base leading-relaxed">
-                67% of patients who reach a busy phone line never call back. AMSh ensures every patient receives an immediate human-grade answer.
+                Over 60% of callers who reach a busy line never call back. AMSh ensures every customer receives an immediate human-grade answer and locks them onto your calendar.
               </p>
             </div>
 

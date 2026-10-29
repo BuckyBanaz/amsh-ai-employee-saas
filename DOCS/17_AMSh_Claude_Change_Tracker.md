@@ -6,6 +6,45 @@ Running log of what Claude changes, plans, or reviews in this repo. Newest entry
 
 Status legend: `DONE` / `IN PROGRESS` / `PLANNED` / `BLOCKED`
 
+### Entry 127 - Live call review (Hindi, Demo clinic) and capacity audit (2026-10-26) - DONE (findings only, nothing fixed)
+- **Call `0c3bd206` (12:22 IST):** the AI said "Maaf kijiye, mujhe abhi thodi dikkat aa rahi hai…" 4 times, read the phone number back wrong
+  ("+91 918901414107"), forgot the agreed time and switched to English, and booked nothing. The repeated line is the empty-reply fallback,
+  not an LLM outage; every turn hopped between Groq models. Cause not confirmed: the server logs were lost when the containers were
+  recreated. Full list and next steps: `32_AMSh_Pending_Work_2026-10-26.md` section B.
+- **Capacity:** no load test or measured concurrency exists; the "50 to 100 calls per container" in `27_...` is unmeasured. Verified limits,
+  likely first failure points, what information is needed and a staged load-test plan: `32_...` section E.
+
+### Entry 126 - F5: trials and paid plans now end (2026-10-26, branch `version-0.5`) - DONE (phase 1, uncommitted)
+- **Before:** a trial stayed `trial` and a paid plan stayed `active` forever; the billing page showed a renewal date of "today + 22 days"
+  that moved every day; trial days were counted from the business's creation; the trial text said "14-Day" whatever the setting.
+- **Now:** `businesses.trial_ends_at`, `current_period_end`, `billing_cycle` (monthly / yearly / manual), migration `0016`. Access is
+  computed from the dates (`backend/server/billing/entitlement.py`), nothing flips `status` in the background. After the end a clinic
+  keeps its AI for `BILLING_GRACE_DAYS` (3), then Twilio, Plivo and call-me calls are refused like a suspended clinic; the dashboard stays
+  open so the owner can pay. A full payment adds one calendar cycle from the later of now and the current end (renewing early loses no
+  days); a prorated upgrade keeps the paid period; staff turning on a clinic with no payment makes it `manual` (no end). The billing API
+  returns the real renewal date plus `access`, `days_left`, `grace_ends_at`; the page no longer falls back to a made-up date.
+- **Existing clinics:** a full period from the day the migration runs (owner's choice), cycle read from the last real payment; `status`
+  untouched. Preview on the dev database: Demo clinic -> `manual`, Mayo Clinic - Rochester -> `monthly`.
+- **Checks:** 14 new tests (`test_billing_periods.py`: grace edges, early renewal, upgrade, Twilio and Plivo gates, migration on SQLite);
+  full suite 757 tests with the same 5 old failures (their messages unchanged); API smoke 54/54 from an empty database.
+- **Still open:** Razorpay auto-recurring (phase 2), the INR ×85 payment bug, expiry email, grace / expired banner: `32_...` section A.
+
+### Entry 125 - Voice latency, interruption and log privacy (2026-10-25, branch `version-0.4`, commit `0b89a05`) - DONE (not live-tested)
+- **Trailing question:** the LLM stream now signals when the words are complete (`text_end`), so the last sentence (usually the question)
+  is spoken then, not after the tool-call arguments and connection close.
+- **Barge-in:** stops the model at once (no more tokens or tool rounds for an unheard answer); the agent's history keeps only the
+  sentences the caller heard, also when they interrupt after the reply was fully sent (Twilio / Plivo playback marks decide). This
+  matters for safety: a later "yes" can no longer accept a proposal the caller never heard.
+- **Opening:** the greeting plays beside the receive loop (caller audio is no longer held until the greeting is sent); caller audio that
+  arrives while Deepgram connects is kept (up to 3 s) and sent first; a caller who talks over the recording notice is answered only after
+  the provider confirms the notice played.
+- **Measurement:** per-turn `[LATENCY]` (call opening as turn 0, speech start, first interim, per-sentence TTS and queue, barge-in to clear),
+  `[BARGE-IN]` and `[PLAYOUT]` lines; a turn cut off by a hang-up says `ended_by: "call_stopped"`. No transcript text in any of them.
+- **Log privacy:** transcripts, replies, greeting text, slot values, caller numbers, raw audio and the stream token removed from the call
+  logs; the emergency and shadow logs carry no words; SMS and booking logs carry no body or patient name.
+- **Checks:** offline tests only (new tests fail on the old code); simulated benchmark unchanged within noise. Live benchmark plan:
+  `07_AMSh_Latency_Optimization_Strategy.md` section 7. Cartesia stays the only TTS; Deepgram Flux evaluated and not adopted.
+
 ### Entry 103 - Landing Page Westernization: Removed INR, Indian Names & Added Dutch / German Personas (2026-10-23) - DONE
 - **Virtual Employee Personas Re-ordered & Expanded ([VirtualEmployeeCard.tsx](file:///c:/Users/Parikshit/Desktop/saas/frontend/landing-page/components/landing/VirtualEmployeeCard.tsx))**:
   - Persona lineup set strictly to: 1. USA (Sarah Jenkins - Default), 2. UK (Emma Watson), 3. Dutch (Lotte de Jong), 4. German (Hannah Weber), 5. Arabic (Fatima Al-Mansoor).
@@ -1403,9 +1442,39 @@ Run it: `python -m backend.ai.evals.runner` (`--live`, `--only persona,safety`, 
     - Updated `SMTP_PASS=Hello@007` & `SMTP_PASSWORD=Hello@007`.
     - Updated `SMTP_FROM_NAME="Parikshit Verma"`.
     - Updated `SMTP_FROM_EMAIL=no-replay@techycodex.com`.
-  - **`frontend/landing-page/app/api/pilot/route.ts`**:
-    - Updated env variable parsing to support all aliases (`SMTP_PASS` vs `SMTP_PASSWORD`, `SMTP_FROM_EMAIL` vs `FROM_EMAIL`, `SMTP_FROM_NAME` vs `FROM_NAME`).
-    - Added quote-stripping (`.replace(/^["']|["']$/g, "")`) so passwords wrapped in quotes like `"Hello@007"` are cleanly decoded without quote contamination.
+### Entry 125 - Multi-Vertical Platform Landing Page Transformation (Healthcare, Education, Salons & Spas) (2026-10-29)
+- **Problem**:
+  - The marketing landing page (`frontend/landing-page`) previously focused exclusively on clinics and dentists.
+  - The AMSh platform core recently expanded to full multi-vertical capability (Healthcare, Education, Salons, Spas & Wellness).
+  - User requested transforming `frontend/landing-page` into a premium multi-vertical platform landing page with dedicated industry sections, interactive voice simulators, dynamic ROI calculator, and dedicated SEO landing pages.
+- **Root Cause & Fix**:
+  - **`frontend/landing-page/components/landing/VerticalMatrix.tsx`**:
+    - Created a high-end Bento Grid multi-vertical showcase for the 4 core verticals (`clinic`, `education`, `salon`, `wellness`).
+    - Implemented interactive tab switching with dynamic live call dialogue streams, telemetry latency badges, specialty workflow cards, and 1-click pilot modal triggers.
+  - **`frontend/landing-page/components/landing/Hero.tsx`**:
+    - Upgraded hero with an industry capsule pill strip (`[ 🏥 Clinics ] [ 🎓 Education ] [ ✂️ Salons ] [ 🌿 Spas ]`).
+    - Multi-vertical headline: *"Autonomous 24/7 Front-Desk AI for Service Businesses."*
+    - Removed outdated Indian WhatsApp contact link and replaced with direct multi-vertical navigation.
+  - **`frontend/landing-page/components/landing/VoiceCallScope.tsx`**:
+    - Added an industry selector pill bar (`[ 🏥 Clinic ] [ 🎓 Education ] [ ✂️ Salon ] [ 🌿 Spa ]`).
+    - Configured realistic conversation flows for all 4 verticals: Dental new patient intake, University admissions inquiry & tour booking, Salon balayage with stylist Chloe & WhatsApp deposit, and Spa couples massage & steam suite reservation.
+  - **`frontend/landing-page/components/landing/RoiCalculator.tsx`**:
+    - Added industry switcher buttons (`Healthcare & Clinic`, `Education & EdTech`, `Salon & Personal Care`, `Spa & Wellness`).
+    - Dynamically updates staff/practitioner labels, inquiry volumes, and average ticket/booking values ($150 clinic vs $320 student acquisition vs $85 salon ticket vs $135 spa package).
+  - **`frontend/landing-page/components/landing/Nav.tsx`**:
+    - Added direct `#industries` anchor link in desktop and mobile menus.
+  - **`frontend/landing-page/components/landing/PilotModal.tsx`**:
+    - Removed "India" from location dropdown, added Germany and Netherlands alongside USA, UK, Canada, Australia, and UAE.
+    - Expanded practice/business types into clean optgroups across Healthcare, Education, Salons, and Spas.
+  - **Dedicated SEO Landing Pages**:
+    - `frontend/landing-page/app/ai-receptionist-for-salons/page.tsx`: Full SEO landing page for hair salons, barbershops, and nail/lash studios.
+    - `frontend/landing-page/app/ai-receptionist-for-education/page.tsx`: Full SEO landing page for universities, private schools, and EdTech institutes.
+    - `frontend/landing-page/app/ai-receptionist-for-wellness/page.tsx`: Full SEO landing page for day spas, massage centers, and recovery lounges.
+  - **`frontend/landing-page/app/page.tsx`**:
+    - Embedded `<VerticalMatrix />` directly below `<Hero />`.
+    - Expanded `AUDIENCES` array to include all 4 industries.
+    - Updated page metadata and schemas in `lib/schema.ts` and `lib/site.ts`.
+
 
 
 

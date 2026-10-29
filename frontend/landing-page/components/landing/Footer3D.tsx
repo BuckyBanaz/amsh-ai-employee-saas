@@ -13,23 +13,24 @@ export default function Footer3D() {
   const currentYear = new Date().getFullYear();
 
   const usefulLinks = [
-    { label: "AI Receptionist for Dentists", href: "/ai-receptionist-for-dentists" },
     { label: "AI Receptionist for Clinics", href: "/ai-receptionist-for-clinics" },
-    { label: "Medical Office Call Answering", href: "/ai-answering-service-medical" },
-    { label: "Dental Answering Service", href: "/dental-answering-service" },
+    { label: "AI Receptionist for Dentists", href: "/ai-receptionist-for-dentists" },
+    { label: "AI Receptionist for Salons", href: "/ai-receptionist-for-salons" },
+    { label: "AI Receptionist for Education", href: "/ai-receptionist-for-education" },
+    { label: "AI Receptionist for Spas & Wellness", href: "/ai-receptionist-for-wellness" },
     { label: "AI Appointment Booking", href: "/ai-appointment-booking" },
     { label: "AI Phone Answering Service", href: "/ai-phone-answering-service" },
     { label: "AI Receptionist for WhatsApp", href: "/ai-receptionist-whatsapp" },
   ];
 
   const industries = [
+    { label: "Medical & Primary Care", href: "/ai-receptionist-for-clinics" },
     { label: "Dental & Orthodontics", href: "/ai-receptionist-for-dentists" },
-    { label: "Medical Clinics & GP", href: "/ai-receptionist-for-clinics" },
+    { label: "Hair Salons & Barbershops", href: "/ai-receptionist-for-salons" },
+    { label: "Universities & Schools", href: "/ai-receptionist-for-education" },
+    { label: "Spas & Wellness Centers", href: "/ai-receptionist-for-wellness" },
     { label: "Dermatology & Aesthetics", href: "/ai-receptionist-for-clinics" },
-    { label: "Emergency Dental Triage", href: "/dental-answering-service" },
-    { label: "Multi-Doctor Scheduling", href: "/ai-appointment-booking" },
-    { label: "Carrier Phone Forwarding", href: "/ai-phone-answering-service" },
-    { label: "WhatsApp Clinic Triage", href: "/ai-receptionist-whatsapp" },
+    { label: "WhatsApp Front-Desk Triage", href: "/ai-receptionist-whatsapp" },
   ];
 
   const resources = [
@@ -84,7 +85,7 @@ export default function Footer3D() {
                 <Logo dark={true} size="md" />
               </Link>
               <p className="mt-4 text-sm leading-relaxed text-slate-300 max-w-sm">
-                Your clinic&apos;s 24/7 AI employee answering patient phone calls, WhatsApp triage &amp; Google Calendar appointments — alongside your team.
+                Your organization&apos;s 24/7 AI employee answering client phone calls, WhatsApp triage &amp; calendar appointments — across clinics, schools, salons and wellness spas.
               </p>
             </div>
 

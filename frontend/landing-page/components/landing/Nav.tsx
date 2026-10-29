@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Logo } from "./Logo";
 
 const NAV_LINKS = [
+  { href: "/#industries", label: "Industries" },
   { href: "/#demo", label: "Voice AI" },
   { href: "/#employees", label: "Virtual Employee" },
   { href: "/#calculator", label: "ROI Calc" },

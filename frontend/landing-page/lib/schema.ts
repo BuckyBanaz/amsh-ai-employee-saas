@@ -48,7 +48,7 @@ export function softwareSchema(): Json {
     url: SITE.url,
     description: SITE.description,
     publisher: { "@id": ORG_ID },
-    audience: { "@type": "BusinessAudience", audienceType: "Medical clinics, dental practices and hospitals" },
+    audience: { "@type": "BusinessAudience", audienceType: "Clinics, academic institutions, salons and wellness centers" },
   };
 }
 
@@ -64,7 +64,7 @@ export function serviceSchema(path: string, description: string): Json {
     url: absoluteUrl(path),
     provider: { "@id": ORG_ID },
     areaServed: "Worldwide",
-    audience: { "@type": "BusinessAudience", audienceType: "Medical clinics and dental practices" },
+    audience: { "@type": "BusinessAudience", audienceType: "Clinics, schools, salons and wellness businesses" },
   };
 }
 
