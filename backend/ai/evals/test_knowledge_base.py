@@ -762,3 +762,106 @@ class Retrieval(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ------------------------------------------------------------------- every language the agent speaks (en hi nl ar de es fr)
+
+class Multilingual(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        from backend.ai.engine.rag import languages
+
+        embeddings.set_embedder(None)
+        languages.set_translator(lambda text: None)  # offline: vocabulary only, unless a test installs a translator
+        cls.factory, cls.biz = make_db_factory()
+        ingest(cls.factory, cls.biz, "university_fees.xlsx", fixture("university_fees.xlsx"))
+        ingest(cls.factory, cls.biz, "nl.txt", "Openingstijden: maandag tot vrijdag van 9 tot 17 uur. Parkeren is gratis voor bezoekers.".encode())
+        ingest(cls.factory, cls.biz, "ar.txt", "ساعات العمل: من الأحد إلى الخميس من 9 صباحاً حتى 5 مساءً. موقف السيارات مجاني للزوار.".encode())
+        ingest(cls.factory, cls.biz, "hi.txt", "हमारा क्लिनिक सोमवार से शनिवार सुबह 9 बजे से शाम 7 बजे तक खुला रहता है। पार्किंग मुफ्त है।".encode())
+        ingest(cls.factory, cls.biz, "pool.txt", "The campus has an indoor swimming pool open to students from 6 AM to 9 PM.".encode())
+
+    @classmethod
+    def tearDownClass(cls):
+        from backend.ai.engine.rag import languages
+
+        languages.set_translator(None)
+
+    def search(self, q):
+        with self.factory() as db:
+            return index.search(db, self.biz, q)
+
+    def fee(self, q):
+        t = self.search(q)["structured"]
+        return (t["status"], t["rows"][0]["Tuition Fee"] if t["status"] == "exact" else t["ask_for"]) if t else None
+
+    def test_hindi_words_are_not_split_at_vowel_signs(self):
+        from backend.ai.engine.rag.languages import words
+
+        self.assertEqual(words("क्लिनिक कब खुला है। फ़ीस २०२६-२७"), ["क्लिनिक", "कब", "खुला", "है", "फीस", "2026", "27"])
+
+    def test_same_language_questions_ignore_question_words(self):
+        cases = {"Wat zijn de openingstijden?": "Openingstijden", "ما هي ساعات العمل؟": "ساعات العمل",
+                 "क्लिनिक कब खुला रहता है?": "क्लिनिक"}
+        for q, expected in cases.items():
+            with self.subTest(q):
+                res = self.search(q)["results"]
+                self.assertTrue(res)
+                self.assertIn(expected, res[0]["text"])
+
+    def test_grammar_words_never_make_a_match(self):
+        res = self.search("हॉस्टल की फीस कितनी है?")["results"]  # used to match the Hindi clinic text on "की" and "है"
+        self.assertNotIn("क्लिनिक", " ".join(r["text"] for r in res))
+        self.assertIn("Hostel", res[0]["text"])  # the English hostel sheet, through the vocabulary
+
+    def test_fee_questions_in_every_language(self):
+        cases = {
+            "नेपाल के छात्र की बीटेक सीएसई फीस 2026-27 क्या है?": ("exact", "180000"),
+            "nepal ke student ki btech cse fees 2026-27 kitni hai": ("exact", "180000"),
+            "كم رسوم B.Tech CSE لطالب من نيبال 2026-27": ("exact", "180000"),
+            "Wat is het collegegeld voor B.Tech CSE voor een student uit Nepal in 2026-27?": ("exact", "180000"),
+            "Wie hoch sind die Studiengebühren für B.Tech CSE für Studenten aus Nigeria 2026-27?": ("exact", "250000"),
+            "¿Cuál es la matrícula de B.Tech CSE para un estudiante de Bangladesh en 2026-27?": ("exact", "200000"),
+            "Quels sont les frais de scolarité B.Tech CSE pour un étudiant indien en 2026-27 ?": ("exact", "120000"),
+            "B.Tech CSE fee Nepal 2026-2027": ("exact", "180000"),
+            "बीटेक सीएसई नेपाल फीस २०२६-२७": ("exact", "180000"),
+            "كم رسوم B.Tech CSE للطلاب الدوليين 2026-27": ("ambiguous", ["Country"]),
+            "अंतरराष्ट्रीय छात्रों की बीटेक सीएसई फीस 2026-27": ("ambiguous", ["Country"]),
+        }
+        for q, expected in cases.items():
+            with self.subTest(q):
+                self.assertEqual(self.fee(q), expected)
+
+    def test_us_is_not_the_united_states(self):
+        self.assertEqual(self.fee("what are the B.Tech CSE fees for us in 2026-27"), ("ambiguous", ["Student Category", "Country"]))
+
+    def test_translation_fallback_only_when_nothing_was_found(self):
+        from backend.ai.engine.rag import languages
+
+        asked = []
+
+        def translator(text):
+            asked.append(text)
+            return {"¿Tienen piscina en el campus?": "Do you have a swimming pool on campus?"}.get(text)
+
+        languages.set_translator(translator)
+        try:
+            res = self.search("¿Tienen piscina en el campus?")
+            self.assertIn("+translated", res["mode"])
+            self.assertIn("swimming pool", res["results"][0]["text"])
+            self.search("Wat zijn de openingstijden?")  # found in Dutch: no translation
+            self.search("Is there a swimming pool?")  # English: never translated
+            self.assertEqual(asked, ["¿Tienen piscina en el campus?"])
+        finally:
+            languages.set_translator(lambda text: None)
+
+    def test_agent_tool_answers_a_hindi_fee_question(self):
+        from backend.ai.evals.test_vertical_runtime import engine as make_engine
+
+        with self.factory() as db:
+            b = db.get(Business, self.biz)
+            b.vertical, b.business_subtype = "education", "university"
+            db.commit()
+        eng = make_engine(self.factory, self.biz)
+        out = run(eng.toolbox.execute("search_knowledge", {"query": "नाइजीरिया के छात्र की बीटेक सीएसई फीस 2026-27"}))
+        self.assertEqual(out["table"]["status"], "exact")
+        self.assertIn("Tuition Fee: 250000", out["message"])

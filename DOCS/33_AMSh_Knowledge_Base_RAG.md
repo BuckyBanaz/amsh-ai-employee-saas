@@ -78,6 +78,7 @@ upload / sync / FAQ ──► API (validate: type by magic bytes, size, SSRF, du
 | `structured.py` | Exact table lookup: exact / ambiguous (ask for) / no_match. |
 | `ingestion.py` | Background jobs, atomic replacement of chunks and records, honest failure, resume on startup. |
 | `answering.py` | Grounding rules shared by the agent tool and the dashboard preview. |
+| `languages.py` | One tokenizer for every script, normalisation, stop words, vocabulary to English, language guess, and the translation fallback (section 4.5). |
 | `retriever.py` | Kept for older callers and scripts. |
 
 ## 3. Supported formats
@@ -170,6 +171,23 @@ school, coaching institute, EdTech), salon and wellness workflow definitions. Th
 `index.search`. The tests drive a voice call and a WhatsApp message through the real engine with a scripted model, and
 call the tool for one business of each configured vertical.
 
+### 4.5 Languages: English, Hindi (and Hinglish), Dutch, Arabic, German, Spanish, French
+
+The AI employee speaks all of these, so search handles questions in them, against documents in any of them.
+
+| Problem found | Fix |
+|---|---|
+| Hindi words were split at every vowel sign ("क्लिनिक" → क, ल, न, क). Python's `\w` excludes combining marks, so Hindi matched on letter fragments: "हॉस्टल की फीस कितनी है?" returned the clinic hours. | One tokenizer (`languages.words`) for indexing, queries and table lookups. It keeps the combining marks of Latin and every Indic script (Devanagari to Sinhala). |
+| Question words counted as content: "Wat zijn de openingstijden?" and "ما هي ساعات العمل؟" found nothing (about a quarter of the words matched). | Stop words for all seven languages plus Hinglish. Only content words are scored. |
+| Spelling variants did not match. | Text folding: Latin accents (één, Gebühr, étudiant), Arabic diacritics, tatweel and letter variants (أ إ آ → ا, ة → ه, ى → ي), the Arabic article and joined conjunctions (الرسوم → رسوم), Devanagari nukta and chandrabindu, and Devanagari / Arabic-Indic digits (२०२६ → 2026). |
+| An English fee sheet could not answer "नेपाल के छात्र की बीटेक फीस" or "كم رسوم ... نيبال". | Vocabulary to English (`languages.to_english`) for countries and nationalities, student categories, Hindi spellings of course codes (बीटेक, एमबीए, सीएसई ...), and fee, hostel, scholarship and admission words, in hi, ar, nl, de, es and fr. Each question is searched as asked and in this English form; each passage keeps its best score. |
+| "2026-2027" did not match "2026-27". | Academic years are folded to one form (2026-27, 2026/27, 2026–27 and 2026-2027 are all the same). |
+| "fees for us" was read as the United States. | "us" removed from the country synonyms. |
+| Any other cross-language question (e.g. Spanish "¿Tienen piscina?" against an English page). | Translation fallback: only when nothing was found and the question is not English, one Groq call translates it (`KB_TRANSLATE_TIMEOUT`, 1.5 s, cached), and it is searched again. `mode` shows `+translated`. With embeddings enabled, the multilingual embedding model also matches across languages without it. |
+
+`search()` also returns `language` (hi, ar, nl, de, es, fr, hinglish or en). The agent answers in the caller's language
+whatever language the document is in; that is the existing language rule.
+
 ## 5. API
 
 Both prefixes serve the same handlers: `/api/onboarding/businesses/{id}/knowledge` and `/api/businesses/{id}/knowledge`.
@@ -213,7 +231,7 @@ Both prefixes serve the same handlers: `/api/onboarding/businesses/{id}/knowledg
 | Ingest a 6,000-row XLSX | n/a (not supported) | 1.0 s → 858 chunks + 6,000 exact-lookup rows |
 | Ingest 2 MB of TXT | blocked the request | 0.6 s in the background → 4,000 chunks |
 | Load a business's index from the DB (cold, 4,858 chunks) | n/a | 0.5 s, once per change |
-| Cached search including the table lookup over 6,000 rows (SQLite) | n/a | 32 ms median, 151 ms worst |
+| Cached search including the table lookup over 6,000 rows (SQLite) | n/a | 23 ms median. The first lookup after a change takes about 0.45 s, once, to build the table cache. |
 
 A live call adds at most `KB_QUERY_EMBED_TIMEOUT` (1.5 s) for the query embedding, and only when embeddings are enabled.
 On timeout the search continues with keyword ranking.
@@ -242,8 +260,10 @@ file per format. The `.doc` is a Word 97 file from the oletools test data (BSD-2
 
 Results on this branch:
 
-- **Knowledge-base tests**: 49 passed.
-- **Full backend suite**: 805 passed, 1 skipped, 5 failed. The same 5 fail on `version-0.6` without these changes (checked
+- **Knowledge-base tests**: 56 passed (49 + 7 multilingual: Hindi tokenizing; same-language search in nl/ar/hi;
+  grammar words never matching; fee questions in hi, Hinglish, ar, nl, de, es and fr; years and Devanagari digits;
+  "us"; the translation fallback; a Hindi fee question through the agent tool).
+- **Full backend suite**: 812 passed, 1 skipped, 5 failed. The same 5 fail on `version-0.6` without these changes (checked
   by stashing the work), and none involve the knowledge base:
   - `test_resolve_mode_prefers_tenant_and_defaults_to_legacy`
   - `test_llm_outage_hands_the_turn_back_to_the_state_machine`
@@ -270,6 +290,7 @@ Results on this branch:
    - `KB_MAX_FILE_MB=20`
    - `KB_CRAWL_MAX_PAGES=25`, `KB_CRAWL_PAGE_CAP=100`, `KB_CRAWL_MAX_DEPTH=2`
    - `KB_MAX_PROCESSING_PER_BUSINESS=5`
+   - `KB_QUERY_TRANSLATION=auto` (`off`: never call the LLM for search), `KB_TRANSLATE_TIMEOUT=1.5`
 4. After deploying with embeddings on, `POST /knowledge/reindex` per business embeds existing documents. Without it they
    are still found by keyword search.
 5. Websites synced before this release keep their old text until re-synced. Old uploads that the previous parser could
@@ -291,3 +312,6 @@ Results on this branch:
 - Table lookup matches values the caller names. A paraphrase of a value ("computer science engineering" for "B.Tech
   CSE") is found by passage search, not by the exact table lookup.
 - Real estate and hospitality have no vertical workflow yet (their documents are supported).
+- The cross-language vocabulary covers countries, categories, course codes and fee words. Other cross-language questions
+  rely on the translation fallback (needs `GROQ_API_KEY`) or on embeddings. Without either, they only match documents in
+  the same language.

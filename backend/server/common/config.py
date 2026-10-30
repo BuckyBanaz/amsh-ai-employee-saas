@@ -91,6 +91,9 @@ class Settings(BaseSettings):
     KB_EMBEDDING_MODEL: str = "gemini-embedding-001"
     KB_EMBEDDING_DIM: int = 768
     KB_QUERY_EMBED_TIMEOUT: float = 1.5  # seconds; a live call never waits longer than this for a query embedding
+    # A question in Hindi/Arabic/Dutch/... that finds nothing is translated to English once (Groq) and searched again.
+    KB_QUERY_TRANSLATION: str = "auto"  # "off" to never call the LLM for search
+    KB_TRANSLATE_TIMEOUT: float = 1.5
     KB_MAX_FILE_MB: int = 20
     KB_CRAWL_MAX_PAGES: int = 25  # per sync; the business can ask for fewer, never more than KB_CRAWL_PAGE_CAP
     KB_CRAWL_PAGE_CAP: int = 100

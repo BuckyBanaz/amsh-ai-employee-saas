@@ -11,20 +11,13 @@ The store is in memory and keyed by business_id: a search can only ever see the 
 
 import difflib
 import math
-import re
 import time
 from collections import Counter
 from typing import Dict, List, Optional
 
 import numpy as np
 
-STOP_WORDS = {
-    "what", "is", "are", "a", "an", "the", "in", "on", "at", "for", "to", "of", "and", "or", "do", "does", "did", "you",
-    "your", "have", "has", "can", "could", "i", "we", "my", "our", "how", "much", "many", "when", "where", "why", "who",
-    "which", "tell", "me", "about", "please", "any", "some", "there", "it", "its", "this", "that", "be", "will", "would",
-    "with", "from", "by", "as", "if", "so", "also", "want", "know", "need", "like", "get", "give", "hi", "hello", "kya",
-    "hai", "ka", "ki", "ke", "ko", "se", "mein", "aur", "batao", "bataiye", "kitna", "kitni", "hain",
-}
+from backend.ai.engine.rag.languages import STOP_WORDS, is_stop, strip_arabic_article, words  # noqa: E402,F401
 
 # Relevance floor. lexical: idf-weighted share of the query's meaningful words found in the chunk. semantic: cosine.
 MIN_COVERAGE = 0.5
@@ -33,13 +26,16 @@ K1, B = 1.2, 0.75
 
 
 def _tokenize(text: str) -> list[str]:
-    """Lowercase word tokenizer stripping punctuation."""
-    return re.findall(r"\w+", text.lower())
+    """Folded words in any script (accents, Arabic letter variants and Indic/Arabic digits normalised)."""
+    return words(text)
 
 
 def _normalize_token(t: str) -> str:
-    """Lightweight suffix normalization for plurals and common inflections."""
+    """Lightweight suffix normalization for plurals and common inflections (English-style, Latin words only); the Arabic
+    article and joined conjunctions are dropped (الرسوم -> رسوم)."""
     t = t.lower()
+    if not t.isascii():
+        return strip_arabic_article(t)
     if t.endswith("ies") and len(t) > 4:
         return t[:-3] + "y"
     if t.endswith(("ches", "shes", "sses", "xes")) and len(t) > 4:
@@ -167,9 +163,9 @@ class BusinessVectorStore:
         if idx is None or not idx.n or not query or not query.strip():
             return []
 
-        raw = _terms(query)
-        meaningful = [t for t in raw if t not in STOP_WORDS] or raw
-        meaningful = list(dict.fromkeys(meaningful))
+        tokens = _tokenize(query)
+        content = [t for t in tokens if not is_stop(t)] or tokens  # question words and grammar in any language
+        meaningful = list(dict.fromkeys(_normalize_token(t) for t in content))
         expanded = {q: idx.expand(q) for q in meaningful}
         q_weights = {q: max(idx.idf(v) for v, _ in exp) if exp else math.log(1 + idx.n) for q, exp in expanded.items()}
         total_weight = sum(q_weights.values()) or 1.0

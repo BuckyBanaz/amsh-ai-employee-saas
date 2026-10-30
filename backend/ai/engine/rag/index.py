@@ -22,7 +22,7 @@ from typing import Dict, List, Optional
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from backend.ai.engine.rag import structured
+from backend.ai.engine.rag import languages, structured
 from backend.ai.engine.rag.chunker import SemanticChunker
 from backend.ai.engine.rag.embeddings import from_bytes, get_embedder
 from backend.ai.engine.rag.vector_store import global_vector_store
@@ -256,22 +256,56 @@ def _tables(db: Session, business_id: str):
     return tables
 
 
+def _merge(lists: List[List[dict]], top_k: int) -> List[dict]:
+    """Results of several phrasings of one question: each passage once, with its best score."""
+    best: Dict[str, dict] = {}
+    for results in lists:
+        for r in results:
+            if r["chunk_id"] not in best or r["score"] > best[r["chunk_id"]]["score"]:
+                best[r["chunk_id"]] = r
+    return sorted(best.values(), key=lambda r: r["score"], reverse=True)[:top_k]
+
+
+_STATUS_RANK = {"exact": 3, "ambiguous": 2, "no_match": 1}
+
+
 def search(db: Session, business_id: str, query: str, top_k: int = 4) -> dict:
     """Retrieval for one business: ranked passages with sources, plus an exact table lookup when the question names table
-    values. Never touches any other business's data."""
+    values. Never touches any other business's data.
+
+    Any of the agent's languages: the question is searched as asked (same-language documents) and with its known words in
+    English (an English fee sheet answering a Hindi, Arabic or Dutch question). Only when that finds nothing, and the
+    question is not English, it is translated once (languages.translate_query; short timeout, cached) and searched again."""
     started = time.perf_counter()
     load_index(db, business_id)
     query = (query or "").strip()[:500]
+    top_k = max(1, min(int(top_k or 4), 10))
     qvec = None
     idx = global_vector_store._indexes.get(business_id)
     if query and idx is not None and idx.matrix is not None:
         embedder = get_embedder()
         if embedder is not None and embedder.model == idx.embedding_model:
-            qvec = embedder.embed_query(query)
-    results = global_vector_store.search(business_id, query, top_k=max(1, min(int(top_k or 4), 10)), query_vector=qvec)
+            qvec = embedder.embed_query(query)  # multilingual model: the original wording is enough
+    phrasings = [query]
+    english = languages.to_english(query) if query else ""
+    if english and english != " ".join(languages.words(query)):
+        phrasings.append(english)
+    lists = [global_vector_store.search(business_id, q, top_k=top_k, query_vector=qvec if n == 0 else None) for n, q in enumerate(phrasings)]
+    results = _merge(lists, top_k)
+    tables = _tables(db, business_id) if query else []
+    table = structured.lookup(tables, query) if query else None
+    mode = "hybrid" if qvec is not None else "keyword"
+    language = languages.guess_language(query) if query else "en"
+    if query and not results and (table is None or table["status"] == "no_match") and language != "en":
+        translated = languages.translate_query(query)
+        if translated and translated.lower() != query.lower():
+            results = global_vector_store.search(business_id, translated, top_k=top_k)
+            alt = structured.lookup(tables, translated)
+            if alt and (table is None or _STATUS_RANK[alt["status"]] > _STATUS_RANK[table["status"]]):
+                table = alt
+            mode += "+translated"
     for r in results:
         r["text"] = sanitize_snippet(r["text"])
-    table = structured.lookup(_tables(db, business_id), query) if query else None
     if table and table["status"] == "exact":
         confidence = "high"
     elif results:
@@ -283,9 +317,10 @@ def search(db: Session, business_id: str, query: str, top_k: int = 4) -> dict:
     return {
         "business_id": business_id,
         "query": query,
+        "language": language,
         "latency_ms": round((time.perf_counter() - started) * 1000.0, 2),
         "match_count": len(results),
-        "mode": "hybrid" if qvec is not None else "keyword",
+        "mode": mode,
         "confidence": confidence,
         "results": results,
         "structured": table,

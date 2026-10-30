@@ -17,6 +17,8 @@ import re
 from collections import defaultdict
 from typing import Dict, List, Optional
 
+from backend.ai.engine.rag import languages
+
 # Nationality words a caller uses for the country column ("Nepali student" -> Nepal), and common category synonyms.
 DEMONYMS = {
     "indian": "india", "nepali": "nepal", "nepalese": "nepal", "bangladeshi": "bangladesh", "nigerian": "nigeria",
@@ -31,13 +33,19 @@ DEMONYMS = {
     "burmese": "myanmar", "south african": "south africa", "german": "germany", "french": "france",
 }
 SYNONYMS = {"foreign": "international", "overseas": "international", "abroad": "international", "local": "domestic",
-            "uk": "united kingdom", "usa": "united states", "us": "united states", "u s": "united states"}
+            "uk": "united kingdom", "usa": "united states"}  # not "us": "fees for us" is not about the United States
 
 _NUMERIC = re.compile(r"^[^\d]{0,4}[-+]?[\d,]*\.?\d+\s*(%|/-|lakh|lakhs|crore|k|inr|rs|usd|gbp|eur)?\.?$", re.I)
 
 
+_YEAR_RANGE = re.compile(r"\b(20\d\d)\s*[-/–—]\s*(?:20)?(\d\d)\b")
+
+
 def normalize(s: str) -> str:
-    return re.sub(r"\s+", " ", re.sub(r"[^\w]+", " ", (s or "").lower())).strip()
+    """Folded words in any language (languages.words), with academic years in one form: 2026-27, 2026/27 and 2026-2027
+    all become "2026 27"."""
+    s = _YEAR_RANGE.sub(lambda m: f"{m.group(1)} {m.group(2)}", languages.fold(s or ""))
+    return " ".join(languages.words(s))
 
 
 def _compact(s: str) -> str:
@@ -49,7 +57,12 @@ def _is_amount(v: str) -> bool:
 
 
 def expand_query(query: str) -> str:
+    """The question in comparable form, plus the same question with the caller's language's words for countries,
+    categories and courses in English (languages.to_english), plus nationality words as countries."""
     q = f" {normalize(query)} "
+    english = normalize(languages.to_english(_YEAR_RANGE.sub(lambda m: f"{m.group(1)}-{m.group(2)}", languages.fold(query or ""))))
+    if english and english != q.strip():
+        q += english + " "
     extra = []
     for word, value in list(DEMONYMS.items()) + list(SYNONYMS.items()):
         if f" {word} " in q:
@@ -89,6 +102,8 @@ class _Table:
                 self.value_columns.append(col)
             else:
                 self.category_columns.append(col)
+        # normalised once per table, not on every question (a 6,000-row fee sheet is filtered on every lookup)
+        self.norm_rows: List[Dict[str, str]] = [{col: normalize(r.get(col, "")) for col in self.category_columns} for r in rows]
         self.distinct: Dict[str, Dict[str, str]] = {}
         for col in self.category_columns:
             d: Dict[str, str] = {}
@@ -134,15 +149,15 @@ def lookup(tables: List[_Table], query: str, max_rows: int = 10) -> Optional[dic
     if best is None:
         return None
     _, table, constraints = best
-    candidates = [r for r in table.rows if all(normalize(r.get(col, "")) in vals for col, vals in constraints.items())]
+    candidates = [r for r, n in zip(table.rows, table.norm_rows) if all(n[col] in vals for col, vals in constraints.items())]
     matched = {col: sorted(table.distinct[col][v] for v in vals) for col, vals in constraints.items()}
     out = {"table": f"{table.source} › {table.name}" if table.source else table.name, "document_id": table.document_id,
            "matched": matched, "value_columns": table.value_columns}
     if not candidates:
         out.update(status="no_match", rows=[], ask_for=[], options={})
         return out
-    differing = [col for col in table.category_columns if col not in constraints
-                 and len({normalize(r.get(col, "")) for r in candidates}) > 1]
+    cand_norm = [n for n in table.norm_rows if all(n[col] in vals for col, vals in constraints.items())]
+    differing = [col for col in table.category_columns if col not in constraints and len({n[col] for n in cand_norm}) > 1]
     # several values named for one column ("Nepal or Nigeria?") is also a question back, not an answer
     multi = [col for col, vals in constraints.items() if len(vals) > 1]
     if len(candidates) == 1:
