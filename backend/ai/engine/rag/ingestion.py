@@ -120,7 +120,8 @@ def process(db: Session, doc_id: str) -> None:
             data = doc.file_data
             if not data:
                 raise extractors.ExtractionError("The original file is no longer stored. Upload it again.")
-            ex = extractors.extract(doc.filename or "document", data, extractors.Limits(max_bytes=s.KB_MAX_FILE_MB * 1024 * 1024))
+            ex = extractors.extract(doc.filename or "document", data, extractors.Limits(
+                max_bytes=s.KB_MAX_FILE_MB * 1024 * 1024, ocr=s.KB_OCR.lower() != "off", ocr_max_pages=s.KB_OCR_MAX_PAGES, ocr_dpi=s.KB_OCR_DPI))
             chunks, records, content = _document_pieces(doc, ex)
             warnings += ex.warnings
             meta.update({"kind": ex.kind, **ex.meta})
@@ -149,6 +150,15 @@ def process(db: Session, doc_id: str) -> None:
             warnings.append("Some text reads like instructions to the AI; it is treated as plain information and never followed.")
             meta["injection_flags"] = flags
         stats = _store(db, doc, chunks, records, prefix)
+        if records:  # check every table now, so problems show on the document before a caller hits them
+            from backend.ai.engine.rag import structured
+
+            by_table: dict = {}
+            for table_name, _, data in records:
+                by_table.setdefault(table_name, []).append(data)
+            column_map = (doc.meta or {}).get("column_map") or {}
+            issues = [i for name, rows in by_table.items() for i in structured.profile(name, rows, column_map.get(name)).get("issues", [])]
+            meta["table_issues"] = {"errors": sum(i["level"] == "error" for i in issues), "warnings": sum(i["level"] == "warning" for i in issues)}
         if _embedder_configured() and stats["embedded"] < stats["chunks"]:
             warnings.append("Semantic embeddings were unavailable for some passages; keyword search still covers them. Re-index later to add them.")
         meta.update(stats)

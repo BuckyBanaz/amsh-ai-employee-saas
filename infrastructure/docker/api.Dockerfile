@@ -2,6 +2,12 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
+# Knowledge base OCR for scanned PDFs (backend/ai/engine/rag/ocr.py): Tesseract with the languages the AI employee speaks.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-eng tesseract-ocr-hin tesseract-ocr-ara \
+       tesseract-ocr-nld tesseract-ocr-deu tesseract-ocr-spa tesseract-ocr-fra \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY backend/requirements.txt ./backend/requirements.txt
 RUN pip install --no-cache-dir -r backend/requirements.txt
 

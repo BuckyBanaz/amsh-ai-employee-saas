@@ -12,6 +12,7 @@ interface KnowledgeTableProps {
   onEditFaq: (faq: KnowledgeItem) => void;
   onReindex: (item: KnowledgeItem) => Promise<void>;
   onReplace: (item: KnowledgeItem, file: File) => Promise<void>;
+  onColumns: (item: KnowledgeItem) => void;
   onOpenModal: (modal: 'upload' | 'website' | 'faq' | 'test') => void;
 }
 
@@ -23,6 +24,7 @@ export function KnowledgeTable({
   onEditFaq,
   onReindex,
   onReplace,
+  onColumns,
   onOpenModal,
 }: KnowledgeTableProps) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -257,6 +259,13 @@ export function KnowledgeTable({
                               {getItemDetails(item)}{item.meta?.warnings?.length ? ' · ⚠ ' + item.meta.warnings.length + ' note' + (item.meta.warnings.length === 1 ? '' : 's') : ''}
                             </span>
                           )}
+                          {item.status === 'indexed' && (item.meta?.table_issues?.errors || item.meta?.table_issues?.warnings) ? (
+                            <button onClick={() => onColumns(item)} className={`text-[10px] text-left font-semibold ${item.meta?.table_issues?.errors ? 'text-red-600' : 'text-amber-700'}`}>
+                              {[item.meta?.table_issues?.errors ? `${item.meta.table_issues.errors} table error${item.meta.table_issues.errors === 1 ? '' : 's'}` : '',
+                                item.meta?.table_issues?.warnings ? `${item.meta.table_issues.warnings} table warning${item.meta.table_issues.warnings === 1 ? '' : 's'}` : '']
+                                .filter(Boolean).join(' · ')} — check columns
+                            </button>
+                          ) : null}
                           {item.status === 'indexed' && item.error && (
                             <span className="text-[10px] text-amber-700 whitespace-normal">{item.error}</span>
                           )}
@@ -307,6 +316,15 @@ export function KnowledgeTable({
                             title={item.doc_type === 'website' ? 'Crawl the website again' : 'Process the document again'}
                           >
                             {isSyncing ? 'Working...' : item.doc_type === 'website' ? 'Re-sync' : 'Re-index'}
+                          </button>
+                        )}
+                        {item.doc_type === 'document' && item.status === 'indexed' && (item.meta?.records || 0) > 0 && (
+                          <button
+                            onClick={() => onColumns(item)}
+                            className="text-[#0066FF] hover:text-[#0052cc] cursor-pointer"
+                            title="Check how the document's tables are read (fee column, labels, other names)"
+                          >
+                            Columns
                           </button>
                         )}
                         {item.doc_type === 'document' && (

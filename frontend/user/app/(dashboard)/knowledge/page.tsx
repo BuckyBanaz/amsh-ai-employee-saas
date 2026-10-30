@@ -7,6 +7,7 @@ import { UploadDocModal } from '../../../components/dashboard/knowledge/UploadDo
 import { SyncWebsiteModal } from '../../../components/dashboard/knowledge/SyncWebsiteModal';
 import { AddFaqModal } from '../../../components/dashboard/knowledge/AddFaqModal';
 import { TestRagModal } from '../../../components/dashboard/knowledge/TestRagModal';
+import { ColumnMappingModal } from '../../../components/dashboard/knowledge/ColumnMappingModal';
 import { DashboardController, KnowledgeItem, isKnowledgeProcessing } from '../../../controllers/dashboard.controller';
 
 export default function KnowledgeBasePage() {
@@ -16,6 +17,7 @@ export default function KnowledgeBasePage() {
   
   const [activeModal, setActiveModal] = useState<'upload' | 'website' | 'faq' | 'test' | null>(null);
   const [editingFaq, setEditingFaq] = useState<KnowledgeItem | null>(null);
+  const [columnsItem, setColumnsItem] = useState<KnowledgeItem | null>(null);
 
   const fetchKnowledge = useCallback(async (quiet = false) => {
     try {
@@ -94,6 +96,7 @@ export default function KnowledgeBasePage() {
         onEditFaq={handleEditFaq}
         onReindex={handleReindex}
         onReplace={handleReplace}
+        onColumns={setColumnsItem}
         onOpenModal={(modal) => {
           setEditingFaq(null);
           setActiveModal(modal);
@@ -123,6 +126,12 @@ export default function KnowledgeBasePage() {
       <TestRagModal
         isOpen={activeModal === 'test'}
         onClose={handleCloseModal}
+      />
+
+      <ColumnMappingModal
+        item={columnsItem}
+        onClose={() => setColumnsItem(null)}
+        onSaved={() => fetchKnowledge(true)}
       />
     </div>
   );

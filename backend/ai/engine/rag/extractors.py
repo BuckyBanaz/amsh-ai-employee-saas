@@ -42,6 +42,9 @@ class Limits:
     max_pages: int = 2_000
     max_unzipped_bytes: int = 250 * 1024 * 1024  # DOCX/XLSX are zips: refuse zip bombs before opening them
     max_zip_ratio: int = 200
+    ocr: bool = True  # read scanned PDF pages with Tesseract when it is installed (backend/ai/engine/rag/ocr.py)
+    ocr_max_pages: int = 50
+    ocr_dpi: int = 200
 
 
 @dataclass
@@ -277,7 +280,7 @@ def _pdf(filename: str, data: bytes, limits: Limits) -> Extracted:
     pages = reader.pages
     if len(pages) > limits.max_pages:
         out.warnings.append(f"Only the first {limits.max_pages} of {len(pages)} pages were indexed.")
-    empty = 0
+    empty_pages = []
     for n, page in enumerate(pages[: limits.max_pages], start=1):
         try:
             text = clean_text(page.extract_text() or "")
@@ -285,15 +288,38 @@ def _pdf(filename: str, data: bytes, limits: Limits) -> Extracted:
             text = ""
             out.warnings.append(f"Page {n} could not be read.")
         if len(text) < 3:
-            empty += 1
+            empty_pages.append(n)
             continue
         out.sections.append(Section(text, {"page": n}))
     out.meta = {"pages": len(pages)}
+    ocr_read = []
+    if empty_pages:
+        from backend.ai.engine.rag import ocr
+
+        if limits.ocr and ocr.available():
+            todo = empty_pages[: limits.ocr_max_pages]
+            if len(empty_pages) > len(todo):
+                out.warnings.append(f"Only the first {len(todo)} of {len(empty_pages)} scanned pages were read with OCR.")
+            for n, text in sorted(ocr.ocr_pages(data, todo, dpi=limits.ocr_dpi).items()):
+                text = clean_text(text)
+                if len(text) >= 3:
+                    out.sections.append(Section(text, {"page": n, "ocr": True}))
+                    ocr_read.append(n)
+            out.sections.sort(key=lambda s: s.meta.get("page", 0))
+            out.meta["ocr_pages"] = ocr_read
+            out.meta["ocr_languages"] = ocr.languages()
+            if ocr_read:
+                out.warnings.append(f"{len(ocr_read)} scanned page(s) were read with OCR (text recognition). Check figures such as "
+                                    "fees and dates against the original; a text-based PDF, DOCX or XLSX is more reliable.")
+        elif not out.sections:
+            raise ExtractionError("No selectable text was found in this PDF. It is probably a scanned image, and text recognition "
+                                  "(OCR) is not available on this server. Upload a text-based PDF, a DOCX or a TXT file instead.")
     if not out.sections:
-        raise ExtractionError("No selectable text was found in this PDF. It is probably a scanned image; OCR is not supported. "
-                              "Upload a text-based PDF, a DOCX or a TXT file instead.")
-    if empty:
-        out.warnings.append(f"{empty} page(s) had no selectable text (scanned images are not read).")
+        raise ExtractionError("No text could be read from this PDF, not even with text recognition (OCR). It may be a photo of "
+                              "low quality or have no text. Upload a text-based PDF, a DOCX or a TXT file instead.")
+    unread = [n for n in empty_pages if n not in ocr_read]
+    if unread:
+        out.warnings.append(f"{len(unread)} page(s) had no readable text.")
     return out
 
 
@@ -363,9 +389,77 @@ def _docx(filename: str, data: bytes, limits: Limits) -> Extracted:
     return out
 
 
+_SPRM_P_IN_TABLE, _SPRM_P_TTP, _SPRM_P_INNER_TTP, _SPRM_P_ITAP = 0x2416, 0x2417, 0x244C, 0x6649
+
+
+def _sprm_operand_size(sprm: int, grpprl: bytes, at: int) -> int:
+    spra = (sprm >> 13) & 7
+    if spra in (0, 1):
+        return 1
+    if spra in (2, 4, 5):
+        return 2
+    if spra == 3:
+        return 4
+    if spra == 7:
+        return 3
+    if sprm in (0xD608, 0xC615):  # sprmTDefTable / sprmPChgTabs: 2-byte length
+        return 2 + struct.unpack_from("<H", grpprl, at)[0] - 1 if sprm == 0xD608 else 1 + grpprl[at]
+    return 1 + grpprl[at]
+
+
+def _papx_flags(grpprl: bytes) -> tuple:
+    """(in_table, row_end) from a paragraph's sprms ([MS-DOC] 2.6.2): sprmPFInTable / sprmPItap mark a table cell paragraph,
+    sprmPFTtp / sprmPFInnerTtp the row's end mark."""
+    in_table = ttp = False
+    i = 2  # istd
+    while i + 2 <= len(grpprl):
+        sprm = struct.unpack_from("<H", grpprl, i)[0]
+        i += 2
+        if i > len(grpprl):
+            break
+        size = _sprm_operand_size(sprm, grpprl, i) if i < len(grpprl) else 1
+        operand = grpprl[i:i + size]
+        if sprm == _SPRM_P_IN_TABLE and operand[:1] == b"\x01":
+            in_table = True
+        elif sprm in (_SPRM_P_TTP, _SPRM_P_INNER_TTP) and operand[:1] == b"\x01":
+            in_table = ttp = True
+        elif sprm == _SPRM_P_ITAP and len(operand) == 4 and struct.unpack("<i", operand)[0] > 0:
+            in_table = True
+        i += max(size, 1)
+    return in_table, ttp
+
+
+def _doc_paragraph_runs(wd: bytes, tbl: bytes, fc_bte: int, lcb_bte: int) -> List[tuple]:
+    """[(fc_start, fc_end, in_table, row_end)] from the PlcBtePapx and its PAPX FKP pages."""
+    runs = []
+    if not lcb_bte or fc_bte + lcb_bte > len(tbl):
+        return runs
+    n = (lcb_bte - 4) // 8
+    pns = struct.unpack_from(f"<{n}I", tbl, fc_bte + (n + 1) * 4)
+    for pn in pns:
+        base = (pn & 0x3FFFFF) * 512
+        page = wd[base: base + 512]
+        if len(page) < 512:
+            continue
+        crun = page[511]
+        rgfc = struct.unpack_from(f"<{crun + 1}I", page, 0)
+        for k in range(crun):
+            off = page[(crun + 1) * 4 + k * 13] * 2
+            if off == 0:
+                runs.append((rgfc[k], rgfc[k + 1], False, False))
+                continue
+            cb = page[off]
+            grpprl = page[off + 2: off + 2 + 2 * page[off + 1]] if cb == 0 else page[off + 1: off + 1 + 2 * cb - 1]
+            runs.append((rgfc[k], rgfc[k + 1], *_papx_flags(grpprl)))
+    return runs
+
+
 def _doc(filename: str, data: bytes, limits: Limits) -> Extracted:
-    """Word 97-2003 (.doc): reads the main document text through the piece table ([MS-DOC] 2.4.1). Formatting and table
-    structure are not recovered; table cells are separated with " | "."""
+    """Word 97-2003 (.doc): the main document text through the piece table ([MS-DOC] 2.4.1), and table structure from the
+    paragraph properties: a cell's paragraphs end with a cell mark, a row ends with a row-end (TTP) mark, so tables come back
+    as rows and columns (and their rows can be looked up exactly, like a spreadsheet). Formatting is not recovered."""
+    import bisect
+
     import olefile
 
     try:
@@ -391,6 +485,7 @@ def _doc(filename: str, data: bytes, limits: Limits) -> Extracted:
         cslw = struct.unpack_from("<H", wd, lw_at - 2)[0]
         fclcb_at = lw_at + cslw * 4 + 2
         fc_clx, lcb_clx = struct.unpack_from("<II", wd, fclcb_at + 33 * 8)
+        fc_bte, lcb_bte = struct.unpack_from("<II", wd, fclcb_at + 13 * 8)
         clx = tbl[fc_clx: fc_clx + lcb_clx]
         i = 0
         while i < len(clx) and clx[i] == 0x01:  # Prc entries: skip
@@ -401,7 +496,8 @@ def _doc(filename: str, data: bytes, limits: Limits) -> Extracted:
         plc = clx[i + 5: i + 5 + lcb]
         n = (len(plc) - 4) // 12
         cps = struct.unpack_from(f"<{n + 1}I", plc, 0)
-        parts = []
+        chars: List[str] = []
+        fcs: List[int] = []  # the file position of every character: paragraph properties are keyed by it
         for k in range(n):
             start, end = cps[k], cps[k + 1]
             if start >= ccp_text:
@@ -410,23 +506,89 @@ def _doc(filename: str, data: bytes, limits: Limits) -> Extracted:
             fc = struct.unpack_from("<I", plc, (n + 1) * 4 + k * 8 + 2)[0]
             if fc & 0x40000000:
                 off = (fc & 0x3FFFFFFF) // 2
-                parts.append(wd[off: off + (end - start)].decode("cp1252", errors="replace"))
+                text = wd[off: off + (end - start)].decode("cp1252", errors="replace")
+                chars.extend(text)
+                fcs.extend(off + j for j in range(len(text)))
             else:
                 off = fc & 0x3FFFFFFF
-                parts.append(wd[off: off + 2 * (end - start)].decode("utf-16-le", errors="replace"))
-        raw = "".join(parts)
+                text = wd[off: off + 2 * (end - start)].decode("utf-16-le", errors="replace")
+                chars.extend(text)
+                fcs.extend(off + 2 * j for j in range(len(text)))
+        try:
+            runs = _doc_paragraph_runs(wd, tbl, fc_bte, lcb_bte)
+        except Exception:
+            runs = []  # unreadable paragraph properties: text without table structure
     finally:
         ole.close()
-    raw = re.sub(r"\x13[^\x13\x14\x15]*\x14", "", raw)  # field instructions (keep the field's shown result)
-    raw = re.sub(r"\x13[^\x13\x14\x15]*\x15", "", raw)  # fields with no result
-    raw = raw.replace("\x15", "").replace("\x07\r", "\n").replace("\x07", " | ").replace("\x0b", "\n").replace("\x0c", "\n\n")
-    raw = raw.replace("\r", "\n\n")
-    text = clean_text(raw)
+
+    starts = [r[0] for r in runs]
+
+    def flags_at(fc: int) -> tuple:
+        k = bisect.bisect_right(starts, fc) - 1
+        if 0 <= k < len(runs) and runs[k][0] <= fc < runs[k][1]:
+            return runs[k][2], runs[k][3]
+        return False, False
+
+    def clean_field_codes(text: str) -> str:
+        text = re.sub(r"\x13[^\x13\x14\x15]*\x14", "", text)  # field instructions (keep the field's shown result)
+        text = re.sub(r"\x13[^\x13\x14\x15]*\x15", "", text)
+        return text.replace("\x15", "").replace("\x0b", "\n").replace("\x0c", "\n\n")
+
     out = Extracted(kind="doc")
-    if text:
-        for block in re.split(r"\n{2,}(?=\S)", text):
-            if block.strip():
-                out.sections.append(Section(block.strip()))
+    paragraphs: List[str] = []
+    grid: List[List[str]] = []
+    row: List[str] = []
+    cell: List[str] = []
+    buf: List[str] = []
+    n_tables = 0
+    heading = ""
+
+    def close_table():
+        nonlocal grid, n_tables
+        if grid:
+            n_tables += 1
+            table = build_table(f"Table {n_tables}" + (f" ({heading})" if heading else ""), grid, limits.max_rows, out.warnings)
+            if table:
+                out.tables.append(table)
+            grid = []
+
+    for ch, fc in zip(chars, fcs):
+        if ch not in ("\r", "\x07"):
+            buf.append(ch)
+            continue
+        text = clean_text(clean_field_codes("".join(buf)))
+        buf = []
+        in_table, row_end = flags_at(fc)
+        if runs and row_end:
+            if cell or text:
+                row.append(" ".join(cell + ([text] if text else [])))
+                cell = []
+            if row:
+                grid.append(row)
+            row = []
+        elif runs and in_table:
+            if ch == "\x07":  # end of a cell
+                row.append(" ".join(cell + ([text] if text else [])).strip())
+                cell = []
+            elif text:  # a cell with several paragraphs
+                cell.append(text)
+        elif runs or ch == "\r":
+            close_table()
+            if text:
+                paragraphs.append(text)
+                if len(text) < 80 and not text.endswith((".", ":", ";", ",")):
+                    heading = text
+        else:  # no paragraph properties: keep cells readable as text
+            if text:
+                paragraphs.append(text + " |")
+    if row:
+        grid.append(row)
+    close_table()
+    body = clean_text("\n\n".join(paragraphs)).replace(" |\n\n", " | ")
+    for block in re.split(r"\n{2,}(?=\S)", body):
+        if block.strip():
+            out.sections.append(Section(block.strip()))
+    out.meta = {"tables": n_tables}
     return out
 
 

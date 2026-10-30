@@ -252,6 +252,8 @@ export interface KnowledgeMeta {
   embedded?: number;
   warnings?: string[];
   last_error?: string;
+  ocr_pages?: number[];
+  table_issues?: { errors: number; warnings: number };
   crawl?: {
     urls_discovered: number;
     urls_processed: number;
@@ -261,6 +263,39 @@ export interface KnowledgeMeta {
     failed?: { url: string; reason: string }[];
     skipped?: { url: string; reason: string }[];
   };
+}
+
+export type ColumnRole = 'course' | 'country' | 'category' | 'year' | 'fee' | 'other' | 'ignore';
+
+export interface ColumnSetting {
+  role?: ColumnRole | null;
+  label?: string | null;
+  aliases?: Record<string, string>;
+}
+
+/** One table of a document as the Columns screen shows it (GET .../knowledge/{id}/tables). */
+export interface KnowledgeTableProfile {
+  name: string;
+  rows: number;
+  columns: {
+    name: string;
+    label: string;
+    role: ColumnRole;
+    detected_role: ColumnRole;
+    confirmed: boolean;
+    distinct: number;
+    empty: number;
+    samples: string[];
+    aliases: Record<string, string>;
+  }[];
+  issues: { level: 'error' | 'warning' | 'info'; column: string | null; message: string }[];
+}
+
+export interface KnowledgeTables {
+  document_id: string;
+  filename: string | null;
+  roles: ColumnRole[];
+  tables: KnowledgeTableProfile[];
 }
 
 /** True while the backend is still working on a source (the page polls until it is indexed or failed). */
@@ -580,6 +615,16 @@ export const DashboardController = {
   async updateKnowledge(entryId: string, payload: { question?: string; answer?: string; filename?: string; source_url?: string }, businessId?: string): Promise<KnowledgeItem> {
     const bId = this.getEffectiveBusinessId(businessId);
     return ApiService.patch<KnowledgeItem>(API_ENDPOINTS.KNOWLEDGE.ENTRY(bId, entryId), payload);
+  },
+
+  async getKnowledgeTables(entryId: string, businessId?: string): Promise<KnowledgeTables> {
+    const bId = this.getEffectiveBusinessId(businessId);
+    return ApiService.get<KnowledgeTables>(API_ENDPOINTS.KNOWLEDGE.TABLES(bId, entryId));
+  },
+
+  async saveKnowledgeTables(entryId: string, tables: Record<string, { columns: Record<string, ColumnSetting> }>, businessId?: string): Promise<KnowledgeTables> {
+    const bId = this.getEffectiveBusinessId(businessId);
+    return ApiService.put<KnowledgeTables>(API_ENDPOINTS.KNOWLEDGE.TABLES(bId, entryId), { tables });
   },
 
   async testKnowledgeAnswer(query: string, businessId?: string): Promise<any> {

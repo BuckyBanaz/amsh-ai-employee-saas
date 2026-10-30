@@ -238,18 +238,24 @@ class UploadValidation(KBBase):
         self.assertIn("damaged", d["error"])
         self.assertEqual(self.query("cancellation")["results"], [])
 
-    def test_scanned_pdf_without_text_fails_honestly(self):
-        from reportlab.pdfgen import canvas  # fixture-time helper; skip when not installed
-
-        buf = io.BytesIO()
-        c = canvas.Canvas(buf)
-        c.rect(50, 50, 200, 200, fill=1)  # an image-like page with no text
-        c.showPage()
-        c.save()
-        r = self.upload("scan.pdf", buf.getvalue())
+    @unittest.skipUnless(__import__("shutil").which("tesseract"), "Tesseract is not installed (the API image installs it)")
+    def test_scanned_pdf_is_read_with_ocr(self):
+        r = self.upload("scanned_hostel_notice.pdf")
         d = self.doc(r.json()["id"])
+        self.assertEqual(d["status"], "indexed", d.get("error"))
+        self.assertEqual(d["meta"]["ocr_pages"], [1])
+        self.assertTrue(any("OCR" in w and "Check figures" in w for w in d["meta"]["warnings"]))
+        self.assertIn("INR 95000", self.texts("hostel fee international students"))
+
+    def test_scanned_pdf_without_ocr_fails_honestly(self):
+        from backend.ai.engine.rag import ocr
+
+        with patch.object(ocr, "available", lambda: False):
+            r = self.upload("scanned_hostel_notice.pdf")
+            d = self.doc(r.json()["id"])
         self.assertEqual(d["status"], "failed")
-        self.assertIn("OCR is not supported", d["error"])
+        self.assertIn("OCR", d["error"])
+        self.assertIn("not available", d["error"])
 
     def test_duplicate_upload_is_refused(self):
         self.assertEqual(self.upload("salon_faq.txt").status_code, 201)
@@ -865,3 +871,197 @@ class Multilingual(unittest.TestCase):
         out = run(eng.toolbox.execute("search_knowledge", {"query": "नाइजीरिया के छात्र की बीटेक सीएसई फीस 2026-27"}))
         self.assertEqual(out["table"]["status"], "exact")
         self.assertIn("Tuition Fee: 250000", out["message"])
+
+
+# ----------------------------------------------------- education workflow: country and academic year as real slots
+
+class EducationSlots(unittest.TestCase):
+    def setUp(self):
+        from backend.ai.evals.test_vertical_runtime import tenant
+
+        embeddings.set_embedder(None)
+        self.factory, self.biz = tenant("education", "university")
+        ingest(self.factory, self.biz, "university_fees.xlsx", fixture("university_fees.xlsx"))
+
+    def engine(self, backend):
+        from backend.ai.engine.agent.agent_loop import AgentEngine
+        from backend.ai.engine.agent.facts import load_facts
+        from backend.ai.evals.fixtures import FIXED_NOW
+        from backend.ai.verticals.registry import registry
+
+        with self.factory() as db:
+            facts = load_facts(db, self.biz)
+        return AgentEngine(self.biz, "+919876543210", "CA-SLOTS", facts, registry.get_vertical(facts.vertical, "en"), backend,
+                           self.factory, agent_name="Ava", now_fn=lambda: FIXED_NOW)
+
+    def test_the_workflow_declares_country_and_academic_year(self):
+        from backend.ai.workflows.registry import workflow_registry
+
+        wf = next(w for w in workflow_registry().workflows_for("education", "university") if w.id == "education.university_enquiry")
+        slots = {s.id: s for s in wf.slots}
+        self.assertIn("country", slots)
+        self.assertIn("academic_year", slots)
+        context = next(st for st in wf.steps if st.id == "context")
+        self.assertIn("country", context.slots)
+        self.assertIn("academic_year", context.slots)
+        self.assertIn("academic_year", wf.transfer.collect_before_transfer)
+
+    def test_caller_words_fill_the_slots_in_any_language(self):
+        from backend.ai.workflows.caller_slots import parse
+
+        self.assertEqual(parse("I'm from Nepal, B.Tech fee for 2026-27?"), {"country": "Nepal", "academic_year": "2026-27"})
+        self.assertEqual(parse("मैं नेपाल से हूँ, २०२६-२७ का सत्र"), {"country": "Nepal", "academic_year": "2026-27"})
+        self.assertEqual(parse("من نيجيريا 2026-2027"), {"country": "Nigeria", "academic_year": "2026-27"})
+        self.assertEqual(parse("Ik kom uit Bangladesh, sessie 2026"), {"country": "Bangladesh", "academic_year": "2026"})
+        self.assertEqual(parse("what are the fees for us?"), {})
+
+    def test_earlier_answers_carry_into_later_fee_questions_and_the_lead(self):
+        from backend.ai.evals.test_agent_core import ScriptedBackend, call, reply
+        from backend.server.database.models.vertical import Enquiry
+
+        backend = ScriptedBackend(
+            call("search_knowledge", query="B.Tech CSE fee"), reply("For a student from Nepal it is 180000 for 2026-27."),
+            call("search_knowledge", query="B.Tech CSE fee 2025-26"), reply("For 2025-26 it was 170000."),
+        )
+        eng = self.engine(backend)
+        run(eng.turn("Hi, I'm from Nepal. What is the B.Tech CSE fee for 2026-27?"))
+        self.assertEqual({k: eng.workflow.context().get(k) for k in ("country", "academic_year")}, {"country": "Nepal", "academic_year": "2026-27"})
+        first = [r for r in tool_results(backend) if "table" in r][0]["table"]
+        self.assertEqual(first["status"], "exact")  # the model's query named neither country nor year: the slots did
+        self.assertEqual(first["rows"][0]["Tuition Fee"], "180000")
+        self.assertEqual(first["from_earlier_answers"], {"Academic Year": ["2026-27"], "Country": ["Nepal"]})
+        run(eng.turn("And what was it in 2025-26?"))
+        self.assertEqual(eng.workflow.context()["academic_year"], "2025-26")  # the newer value replaces the older one
+        second = [r for r in tool_results(backend) if "table" in r][-1]["table"]
+        self.assertEqual((second["status"], second["rows"][0]["Tuition Fee"]), ("exact", "170000"))
+        # the lead keeps what the caller said even when the model leaves it out of capture_enquiry
+        tb = eng.toolbox
+        tb.said += ["my name is aarav shrestha", "9876500011"]
+        args = {"name": "Aarav Shrestha", "phone_number": "9876500011", "kind": "admission", "subject": "B.Tech CSE"}
+        self.assertEqual(run(tb.execute("capture_enquiry", {**args, "confirmed_by_caller": False}))["code"], "needs_confirmation")
+        tb.gate.turn += 1
+        self.assertEqual(run(tb.execute("capture_enquiry", {**args, "confirmed_by_caller": True}))["code"], "saved")
+        with self.factory() as db:
+            details = db.query(Enquiry).filter_by(business_id=self.biz).one().details
+        self.assertEqual((details["country"], details["academic_year"]), ("Nepal", "2025-26"))
+
+    def test_a_new_value_in_the_question_wins_over_an_earlier_answer(self):
+        with self.factory() as db:
+            t = index.search(db, self.biz, "B.Tech CSE fee for Nigeria", hints=["Nepal", "2026-27"])["structured"]
+        self.assertEqual((t["status"], t["rows"][0]["Country"], t["rows"][0]["Tuition Fee"]), ("exact", "Nigeria", "250000"))
+        self.assertEqual(t["from_context"], {"Academic Year": ["2026-27"]})
+
+    def test_hints_never_pick_a_table_on_their_own(self):
+        with self.factory() as db:
+            t = index.search(db, self.biz, "what are the library timings", hints=["Nepal", "2026-27"])["structured"]
+        self.assertIsNone(t)
+
+
+# ------------------------------------------------------------------------------------- legacy Word tables (.doc)
+
+class LegacyDocTables(KBBase):
+    def test_doc_tables_keep_rows_and_columns(self):
+        ex = extractors.extract("spa_price_list.doc", fixture("spa_price_list.doc"))
+        self.assertEqual([s.text for s in ex.sections], ["Spa Price List", "Please arrive 15 minutes before your treatment."])
+        self.assertEqual(len(ex.tables), 1)
+        t = ex.tables[0]
+        self.assertEqual(t.header, ["Treatment", "Duration", "Price"])
+        self.assertEqual(t.rows, [["Couples massage", "90 min", "INR 7000"], ["Hot stone massage", "60 min", "INR 4500"],
+                                  ["Aromatherapy", "45 min", ""]])  # an empty cell stays in its column
+
+    def test_doc_table_rows_are_looked_up_exactly(self):
+        self.upload("spa_price_list.doc")
+        t = self.query("hot stone massage price")["structured"]
+        self.assertEqual((t["status"], t["rows"][0]["Price"]), ("exact", "INR 4500"))
+
+    def test_doc_without_tables_is_unchanged(self):
+        ex = extractors.extract("spa_policies.doc", fixture("spa_policies.doc"))
+        self.assertEqual(ex.tables, [])
+        self.assertIn("Couples massage packages cost INR 7000 for 90 minutes.", [s.text for s in ex.sections])
+
+    def test_paragraph_property_parsing(self):
+        import struct as st
+
+        cell = b"\x00\x00" + st.pack("<H", 0x2416) + b"\x01"
+        row_end = cell + st.pack("<H", 0x2417) + b"\x01"
+        nested = b"\x00\x00" + st.pack("<H", 0x6649) + st.pack("<i", 1)
+        self.assertEqual(extractors._papx_flags(b"\x00\x00"), (False, False))
+        self.assertEqual(extractors._papx_flags(cell), (True, False))
+        self.assertEqual(extractors._papx_flags(row_end), (True, True))
+        self.assertEqual(extractors._papx_flags(nested), (True, False))
+
+
+# ------------------------------------------------------------------------- spreadsheets in each university's own format
+
+def sheet(rows):
+    from openpyxl import Workbook
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Fees"
+    for r in rows:
+        ws.append(r)
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+class ColumnMapping(KBBase):
+    ROWS = [["Programme", "Nationality", "Session", "Annual Tuition (INR)", "Remarks"],
+            ["Computer Science Engg", "Nepal", "2026-27", "1,80,000", "Merit seats"],
+            ["Computer Science Engg", "Nigeria", "2026-27", "2,50,000", "Merit seats"],
+            ["Computer Science Engg", "India", "2026-27", "TBD", "Merit seats"],
+            ["MBA", "Nepal", "2026-27", "", "Merit seats"],
+            ["MBA", "Nepal", "2026-27", "4,30,000", "Merit seats"]]
+
+    def setUp(self):
+        super().setUp()
+        self.doc_id = self.upload("westbridge_fee_sheet.xlsx", sheet(self.ROWS)).json()["id"]
+
+    def tables(self):
+        return self.c.get(self.url(path=f"/{self.doc_id}/tables"), headers=self.h["owner"]).json()
+
+    def save(self, columns, who="owner"):
+        return self.c.put(self.url(path=f"/{self.doc_id}/tables"), json={"tables": {"Fees": {"columns": columns}}}, headers=self.h[who])
+
+    def test_roles_are_detected_from_headings_in_any_format(self):
+        cols = {c["name"]: c["detected_role"] for c in self.tables()["tables"][0]["columns"]}
+        self.assertEqual(cols, {"Programme": "course", "Nationality": "country", "Session": "year", "Annual Tuition (INR)": "fee",
+                                "Remarks": "other"})
+
+    def test_validation_finds_what_would_make_a_lookup_wrong(self):
+        issues = [i["message"] for i in self.tables()["tables"][0]["issues"]]
+        self.assertTrue(any("text instead of an amount" in m and "TBD" in m for m in issues), issues)
+        self.assertTrue(any("is empty in 1 row(s) (rows 4)" in m for m in issues), issues)
+        self.assertTrue(any(m.startswith("Rows 4 and 5 describe the same thing") for m in issues), issues)
+        d = self.doc(self.doc_id)
+        self.assertEqual(d["meta"]["table_issues"], {"errors": 1, "warnings": 2})  # shown on the document straight after upload
+
+    def test_aliases_labels_and_ignored_columns_change_the_lookup(self):
+        q = "BTech CSE fee for Nepal 2026-27"
+        before = self.query(q)["structured"]  # the sheet never says "BTech CSE": the course is unknown, so it asks
+        self.assertEqual((before["status"], before["ask_for"]), ("ambiguous", ["Programme"]))
+        r = self.save({"Programme": {"role": "course", "aliases": {"BTech CSE": "Computer Science Engg", "B.Tech CSE": "Computer Science Engg"}},
+                       "Annual Tuition (INR)": {"label": "Tuition Fee"}, "Remarks": {"role": "ignore"}})
+        self.assertEqual(r.status_code, 200, r.text)
+        t = self.query(q)["structured"]
+        self.assertEqual(t["status"], "exact")
+        self.assertEqual(t["rows"][0], {"Programme": "Computer Science Engg", "Nationality": "Nepal", "Session": "2026-27", "Tuition Fee": "1,80,000"})
+        cols = {c["name"]: c for c in self.tables()["tables"][0]["columns"]}
+        self.assertTrue(cols["Remarks"]["confirmed"])
+        self.assertEqual(cols["Programme"]["aliases"]["BTech CSE"], "Computer Science Engg")
+
+    def test_a_column_marked_as_fee_holds_the_answers(self):
+        self.save({"Remarks": {"role": "fee"}})
+        t = self.query("MBA Nepal 2026-27")["structured"]
+        self.assertIn("Remarks", t["value_columns"])
+
+    def test_bad_settings_are_refused(self):
+        self.assertEqual(self.save({"Nope": {"role": "course"}}).status_code, 422)
+        self.assertEqual(self.save({"Programme": {"role": "banana"}}).status_code, 422)
+        r = self.save({"Programme": {"aliases": {"Data Science": "MSc Data Science"}}})  # not a value of the column
+        self.assertEqual(r.status_code, 422)
+        self.assertIn("is not a value of", r.json()["detail"])
+        self.assertEqual(self.save({"Remarks": {"role": "ignore"}}, who="recep").status_code, 403)
+        other = self.c.get(f"/api/businesses/biz-other/knowledge/{self.doc_id}/tables", headers=self.h["other"])
+        self.assertEqual(other.status_code, 404)

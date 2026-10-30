@@ -109,6 +109,7 @@ export const API_ENDPOINTS = {
     REPLACE: (businessId: string, id: string) => `${BASE_URL}/onboarding/businesses/${businessId}/knowledge/${id}/replace`,
     REINDEX: (businessId: string, id: string) => `${BASE_URL}/onboarding/businesses/${businessId}/knowledge/${id}/reindex`,
     TEST_ANSWER: (businessId: string) => `${BASE_URL}/onboarding/businesses/${businessId}/knowledge/test-answer`,
+    TABLES: (businessId: string, id: string) => `${BASE_URL}/onboarding/businesses/${businessId}/knowledge/${id}/tables`,
   },
   INTEGRATIONS: {
     LIST: (businessId: string) => `${BASE_URL}/onboarding/businesses/${businessId}/integrations`,

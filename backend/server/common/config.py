@@ -94,6 +94,11 @@ class Settings(BaseSettings):
     # A question in Hindi/Arabic/Dutch/... that finds nothing is translated to English once (Groq) and searched again.
     KB_QUERY_TRANSLATION: str = "auto"  # "off" to never call the LLM for search
     KB_TRANSLATE_TIMEOUT: float = 1.5
+    # Scanned PDF pages are read with Tesseract when it is installed (the API image installs it). "off" disables OCR.
+    KB_OCR: str = "auto"
+    KB_OCR_LANGS: str = "eng+hin+ara+nld+deu+spa+fra"  # only installed packs are used
+    KB_OCR_MAX_PAGES: int = 50
+    KB_OCR_DPI: int = 200
     KB_MAX_FILE_MB: int = 20
     KB_CRAWL_MAX_PAGES: int = 25  # per sync; the business can ask for fewer, never more than KB_CRAWL_PAGE_CAP
     KB_CRAWL_PAGE_CAP: int = 100

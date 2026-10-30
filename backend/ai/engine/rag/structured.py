@@ -87,45 +87,185 @@ def _mentions(value_norm: str, q: str, q_joins: set) -> bool:
     return len(c) >= 4 and not c.isdigit() and c in q_joins
 
 
+ROLES = ("course", "country", "category", "year", "fee", "other", "ignore")
+VALUE_ROLES = ("fee",)
+
+# What a column is about, from its heading in any of the agent's languages (folded and mapped to English first).
+_ROLE_WORDS = {
+    "fee": {"fee", "fees", "tuition", "price", "prices", "cost", "costs", "amount", "charge", "charges", "rate", "rates", "inr",
+            "usd", "gbp", "eur", "rs", "rupees", "total"},
+    "year": {"year", "years", "session", "intake", "batch", "academic", "semester", "term"},
+    "country": {"country", "countries", "nationality", "nation", "region", "origin", "citizenship"},
+    "category": {"category", "categories", "type", "quota", "student", "applicant", "residency", "domestic", "international"},
+    "course": {"course", "courses", "programme", "program", "programs", "degree", "branch", "specialization", "specialisation",
+               "stream", "subject", "treatment", "service", "services", "room", "package", "plan", "item"},
+}
+_YEAR_VALUE = re.compile(r"^20\d\d(\s*[-/–]\s*(20)?\d\d)?$")
+
+
+def guess_role(header: str, values: List[str]) -> str:
+    """course | country | category | year | fee | other, from the heading first and the values second."""
+    words = set(normalize(languages.to_english(header)).split())
+    for role in ("fee", "year", "country", "category", "course"):
+        if words & _ROLE_WORDS[role]:
+            return role
+    vals = [v for v in values if v][:200]
+    if not vals:
+        return "other"
+    if sum(bool(_YEAR_VALUE.match(v.strip())) for v in vals) >= 0.7 * len(vals):
+        return "year"
+    if sum(_is_amount(v) for v in vals) >= 0.7 * len(vals):
+        return "fee"
+    from backend.ai.workflows.caller_slots import country_in
+
+    if sum(bool(country_in(v)) for v in vals) >= 0.6 * len(vals):
+        return "country"
+    return "other"
+
+
 class _Table:
-    def __init__(self, document_id: str, name: str, source: str, rows: List[dict]):
+    """One table for lookups. `mapping` ({original column: {"role", "label", "aliases"}}) is what the business confirmed in
+    the Columns screen: an ignored column is left out, a "fee" column holds the answers, every other role is a column the
+    caller's words are matched against; `label` renames the column; `aliases` are other names for a value
+    ({"Computer Science": "B.Tech CSE"})."""
+
+    def __init__(self, document_id: str, name: str, source: str, rows: List[dict], mapping: Optional[dict] = None):
         self.document_id = document_id
         self.name = name
         self.source = source
-        self.rows = rows
-        self.columns: List[str] = list(dict.fromkeys(k for r in rows for k in r.keys()))
+        mapping = mapping or {}
+        raw_columns = list(dict.fromkeys(k for r in rows for k in r.keys()))
+        keep = [c for c in raw_columns if (mapping.get(c) or {}).get("role") != "ignore"]
+        rename = {c: ((mapping.get(c) or {}).get("label") or c).strip() or c for c in keep}
+        self.rows = [{rename[c]: r[c] for c in keep if c in r} for r in rows]
+        self.columns: List[str] = [rename[c] for c in keep]
         self.value_columns: List[str] = []
         self.category_columns: List[str] = []
-        for col in self.columns:
-            vals = [r.get(col, "") for r in rows if r.get(col, "")]
-            if vals and sum(_is_amount(v) for v in vals) >= 0.7 * len(vals):
+        for c in keep:
+            col = rename[c]
+            role = (mapping.get(c) or {}).get("role")
+            vals = [r.get(col, "") for r in self.rows if r.get(col, "")]
+            if role in VALUE_ROLES or (role is None and vals and sum(_is_amount(v) for v in vals) >= 0.7 * len(vals)):
                 self.value_columns.append(col)
             else:
                 self.category_columns.append(col)
         # normalised once per table, not on every question (a 6,000-row fee sheet is filtered on every lookup)
-        self.norm_rows: List[Dict[str, str]] = [{col: normalize(r.get(col, "")) for col in self.category_columns} for r in rows]
+        self.norm_rows: List[Dict[str, str]] = [{col: normalize(r.get(col, "")) for col in self.category_columns} for r in self.rows]
         self.distinct: Dict[str, Dict[str, str]] = {}
-        for col in self.category_columns:
+        self.aliases: Dict[str, Dict[str, str]] = {}  # column -> {normalised alias: normalised value}
+        for c in keep:
+            col = rename[c]
+            if col not in self.category_columns:
+                continue
             d: Dict[str, str] = {}
-            for r in rows:
+            for r in self.rows:
                 v = r.get(col, "")
                 if v and len(v) <= 80:
                     d.setdefault(normalize(v), v)
             self.distinct[col] = d
+            self.aliases[col] = {normalize(a): normalize(v) for a, v in ((mapping.get(c) or {}).get("aliases") or {}).items()
+                                 if normalize(a) and normalize(v) in d}
 
 
-def build_tables(records: List[dict]) -> List[_Table]:
-    """records: [{"document_id", "table_name", "source", "data"}] for ONE business."""
+def build_tables(records: List[dict], mappings: Optional[Dict[tuple, dict]] = None) -> List[_Table]:
+    """records: [{"document_id", "table_name", "source", "data"}] for ONE business. mappings: {(document_id, table_name):
+    column mapping} from each document's confirmed Columns settings."""
     groups: Dict[tuple, List[dict]] = defaultdict(list)
     sources: Dict[tuple, str] = {}
     for r in records:
         key = (r["document_id"], r["table_name"])
         groups[key].append(r["data"])
         sources[key] = r.get("source") or ""
-    return [_Table(doc, name, sources[(doc, name)], rows) for (doc, name), rows in groups.items()]
+    mappings = mappings or {}
+    return [_Table(doc, name, sources[(doc, name)], rows, mappings.get((doc, name))) for (doc, name), rows in groups.items()]
 
 
-def lookup(tables: List[_Table], query: str, max_rows: int = 10) -> Optional[dict]:
+def profile(name: str, rows: List[dict], mapping: Optional[dict] = None) -> dict:
+    """What the Columns screen shows for one table: each column's detected and confirmed role, label, sample values and
+    aliases, and the problems that would make an exact lookup wrong or impossible."""
+    mapping = mapping or {}
+    columns = list(dict.fromkeys(k for r in rows for k in r.keys()))
+    out_cols, issues = [], []
+    roles = {}
+    for c in columns:
+        values = [r.get(c, "") for r in rows]
+        filled = [v for v in values if v]
+        detected = guess_role(c, filled)
+        m = mapping.get(c) or {}
+        role = m.get("role") or detected
+        roles[c] = role
+        samples = list(dict.fromkeys(filled))[:5]
+        out_cols.append({"name": c, "label": m.get("label") or "", "role": role, "detected_role": detected,
+                         "confirmed": bool(m.get("role")), "distinct": len(set(filled)), "empty": len(values) - len(filled),
+                         "samples": samples, "aliases": m.get("aliases") or {}})
+        if re.fullmatch(r"Column \d+", c):
+            issues.append({"level": "warning", "column": c, "message": f"'{c}' has no heading; give it a label so callers' words can match it."})
+    value_cols = [c for c in columns if roles[c] in VALUE_ROLES]
+    label_cols = [c for c in columns if roles[c] not in VALUE_ROLES and roles[c] != "ignore"]
+    if not value_cols:
+        issues.append({"level": "warning", "column": None, "message": "No fee or price column was found. Mark the column that holds "
+                       "the amounts as Fee so exact answers can be given."})
+    for c in value_cols:
+        empty = [i + 1 for i, r in enumerate(rows) if not r.get(c, "")]
+        if empty:
+            issues.append({"level": "warning", "column": c, "message": f"'{c}' is empty in {len(empty)} row(s) ({_rows(empty)}). "
+                           "The AI will say no figure is listed for those."})
+        odd = [i + 1 for i, r in enumerate(rows) if r.get(c, "") and not _is_amount(r[c])]
+        if odd and len(odd) < len(rows):
+            issues.append({"level": "warning", "column": c, "message": f"'{c}' has text instead of an amount in {len(odd)} row(s) "
+                           f"({_rows(odd)}), e.g. '{rows[odd[0] - 1][c]}'."})
+    if value_cols and label_cols:
+        seen: Dict[tuple, int] = {}
+        conflicts = []
+        for i, r in enumerate(rows):
+            key = tuple(_compact(normalize(r.get(c, ""))) for c in label_cols)  # "B.Tech CSE" and "BTech CSE" are one value
+            vals = tuple(r.get(c, "") for c in value_cols)
+            if key in seen:
+                j = seen[key]
+                if tuple(rows[j].get(c, "") for c in value_cols) != vals:
+                    conflicts.append((j + 1, i + 1))
+            else:
+                seen[key] = i
+        for a, b in conflicts[:5]:
+            issues.append({"level": "error", "column": None, "message": f"Rows {a} and {b} describe the same thing but list different "
+                           "amounts, so no single answer can be given. Fix the sheet or add the column that tells them apart."})
+    for c in label_cols:
+        spellings: Dict[str, set] = defaultdict(set)
+        for r in rows:
+            v = r.get(c, "")
+            if v:
+                spellings[_compact(normalize(v))].add(v)
+        for forms in spellings.values():
+            if len(forms) > 1:
+                issues.append({"level": "info", "column": c, "message": f"'{c}' writes one value in {len(forms)} ways: "
+                               f"{', '.join(sorted(forms)[:4])}. They are treated as the same value."})
+    return {"name": name, "rows": len(rows), "columns": out_cols, "issues": issues}
+
+
+def _rows(numbers: List[int]) -> str:
+    return "rows " + ", ".join(map(str, numbers[:5])) + (" …" if len(numbers) > 5 else "")
+
+
+def _constraints(table: _Table, q: str, q_joins: set, columns=None) -> Dict[str, set]:
+    out: Dict[str, set] = {}
+    for col in (columns if columns is not None else table.category_columns):
+        hit = {norm for norm in table.distinct[col] if _mentions(norm, q, q_joins)}
+        hit |= {value for alias, value in table.aliases.get(col, {}).items() if _mentions(alias, q, q_joins)}
+        # a shorter value inside a longer matched one ("cse" inside "b tech cse") is not a separate mention
+        hit = {h for h in hit if not any(h != o and f" {h} " in f" {o} " for o in hit)}
+        if hit:
+            out[col] = hit
+    return out
+
+
+def _matches(table: _Table, constraints: Dict[str, set]) -> List[int]:
+    return [i for i, n in enumerate(table.norm_rows) if all(n[col] in vals for col, vals in constraints.items())]
+
+
+def lookup(tables: List[_Table], query: str, max_rows: int = 10, hints: Optional[List[str]] = None) -> Optional[dict]:
+    """`hints`: what the caller already said earlier in the conversation (the workflow's country, academic year, student
+    category, programme). A table is chosen only by what the question itself names; hints then fill in columns the question
+    did not name, and only when they leave at least one row (a new value in the question always wins)."""
     if not tables or not query or not query.strip():
         return None
     q = expand_query(query)
@@ -133,13 +273,7 @@ def lookup(tables: List[_Table], query: str, max_rows: int = 10) -> Optional[dic
     q_words = set(q.split())
     best = None
     for table in tables:
-        constraints: Dict[str, set] = {}
-        for col in table.category_columns:
-            hit = {norm for norm in table.distinct[col] if _mentions(norm, q, q_joins)}
-            # a shorter value inside a longer matched one ("cse" inside "b tech cse") is not a separate mention
-            hit = {h for h in hit if not any(h != o and f" {h} " in f" {o} " for o in hit)}
-            if hit:
-                constraints[col] = hit
+        constraints = _constraints(table, q, q_joins)
         if not constraints:
             continue
         header_hits = sum(1 for col in table.value_columns if set(normalize(col).split()) & q_words)
@@ -149,17 +283,27 @@ def lookup(tables: List[_Table], query: str, max_rows: int = 10) -> Optional[dic
     if best is None:
         return None
     _, table, constraints = best
-    candidates = [r for r, n in zip(table.rows, table.norm_rows) if all(n[col] in vals for col, vals in constraints.items())]
+    from_context: Dict[str, set] = {}
+    if hints:
+        hq = expand_query(" ".join(h for h in hints if h))
+        free = [c for c in table.category_columns if c not in constraints]
+        for col, vals in _constraints(table, hq, _word_joins(hq), free).items():
+            if len(vals) == 1 and _matches(table, {**constraints, **from_context, col: vals}):
+                from_context[col] = vals
+        constraints = {**constraints, **from_context}
+    idx = _matches(table, constraints)
+    candidates = [table.rows[i] for i in idx]
+    cand_norm = [table.norm_rows[i] for i in idx]
     matched = {col: sorted(table.distinct[col][v] for v in vals) for col, vals in constraints.items()}
     out = {"table": f"{table.source} › {table.name}" if table.source else table.name, "document_id": table.document_id,
-           "matched": matched, "value_columns": table.value_columns}
+           "matched": matched, "value_columns": table.value_columns,
+           "from_context": {col: sorted(table.distinct[col][v] for v in vals) for col, vals in from_context.items()}}
     if not candidates:
         out.update(status="no_match", rows=[], ask_for=[], options={})
         return out
-    cand_norm = [n for n in table.norm_rows if all(n[col] in vals for col, vals in constraints.items())]
     differing = [col for col in table.category_columns if col not in constraints and len({n[col] for n in cand_norm}) > 1]
     # several values named for one column ("Nepal or Nigeria?") is also a question back, not an answer
-    multi = [col for col, vals in constraints.items() if len(vals) > 1]
+    multi = [col for col, vals in constraints.items() if len({_compact(v) for v in vals}) > 1]  # spellings of one value are one
     if len(candidates) == 1:
         out.update(status="exact", rows=candidates, ask_for=[], options={})
     elif differing or multi:

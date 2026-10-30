@@ -145,6 +145,8 @@ def _tool_schemas(vertical: Optional[str]) -> Tuple[Dict[str, Any], ...]:
                 "study_level": {"type": "string", "enum": ["undergraduate", "postgraduate", "doctoral"]},
                 "grade": {"type": "string"},
                 "batch_preference": {"type": "string"},
+                "country": {"type": "string"},
+                "academic_year": {"type": "string"},
                 "email": {"type": "string"},
                 "department": {"type": "string"},
                 "notes": {"type": "string", "description": m("toolbox.tools.param.enquiry_notes")},
@@ -511,7 +513,9 @@ class AgentToolbox:
             from backend.ai.engine.rag import index
             from backend.ai.engine.rag.answering import for_agent
 
-            shaped = for_agent(index.search(db, self.business_id, query, top_k=4))
+            context = dict(self.route_context() or {}) if self.route_context else {}
+            hints = [str(context[k]) for k in ("programme", "applicant_type", "study_level", "country", "academic_year") if context.get(k)]
+            shaped = for_agent(index.search(db, self.business_id, query, top_k=4, hints=hints))
         except Exception as e:
             logger.warning("search_knowledge failed: %s", e)
             shaped = {"ok": True, "snippets": []}
@@ -658,7 +662,11 @@ class AgentToolbox:
         )
         if recent is not None and (recent.idempotency_key == idem or (recent.subject or "").lower() == subject_key):
             return {"ok": True, "code": "duplicate", "ref": recent.id[:8], "message": self._m("toolbox.capture_enquiry.duplicate")}
-        details = {k: str(args[k]).strip()[:120] for k in ("applicant_type", "study_level", "grade", "batch_preference") if args.get(k)}
+        details = {k: str(args[k]).strip()[:120] for k in ("applicant_type", "study_level", "grade", "batch_preference", "country", "academic_year") if args.get(k)}
+        context = dict(self.route_context() or {}) if self.route_context else {}
+        for k in ("applicant_type", "study_level", "country", "academic_year"):  # what the caller already said, if the model left it out
+            if k not in details and context.get(k):
+                details[k] = str(context[k]).strip()[:120]
         email = str(args.get("email") or "").strip()[:255] or None
         row = Enquiry(
             business_id=self.business_id, call_id=self.call_id, source="ai", kind=kind,

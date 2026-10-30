@@ -368,6 +368,7 @@ class AgentEngine:
             self.workflow = WorkflowSession(business_id, call_id, facts.vertical, subtype, db_factory,
                                             persist=sandbox is None and not dry_run)
             self.toolbox.route_context = self.workflow.context  # department routing reads validated slots, never the model's prose
+        self._caller_slots: Dict[str, str] = {}  # country / academic year from the caller's own words (workflows/caller_slots.py)
         self._system = build_system_prompt(
             facts, agent_name, self.now_fn(), caller_number, tone, gender,
             instructions=instructions, small_talk=small_talk, require_confirmation=require_confirmation, disabled=disabled_notes,
@@ -465,6 +466,10 @@ class AgentEngine:
         self.gate.turn += 1
         cues, self.audio_cues = self.audio_cues, None
         self._mood_note = self.emotion.hear(utterance, laughed=bool(cues and cues.get("laughter", 0.0) >= LAUGHTER_MIN))
+        if self.workflow is not None:  # healthcare has no workflow session: its turns are untouched
+            from backend.ai.workflows.caller_slots import parse as parse_caller_slots
+
+            self._caller_slots.update(parse_caller_slots(utterance))
         self._reply_started = False
         self._wait_spoken = False
         self._ack_used = set()
@@ -994,7 +999,7 @@ class AgentEngine:
         if note := self.ctrl.note():  # what is already known, and the one thing to ask next (right after the static prompt, so the
             messages.insert(1, {"role": "system", "content": note})  # trailing notes and tool results stay the last messages)
         if self.workflow is not None:  # where this call's workflow stands, from real tool results (never the model's prose)
-            self.workflow.sync(self.toolbox.calls, self.ctrl.known())
+            self.workflow.sync(self.toolbox.calls, {**self.ctrl.known(), **self._caller_slots})
             if wf_note := self.workflow.note():
                 messages.insert(1, {"role": "system", "content": wf_note})
         return messages

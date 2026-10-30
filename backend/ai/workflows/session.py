@@ -26,8 +26,10 @@ ARG_SLOTS: Dict[str, str] = {
     "doctor_name": "doctor", "email": "email", "topic": "topic", "subject": "programme", "programme": "programme",
     "product": "product", "applicant_type": "applicant_type", "study_level": "study_level", "grade": "grade",
     "batch_preference": "batch_preference", "student_first_name": "student_first_name",
+    "country": "country", "nationality": "country", "academic_year": "academic_year", "intake": "academic_year",
 }
-CONTROLLER_SLOTS = ("service", "date", "time", "name", "phone")
+# Code-parsed slots: the booking controller's, plus the caller's country and academic year (workflows/caller_slots.py).
+CONTROLLER_SLOTS = ("service", "date", "time", "name", "phone", "country", "academic_year")
 
 
 class WorkflowSession:

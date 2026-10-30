@@ -130,6 +130,8 @@ workflows:
       - {id: applicant_type, type: enum, allowed_values: [domestic, international], required: false}
       - {id: study_level, type: enum, allowed_values: [undergraduate, postgraduate, doctoral], required: false}
       - {id: programme, type: text, required: false, description: Course or programme of interest}
+      - {id: country, type: text, required: false, description: "Applicant's country or nationality (fees can depend on it)"}
+      - {id: academic_year, type: text, required: false, validation: "20[2-4][0-9](-[0-9]{2})?", description: "Academic year or intake, e.g. 2026-27"}
       - {id: name, type: name, sensitive: true}
       - {id: phone, type: phone, sensitive: true}
       - {id: email, type: email, required: false, sensitive: true}
@@ -150,7 +152,7 @@ workflows:
           - {to: context}
       - id: context
         kind: collect
-        slots: [applicant_type, study_level, programme]
+        slots: [applicant_type, study_level, programme, country, academic_year]
         next: [{to: route}]
       - id: identity
         kind: collect
@@ -187,7 +189,7 @@ workflows:
     transfer:
       departments: [route, general_enquiries, ug_admissions, pg_admissions, international_admissions, finance, scholarships, faculty_office, student_support, application_support, campus_visits, complaints]
       require_caller_consent: true
-      collect_before_transfer: [applicant_type, study_level, programme]
+      collect_before_transfer: [applicant_type, study_level, programme, country, academic_year]
       on_unavailable: fallback_then_callback
     follow_ups: [callback_task]
     audit_events: [enquiry.captured, transfer.attempted, transfer.completed, transfer.fallback]

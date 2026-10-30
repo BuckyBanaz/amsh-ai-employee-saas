@@ -250,8 +250,11 @@ def _tables(db: Session, business_id: str):
         .where(KnowledgeRecord.business_id == business_id, KnowledgeDocument.business_id == business_id)
         .order_by(KnowledgeRecord.document_id, KnowledgeRecord.table_name, KnowledgeRecord.row_index)
     ).all()
+    metas = db.execute(select(KnowledgeDocument.id, KnowledgeDocument.meta).where(
+        KnowledgeDocument.business_id == business_id, KnowledgeDocument.doc_type == "document")).all()
+    mappings = {(doc_id, table): cols for doc_id, meta in metas for table, cols in ((meta or {}).get("column_map") or {}).items()}
     tables = structured.build_tables([{"document_id": r.document_id, "table_name": r.table_name, "data": r.data, "source": r.filename}
-                                      for r in rows])
+                                      for r in rows], mappings)
     _tables_cache[business_id] = (stamp, tables)
     return tables
 
@@ -269,13 +272,16 @@ def _merge(lists: List[List[dict]], top_k: int) -> List[dict]:
 _STATUS_RANK = {"exact": 3, "ambiguous": 2, "no_match": 1}
 
 
-def search(db: Session, business_id: str, query: str, top_k: int = 4) -> dict:
+def search(db: Session, business_id: str, query: str, top_k: int = 4, hints: Optional[List[str]] = None) -> dict:
     """Retrieval for one business: ranked passages with sources, plus an exact table lookup when the question names table
     values. Never touches any other business's data.
 
     Any of the agent's languages: the question is searched as asked (same-language documents) and with its known words in
     English (an English fee sheet answering a Hindi, Arabic or Dutch question). Only when that finds nothing, and the
-    question is not English, it is translated once (languages.translate_query; short timeout, cached) and searched again."""
+    question is not English, it is translated once (languages.translate_query; short timeout, cached) and searched again.
+
+    `hints`: the caller's earlier answers kept by the workflow (country, academic year, ...); they fill table columns the
+    question does not name (structured.lookup), never the passage ranking."""
     started = time.perf_counter()
     load_index(db, business_id)
     query = (query or "").strip()[:500]
@@ -293,14 +299,14 @@ def search(db: Session, business_id: str, query: str, top_k: int = 4) -> dict:
     lists = [global_vector_store.search(business_id, q, top_k=top_k, query_vector=qvec if n == 0 else None) for n, q in enumerate(phrasings)]
     results = _merge(lists, top_k)
     tables = _tables(db, business_id) if query else []
-    table = structured.lookup(tables, query) if query else None
+    table = structured.lookup(tables, query, hints=hints) if query else None
     mode = "hybrid" if qvec is not None else "keyword"
     language = languages.guess_language(query) if query else "en"
     if query and not results and (table is None or table["status"] == "no_match") and language != "en":
         translated = languages.translate_query(query)
         if translated and translated.lower() != query.lower():
             results = global_vector_store.search(business_id, translated, top_k=top_k)
-            alt = structured.lookup(tables, translated)
+            alt = structured.lookup(tables, translated, hints=hints)
             if alt and (table is None or _STATUS_RANK[alt["status"]] > _STATUS_RANK[table["status"]]):
                 table = alt
             mode += "+translated"

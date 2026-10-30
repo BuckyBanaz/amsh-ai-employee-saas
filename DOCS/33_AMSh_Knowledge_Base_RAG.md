@@ -85,9 +85,9 @@ upload / sync / FAQ ──► API (validate: type by magic bytes, size, SSRF, du
 
 | Format | How it is read | Structure kept | Limits and failure messages |
 |---|---|---|---|
-| PDF | `pypdf`, page by page | page numbers (in the source label) | Password-protected or damaged files are refused. No selectable text fails as "scanned PDF; OCR not supported". Pages with no text are listed as a warning. At most 2,000 pages. |
+| PDF | `pypdf`, page by page. Pages with no selectable text (scans) are rendered with `pypdfium2` and read by **Tesseract OCR** (eng, hin, ara, nld, deu, spa, fra) | page numbers (in the source label) | Password-protected or damaged files are refused. OCR'd documents carry a warning to check figures against the original. OCR covers at most 50 pages (`KB_OCR_MAX_PAGES`), with a 60 s per-page timeout. Without Tesseract a scan fails with "OCR not available on this server". At most 2,000 pages. |
 | DOCX | WordprocessingML XML | headings (`## `), list items, tables as rows with headers | zip-bomb guard, password-protected refused |
-| DOC (Word 97-2003) | `olefile` + the piece table ([MS-DOC] 2.4.1) | paragraphs; table cells joined with ` \| ` (no table structure) | encrypted refused; very old Word 6/95 files are asked to be re-saved as DOCX |
+| DOC (Word 97-2003) | `olefile` + the piece table ([MS-DOC] 2.4.1) + paragraph properties (PAPX FKPs: `sprmPFInTable`, `sprmPFTtp`) | paragraphs, and **tables as rows and columns**: cell marks end cells, row-end (TTP) marks end rows, empty cells keep their column. The rows feed the exact lookup like a spreadsheet. | encrypted refused; very old Word 6/95 files are asked to be re-saved as DOCX; a file whose paragraph properties cannot be read keeps its cells as text |
 | TXT | BOM / UTF-8 / UTF-16 / cp1252 detection | paragraphs | binary content refused |
 | CSV | `csv.Sniffer` (`, ; \t \|`) | the table (header row detected) | at most 50,000 rows |
 | XLSX | `openpyxl` (full load ≤ 5 MB, streamed above) | every visible sheet, title rows as a caption, merged cells filled in (≤ 5 MB), dates as ISO, 120000.0 → "120000" | zip-bomb guard, at most 50,000 rows per sheet |
@@ -188,6 +188,52 @@ The AI employee speaks all of these, so search handles questions in them, agains
 `search()` also returns `language` (hi, ar, nl, de, es, fr, hinglish or en). The agent answers in the caller's language
 whatever language the document is in; that is the existing language rule.
 
+### 4.6 Education workflow slots: country and academic year
+
+`education.university_enquiry` declares two more optional slots:
+- `country`: the applicant's country or nationality
+- `academic_year`: validated as `2026` or `2026-27`
+
+Both are part of the `context` step and of `collect_before_transfer`.
+
+- **Filled from the caller's own words**, never the model's prose, by `backend/ai/workflows/caller_slots.py`. It reads all
+  seven languages through the shared vocabulary:
+  - "I'm from Nepal", "Nepali student", "नेपाल से हूँ", "من نيبال" and "uit Nigeria" all give the country.
+  - "2026-27", "2026/2027", "२०२६-२७", "session 2026" and "intake 2027" all give the year.
+  - A newer value replaces the older one. "fees for us" is not the United States.
+- **Used by `search_knowledge`.** The workflow's country, academic year, student category and programme are passed as
+  hints to the fee lookup. They fill only the columns the question does not name, and only when at least one row still
+  matches; a value named in the question always wins. Hints never pick a table on their own. Example: "I'm from Nepal…
+  2026-27" followed by the model calling `search_knowledge("B.Tech CSE fee")` gives the exact Nepal 2026-27 fee, and a
+  later "and in 2025-26?" gives the 2025-26 fee. The result says which values came from earlier answers
+  (`from_earlier_answers`).
+- **Saved on the lead.** `capture_enquiry` accepts `country` and `academic_year`. When the model leaves them out, the
+  workflow's values are saved anyway (`Enquiry.details`).
+- **Healthcare is untouched.** It has no workflow session, and the clinic golden test passes.
+
+### 4.7 Spreadsheets in each institution's own format: column mapping and validation
+
+Every table (spreadsheet sheet, CSV, DOCX or DOC table) is checked at upload, and the business can confirm how it is read.
+
+- **Detected roles**, from the heading in any language and then from the values: course, country, category, year, fee
+  (the answer), or other. For example: "Programme" → course, "Nationality" → country, "Session" → year, "Annual Tuition
+  (INR)" → fee.
+- **Validation** (`structured.profile`). The counts appear on the document right after upload as `meta.table_issues`
+  (errors and warnings):
+  - **error:** rows that describe the same thing with different amounts, so no single answer exists ("B.Tech CSE" and
+    "BTech CSE" count as the same thing).
+  - **warning:** no fee column; empty fee cells (with row numbers); text in an amount column (e.g. "TBD"); columns with
+    no heading.
+  - **info:** one value written in several ways.
+- **Columns screen** (dashboard → Knowledge Base → a document's "Columns"; `GET` / `PUT …/knowledge/{id}/tables`):
+  - set a column's role, including Fee (holds the answers) and Ignore (left out entirely);
+  - rename a heading (Label);
+  - add other names callers use for a value, one per line ("BTech CSE = Computer Science Engg"). Aliases can only point
+    to values that exist in the column.
+  
+  The mapping is stored in `meta.column_map` and applies on the next lookup in every process, because saving changes the
+  index stamp; the file is not re-processed. Owner/admin only, and tenant-scoped.
+
 ## 5. API
 
 Both prefixes serve the same handlers: `/api/onboarding/businesses/{id}/knowledge` and `/api/businesses/{id}/knowledge`.
@@ -205,6 +251,8 @@ Both prefixes serve the same handlers: `/api/onboarding/businesses/{id}/knowledg
 | `POST /reindex` | owner/admin | **new**: re-process every document and FAQ (e.g. after enabling embeddings) |
 | `POST /sync-url` | owner/admin | Body: `{source_url, max_pages?, max_depth?}`. 201 for a new site; 200 when it re-crawls the existing entry. 422 for unsafe URLs. |
 | `POST /query` | member | Now `{query, latency_ms, match_count, mode, confidence, results[{text, source, score, confidence, match, meta, updated_at}], structured}` (the `results` list keeps its old fields). |
+| `GET /{entry_id}/tables` | member | **new**: the document's tables with detected and confirmed column roles, labels, aliases, samples and validation issues |
+| `PUT /{entry_id}/tables` | owner/admin | **new**: `{tables: {name: {columns: {col: {role, label, aliases}}}}}`. Validated (known table and column, known role, aliases only to existing values). Returns the updated profiles. |
 | `POST /test-answer` | member | **new**: the answer the AI would give, from the same retrieval and rules (an LLM when configured, otherwise the matching passage), with `grounded`, `sources` and `table`. |
 
 ## 6. Security
@@ -263,7 +311,15 @@ Results on this branch:
 - **Knowledge-base tests**: 56 passed (49 + 7 multilingual: Hindi tokenizing; same-language search in nl/ar/hi;
   grammar words never matching; fee questions in hi, Hinglish, ar, nl, de, es and fr; years and Devanagari digits;
   "us"; the translation fallback; a Hindi fee question through the agent tool).
-- **Full backend suite**: 812 passed, 1 skipped, 5 failed. The same 5 fail on `version-0.6` without these changes (checked
+- **Further tests**: 15 tests for the work below. **Total: 71 passed.**
+  - education slots: workflow declaration; caller words in five languages; earlier answers carried into later fee
+    questions and onto the saved lead; a new value winning over an earlier one; hints never picking a table
+  - legacy DOC tables: rows and columns, an empty cell, exact lookup, no change for DOCs without tables, PAPX sprm
+    parsing
+  - OCR: a scanned PDF read and searchable; a clear failure when OCR is unavailable
+  - column mapping: role detection, validation issues, aliases, labels and ignore changing the lookup, a column marked
+    Fee, refused settings (unknown column or role, alias to a missing value, receptionist, another business)
+- **Full backend suite**: 827 passed, 1 skipped, 5 failed. The same 5 fail on `version-0.6` without these changes (checked
   by stashing the work), and none involve the knowledge base:
   - `test_resolve_mode_prefers_tenant_and_defaults_to_legacy`
   - `test_llm_outage_hands_the_turn_back_to_the_state_machine`
@@ -279,8 +335,10 @@ Results on this branch:
 
 ## 9. Deployment and migration
 
-1. `pip install -r backend/requirements.txt`: new pure-Python dependencies `pypdf==6.1.1`, `openpyxl==3.1.5`,
-   `xlrd==2.0.2` and `olefile==0.47`. The API image installs them on build. No system packages, services or containers.
+1. `pip install -r backend/requirements.txt`: new dependencies `pypdf==6.1.1`, `openpyxl==3.1.5`, `xlrd==2.0.2`,
+   `olefile==0.47` and `pypdfium2==4.30.0` (a wheel that bundles PDFium). The API image also installs `tesseract-ocr`
+   with the eng, hin, ara, nld, deu, spa and fra packs (`infrastructure/docker/api.Dockerfile`; rebuild the image). No
+   new services or containers.
 2. Migration `0017_knowledge_base` runs automatically at API startup (or `alembic upgrade head`). It is additive, and
    existing text is kept. Downgrade drops the two new tables and columns.
 3. Optional settings (defaults shown):
@@ -291,6 +349,8 @@ Results on this branch:
    - `KB_CRAWL_MAX_PAGES=25`, `KB_CRAWL_PAGE_CAP=100`, `KB_CRAWL_MAX_DEPTH=2`
    - `KB_MAX_PROCESSING_PER_BUSINESS=5`
    - `KB_QUERY_TRANSLATION=auto` (`off`: never call the LLM for search), `KB_TRANSLATE_TIMEOUT=1.5`
+   - `KB_OCR=auto` (`off` disables OCR), `KB_OCR_LANGS=eng+hin+ara+nld+deu+spa+fra` (only installed packs are used),
+     `KB_OCR_MAX_PAGES=50`, `KB_OCR_DPI=200`
 4. After deploying with embeddings on, `POST /knowledge/reindex` per business embeds existing documents. Without it they
    are still found by keyword search.
 5. Websites synced before this release keep their old text until re-synced. Old uploads that the previous parser could
@@ -298,7 +358,9 @@ Results on this branch:
 
 ## 10. Known limitations
 
-- No OCR: scanned PDFs and images are refused with a clear message.
+- OCR quality depends on the scan. OCR'd text is never turned into table rows (fees in a scanned table are searchable as
+  text, not looked up exactly), and the document says to check figures. Image files (JPG/PNG) are not accepted, only
+  scanned PDFs.
 - JavaScript-only pages are skipped with a reason. There is no headless browser in the API image, by choice: it would add
   roughly 300 MB and a browser process per crawl.
 - DNS rebinding: addresses are checked before each request but the connection is not pinned to the checked IP. Run the
@@ -308,9 +370,11 @@ Results on this branch:
   queue-ready.
 - Vector search is exact in memory (numpy, per business). This is fast for tens of thousands of chunks per business.
   pgvector would be needed for millions.
-- Legacy DOC tables lose their structure (cells are kept as text). Use DOCX or XLSX for fee tables.
-- Table lookup matches values the caller names. A paraphrase of a value ("computer science engineering" for "B.Tech
-  CSE") is found by passage search, not by the exact table lookup.
+- Legacy DOC: nested tables are flattened into their outer table. The DOC table test fixture is a real Word 97 file
+  whose text and paragraph-property page were rewritten to the spec layout, because no `.doc` with a table could be
+  generated in the build container (LibreOffice cannot load files there).
+- Table lookup matches values the caller names, plus the aliases set in the Columns screen. A paraphrase that is neither
+  is found by passage search, not by the exact table lookup.
 - Real estate and hospitality have no vertical workflow yet (their documents are supported).
 - The cross-language vocabulary covers countries, categories, course codes and fee words. Other cross-language questions
   rely on the translation fallback (needs `GROQ_API_KEY`) or on embeddings. Without either, they only match documents in

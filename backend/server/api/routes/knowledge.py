@@ -463,6 +463,102 @@ def reindex_all(
     return {"queued": queued}
 
 
+class ColumnSetting(BaseModel):
+    role: str | None = None  # course | country | category | year | fee | other | ignore (None: use the detected role)
+    label: str | None = Field(default=None, max_length=60)
+    aliases: dict[str, str] = Field(default_factory=dict)  # another name -> a value of this column
+
+
+class TableSettings(BaseModel):
+    columns: dict[str, ColumnSetting]
+
+
+class TablesPayload(BaseModel):
+    tables: dict[str, TableSettings]
+
+
+def _table_rows(db: Session, entry: KnowledgeDocument) -> dict:
+    rows: dict = {}
+    for r in db.scalars(select(KnowledgeRecord).where(KnowledgeRecord.business_id == entry.business_id, KnowledgeRecord.document_id == entry.id)
+                        .order_by(KnowledgeRecord.table_name, KnowledgeRecord.row_index)):
+        rows.setdefault(r.table_name, []).append(r.data)
+    return rows
+
+
+def _profiles(db: Session, entry: KnowledgeDocument) -> dict:
+    from backend.ai.engine.rag import structured
+
+    column_map = (entry.meta or {}).get("column_map") or {}
+    tables = [structured.profile(name, rows, column_map.get(name)) for name, rows in _table_rows(db, entry).items()]
+    return {"document_id": entry.id, "filename": entry.filename, "roles": list(structured.ROLES), "tables": tables}
+
+
+@router.get("/{entry_id}/tables")
+def get_knowledge_tables(
+    business_id: str,
+    entry_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """The tables found in a document (spreadsheet sheets, CSV, DOCX/DOC tables): each column's detected role, the
+    business's confirmed mapping, sample values, and validation issues."""
+    get_business_or_404(business_id, db)
+    require_membership(business_id, current_user)
+    return _profiles(db, _get_entry_or_404(business_id, entry_id, db))
+
+
+@router.put("/{entry_id}/tables")
+def save_knowledge_tables(
+    business_id: str,
+    entry_id: str,
+    payload: TablesPayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Confirm or correct how a document's tables are read: column roles (Fee holds the answers, Ignore leaves a column
+    out), labels, and other names for values. Takes effect on the next lookup; the file is not re-processed."""
+    from backend.ai.engine.rag import structured
+
+    get_business_or_404(business_id, db)
+    require_owner_or_admin(business_id, current_user)
+    entry = _get_entry_or_404(business_id, entry_id, db)
+    tables = _table_rows(db, entry)
+    column_map = dict((entry.meta or {}).get("column_map") or {})
+    for name, settings in payload.tables.items():
+        if name not in tables:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"No table named '{name}' in this document.")
+        columns = list(dict.fromkeys(k for r in tables[name] for k in r))
+        saved = {}
+        for col, setting in settings.columns.items():
+            if col not in columns:
+                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"'{name}' has no column '{col}'.")
+            if setting.role is not None and setting.role not in structured.ROLES:
+                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Role must be one of {', '.join(structured.ROLES)}.")
+            values = {structured.normalize(r.get(col, "")) for r in tables[name] if r.get(col)}
+            aliases = {}
+            for alias, value in list(setting.aliases.items())[:50]:
+                alias, value = alias.strip()[:80], value.strip()[:80]
+                if not alias:
+                    continue
+                if structured.normalize(value) not in values:
+                    raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                                        detail=f"'{value}' is not a value of '{col}', so '{alias}' cannot point to it.")
+                aliases[alias] = value
+            item = {k: v for k, v in (("role", setting.role), ("label", (setting.label or "").strip() or None)) if v}
+            if aliases:
+                item["aliases"] = aliases
+            if item:
+                saved[col] = item
+        column_map[name] = saved
+    issues = [i for name, rows in tables.items() for i in structured.profile(name, rows, column_map.get(name))["issues"]]
+    entry.meta = {**(entry.meta or {}), "column_map": column_map,
+                  "table_issues": {"errors": sum(i["level"] == "error" for i in issues), "warnings": sum(i["level"] == "warning" for i in issues)}}
+    entry.updated_at = _now()  # changes the index stamp: every process reloads the tables with the new mapping
+    db.commit()
+    db.refresh(entry)
+    return _profiles(db, entry)
+
+
 @router.post("/sync-url", response_model=KnowledgeOut, status_code=status.HTTP_201_CREATED)
 def sync_knowledge_url(
     business_id: str,
@@ -522,6 +618,8 @@ dashboard_router.add_api_route("/{entry_id}", update_knowledge_entry, methods=["
 dashboard_router.add_api_route("/{entry_id}", delete_knowledge_entry, methods=["DELETE"], status_code=status.HTTP_204_NO_CONTENT)
 dashboard_router.add_api_route("/{entry_id}/replace", replace_knowledge_file, methods=["POST"], response_model=KnowledgeOut)
 dashboard_router.add_api_route("/{entry_id}/reindex", reindex_knowledge_entry, methods=["POST"], response_model=KnowledgeOut)
+dashboard_router.add_api_route("/{entry_id}/tables", get_knowledge_tables, methods=["GET"])
+dashboard_router.add_api_route("/{entry_id}/tables", save_knowledge_tables, methods=["PUT"])
 
 
 def _scrape_website_text(url: str) -> str:

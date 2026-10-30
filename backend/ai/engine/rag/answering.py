@@ -37,6 +37,7 @@ def for_agent(result: dict, max_snippets: int = 3) -> Dict[str, Any]:
     table = result.get("structured")
     if table:
         out["table"] = {"status": table["status"], "source": table["table"], "matched": table["matched"],
+                        "from_earlier_answers": table.get("from_context") or {},
                         "rows": table["rows"][:6], "ask_for": table.get("ask_for", []), "options": table.get("options", {}),
                         "summary": structured.describe(table)}
     return out
