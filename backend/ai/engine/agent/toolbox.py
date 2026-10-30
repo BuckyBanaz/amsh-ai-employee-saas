@@ -502,21 +502,35 @@ class AgentToolbox:
         return {"ok": True, "code": "rescheduled", "message": self._m("toolbox.reschedule_appointment.rescheduled"), "when": self._m("toolbox.when", date=speak_date(when, now.date()), time=format_time(start))}
 
     def _tool_search_knowledge(self, args: Dict[str, Any], db: Session) -> Dict[str, Any]:
+        """The shared knowledge base (backend/ai/engine/rag), scoped to this business: ranked passages with sources, and an
+        exact table lookup for fees and prices. Ambiguous or unlisted table questions come back as "ask" / "not listed"."""
         query = str(args.get("query") or "").strip()
         if not query:
             return err("bad_arguments", "Provide a search query.")
         try:
-            from backend.ai.engine.rag.retriever import rag_retriever
-            from backend.server.api.routes.knowledge import ensure_business_indexed
+            from backend.ai.engine.rag import index
+            from backend.ai.engine.rag.answering import for_agent
 
-            ensure_business_indexed(self.business_id, db, force_reload=False)
-            snippets = rag_retriever.retrieve_snippets(self.business_id, query, top_k=3)
+            shaped = for_agent(index.search(db, self.business_id, query, top_k=4))
         except Exception as e:
             logger.warning("search_knowledge failed: %s", e)
-            snippets = []
-        if not snippets:
+            shaped = {"ok": True, "snippets": []}
+        table = shaped.get("table")
+        if table and table["status"] == "ambiguous" and table.get("ask_for"):
+            shaped["message"] = self._m("toolbox.search_knowledge.ambiguous", ask_for=", ".join(table["ask_for"]),
+                                        options="; ".join(f"{k}: {', '.join(v)}" for k, v in table["options"].items()))
+            return shaped
+        if table and table["status"] == "no_match" and not shaped["snippets"]:
+            shaped["message"] = self._m("toolbox.search_knowledge.no_match",
+                                        matched=", ".join(f"{k} {'/'.join(v)}" for k, v in table["matched"].items()))
+            return shaped
+        if not shaped["snippets"] and not (table and table["status"] == "exact"):
             return {"ok": True, "snippets": [], "message": self._m("toolbox.search_knowledge.not_found")}
-        return {"ok": True, "snippets": snippets}
+        message = self._m("toolbox.search_knowledge.found")
+        if table and table["status"] == "exact":
+            message = self._m("toolbox.search_knowledge.exact", source=table["source"], summary=table["summary"]) + " " + message
+        shaped["message"] = message
+        return shaped
 
     async def _tool_transfer_to_human(self, args: Dict[str, Any]) -> Dict[str, Any]:
         department = str(args.get("department") or "front_desk").strip().lower().replace(" ", "_")

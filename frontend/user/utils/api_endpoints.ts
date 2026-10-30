@@ -105,6 +105,10 @@ export const API_ENDPOINTS = {
     SYNC_URL: (businessId: string) => `${BASE_URL}/onboarding/businesses/${businessId}/knowledge/sync-url`,
     QUERY: (businessId: string) => `${BASE_URL}/onboarding/businesses/${businessId}/knowledge/query`,
     DELETE: (businessId: string, id: string) => `${BASE_URL}/onboarding/businesses/${businessId}/knowledge/${id}`,
+    ENTRY: (businessId: string, id: string) => `${BASE_URL}/onboarding/businesses/${businessId}/knowledge/${id}`,
+    REPLACE: (businessId: string, id: string) => `${BASE_URL}/onboarding/businesses/${businessId}/knowledge/${id}/replace`,
+    REINDEX: (businessId: string, id: string) => `${BASE_URL}/onboarding/businesses/${businessId}/knowledge/${id}/reindex`,
+    TEST_ANSWER: (businessId: string) => `${BASE_URL}/onboarding/businesses/${businessId}/knowledge/test-answer`,
   },
   INTEGRATIONS: {
     LIST: (businessId: string) => `${BASE_URL}/onboarding/businesses/${businessId}/integrations`,

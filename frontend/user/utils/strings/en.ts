@@ -612,7 +612,7 @@ export const STRINGS = {
       },
       KNOWLEDGE: {
         TITLE: "Knowledge Base",
-        SUBTITLE: "Manage documents, clinical policies, and web portals used by the AI agent",
+        SUBTITLE: "Documents, spreadsheets, websites and FAQs your AI employee answers from",
         SEARCH_PLACEHOLDER: "Search files...",
         ADD_BTN: "Add Source"
       },

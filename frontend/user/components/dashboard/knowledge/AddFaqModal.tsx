@@ -39,13 +39,11 @@ export function AddFaqModal({ isOpen, onClose, onSuccess, editingFaq }: AddFaqMo
       setError('');
 
       if (editingFaq) {
-        // If editing existing entry
-        await DashboardController.createKnowledge({
-          doc_type: 'faq',
+        // Edit in place: keeps the FAQ's id and does not count as a new knowledge document against the plan quota
+        await DashboardController.updateKnowledge(editingFaq.id, {
           question: question.trim(),
           answer: answer.trim(),
         });
-        await DashboardController.deleteKnowledge(editingFaq.id);
       } else {
         await DashboardController.createKnowledge({
           doc_type: 'faq',

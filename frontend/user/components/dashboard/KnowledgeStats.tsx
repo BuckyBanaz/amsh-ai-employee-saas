@@ -1,6 +1,6 @@
 "use client";
 import React from 'react';
-import { KnowledgeItem } from '../../controllers/dashboard.controller';
+import { KnowledgeItem, isKnowledgeProcessing } from '../../controllers/dashboard.controller';
 
 interface KnowledgeStatsProps {
   items: KnowledgeItem[];
@@ -8,14 +8,19 @@ interface KnowledgeStatsProps {
 }
 
 export function KnowledgeStats({ items, loading }: KnowledgeStatsProps) {
-  const docCount = items.filter(i => i.doc_type === 'document').length;
-  const siteCount = items.filter(i => i.doc_type === 'website').length;
+  const ready = (i: KnowledgeItem) => i.status === 'indexed';
+  const docs = items.filter(i => i.doc_type === 'document');
+  const sites = items.filter(i => i.doc_type === 'website');
   const faqCount = items.filter(i => i.doc_type === 'faq').length;
+  const processing = items.filter(isKnowledgeProcessing).length;
+  const failed = items.filter(i => i.status === 'failed').length;
+  const passages = items.reduce((n, i) => n + (ready(i) ? i.chunk_count || 0 : 0), 0);
+  const pages = sites.reduce((n, i) => n + (i.meta?.crawl?.urls_processed || 0), 0);
 
   const stats = [
     {
       title: "Documents Uploaded",
-      subtext: loading ? "Loading..." : `${docCount} files indexed`,
+      subtext: loading ? "Loading..." : `${docs.filter(ready).length} of ${docs.length} files indexed`,
       icon: (
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
@@ -25,7 +30,7 @@ export function KnowledgeStats({ items, loading }: KnowledgeStatsProps) {
     },
     {
       title: "Websites Synced",
-      subtext: loading ? "Loading..." : `${siteCount} domains active`,
+      subtext: loading ? "Loading..." : `${sites.filter(ready).length} sites · ${pages} pages indexed`,
       icon: (
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="12" cy="12" r="10"></circle>
@@ -46,9 +51,9 @@ export function KnowledgeStats({ items, loading }: KnowledgeStatsProps) {
       )
     },
     {
-      title: "Vector Storage",
-      subtext: "Active RAG (<50ms retrieval)",
-      isLive: true,
+      title: "Searchable Knowledge",
+      subtext: loading ? "Loading..." : [`${passages} passages`, processing ? `${processing} processing` : '', failed ? `${failed} failed` : ''].filter(Boolean).join(' · '),
+      isLive: !loading && processing === 0 && failed === 0 && passages > 0,
       icon: (
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
           <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>

@@ -115,18 +115,8 @@ export const OnboardingController = {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-
-      const response = await fetch(API_ENDPOINTS.KNOWLEDGE.UPLOAD_FILE(businessId), {
-        method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        body: formData,
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to upload file');
-      }
-      return await response.json();
+      // Through ApiService so the session token is sent (it lives under `access_token`, not `token`).
+      return await ApiService.request<any>(API_ENDPOINTS.KNOWLEDGE.UPLOAD_FILE(businessId), { method: 'POST', body: formData });
     } catch (error) {
       console.error('Upload knowledge file error:', error);
       throw error;
@@ -144,6 +134,10 @@ export const OnboardingController = {
       console.error('Sync knowledge URL error:', error);
       throw error;
     }
+  },
+
+  updateKnowledge: async (businessId: string, entryId: string, payload: { question?: string; answer?: string }) => {
+    return await ApiService.patch<any>(API_ENDPOINTS.KNOWLEDGE.ENTRY(businessId, entryId), payload, { requireAuth: true });
   },
 
   deleteKnowledge: async (businessId: string, entryId: string) => {

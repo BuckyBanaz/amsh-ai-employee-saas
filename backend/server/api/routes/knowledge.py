@@ -1,23 +1,29 @@
 """Onboarding "Knowledge" step: frontend/user/app/onboarding/knowledge/page.tsx
 (three sections — uploaded documents, synced websites, manual FAQs — all
-stored as KnowledgeDocument rows distinguished by doc_type)."""
+stored as KnowledgeDocument rows distinguished by doc_type), and the dashboard
+Knowledge Base page (same routes under /api/businesses/{id}/knowledge).
 
-from datetime import datetime
+Uploads and website syncs are validated straight away (type, size, safety, duplicates) and then processed in the
+background: the response says "uploaded", and the row moves to "processing" and then "indexed" or "failed" (with the
+reason in `error`). The pipeline itself lives in backend/ai/engine/rag (extractors, crawler, ingestion, index)."""
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
-from sqlalchemy.orm import Session
+import hashlib
+import re
+from datetime import datetime, timezone
 
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Response, UploadFile, status
+from pydantic import BaseModel, Field
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session, sessionmaker
+
+from backend.ai.engine.rag import crawler, extractors, index, ingestion
 from backend.server.api.routes._shared import get_business_or_404, require_membership, require_owner_or_admin
 from backend.server.auth.security import get_current_user
-from backend.server.database.models.business import Business
-from backend.server.database.models.knowledge_base import KnowledgeDocument
-from backend.server.database.models.service import Service
+from backend.server.common.config import get_settings
+from backend.server.database.models.knowledge_base import KnowledgeChunk, KnowledgeDocument, KnowledgeRecord
 from backend.server.database.models.user import User
 from backend.server.database.session import get_db
 from backend.server.services import quotas
-from backend.ai.engine.rag.retriever import rag_retriever
-from backend.ai.engine.rag.vector_store import global_vector_store
 
 router = APIRouter(prefix="/api/onboarding/businesses/{business_id}/knowledge", tags=["knowledge"])
 
@@ -33,7 +39,7 @@ class KnowledgeCreate(BaseModel):
 
 
 class KnowledgeUpdate(BaseModel):
-    status: str | None = None
+    status: str | None = None  # ignored: processing status is set by the pipeline, never by a client
     filename: str | None = None
     source_url: str | None = None
     question: str | None = None
@@ -50,120 +56,56 @@ class KnowledgeOut(BaseModel):
     question: str | None
     answer: str | None
     uploaded_at: datetime
+    error: str | None = None
+    meta: dict | None = None
+    chunk_count: int = 0
+    version: int = 1
+    file_size: int | None = None
+    mime_type: str | None = None
+    updated_at: datetime | None = None
+    indexed_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 
 
+class SyncUrlPayload(BaseModel):
+    source_url: str
+    max_pages: int | None = Field(default=None, ge=1, le=100)
+    max_depth: int | None = Field(default=None, ge=0, le=4)
+
+
+class KnowledgeQueryPayload(BaseModel):
+    query: str
+    top_k: int = 4
+
+
+def _now():
+    return datetime.now(timezone.utc)
+
+
 def ensure_business_indexed(business_id: str, db: Session, force_reload: bool = False) -> int:
-    """Ensures all knowledge sources (documents, synced websites, FAQs, bookable services, and business info)
-    are indexed into the sub-50ms RAG vector store for this business.
-    """
-    current_store = global_vector_store._stores.get(business_id)
-    if not force_reload and current_store is not None and len(current_store) > 0:
-        return len(current_store)
+    """Loads the business's knowledge (documents, websites, FAQs, its profile and services) into the search index.
+    Kept for existing callers; the index only rebuilds when the business's knowledge changed."""
+    return index.load_index(db, business_id, force=force_reload)
 
-    global_vector_store.clear_business(business_id)
-    total_indexed = 0
 
-    # 1. Index Business Profile (Name, Type, Address, Timings, Phone)
-    biz = db.get(Business, business_id)
-    if biz:
-        biz_info = []
-        biz_info.append(f"Business/Clinic Name: {biz.name}")
-        biz_info.append(f"Category: {biz.business_type} ({biz.vertical})")
-        if biz.business_phone:
-            biz_info.append(f"Phone Number: {biz.business_phone}")
-        if biz.address or biz.city:
-            loc_parts = [p for p in [biz.address, biz.city, biz.postal_code, biz.country] if p]
-            biz_info.append(f"Location / Address: {', '.join(loc_parts)}")
-        if biz.working_hours:
-            if isinstance(biz.working_hours, dict):
-                hours_str = ", ".join(f"{k}: {v}" for k, v in biz.working_hours.items() if v)
-                biz_info.append(f"Working Hours / Timings: {hours_str}")
-            else:
-                biz_info.append(f"Working Hours: {biz.working_hours}")
-        if biz.website:
-            biz_info.append(f"Website: {biz.website}")
+def _session_factory(db: Session):
+    return sessionmaker(bind=db.get_bind(), autoflush=False, expire_on_commit=False)
 
-        biz_text = "\n".join(biz_info)
-        total_indexed += rag_retriever.index_document_text(
-            business_id,
-            biz_text,
-            source_id="business_profile",
-            source_name=f"Clinic Profile: {biz.name}",
-        )
 
-    # 2. Index Bookable Services & Treatments with Pricing
-    services = db.query(Service).filter(Service.business_id == business_id).all()
-    if services:
-        # Grouped summary chunk for general queries like "what is clinic services" / "what services do you offer"
-        service_catalog = [f"Clinic Services & Treatments offered at {biz.name if biz else 'the clinic'}:"]
-        for s in services:
-            price_display = f"{s.price_currency} {s.price_amount}" if s.price_amount is not None else "Price on consultation"
-            desc_part = f" - {s.description}" if s.description else ""
-            service_catalog.append(f"• {s.title} ({price_display}, Duration: {s.duration_minutes} mins){desc_part}")
+def _schedule(background: BackgroundTasks, db: Session, doc_id: str) -> None:
+    background.add_task(ingestion.run_job, _session_factory(db), doc_id)
 
-        catalog_text = "\n".join(service_catalog)
-        total_indexed += rag_retriever.index_document_text(
-            business_id,
-            catalog_text,
-            source_id="services_catalog",
-            source_name="Services & Pricing Catalog",
-        )
 
-        # Also individual chunks for each unique service for high-precision matching
-        for s in services:
-            price_display = f"{s.price_currency} {s.price_amount}" if s.price_amount is not None else "Price on consultation"
-            s_text = (
-                f"Service Name: {s.title}\n"
-                f"Description: {s.description or 'Specialized clinic treatment and consultation'}\n"
-                f"Price / Fee: {price_display}\n"
-                f"Appointment Duration: {s.duration_minutes} minutes"
-            )
-            total_indexed += rag_retriever.index_document_text(
-                business_id,
-                s_text,
-                source_id=f"service_{s.id}",
-                source_name=f"Service: {s.title}",
-            )
-
-    # 3. Index Knowledge Documents (FAQs, Synced Websites, Uploaded Documents)
-    docs = db.query(KnowledgeDocument).filter(
-        KnowledgeDocument.business_id == business_id
-    ).all()
-
-    for doc in docs:
-        if doc.doc_type == "faq":
-            faq_text = f"FAQ:\nQuestion: {doc.question}\nAnswer: {doc.answer}"
-            source_title = f"FAQ: {doc.question[:45]}..." if doc.question and len(doc.question) > 45 else (doc.question or "Clinic FAQ")
-            total_indexed += rag_retriever.index_document_text(
-                business_id,
-                faq_text,
-                source_id=doc.id,
-                source_name=source_title,
-            )
-        elif doc.doc_type == "website":
-            site_text = doc.answer or ""
-            source_title = doc.source_url or "Website Knowledge"
-            if site_text.strip():
-                total_indexed += rag_retriever.index_document_text(
-                    business_id,
-                    site_text,
-                    source_id=doc.id,
-                    source_name=source_title,
-                )
-        elif doc.doc_type == "document":
-            file_text = doc.answer or ""
-            source_title = doc.filename or "Uploaded Document"
-            if file_text.strip():
-                total_indexed += rag_retriever.index_document_text(
-                    business_id,
-                    file_text,
-                    source_id=doc.id,
-                    source_name=source_title,
-                )
-
-    return total_indexed
+def _limit_in_flight(db: Session, business_id: str) -> None:
+    """Rate limit: a business can have only a few uploads/crawls processing at once."""
+    limit = get_settings().KB_MAX_PROCESSING_PER_BUSINESS
+    busy = db.scalar(select(func.count(KnowledgeDocument.id)).where(
+        KnowledgeDocument.business_id == business_id, KnowledgeDocument.status.in_(("uploaded", "processing")),
+        KnowledgeDocument.doc_type != "faq")) or 0
+    if busy >= limit:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                            detail=f"{busy} knowledge sources are still processing. Wait for them to finish, then try again.")
 
 
 def _validate_doc_type(payload: KnowledgeCreate) -> None:
@@ -178,28 +120,91 @@ def _validate_doc_type(payload: KnowledgeCreate) -> None:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="source_url is required for doc_type=website")
     if payload.doc_type == "faq" and not (payload.question and payload.answer):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="question and answer are required for doc_type=faq")
+    if payload.doc_type == "faq" and (len(payload.question or "") > 500 or len(payload.answer or "") > 20000):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="FAQ question must be at most 500 characters and the answer at most 20,000.")
+
+
+def _checked_url(url: str) -> str:
+    normalized = crawler.normalize_url(url)
+    if not normalized:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Enter a valid website address, like https://example.com.")
+    if ingestion._fetcher_override is None:  # tests crawl through a fake fetcher and skip DNS
+        try:
+            crawler.check_url_safe(normalized)
+        except crawler.CrawlError as e:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    if len(normalized) > 500:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="The website address is too long.")
+    return normalized
+
+
+def _start_crawl(db: Session, background: BackgroundTasks, business_id: str, url: str, max_pages=None, max_depth=None,
+                 response: Response | None = None) -> KnowledgeDocument:
+    """New website rows, or a re-crawl of the business's existing row for the same site (never a duplicate)."""
+    normalized = _checked_url(url)
+    url_hash = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+    entry = db.scalar(select(KnowledgeDocument).where(KnowledgeDocument.business_id == business_id, KnowledgeDocument.doc_type == "website",
+                                                      KnowledgeDocument.content_hash == url_hash))
+    if entry is None:  # rows saved before URLs were normalised
+        for row in db.scalars(select(KnowledgeDocument).where(KnowledgeDocument.business_id == business_id, KnowledgeDocument.doc_type == "website")):
+            if crawler.normalize_url(row.source_url or "") == normalized:
+                entry = row
+                break
+    if entry is not None and entry.status in ("uploaded", "processing"):
+        if response is not None:
+            response.status_code = status.HTTP_200_OK
+        return entry
+    _limit_in_flight(db, business_id)
+    options = {k: v for k, v in (("max_pages", max_pages), ("max_depth", max_depth)) if v is not None}
+    if entry is None:
+        quotas.enforce_add(db, get_business_or_404(business_id, db), "knowledge_docs")
+        entry = KnowledgeDocument(business_id=business_id, doc_type="website", source_url=normalized, status="uploaded",
+                                  question=f"Website: {normalized}", content_hash=url_hash, meta={"crawl_options": options})
+        db.add(entry)
+    else:
+        if response is not None:
+            response.status_code = status.HTTP_200_OK
+        entry.status = "uploaded"
+        entry.source_url = normalized
+        entry.content_hash = url_hash
+        entry.meta = {**(entry.meta or {}), "crawl_options": {**((entry.meta or {}).get("crawl_options") or {}), **options}}
+        entry.updated_at = _now()
+    db.commit()
+    db.refresh(entry)
+    _schedule(background, db, entry.id)
+    return entry
 
 
 @router.post("", response_model=KnowledgeOut, status_code=status.HTTP_201_CREATED)
 def create_knowledge_entry(
     business_id: str,
     payload: KnowledgeCreate,
+    background: BackgroundTasks,
+    response: Response,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     get_business_or_404(business_id, db)
     require_owner_or_admin(business_id, current_user)
-    quotas.enforce_add(db, get_business_or_404(business_id, db), "knowledge_docs")
     _validate_doc_type(payload)
+    if payload.doc_type == "website":
+        return _start_crawl(db, background, business_id, payload.source_url or "", response=response)
+    if payload.doc_type == "document":
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail="Documents are added by uploading the file (POST .../knowledge/upload-file).")
+    quotas.enforce_add(db, get_business_or_404(business_id, db), "knowledge_docs")
     entry = KnowledgeDocument(
         business_id=business_id,
-        status="indexed" if payload.doc_type == "faq" else "pending",
-        **payload.model_dump(),
+        doc_type="faq",
+        status="indexed",
+        question=payload.question.strip(),
+        answer=payload.answer.strip(),
     )
     db.add(entry)
+    db.flush()
+    ingestion.reindex_faq(db, entry)
     db.commit()
     db.refresh(entry)
-    ensure_business_indexed(business_id, db, force_reload=True)
     return entry
 
 
@@ -212,10 +217,16 @@ def list_knowledge_entries(
 ):
     get_business_or_404(business_id, db)
     require_membership(business_id, current_user)
+    index.backfill(db, business_id)  # older rows get their chunks (or an honest "failed") before they are shown
     query = db.query(KnowledgeDocument).filter(KnowledgeDocument.business_id == business_id)
     if doc_type:
         query = query.filter(KnowledgeDocument.doc_type == doc_type)
-    return query.order_by(KnowledgeDocument.uploaded_at.asc()).all()
+    rows = query.order_by(KnowledgeDocument.uploaded_at.asc()).all()
+    for row in rows:  # documents/websites show a preview, never the full extracted text, in lists
+        if row.doc_type != "faq" and row.answer and len(row.answer) > ingestion.PREVIEW_CHARS + 1:
+            db.expunge(row)
+            row.answer = ingestion.preview(row.answer)
+    return rows
 
 
 def _get_entry_or_404(business_id: str, entry_id: str, db: Session) -> KnowledgeDocument:
@@ -225,22 +236,50 @@ def _get_entry_or_404(business_id: str, entry_id: str, db: Session) -> Knowledge
     return entry
 
 
+@router.get("/{entry_id}", response_model=KnowledgeOut)
+def get_knowledge_entry(
+    business_id: str,
+    entry_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    get_business_or_404(business_id, db)
+    require_membership(business_id, current_user)
+    return _get_entry_or_404(business_id, entry_id, db)
+
+
 @router.patch("/{entry_id}", response_model=KnowledgeOut)
 def update_knowledge_entry(
     business_id: str,
     entry_id: str,
     payload: KnowledgeUpdate,
+    background: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     get_business_or_404(business_id, db)
     require_owner_or_admin(business_id, current_user)
     entry = _get_entry_or_404(business_id, entry_id, db)
-    for field, value in payload.model_dump(exclude_unset=True).items():
-        setattr(entry, field, value)
+    changes = payload.model_dump(exclude_unset=True)
+    changes.pop("status", None)
+    if entry.doc_type == "faq":
+        if "question" in changes and changes["question"] is not None:
+            entry.question = changes["question"].strip()[:500]
+        if "answer" in changes and changes["answer"] is not None:
+            entry.answer = changes["answer"].strip()[:20000]
+        if not (entry.question and entry.answer):
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="question and answer are required for doc_type=faq")
+        entry.version = (entry.version or 1) + 1
+        ingestion.reindex_faq(db, entry)
+    elif entry.doc_type == "document":
+        if changes.get("filename"):
+            entry.filename = re.sub(r"[\\/]", "_", changes["filename"]).strip()[:255]
+            entry.updated_at = _now()
+    elif entry.doc_type == "website" and changes.get("source_url"):
+        db.commit()
+        return _start_crawl(db, background, business_id, changes["source_url"])
     db.commit()
     db.refresh(entry)
-    ensure_business_indexed(business_id, db, force_reload=True)
     return entry
 
 
@@ -254,258 +293,190 @@ def delete_knowledge_entry(
     get_business_or_404(business_id, db)
     require_owner_or_admin(business_id, current_user)
     entry = _get_entry_or_404(business_id, entry_id, db)
+    db.query(KnowledgeChunk).filter(KnowledgeChunk.business_id == business_id, KnowledgeChunk.document_id == entry.id).delete(synchronize_session=False)
+    db.query(KnowledgeRecord).filter(KnowledgeRecord.business_id == business_id, KnowledgeRecord.document_id == entry.id).delete(synchronize_session=False)
     db.delete(entry)
     db.commit()
-    ensure_business_indexed(business_id, db, force_reload=True)
 
 
 # -----------------------------------------------------------------------------
-# Document Upload (PDF/DOCX/TXT), Website Sync & RAG Query Endpoints
+# Document Upload (PDF/DOC/DOCX/TXT/CSV/XLS/XLSX), Website Sync & RAG Query Endpoints
 # -----------------------------------------------------------------------------
-import io
-import json
-import re
-import urllib.request
-from fastapi import File, UploadFile
 
-
-def _extract_file_text(filename: str, content_bytes: bytes) -> str:
-    """Extract clean text from PDF, DOCX, or TXT content bytes."""
-    lower_fn = filename.lower()
-    if lower_fn.endswith(".pdf"):
-        try:
-            from pypdf import PdfReader
-            reader = PdfReader(io.BytesIO(content_bytes))
-            extracted = "\n".join([page.extract_text() or "" for page in reader.pages])
-            if extracted.strip():
-                return extracted
-        except Exception:
-            pass
-        return content_bytes.decode("utf-8", errors="ignore")
-    elif lower_fn.endswith(".docx"):
-        try:
-            import zipfile
-            import xml.etree.ElementTree as ET
-            with zipfile.ZipFile(io.BytesIO(content_bytes)) as z:
-                xml_content = z.read("word/document.xml")
-                tree = ET.fromstring(xml_content)
-                return "".join(tree.itertext())
-        except Exception:
-            pass
-        return content_bytes.decode("utf-8", errors="ignore")
-    else:
-        return content_bytes.decode("utf-8", errors="ignore")
-
-
-def _extract_rich_html(html: str, url: str) -> str:
-    """Extracts semantic structured content from HTML including schema.org JSON-LD, meta tags, and body."""
-    sections: list[str] = []
-
-    # 1. Page Title
-    title_m = re.findall(r"<title>(.*?)</title>", html, re.IGNORECASE)
-    if title_m and title_m[0].strip():
-        sections.append(f"Page Title: {title_m[0].strip()}")
-
-    # 2. Meta Description and Keywords
-    desc_m = re.findall(r'<meta\s+[^>]*name=["\']description["\'][^>]*content=["\']([^"\']+)["\']', html, re.IGNORECASE)
-    if not desc_m:
-        desc_m = re.findall(r'<meta\s+[^>]*content=["\']([^"\']+)["\'][^>]*name=["\']description["\']', html, re.IGNORECASE)
-    if desc_m and desc_m[0].strip():
-        sections.append(f"Clinic Overview: {desc_m[0].strip()}")
-
-    kw_m = re.findall(r'<meta\s+[^>]*name=["\']keywords["\'][^>]*content=["\']([^"\']+)["\']', html, re.IGNORECASE)
-    if not kw_m:
-        kw_m = re.findall(r'<meta\s+[^>]*content=["\']([^"\']+)["\'][^>]*name=["\']keywords["\']', html, re.IGNORECASE)
-    if kw_m and kw_m[0].strip():
-        sections.append(f"Treatments, Specialties & Keywords: {kw_m[0].strip()}")
-
-    # 3. Schema.org JSON-LD (FAQs, Medical Procedures, Doctor details, Reviews)
-    ld_blocks = re.findall(r'<script\s+[^>]*type=["\']application/ld\+json["\'][^>]*>(.*?)</script>', html, re.DOTALL | re.IGNORECASE)
-    for block in ld_blocks:
-        try:
-            data = json.loads(block.strip())
-            items = data if isinstance(data, list) else [data]
-            for item in items:
-                # FAQs
-                if item.get("@type") == "FAQPage" and "mainEntity" in item:
-                    faq_lines = ["\nFrequently Asked Questions:"]
-                    for q in item["mainEntity"]:
-                        q_name = q.get("name", "")
-                        a_text = q.get("acceptedAnswer", {}).get("text", "")
-                        if q_name and a_text:
-                            faq_lines.append(f"Q: {q_name}\nA: {a_text}")
-                    if len(faq_lines) > 1:
-                        sections.append("\n".join(faq_lines))
-
-                # Medical Procedures / Available Services
-                services = item.get("availableService") or []
-                if services:
-                    proc_lines = ["\nDental Treatments & Medical Procedures:"]
-                    for s in services:
-                        s_name = s.get("name", "")
-                        if s_name:
-                            proc_lines.append(f"• {s_name}")
-                    if len(proc_lines) > 1:
-                        sections.append("\n".join(proc_lines))
-
-                # Doctor Profile
-                if item.get("@type") == "Person":
-                    p_name = item.get("name", "")
-                    job = item.get("jobTitle", "")
-                    p_desc = item.get("description", "")
-                    if p_name:
-                        sections.append(f"\nDoctor Profile: {p_name} ({job})\n{p_desc}")
-        except Exception:
-            pass
-
-    # 4. Clean Body Text (strip noscript, scripts, styles, boilerplates)
-    body = re.sub(r"<noscript.*?>.*?</noscript>", " ", html, flags=re.DOTALL | re.IGNORECASE)
-    body = re.sub(r"<script.*?>.*?</script>", " ", body, flags=re.DOTALL | re.IGNORECASE)
-    body = re.sub(r"<style.*?>.*?</style>", " ", body, flags=re.DOTALL | re.IGNORECASE)
-    body = re.sub(r"<header.*?>.*?</header>", " ", body, flags=re.DOTALL | re.IGNORECASE)
-    body = re.sub(r"<footer.*?>.*?</footer>", " ", body, flags=re.DOTALL | re.IGNORECASE)
-    body = re.sub(r"<nav.*?>.*?</nav>", " ", body, flags=re.DOTALL | re.IGNORECASE)
-    body = re.sub(r"<.*?>", " ", body)
-    # Remove boilerplate noise
-    body = re.sub(r"You need to enable JavaScript to run this app\.?", " ", body, flags=re.IGNORECASE)
-    body = " ".join(body.split())
-
-    if len(body) > 100:
-        sections.append(f"\nPage Content:\n{body[:3000]}")
-
-    return "\n\n".join(sections)
-
-
-def _scrape_url_single(url: str) -> str:
-    """Helper to fetch and clean raw HTML text from a single URL."""
+async def _read_upload(file: UploadFile) -> tuple[str, bytes, str]:
+    """(safe filename, bytes, kind): refuses unsupported, mismatched, empty and oversized files before anything is stored."""
+    limit = get_settings().KB_MAX_FILE_MB * 1024 * 1024
+    data = await file.read(limit + 1)
+    if len(data) > limit:
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=f"The file is larger than the {get_settings().KB_MAX_FILE_MB} MB limit.")
+    filename = re.sub(r"[\x00-\x1f]", "", (file.filename or "document.txt").replace("\\", "/").rsplit("/", 1)[-1]).strip()[:255] or "document.txt"
     try:
-        req = urllib.request.Request(
-            url,
-            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AMSh-AI-Crawler/1.0"}
-        )
-        with urllib.request.urlopen(req, timeout=8) as resp:
-            html = resp.read().decode("utf-8", errors="ignore")
-            return _extract_rich_html(html, url)
-    except Exception:
-        return ""
-
-
-def _scrape_website_text(url: str) -> str:
-    """Scrapes main page, auto-discovers sitemap.xml & crawls core subpages (about/services/pricing/faq)."""
-    base_url = url.rstrip("/")
-    scraped_texts: list[str] = []
-
-    # 1. Scrape primary URL
-    main_text = _scrape_url_single(url)
-    if main_text:
-        scraped_texts.append(f"--- Main Page ({url}) ---\n{main_text}")
-
-    # 2. Check sitemap.xml for deeper subpage links
-    sitemap_url = f"{base_url}/sitemap.xml"
-    discovered_urls: list[str] = []
-    try:
-        req = urllib.request.Request(sitemap_url, headers={"User-Agent": "AMSh-AI-Crawler/1.0"})
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            xml_content = resp.read().decode("utf-8", errors="ignore")
-            found_locs = re.findall(r"<loc>(.*?)</loc>", xml_content, flags=re.IGNORECASE)
-            for loc in found_locs[:10]:  # Cap at top 10 pages for speed
-                if loc != url and loc != f"{base_url}/":
-                    discovered_urls.append(loc)
-    except Exception:
-        pass
-
-    # 3. Fallback: If no sitemap found, try standard core subpages
-    if not discovered_urls:
-        core_paths = ["/services", "/pricing", "/about", "/about-us", "/faq", "/doctors", "/contact"]
-        discovered_urls = [f"{base_url}{path}" for path in core_paths]
-
-    # 4. Crawl discovered subpages (up to 5 pages max)
-    crawled_count = 0
-    for sub_url in discovered_urls:
-        if crawled_count >= 5:
-            break
-        sub_text = _scrape_url_single(sub_url)
-        # Avoid duplicate SPA pages that return the same HTML as main page
-        if sub_text and len(sub_text) > 100 and sub_text != main_text:
-            scraped_texts.append(f"\n--- Subpage ({sub_url}) ---\n{sub_text}")
-            crawled_count += 1
-
-    combined_text = "\n\n".join(scraped_texts)
-    return combined_text if combined_text.strip() else f"Website content for {url}. Status: Active."
-
-
-class SyncUrlPayload(BaseModel):
-    source_url: str
-
-
-class KnowledgeQueryPayload(BaseModel):
-    query: str
-    top_k: int = 4
+        kind = extractors.detect_kind(filename, data)
+    except extractors.ExtractionError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    return filename, data, kind
 
 
 @router.post("/upload-file", response_model=KnowledgeOut, status_code=status.HTTP_201_CREATED)
 async def upload_knowledge_file(
     business_id: str,
+    background: BackgroundTasks,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Upload PDF, DOCX, or TXT document, extract text, chunk & index into vector store for RAG."""
+    """Upload a PDF, DOC, DOCX, TXT, CSV, XLS or XLSX file. It is validated now and indexed in the background."""
     get_business_or_404(business_id, db)
     require_owner_or_admin(business_id, current_user)
+    filename, data, kind = await _read_upload(file)
+    digest = hashlib.sha256(data).hexdigest()
+    existing = db.scalar(select(KnowledgeDocument).where(KnowledgeDocument.business_id == business_id, KnowledgeDocument.doc_type == "document",
+                                                         KnowledgeDocument.content_hash == digest))
+    if existing is not None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail=f"This file is already in your knowledge base as '{existing.filename}'. Use Replace to update a document.")
+    _limit_in_flight(db, business_id)
     quotas.enforce_add(db, get_business_or_404(business_id, db), "knowledge_docs")
-
-    content_bytes = await file.read()
-    extracted_text = _extract_file_text(file.filename or "document.txt", content_bytes)
-
     entry = KnowledgeDocument(
         business_id=business_id,
         doc_type="document",
-        filename=file.filename or "document.txt",
-        status="indexed",
-        question=f"Document: {file.filename}",
-        answer=extracted_text if extracted_text else "Document uploaded and indexed.",
+        filename=filename,
+        status="uploaded",
+        question=f"Document: {filename}",
+        content_hash=digest,
+        mime_type=extractors.MIME_TYPES.get(kind),
+        file_size=len(data),
+        file_data=data,
+        meta={"kind": kind},
     )
     db.add(entry)
     db.commit()
     db.refresh(entry)
-
-    # Re-index all business knowledge into RAG vector store
-    ensure_business_indexed(business_id, db, force_reload=True)
-
+    _schedule(background, db, entry.id)
     return entry
+
+
+@router.post("/{entry_id}/replace", response_model=KnowledgeOut)
+async def replace_knowledge_file(
+    business_id: str,
+    entry_id: str,
+    background: BackgroundTasks,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Replace a document with a new version. An identical file changes nothing (no re-indexing)."""
+    get_business_or_404(business_id, db)
+    require_owner_or_admin(business_id, current_user)
+    entry = _get_entry_or_404(business_id, entry_id, db)
+    if entry.doc_type != "document":
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Only uploaded documents can be replaced with a file.")
+    filename, data, kind = await _read_upload(file)
+    digest = hashlib.sha256(data).hexdigest()
+    if digest == entry.content_hash and entry.status == "indexed" and not entry.error:
+        return entry
+    clash = db.scalar(select(KnowledgeDocument).where(KnowledgeDocument.business_id == business_id, KnowledgeDocument.doc_type == "document",
+                                                      KnowledgeDocument.content_hash == digest, KnowledgeDocument.id != entry.id))
+    if clash is not None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"This file is already in your knowledge base as '{clash.filename}'.")
+    _limit_in_flight(db, business_id)
+    entry.filename = filename
+    entry.question = f"Document: {filename}"
+    entry.file_data = data
+    entry.file_size = len(data)
+    entry.mime_type = extractors.MIME_TYPES.get(kind)
+    entry.content_hash = digest
+    entry.version = (entry.version or 1) + 1
+    entry.status = "uploaded"
+    entry.error = None
+    entry.meta = {**(entry.meta or {}), "kind": kind}
+    entry.updated_at = _now()
+    db.commit()
+    db.refresh(entry)
+    _schedule(background, db, entry.id)
+    return entry
+
+
+@router.post("/{entry_id}/reindex", response_model=KnowledgeOut)
+def reindex_knowledge_entry(
+    business_id: str,
+    entry_id: str,
+    background: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Process a source again: re-extract a document, re-crawl a website, re-chunk an FAQ."""
+    get_business_or_404(business_id, db)
+    require_owner_or_admin(business_id, current_user)
+    entry = _get_entry_or_404(business_id, entry_id, db)
+    if entry.doc_type == "faq":
+        ingestion.reindex_faq(db, entry)
+        db.commit()
+        db.refresh(entry)
+        return entry
+    if entry.doc_type == "website":
+        return _start_crawl(db, background, business_id, entry.source_url or "")
+    if entry.status in ("uploaded", "processing"):
+        return entry
+    has_file = db.scalar(select(KnowledgeDocument.id).where(KnowledgeDocument.id == entry.id, KnowledgeDocument.file_data.is_not(None)))
+    if not has_file:
+        if entry.content and not index.looks_binary(entry.content):  # saved before files were kept: re-chunk its text
+            index.chunk_plain_document(db, entry, entry.content)
+            entry.status, entry.error, entry.updated_at = "indexed", None, _now()
+            db.commit()
+            db.refresh(entry)
+            return entry
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="The original file is not stored. Upload it again with Replace.")
+    _limit_in_flight(db, business_id)
+    entry.status = "uploaded"
+    entry.updated_at = _now()
+    db.commit()
+    db.refresh(entry)
+    _schedule(background, db, entry.id)
+    return entry
+
+
+@router.post("/reindex")
+def reindex_all(
+    business_id: str,
+    background: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Re-process every document and FAQ of the business (e.g. to add embeddings after enabling them). Websites are
+    re-crawled only on request, per site."""
+    get_business_or_404(business_id, db)
+    require_owner_or_admin(business_id, current_user)
+    queued = 0
+    for entry in db.scalars(select(KnowledgeDocument).where(KnowledgeDocument.business_id == business_id)).all():
+        if entry.doc_type == "faq":
+            if entry.question and entry.answer:
+                ingestion.reindex_faq(db, entry)
+        elif entry.doc_type == "document" and entry.status not in ("uploaded", "processing"):
+            if db.scalar(select(KnowledgeDocument.id).where(KnowledgeDocument.id == entry.id, KnowledgeDocument.file_data.is_not(None))):
+                entry.status = "uploaded"
+                entry.updated_at = _now()
+                db.flush()
+                _schedule(background, db, entry.id)
+                queued += 1
+    db.commit()
+    return {"queued": queued}
 
 
 @router.post("/sync-url", response_model=KnowledgeOut, status_code=status.HTTP_201_CREATED)
 def sync_knowledge_url(
     business_id: str,
     payload: SyncUrlPayload,
+    background: BackgroundTasks,
+    response: Response,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Crawl website URL, clean HTML noise, chunk & index into vector store for RAG."""
+    """Crawl a website (robots.txt, sitemap, internal links within the page/depth limits) in the background. Syncing a
+    site the business already has re-crawls that entry instead of adding a duplicate."""
     get_business_or_404(business_id, db)
     require_owner_or_admin(business_id, current_user)
-    quotas.enforce_add(db, get_business_or_404(business_id, db), "knowledge_docs")
-
-    scraped_text = _scrape_website_text(payload.source_url)
-
-    entry = KnowledgeDocument(
-        business_id=business_id,
-        doc_type="website",
-        source_url=payload.source_url,
-        status="indexed",
-        question=f"Website: {payload.source_url}",
-        answer=scraped_text if scraped_text else f"Website synced from {payload.source_url}",
-    )
-    db.add(entry)
-    db.commit()
-    db.refresh(entry)
-
-    # Re-index all business knowledge into RAG vector store
-    ensure_business_indexed(business_id, db, force_reload=True)
-
-    return entry
+    return _start_crawl(db, background, business_id, payload.source_url, payload.max_pages, payload.max_depth, response=response)
 
 
 @router.post("/query")
@@ -515,23 +486,45 @@ def query_knowledge_base(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Sub-50ms RAG search query returning top relevant policy/pricing snippets."""
+    """Search the business's own knowledge base: ranked passages with their sources and confidence, plus an exact table
+    match (fees, prices) when the question names table values."""
     get_business_or_404(business_id, db)
     require_membership(business_id, current_user)
+    return index.search(db, business_id, payload.query, top_k=payload.top_k)
 
-    ensure_business_indexed(business_id, db, force_reload=False)
-    search_meta = rag_retriever.search_with_metadata(business_id, payload.query, top_k=payload.top_k)
-    return search_meta
+
+@router.post("/test-answer")
+async def test_answer(
+    business_id: str,
+    payload: KnowledgeQueryPayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Preview how the AI employee would answer from the knowledge base, before going live. Uses the same retrieval and
+    grounding rules as calls and WhatsApp: no verified information means no answer, never a guess."""
+    get_business_or_404(business_id, db)
+    require_membership(business_id, current_user)
+    from backend.ai.engine.rag.answering import grounded_answer
+
+    return await grounded_answer(db, business_id, payload.query)
 
 
 dashboard_router = APIRouter(prefix="/api/businesses/{business_id}/knowledge", tags=["knowledge"])
 dashboard_router.add_api_route("", create_knowledge_entry, methods=["POST"], response_model=KnowledgeOut, status_code=status.HTTP_201_CREATED)
 dashboard_router.add_api_route("", list_knowledge_entries, methods=["GET"], response_model=list[KnowledgeOut])
-dashboard_router.add_api_route("/{entry_id}", update_knowledge_entry, methods=["PATCH"], response_model=KnowledgeOut)
-dashboard_router.add_api_route("/{entry_id}", delete_knowledge_entry, methods=["DELETE"], status_code=status.HTTP_204_NO_CONTENT)
 dashboard_router.add_api_route("/upload-file", upload_knowledge_file, methods=["POST"], response_model=KnowledgeOut, status_code=status.HTTP_201_CREATED)
 dashboard_router.add_api_route("/sync-url", sync_knowledge_url, methods=["POST"], response_model=KnowledgeOut, status_code=status.HTTP_201_CREATED)
 dashboard_router.add_api_route("/query", query_knowledge_base, methods=["POST"])
+dashboard_router.add_api_route("/test-answer", test_answer, methods=["POST"])
+dashboard_router.add_api_route("/reindex", reindex_all, methods=["POST"])
+dashboard_router.add_api_route("/{entry_id}", get_knowledge_entry, methods=["GET"], response_model=KnowledgeOut)
+dashboard_router.add_api_route("/{entry_id}", update_knowledge_entry, methods=["PATCH"], response_model=KnowledgeOut)
+dashboard_router.add_api_route("/{entry_id}", delete_knowledge_entry, methods=["DELETE"], status_code=status.HTTP_204_NO_CONTENT)
+dashboard_router.add_api_route("/{entry_id}/replace", replace_knowledge_file, methods=["POST"], response_model=KnowledgeOut)
+dashboard_router.add_api_route("/{entry_id}/reindex", reindex_knowledge_entry, methods=["POST"], response_model=KnowledgeOut)
 
 
-
+def _scrape_website_text(url: str) -> str:
+    """Scripts (backend/scripts/*rag*.py): crawl a site and return its text. Not used by the API."""
+    result = crawler.crawl(url, max_pages=10, max_depth=1)
+    return "\n\n".join(f"--- {p.url} ---\n{p.text}" for p in result.pages)

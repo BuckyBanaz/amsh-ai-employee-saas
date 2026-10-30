@@ -1,7 +1,7 @@
 "use client";
 import React, { useState } from 'react';
 import { STRINGS } from '../../utils/strings/en';
-import { KnowledgeItem } from '../../controllers/dashboard.controller';
+import { KnowledgeItem, isKnowledgeProcessing } from '../../controllers/dashboard.controller';
 import { TableSkeleton } from '../common/ShimmerSkeleton';
 
 interface KnowledgeTableProps {
@@ -10,7 +10,8 @@ interface KnowledgeTableProps {
   searchQuery: string;
   onDelete: (id: string) => Promise<void>;
   onEditFaq: (faq: KnowledgeItem) => void;
-  onSyncUrl: (url: string) => Promise<void>;
+  onReindex: (item: KnowledgeItem) => Promise<void>;
+  onReplace: (item: KnowledgeItem, file: File) => Promise<void>;
   onOpenModal: (modal: 'upload' | 'website' | 'faq' | 'test') => void;
 }
 
@@ -20,11 +21,13 @@ export function KnowledgeTable({
   searchQuery,
   onDelete,
   onEditFaq,
-  onSyncUrl,
+  onReindex,
+  onReplace,
   onOpenModal,
 }: KnowledgeTableProps) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [syncingId, setSyncingId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string>('');
 
   const filteredItems = items.filter((item) => {
     if (!searchQuery.trim()) return true;
@@ -50,16 +53,47 @@ export function KnowledgeTable({
     }
   };
 
-  const handleResync = async (item: KnowledgeItem) => {
-    if (!item.source_url) return;
+  const handleReindex = async (item: KnowledgeItem) => {
     try {
+      setActionError('');
       setSyncingId(item.id);
-      await onSyncUrl(item.source_url);
-    } catch (err) {
-      console.error('Resync error:', err);
+      await onReindex(item);
+    } catch (err: any) {
+      setActionError(err?.message || 'Could not start re-indexing.');
     } finally {
       setSyncingId(null);
     }
+  };
+
+  const handleReplace = async (item: KnowledgeItem, file: File | undefined) => {
+    if (!file) return;
+    try {
+      setActionError('');
+      setSyncingId(item.id);
+      await onReplace(item, file);
+    } catch (err: any) {
+      setActionError(err?.message || 'Could not replace the document.');
+    } finally {
+      setSyncingId(null);
+    }
+  };
+
+  /** What the backend found: pages/sheets for files, the crawl summary for websites. */
+  const getItemDetails = (item: KnowledgeItem): string => {
+    const m = item.meta;
+    if (!m) return '';
+    if (item.doc_type === 'website' && m.crawl) {
+      const c = m.crawl;
+      return [`${c.urls_processed} page${c.urls_processed === 1 ? '' : 's'} indexed`, c.urls_failed ? `${c.urls_failed} failed` : '', c.urls_skipped ? `${c.urls_skipped} skipped` : '']
+        .filter(Boolean).join(' · ');
+    }
+    if (m.sheets?.length) {
+      const rows = m.sheets.reduce((n, sh) => n + sh.rows, 0);
+      return `${m.sheets.length} sheet${m.sheets.length === 1 ? '' : 's'} · ${rows} rows`;
+    }
+    if (m.pages) return `${m.pages} page${m.pages === 1 ? '' : 's'}`;
+    if (item.chunk_count) return `${item.chunk_count} passage${item.chunk_count === 1 ? '' : 's'}`;
+    return '';
   };
 
   const getItemDisplayName = (item: KnowledgeItem) => {
@@ -132,7 +166,7 @@ export function KnowledgeTable({
             <p className="text-xs text-gray-500 max-w-sm mb-4">
               {searchQuery
                 ? `No knowledge entries found matching "${searchQuery}".`
-                : 'Upload PDFs, sync clinic websites, or add custom FAQs so your AI Receptionist can answer caller questions accurately.'}
+                : 'Upload documents and spreadsheets (PDF, Word, Excel, CSV, TXT), sync your website, or add FAQs so your AI employee answers from your own information.'}
             </p>
             {!searchQuery && (
               <div className="flex flex-wrap items-center justify-center gap-2">
@@ -211,10 +245,20 @@ export function KnowledgeTable({
                           <span className="text-xs font-semibold text-gray-900 truncate">
                             {getItemDisplayName(item)}
                           </span>
-                          {item.answer && (
+                          {item.status === 'failed' && item.error ? (
+                            <span className="text-[10px] text-red-600 whitespace-normal" role="alert">{item.error}</span>
+                          ) : item.answer && (
                             <span className="text-[10px] text-gray-400 truncate">
                               {item.answer}
                             </span>
+                          )}
+                          {item.status === 'indexed' && getItemDetails(item) && (
+                            <span className="text-[10px] text-gray-500 truncate" title={(item.meta?.warnings || []).join('\n') || undefined}>
+                              {getItemDetails(item)}{item.meta?.warnings?.length ? ' · ⚠ ' + item.meta.warnings.length + ' note' + (item.meta.warnings.length === 1 ? '' : 's') : ''}
+                            </span>
+                          )}
+                          {item.status === 'indexed' && item.error && (
+                            <span className="text-[10px] text-amber-700 whitespace-normal">{item.error}</span>
                           )}
                         </div>
                       </div>
@@ -231,10 +275,15 @@ export function KnowledgeTable({
                     </td>
 
                     <td className="px-3.5 py-2 whitespace-nowrap">
-                      {isSyncing || item.status === 'processing' || item.status === 'crawling' ? (
+                      {isSyncing || isKnowledgeProcessing(item) ? (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-600 animate-pulse">
                           <div className="w-2 h-2 rounded-full bg-amber-500 animate-spin"></div>
-                          Processing
+                          {item.status === 'processing' ? 'Processing' : 'Queued'}
+                        </span>
+                      ) : item.status === 'failed' ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-red-50 text-red-600" title={item.error || undefined}>
+                          <div className="w-1.5 h-1.5 rounded-full bg-red-500"></div>
+                          Failed
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-[#E6FBF3] text-[#10B981]">
@@ -245,20 +294,31 @@ export function KnowledgeTable({
                     </td>
 
                     <td className="px-3.5 py-2 text-xs text-gray-500 whitespace-nowrap">
-                      {formatDate(item.uploaded_at)}
+                      {formatDate(item.updated_at || item.uploaded_at)}
                     </td>
 
                     <td className="px-3.5 py-2 whitespace-nowrap text-right text-xs font-semibold">
                       <div className="flex items-center justify-end gap-3 opacity-80 group-hover:opacity-100 transition-opacity">
-                        {item.doc_type === 'website' && (
+                        {item.doc_type !== 'faq' && (
                           <button
-                            onClick={() => handleResync(item)}
-                            disabled={isSyncing}
+                            onClick={() => handleReindex(item)}
+                            disabled={isSyncing || isKnowledgeProcessing(item)}
                             className="text-[#0066FF] hover:text-[#0052cc] cursor-pointer disabled:opacity-50"
-                            title="Re-crawl website content"
+                            title={item.doc_type === 'website' ? 'Crawl the website again' : 'Process the document again'}
                           >
-                            {isSyncing ? 'Syncing...' : 'Re-sync'}
+                            {isSyncing ? 'Working...' : item.doc_type === 'website' ? 'Re-sync' : 'Re-index'}
                           </button>
+                        )}
+                        {item.doc_type === 'document' && (
+                          <label className={`text-[#0066FF] hover:text-[#0052cc] cursor-pointer ${isSyncing || isKnowledgeProcessing(item) ? 'opacity-50 pointer-events-none' : ''}`} title="Upload a new version of this document">
+                            Replace
+                            <input
+                              type="file"
+                              className="hidden"
+                              accept=".pdf,.doc,.docx,.txt,.csv,.xls,.xlsx"
+                              onChange={(e) => { handleReplace(item, e.target.files?.[0]); e.target.value = ''; }}
+                            />
+                          </label>
                         )}
                         {item.doc_type === 'faq' && (
                           <button
@@ -286,6 +346,10 @@ export function KnowledgeTable({
           </table>
         )}
       </div>
+
+      {actionError && (
+        <div className="px-4 py-2 text-xs text-red-600 border-t border-red-100 bg-red-50" role="alert">{actionError}</div>
+      )}
 
       {/* Bottom Action Bar */}
       <div className="px-4 py-2.5 border-t border-gray-100 bg-[#F9FAFB]/40 flex flex-wrap items-center justify-between gap-2.5">
@@ -321,7 +385,7 @@ export function KnowledgeTable({
             <circle cx="11" cy="11" r="8"></circle>
             <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
           </svg>
-          <span>Test Vector RAG Search</span>
+          <span>Test Answers</span>
         </button>
       </div>
 

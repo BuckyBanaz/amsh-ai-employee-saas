@@ -16,3 +16,7 @@ websockets==14.1
 plivo==4.63.0
 numpy==2.5.4
 ai-edge-litert==2.3.0  # YAMNet laughter detection on the caller audio (ai/realtime/audio/paralinguistic.py)
+pypdf==6.1.1  # knowledge base: PDF text (backend/ai/engine/rag/extractors.py)
+openpyxl==3.1.5  # knowledge base: XLSX sheets
+xlrd==2.0.2  # knowledge base: legacy XLS sheets
+olefile==0.47  # knowledge base: legacy Word .doc

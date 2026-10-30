@@ -8,6 +8,8 @@ interface UploadDocModalProps {
   onSuccess: () => void;
 }
 
+const MAX_FILE_MB = 20; // backend KB_MAX_FILE_MB
+
 export function UploadDocModal({ isOpen, onClose, onSuccess }: UploadDocModalProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -34,7 +36,15 @@ export function UploadDocModal({ isOpen, onClose, onSuccess }: UploadDocModalPro
 
   const handleUpload = async () => {
     if (!selectedFile) {
-      setError('Please select a document file (.pdf, .docx, .txt).');
+      setError('Please select a file (.pdf, .doc, .docx, .txt, .csv, .xls, .xlsx).');
+      return;
+    }
+    if (!/\.(pdf|docx?|txt|csv|xlsx?)$/i.test(selectedFile.name)) {
+      setError('Unsupported file type. Upload a PDF, DOC, DOCX, TXT, CSV, XLS or XLSX file.');
+      return;
+    }
+    if (selectedFile.size > MAX_FILE_MB * 1024 * 1024) {
+      setError(`The file is larger than ${MAX_FILE_MB} MB. Split it into smaller files.`);
       return;
     }
 
@@ -61,7 +71,7 @@ export function UploadDocModal({ isOpen, onClose, onSuccess }: UploadDocModalPro
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-[#F9FAFB]/50">
           <div>
             <h3 className="text-sm font-bold text-gray-900">Upload Knowledge Document</h3>
-            <p className="text-xs text-gray-500 mt-0.5">Index clinical policies, pricing sheets, or FAQs into RAG vector memory.</p>
+            <p className="text-xs text-gray-500 mt-0.5">Add policies, price lists, fee sheets and FAQs your AI employee can answer from.</p>
           </div>
           <button
             onClick={onClose}
@@ -89,7 +99,7 @@ export function UploadDocModal({ isOpen, onClose, onSuccess }: UploadDocModalPro
               type="file"
               ref={fileInputRef}
               onChange={handleFileChange}
-              accept=".pdf,.docx,.doc,.txt"
+              accept=".pdf,.doc,.docx,.txt,.csv,.xls,.xlsx"
               className="hidden"
             />
             <div className="w-12 h-12 mb-3 bg-[#F0F7FF] group-hover:scale-105 rounded-full flex items-center justify-center text-[#0066FF] shadow-xs transition-transform">
@@ -109,7 +119,7 @@ export function UploadDocModal({ isOpen, onClose, onSuccess }: UploadDocModalPro
             ) : (
               <div>
                 <p className="text-xs font-bold text-gray-900">Click or drag file to this area to upload</p>
-                <p className="text-[11px] text-gray-400 mt-1">Supports PDF, DOCX, and TXT files up to 25MB</p>
+                <p className="text-[11px] text-gray-400 mt-1">Supports PDF, DOC, DOCX, TXT, CSV, XLS and XLSX files up to {MAX_FILE_MB} MB</p>
               </div>
             )}
           </div>
@@ -120,7 +130,7 @@ export function UploadDocModal({ isOpen, onClose, onSuccess }: UploadDocModalPro
               <line x1="12" y1="16" x2="12" y2="12"></line>
               <line x1="12" y1="8" x2="12.01" y2="8"></line>
             </svg>
-            <span>Once uploaded, the document is automatically parsed, split into semantic chunks, and embedded for sub-50ms AI Receptionist retrieval.</span>
+            <span>After upload the file is processed in the background: its text, headings and tables (every sheet of a spreadsheet) are indexed, and the status changes to Ready, or Failed with the reason. Fee and price tables are looked up exactly.</span>
           </div>
         </div>
 

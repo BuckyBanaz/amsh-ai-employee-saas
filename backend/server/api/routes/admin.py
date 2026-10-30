@@ -73,7 +73,7 @@ def purge_other_businesses(db: Session, keep_id: str, dry_run: bool = True) -> D
     from backend.server.database.models.business import Business
     from backend.server.database.models.call import Call
     from backend.server.database.models.integration import Integration
-    from backend.server.database.models.knowledge_base import KnowledgeDocument
+    from backend.server.database.models.knowledge_base import KnowledgeChunk, KnowledgeDocument, KnowledgeRecord
     from backend.server.database.models.message import Message
     from backend.server.database.models.phone_number import PhoneNumber
     from backend.server.database.models.service import Service, staff_services
@@ -139,6 +139,8 @@ def purge_other_businesses(db: Session, keep_id: str, dry_run: bool = True) -> D
         db.query(Call).filter(Call.id.in_(other_call_ids)).delete(synchronize_session=False)
 
     # 6. Knowledge documents, phone numbers, integrations, usage
+    db.query(KnowledgeChunk).filter(KnowledgeChunk.business_id.in_(other_biz_ids)).delete(synchronize_session=False)
+    db.query(KnowledgeRecord).filter(KnowledgeRecord.business_id.in_(other_biz_ids)).delete(synchronize_session=False)
     db.query(KnowledgeDocument).filter(KnowledgeDocument.business_id.in_(other_biz_ids)).delete(synchronize_session=False)
     db.query(PhoneNumber).filter(PhoneNumber.business_id.in_(other_biz_ids)).delete(synchronize_session=False)
     db.query(Integration).filter(Integration.business_id.in_(other_biz_ids)).delete(synchronize_session=False)

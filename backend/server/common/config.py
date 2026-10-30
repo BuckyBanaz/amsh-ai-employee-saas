@@ -85,6 +85,17 @@ class Settings(BaseSettings):
     # Entries: `groq` (default model), `groq:<model>`, `gemini`. Groq limits are per model, so extra Groq models add
     # capacity. Order matters; the flaky-but-free qwen goes last.
     LLM_PROVIDERS: str = "groq,groq:openai/gpt-oss-120b,gemini,groq:qwen/qwen3.8-27b"
+    # Knowledge base (backend/ai/engine/rag). Embeddings: "auto" uses Gemini when GEMINI_API_KEY is set, "off" keeps
+    # keyword (BM25) search only. Retrieval always works without embeddings; they add semantic matching on top.
+    KB_EMBEDDINGS: str = "auto"
+    KB_EMBEDDING_MODEL: str = "gemini-embedding-001"
+    KB_EMBEDDING_DIM: int = 768
+    KB_QUERY_EMBED_TIMEOUT: float = 1.5  # seconds; a live call never waits longer than this for a query embedding
+    KB_MAX_FILE_MB: int = 20
+    KB_CRAWL_MAX_PAGES: int = 25  # per sync; the business can ask for fewer, never more than KB_CRAWL_PAGE_CAP
+    KB_CRAWL_PAGE_CAP: int = 100
+    KB_CRAWL_MAX_DEPTH: int = 2
+    KB_MAX_PROCESSING_PER_BUSINESS: int = 5  # uploads/crawls in flight per business; more are refused with 429
     DEEPGRAM_API_KEY: str | None = None
     ELEVENLABS_API_KEY: str | None = None
     CARTESIA_API_KEY: str | None = None

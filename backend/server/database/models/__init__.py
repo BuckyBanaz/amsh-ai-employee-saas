@@ -10,7 +10,7 @@ from backend.server.database.models.phone_number import PhoneNumber  # noqa: F40
 from backend.server.database.models.call import Call  # noqa: F401
 from backend.server.database.models.message import Message  # noqa: F401
 from backend.server.database.models.transaction import Transaction  # noqa: F401
-from backend.server.database.models.knowledge_base import KnowledgeDocument  # noqa: F401
+from backend.server.database.models.knowledge_base import KnowledgeChunk, KnowledgeDocument, KnowledgeRecord  # noqa: F401
 from backend.server.database.models.integration import Integration  # noqa: F401
 from backend.server.database.models.usage import Usage  # noqa: F401
 from backend.server.database.models.audit_log import AuditLog  # noqa: F401

@@ -6,27 +6,38 @@ import { STRINGS } from '../../../utils/strings/en';
 import { OnboardingController } from '../../../controllers/onboarding.controller';
 import { StorageService } from '../../../services/storage.service';
 
+type SourceStatus = 'Ready' | 'Processing' | 'Failed';
+
 interface KnowledgeDoc {
   id: number;
   name: string;
-  status: 'Ready' | 'Processing';
+  status: SourceStatus;
+  serverId?: string; // the knowledge entry on the server: status is read from it, deletes go to it
+  error?: string;
 }
 
 interface KnowledgeSite {
   id: number;
   url: string;
-  status: 'Ready' | 'Processing';
+  status: SourceStatus;
+  serverId?: string;
+  error?: string;
 }
 
 interface KnowledgeFaq {
   id: number;
   question: string;
   answer: string;
+  serverId?: string;
 }
 
 const initialDocuments: KnowledgeDoc[] = [];
 const initialWebsites: KnowledgeSite[] = [];
 const initialFaqs: KnowledgeFaq[] = [];
+
+/** The server's processing status in this page's terms. */
+const toStatus = (status?: string): SourceStatus =>
+  status === 'indexed' ? 'Ready' : status === 'failed' ? 'Failed' : 'Processing';
 
 export default function KnowledgeOnboardingPage() {
   const router = useRouter();
@@ -44,6 +55,7 @@ export default function KnowledgeOnboardingPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [pendingStep1Site, setPendingStep1Site] = useState<string | null>(null);
 
   // Hydrate from localStorage or derive website from Step 1
   React.useEffect(() => {
@@ -58,13 +70,11 @@ export default function KnowledgeOnboardingPage() {
         const parsed = JSON.parse(rawSites);
         if (Array.isArray(parsed)) setSiteList(parsed);
       } else {
-        // Derive real website from Step 1 if user provided one
+        // The website from Step 1 is synced for real (the server crawls it), not just shown as ready
         const rawBiz = localStorage.getItem('onboarding_business_data');
         if (rawBiz) {
           const biz = JSON.parse(rawBiz);
-          if (biz.website && biz.website.trim()) {
-            setSiteList([{ id: Date.now(), url: biz.website.replace(/^https?:\/\//, ''), status: 'Ready' }]);
-          }
+          if (biz.website && biz.website.trim()) setPendingStep1Site(biz.website.trim());
         }
       }
       const rawFaqs = localStorage.getItem('onboarding_knowledge_faqs');
@@ -91,12 +101,33 @@ export default function KnowledgeOnboardingPage() {
     localStorage.setItem('onboarding_knowledge_faqs', JSON.stringify(faqList));
   }, [faqList]);
 
+  // Files and websites are processed in the background: poll the server until each is Ready or Failed.
+  const anyProcessing = docList.some(d => d.serverId && d.status === 'Processing') || siteList.some(s => s.serverId && s.status === 'Processing');
+  React.useEffect(() => {
+    if (!anyProcessing) return;
+    const businessId = StorageService.getBusinessId();
+    if (!businessId) return;
+    const timer = setTimeout(async () => {
+      const rows: any[] = await OnboardingController.listKnowledge(businessId);
+      const byId = new Map(rows.map(r => [r.id, r]));
+      const apply = <T extends { serverId?: string; status: SourceStatus; error?: string }>(list: T[]): T[] =>
+        list.map(item => {
+          const row = item.serverId ? byId.get(item.serverId) : undefined;
+          return row ? { ...item, status: toStatus(row.status), error: row.error || undefined } : item;
+        });
+      setDocList(apply);
+      setSiteList(apply);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [anyProcessing, docList, siteList]);
+
   const [fileUploading, setFileUploading] = useState(false);
   const [siteSyncing, setSiteSyncing] = useState(false);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    e.target.value = '';
 
     const tempId = Date.now();
     setDocList(prev => [...prev, { id: tempId, name: file.name, status: 'Processing' }]);
@@ -105,10 +136,9 @@ export default function KnowledgeOnboardingPage() {
 
     try {
       const businessId = StorageService.getBusinessId();
-      if (businessId) {
-        await OnboardingController.uploadKnowledgeFile(businessId, file);
-      }
-      setDocList(prev => prev.map(d => (d.id === tempId ? { ...d, status: 'Ready' } : d)));
+      if (!businessId) throw new Error('Finish the business step first, then upload documents.');
+      const row = await OnboardingController.uploadKnowledgeFile(businessId, file);
+      setDocList(prev => prev.map(d => (d.id === tempId ? { ...d, serverId: row.id, status: toStatus(row.status), error: row.error || undefined } : d)));
     } catch (err: any) {
       console.error(err);
       setError(err.message || 'File upload failed');
@@ -118,34 +148,47 @@ export default function KnowledgeOnboardingPage() {
     }
   };
 
-  const handleAddSite = async () => {
-    if (!newUrl.trim()) return;
-    const formattedUrl = newUrl.startsWith('http') ? newUrl : `https://${newUrl}`;
+  const syncSite = async (rawUrl: string) => {
+    const formattedUrl = rawUrl.startsWith('http') ? rawUrl : `https://${rawUrl}`;
+    const label = formattedUrl.replace(/^https?:\/\//, '');
     const tempId = Date.now();
-    setSiteList(prev => [...prev, { id: tempId, url: formattedUrl.replace(/^https?:\/\//, ''), status: 'Processing' }]);
-    setNewUrl('');
+    setSiteList(prev => [...prev.filter(s => s.url !== label), { id: tempId, url: label, status: 'Processing' }]);
     setSiteSyncing(true);
     setError('');
 
     try {
       const businessId = StorageService.getBusinessId();
-      if (businessId) {
-        await OnboardingController.syncKnowledgeUrl(businessId, formattedUrl);
-      }
-      // Min 1.2s animation delay so user sees live scraping progress indicator
-      await new Promise(resolve => setTimeout(resolve, 1200));
-      setSiteList(prev => prev.map(s => (s.id === tempId ? { ...s, status: 'Ready' } : s)));
+      if (!businessId) throw new Error('Finish the business step first, then sync your website.');
+      const row = await OnboardingController.syncKnowledgeUrl(businessId, formattedUrl);
+      setSiteList(prev => prev.map(s => (s.id === tempId ? { ...s, serverId: row.id, status: toStatus(row.status), error: row.error || undefined } : s)));
     } catch (err: any) {
       console.error(err);
-      setError(err.message || 'Failed to sync website URL');
+      const message = err?.message || 'Failed to sync website URL';
+      setError(message);
+      setSiteList(prev => prev.map(s => (s.id === tempId ? { ...s, status: 'Failed', error: message } : s)));
     } finally {
       setSiteSyncing(false);
     }
   };
 
+  React.useEffect(() => {
+    if (pendingStep1Site) {
+      setPendingStep1Site(null);
+      syncSite(pendingStep1Site);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingStep1Site]);
+
+  const handleAddSite = async () => {
+    if (!newUrl.trim()) return;
+    const url = newUrl.trim();
+    setNewUrl('');
+    await syncSite(url);
+  };
+
   const handleAddFaq = async () => {
     if (!newFaq.question.trim() || !newFaq.answer.trim()) return;
-    const tempFaq = { id: Date.now(), ...newFaq };
+    const tempFaq: KnowledgeFaq = { id: Date.now(), ...newFaq };
     setFaqList(prev => [...prev, tempFaq]);
     setNewFaq({ question: '', answer: '' });
     setIsAddingFaq(false);
@@ -153,14 +196,17 @@ export default function KnowledgeOnboardingPage() {
     try {
       const businessId = StorageService.getBusinessId();
       if (businessId) {
-        await OnboardingController.createKnowledge(businessId, {
+        const row = await OnboardingController.createKnowledge(businessId, {
           doc_type: 'faq',
           question: tempFaq.question,
           answer: tempFaq.answer,
         });
+        if (row?.id) setFaqList(prev => prev.map(f => (f.id === tempFaq.id ? { ...f, serverId: row.id } : f)));
       }
     } catch (err: any) {
       console.error(err);
+      setError(err?.message || 'Could not save the FAQ');
+      setFaqList(prev => prev.filter(f => f.id !== tempFaq.id));
     }
   };
 
@@ -170,17 +216,46 @@ export default function KnowledgeOnboardingPage() {
     setIsAddingFaq(false);
   };
 
-  const handleSaveEditFaq = () => {
+  const handleSaveEditFaq = async () => {
     if (!editFaqForm.question.trim() || !editFaqForm.answer.trim()) return;
+    const faq = faqList.find(f => f.id === editingFaqId);
     setFaqList(faqList.map(f => (f.id === editingFaqId ? { ...f, ...editFaqForm } : f)));
     setEditingFaqId(null);
+    const businessId = StorageService.getBusinessId();
+    if (businessId && faq?.serverId) {
+      try {
+        await OnboardingController.updateKnowledge(businessId, faq.serverId, editFaqForm);
+      } catch (err: any) {
+        setError(err?.message || 'Could not save the FAQ change');
+      }
+    }
   };
 
   const cancelEditFaq = () => setEditingFaqId(null);
 
-  const removeDoc = (id: number) => setDocList(docList.filter(d => d.id !== id));
-  const removeSite = (id: number) => setSiteList(siteList.filter(s => s.id !== id));
-  const removeFaq = (id: number) => setFaqList(faqList.filter(f => f.id !== id));
+  /** Removes the entry on the server too, so the AI stops using it (not just this page). */
+  const removeOnServer = async (serverId?: string) => {
+    const businessId = StorageService.getBusinessId();
+    if (!businessId || !serverId) return;
+    try {
+      await OnboardingController.deleteKnowledge(businessId, serverId);
+    } catch (err: any) {
+      setError(err?.message || 'Could not remove it from your knowledge base');
+    }
+  };
+
+  const removeDoc = (id: number) => {
+    removeOnServer(docList.find(d => d.id === id)?.serverId);
+    setDocList(docList.filter(d => d.id !== id));
+  };
+  const removeSite = (id: number) => {
+    removeOnServer(siteList.find(s => s.id === id)?.serverId);
+    setSiteList(siteList.filter(s => s.id !== id));
+  };
+  const removeFaq = (id: number) => {
+    removeOnServer(faqList.find(f => f.id === id)?.serverId);
+    setFaqList(faqList.filter(f => f.id !== id));
+  };
 
   const handleFinish = async () => {
     const businessId = StorageService.getBusinessId();
@@ -222,7 +297,7 @@ export default function KnowledgeOnboardingPage() {
               ref={fileInputRef}
               onChange={handleFileUpload}
               className="hidden"
-              accept=".pdf,.doc,.docx,.txt"
+              accept=".pdf,.doc,.docx,.txt,.csv,.xls,.xlsx"
             />
             <div className="w-8 h-8 mb-2 bg-[#F0F7FF] rounded-full shadow-xs flex items-center justify-center group-hover:scale-110 transition-transform">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0066FF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -255,7 +330,11 @@ export default function KnowledgeOnboardingPage() {
                   </div>
                   <div>
                     <p className="text-xs font-semibold text-gray-900">{doc.name}</p>
-                    <p className="text-[10px] text-gray-400">{STRINGS.ONBOARDING.KNOWLEDGE.SECTION_DOCS.UPDATED}</p>
+                    {doc.status === 'Failed' && doc.error ? (
+                      <p className="text-[10px] text-red-600" role="alert">{doc.error}</p>
+                    ) : (
+                      <p className="text-[10px] text-gray-400">{STRINGS.ONBOARDING.KNOWLEDGE.SECTION_DOCS.UPDATED}</p>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
@@ -263,6 +342,8 @@ export default function KnowledgeOnboardingPage() {
                     <span className="bg-[#E6FBF3] text-[#10B981] text-[10px] font-bold px-1.5 py-0.5 rounded">
                       {STRINGS.ONBOARDING.KNOWLEDGE.SECTION_DOCS.STATUS_READY}
                     </span>
+                  ) : doc.status === 'Failed' ? (
+                    <span className="bg-red-50 text-red-600 text-[10px] font-bold px-1.5 py-0.5 rounded" title={doc.error}>Failed</span>
                   ) : (
                     <span className="bg-[#FEF3C7] text-[#F59E0B] text-[10px] font-bold px-1.5 py-0.5 rounded">
                       {STRINGS.ONBOARDING.KNOWLEDGE.SECTION_DOCS.STATUS_PROCESSING}
@@ -318,7 +399,10 @@ export default function KnowledgeOnboardingPage() {
                       <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
                     </svg>
                   </div>
-                  <p className="text-xs font-semibold text-gray-900">{site.url}</p>
+                  <div>
+                    <p className="text-xs font-semibold text-gray-900">{site.url}</p>
+                    {site.status === 'Failed' && site.error && <p className="text-[10px] text-red-600" role="alert">{site.error}</p>}
+                  </div>
                 </div>
                 <div className="flex items-center gap-3">
                   {site.status === 'Ready' ? (
@@ -326,6 +410,8 @@ export default function KnowledgeOnboardingPage() {
                       <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
                       {STRINGS.ONBOARDING.KNOWLEDGE.SECTION_DOCS.STATUS_READY}
                     </span>
+                  ) : site.status === 'Failed' ? (
+                    <span className="bg-red-50 text-red-600 text-[10px] font-bold px-2 py-0.5 rounded">Failed</span>
                   ) : (
                     <span className="bg-[#FEF3C7] text-[#D97706] text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1.5 animate-pulse">
                       <svg className="animate-spin h-2.5 w-2.5 text-[#D97706]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">

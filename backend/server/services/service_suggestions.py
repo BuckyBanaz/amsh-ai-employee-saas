@@ -103,7 +103,7 @@ async def suggestions_for(business_id: str, db: Session, backend: Any = None) ->
     sources: List[str] = []
     error: Optional[str] = None
     for doc in docs:
-        text = (doc.answer or "").strip()
+        text = (doc.content or doc.answer or "").strip()  # content: the full crawl; answer is only a preview
         if not text or text == f"Website synced from {doc.source_url}":  # the crawl returned nothing
             continue
         sources.append(doc.source_url or "")

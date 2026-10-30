@@ -75,6 +75,15 @@ async def on_startup() -> None:
     # Runs Groq, Deepgram, TTS, Qdrant, Redis warmups in parallel.
     await warmup_all_clients()
 
+    # Knowledge documents left "uploaded"/"processing" by a restart are processed again (in a worker thread).
+    try:
+        from backend.ai.engine.rag.ingestion import resume_pending
+        from backend.server.database.session import SessionLocal
+
+        asyncio.create_task(asyncio.to_thread(resume_pending, SessionLocal))
+    except Exception:
+        logging.getLogger(__name__).exception("[KNOWLEDGE] could not resume pending documents")
+
     if get_settings().REMINDERS_ENABLED:
         from backend.server.workers.jobs.reminders import reminder_loop
 

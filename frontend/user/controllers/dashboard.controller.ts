@@ -231,6 +231,47 @@ export interface KnowledgeItem {
   question?: string | null;
   answer?: string | null;
   uploaded_at: string;
+  error?: string | null;
+  meta?: KnowledgeMeta | null;
+  chunk_count?: number;
+  version?: number;
+  file_size?: number | null;
+  mime_type?: string | null;
+  updated_at?: string | null;
+  indexed_at?: string | null;
+}
+
+/** Processing details the backend records (backend/ai/engine/rag/ingestion.py). */
+export interface KnowledgeMeta {
+  kind?: string;
+  pages?: number;
+  sheets?: { name: string; rows: number; columns: string[] }[];
+  tables?: number;
+  chunks?: number;
+  records?: number;
+  embedded?: number;
+  warnings?: string[];
+  last_error?: string;
+  crawl?: {
+    urls_discovered: number;
+    urls_processed: number;
+    urls_failed: number;
+    urls_skipped: number;
+    chars_indexed: number;
+    failed?: { url: string; reason: string }[];
+    skipped?: { url: string; reason: string }[];
+  };
+}
+
+/** True while the backend is still working on a source (the page polls until it is indexed or failed). */
+export const isKnowledgeProcessing = (item: KnowledgeItem) => item.status === 'uploaded' || item.status === 'processing' || item.status === 'pending';
+
+/** Multipart upload through ApiService, so it carries the same session token as every other call (the old code read a
+ * `token` key that is never written, so every upload was refused as "Not authenticated"). */
+async function postFile(url: string, file: File): Promise<KnowledgeItem> {
+  const formData = new FormData();
+  formData.append('file', file);
+  return ApiService.request<KnowledgeItem>(url, { method: 'POST', body: formData });
 }
 
 export interface AgentItem {
@@ -523,21 +564,27 @@ export const DashboardController = {
 
   async uploadKnowledgeFile(file: File, businessId?: string): Promise<KnowledgeItem> {
     const bId = this.getEffectiveBusinessId(businessId);
-    const formData = new FormData();
-    formData.append('file', file);
-    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    return postFile(API_ENDPOINTS.KNOWLEDGE.UPLOAD_FILE(bId), file);
+  },
 
-    const response = await fetch(API_ENDPOINTS.KNOWLEDGE.UPLOAD_FILE(bId), {
-      method: 'POST',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-      body: formData,
-    });
+  async replaceKnowledgeFile(entryId: string, file: File, businessId?: string): Promise<KnowledgeItem> {
+    const bId = this.getEffectiveBusinessId(businessId);
+    return postFile(API_ENDPOINTS.KNOWLEDGE.REPLACE(bId, entryId), file);
+  },
 
-    if (!response.ok) {
-      const errData = await response.json().catch(() => ({}));
-      throw new Error(errData.detail || 'Failed to upload document to knowledge base');
-    }
-    return response.json();
+  async reindexKnowledge(entryId: string, businessId?: string): Promise<KnowledgeItem> {
+    const bId = this.getEffectiveBusinessId(businessId);
+    return ApiService.post<KnowledgeItem>(API_ENDPOINTS.KNOWLEDGE.REINDEX(bId, entryId), {});
+  },
+
+  async updateKnowledge(entryId: string, payload: { question?: string; answer?: string; filename?: string; source_url?: string }, businessId?: string): Promise<KnowledgeItem> {
+    const bId = this.getEffectiveBusinessId(businessId);
+    return ApiService.patch<KnowledgeItem>(API_ENDPOINTS.KNOWLEDGE.ENTRY(bId, entryId), payload);
+  },
+
+  async testKnowledgeAnswer(query: string, businessId?: string): Promise<any> {
+    const bId = this.getEffectiveBusinessId(businessId);
+    return ApiService.post<any>(API_ENDPOINTS.KNOWLEDGE.TEST_ANSWER(bId), { query });
   },
 
   async syncKnowledgeUrl(sourceUrl: string, businessId?: string): Promise<KnowledgeItem> {

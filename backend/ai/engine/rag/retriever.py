@@ -20,6 +20,12 @@ class RAGRetriever:
             return 0
         return self.vector_store.index_chunks(business_id, chunks)
 
+    def search(self, db, business_id: str, query: str, top_k: int = 4) -> dict:
+        """The persisted, business-scoped knowledge base (backend/ai/engine/rag/index.py). Use this for live traffic."""
+        from backend.ai.engine.rag import index
+
+        return index.search(db, business_id, query, top_k=top_k)
+
     def retrieve_snippets(self, business_id: str, query: str, top_k: int = 4) -> list[str]:
         """Retrieves top_k exact policy/pricing snippets for a caller's query in <50ms."""
         start_time = time.perf_counter()
