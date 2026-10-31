@@ -91,6 +91,39 @@ def find_whatsapp_integration(db: Any, phone_number_id: str) -> Optional[Integra
     return matches[0] if matches else None
 
 
+def meta_error(resp: httpx.Response) -> Dict[str, Any]:
+    """Meta's error code and message for a failed send (no recipient, no body, no token)."""
+    try:
+        err = resp.json().get("error") or {}
+    except ValueError:
+        err = {}
+    message = err.get("error_user_msg") or err.get("message") or f"HTTP {resp.status_code}"
+    return {"code": err.get("code") or resp.status_code, "message": str(message)[:200]}
+
+
+def note_send_result(phone_number_id: Optional[str], error: Optional[Dict[str, Any]]) -> None:
+    """Keep the last send failure on the integration so the dashboard can say replies are not going out, instead of
+    showing "Connected" while Meta refuses every message. The next successful send clears it."""
+    if not phone_number_id:
+        return
+    try:
+        with SessionLocal() as db:
+            row = find_whatsapp_integration(db, phone_number_id)
+            if row is None:
+                return
+            config = dict(row.config or {})
+            if error is None:
+                if "last_send_error" not in config:
+                    return  # the usual case: nothing to clear, no write
+                config.pop("last_send_error")
+            else:
+                config["last_send_error"] = {**error, "at": datetime.now(timezone.utc).isoformat()}
+            row.config = config
+            db.commit()
+    except Exception as e:  # bookkeeping only: never break a send on it
+        logger.warning("[WHATSAPP] could not record send result: %s", e)
+
+
 async def send_text(config: Dict[str, Any], to: str, body: str) -> bool:
     """Send a free-form WhatsApp text (valid inside the 24 h window after the patient's message)."""
     try:
@@ -104,6 +137,7 @@ async def send_text(config: Dict[str, Any], to: str, body: str) -> bool:
             )
         if resp.status_code != 200:
             logger.warning("[WHATSAPP] send failed (%s): %s", resp.status_code, resp.text[:200])
+        await asyncio.to_thread(note_send_result, config.get("phone_number_id"), None if resp.status_code == 200 else meta_error(resp))
         return resp.status_code == 200
     except Exception as e:
         logger.warning("[WHATSAPP] send failed: %s", e)
@@ -129,6 +163,7 @@ async def send_template(config: Dict[str, Any], to: str, template: str, language
             resp = await client.post(url, headers={"Authorization": f"Bearer {token}"}, json=payload)
         if resp.status_code != 200:
             logger.warning("[WHATSAPP] template send failed (%s): %s", resp.status_code, resp.text[:200])
+        await asyncio.to_thread(note_send_result, config.get("phone_number_id"), None if resp.status_code == 200 else meta_error(resp))
         return resp.status_code == 200
     except Exception as e:
         logger.warning("[WHATSAPP] template send failed: %s", e)

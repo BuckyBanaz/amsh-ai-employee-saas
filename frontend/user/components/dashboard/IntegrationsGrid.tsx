@@ -402,6 +402,8 @@ export function IntegrationsGrid({ filter = 'All Integrations' }: { filter?: str
           const connectedRecord = tenantIntegrations.find((ti) => ti.provider === item.providerKey && ti.status === 'connected');
           const comingSoon = !WHATSAPP_ENABLED && item.id === 'whatsapp';
           const isConnected = !comingSoon && (!!connectedRecord || (item.id === 'whatsapp' && wa.status === 'connected'));
+          // Set by the server when Meta refused the last message (e.g. billing): "Connected" alone would hide that no reply goes out.
+          const sendError = item.id === 'whatsapp' && isConnected ? connectedRecord?.config?.last_send_error : null;
 
           return (
             <div
@@ -421,10 +423,10 @@ export function IntegrationsGrid({ filter = 'All Integrations' }: { filter?: str
                       <div className="flex items-center gap-1.5 mt-0.5">
                         <span
                           className={`text-[10px] font-bold ${
-                            isConnected ? 'text-emerald-600' : 'text-gray-400'
+                            sendError ? 'text-amber-600' : isConnected ? 'text-emerald-600' : 'text-gray-400'
                           }`}
                         >
-                          {isConnected ? 'Connected' : comingSoon ? 'Coming soon' : 'Not Connected'}
+                          {sendError ? 'Replies failing' : isConnected ? 'Connected' : comingSoon ? 'Coming soon' : 'Not Connected'}
                         </span>
                         <span className="text-gray-300">·</span>
                         <span className="text-[10px] font-semibold text-gray-400">
@@ -441,11 +443,10 @@ export function IntegrationsGrid({ filter = 'All Integrations' }: { filter?: str
                   ) : item.isWhatsappSpecial && !isConnected ? (
                     <button
                       type="button"
-                      onClick={wa.connect}
-                      disabled={!wa.sdkReady || wa.status === 'connecting' || wa.status === 'loading'}
-                      className="px-3 py-1 bg-[#0066FF] text-white rounded-lg text-xs font-bold shadow-xs hover:bg-blue-600 transition-colors disabled:opacity-50 cursor-pointer"
+                      onClick={() => handleOpenModal(item)}
+                      className="px-3 py-1 bg-[#0066FF] text-white rounded-lg text-xs font-bold shadow-xs hover:bg-blue-600 transition-colors cursor-pointer"
                     >
-                      {wa.status === 'connecting' ? 'Connecting…' : 'Connect'}
+                      Connect
                     </button>
                   ) : (
                     <button
@@ -457,7 +458,7 @@ export function IntegrationsGrid({ filter = 'All Integrations' }: { filter?: str
                           : 'bg-[#0066FF] text-white hover:bg-blue-600 shadow-xs'
                       }`}
                     >
-                      {(item.providerKey === 'google_calendar' || item.providerKey === 'outlook') && isConnected ? 'Disconnect' : isConnected ? 'Manage' : 'Connect'}
+                      {(item.providerKey === 'google_calendar' || item.providerKey === 'outlook' || item.providerKey === 'whatsapp') && isConnected ? 'Disconnect' : isConnected ? 'Manage' : 'Connect'}
                     </button>
                   )}
                 </div>
@@ -465,6 +466,18 @@ export function IntegrationsGrid({ filter = 'All Integrations' }: { filter?: str
                 <p className="text-xs text-gray-500 leading-relaxed">
                   {item.description}
                 </p>
+                {sendError && (
+                  <div className="mt-2.5 p-2 bg-amber-50 border border-amber-200 rounded-lg text-[11px] text-amber-800 font-medium">
+                    Messages are arriving, but Meta refused the last reply
+                    {sendError.at ? ` (${new Date(sendError.at).toLocaleString()})` : ''}: {sendError.message}. Check the payment
+                    method and system user access in Meta Business Settings.
+                  </div>
+                )}
+                {item.id === 'whatsapp' && wa.error && (
+                  <div className="mt-2.5 p-2 bg-rose-50 border border-rose-100 rounded-lg text-[11px] text-rose-700 font-medium">
+                    {wa.error}
+                  </div>
+                )}
               </div>
 
               {/* Status footer for connected items */}
@@ -514,23 +527,91 @@ export function IntegrationsGrid({ filter = 'All Integrations' }: { filter?: str
               {activeModalItem.description}
             </p>
 
-            {/* Input Fields */}
-            <div className="space-y-3 pt-1">
-              {activeModalItem.fields?.map((field: any) => (
-                <div key={field.key}>
-                  <label className="block text-[11px] font-bold text-gray-700 mb-1">
-                    {field.label}
-                  </label>
-                  <input
-                    type={field.key.includes('secret') || field.key.includes('password') || field.key.includes('token') ? 'password' : 'text'}
-                    placeholder={field.placeholder}
-                    value={modalFields[field.key] || ''}
-                    onChange={(e) => setModalFields({ ...modalFields, [field.key]: e.target.value })}
-                    className="w-full text-xs px-3 py-2 border border-gray-200 rounded-xl outline-none focus:border-[#0066FF] focus:ring-1 focus:ring-blue-100 font-mono"
-                  />
+            {/* Modal Body: WhatsApp Embedded Signup vs Generic Forms */}
+            {activeModalItem.id === 'whatsapp' ? (
+              <div className="space-y-4 pt-1">
+                <div className="bg-[#25D366]/10 border border-[#25D366]/20 rounded-xl p-3.5 flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-[#25D366] text-white flex items-center justify-center shrink-0 mt-0.5 shadow-2xs">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M17.472 14.382c-.301-.15-1.78-.878-2.056-.978-.275-.1-.476-.15-.676.15-.2.3-.777.978-.952 1.179-.175.2-.351.226-.652.075-.301-.15-1.272-.469-2.423-1.496-.896-.799-1.501-1.786-1.677-2.087-.175-.301-.019-.464.132-.614.136-.135.301-.351.451-.527.151-.175.201-.301.302-.501.1-.2.05-.376-.025-.527-.075-.15-.676-1.63-.927-2.232-.244-.585-.493-.505-.677-.514-.176-.008-.376-.01-.577-.01-.2 0-.526.075-.802.376-.275.301-1.053 1.029-1.053 2.509 0 1.48 1.078 2.909 1.229 3.109.15.2 2.122 3.24 5.14 4.544.718.31 1.278.496 1.716.635.722.23 1.378.197 1.898.12.579-.087 1.78-.727 2.03-1.43.251-.703.251-1.304.176-1.43-.075-.125-.276-.2-.577-.35z" />
+                      <path d="M12 2C6.477 2 2 6.477 2 12c0 1.89.525 3.66 1.438 5.174L2 22l4.98-1.39A9.96 9.96 0 0 0 12 22c5.523 0 10-4.477 10-10S17.523 2 12 2zm0 18.167c-1.624 0-3.138-.492-4.404-1.334l-.316-.21-2.96.825.827-2.887-.23-.332A8.14 8.14 0 0 1 3.833 12c0-4.502 3.665-8.167 8.167-8.167 4.502 0 8.167 3.665 8.167 8.167 0 4.502-3.665 8.167-8.167 8.167z" />
+                    </svg>
+                  </div>
+                  <div className="text-xs text-gray-700 leading-relaxed">
+                    <p className="font-bold text-gray-900 mb-0.5">Meta Coexistence Mode</p>
+                    <p className="text-gray-600">
+                      Connect your existing WhatsApp Business number. You keep your chat history in the WhatsApp Business mobile app while AMSh AI sends automated appointment reminders and answers patient inquiries.
+                    </p>
+                  </div>
                 </div>
-              ))}
-            </div>
+
+                {/* Status or Launch Button */}
+                {tenantIntegrations.some((ti) => ti.provider === 'whatsapp' && ti.status === 'connected') || wa.status === 'connected' ? (
+                  <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-emerald-800 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                        Connected & Live
+                      </span>
+                      <span className="text-[11px] font-mono font-bold text-emerald-700">
+                        {wa.connectedNumber || tenantIntegrations.find((ti) => ti.provider === 'whatsapp')?.config?.display_phone_number || 'Official WhatsApp Number'}
+                      </span>
+                    </div>
+                    {tenantIntegrations.find((ti) => ti.provider === 'whatsapp')?.config?.last_send_error ? (
+                      <p className="text-[11px] text-amber-700">
+                        Messages arrive, but Meta refused the last reply:{' '}
+                        {tenantIntegrations.find((ti) => ti.provider === 'whatsapp')?.config?.last_send_error?.message}
+                      </p>
+                    ) : (
+                      <p className="text-[11px] text-emerald-600">
+                        Direct Meta webhook verified. Outbound appointment updates and 24/7 AI chat are active.
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-3 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => wa.connect()}
+                      disabled={wa.status === 'connecting' || wa.status === 'loading'}
+                      className="w-full py-3 px-4 bg-[#1877F2] hover:bg-[#166fe5] text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2.5 shadow-sm transition-all cursor-pointer disabled:opacity-50"
+                    >
+                      <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                      </svg>
+                      {wa.status === 'connecting' ? 'Launching Meta Embedded Signup…' : 'Continue with Facebook (Embedded Signup)'}
+                    </button>
+                    <p className="text-[11px] text-center text-gray-400">
+                      Launches the official Meta popup window to link your verified WhatsApp Business account.
+                    </p>
+                  </div>
+                )}
+
+                {wa.error && (
+                  <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-medium">
+                    {wa.error}
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* Input Fields for other integrations */
+              <div className="space-y-3 pt-1">
+                {activeModalItem.fields?.map((field: any) => (
+                  <div key={field.key}>
+                    <label className="block text-[11px] font-bold text-gray-700 mb-1">
+                      {field.label}
+                    </label>
+                    <input
+                      type={field.key.includes('secret') || field.key.includes('password') || field.key.includes('token') ? 'password' : 'text'}
+                      placeholder={field.placeholder}
+                      value={modalFields[field.key] || ''}
+                      onChange={(e) => setModalFields({ ...modalFields, [field.key]: e.target.value })}
+                      className="w-full text-xs px-3 py-2 border border-gray-200 rounded-xl outline-none focus:border-[#0066FF] focus:ring-1 focus:ring-blue-100 font-mono"
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* Feedback alert */}
             {feedback && (
@@ -547,35 +628,72 @@ export function IntegrationsGrid({ filter = 'All Integrations' }: { filter?: str
             )}
 
             {/* Bottom Actions */}
-            <div className="pt-3 border-t border-gray-100 flex items-center justify-between gap-2">
-              {tenantIntegrations.some((ti) => ti.provider === activeModalItem.providerKey && ti.status === 'connected') ? (
-                <button
-                  type="button"
-                  onClick={() => handleDisconnect(activeModalItem.providerKey)}
-                  className="text-xs font-bold text-rose-600 hover:text-rose-700 px-3 py-2 rounded-xl transition-colors cursor-pointer"
-                >
-                  Disconnect
-                </button>
-              ) : <div />}
+            {activeModalItem.id === 'whatsapp' ? (
+              <div className="pt-3 border-t border-gray-100 flex items-center justify-between gap-2">
+                {tenantIntegrations.some((ti) => ti.provider === 'whatsapp' && ti.status === 'connected') || wa.status === 'connected' ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleDisconnect('whatsapp');
+                      setActiveModalItem(null);
+                    }}
+                    className="text-xs font-bold text-rose-600 hover:text-rose-700 px-3 py-2 rounded-xl transition-colors cursor-pointer"
+                  >
+                    Disconnect WhatsApp
+                  </button>
+                ) : <div />}
 
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setActiveModalItem(null)}
-                  className="text-xs font-semibold text-gray-600 hover:text-gray-900 px-3.5 py-2 rounded-xl transition-colors cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  disabled={isSubmitting}
-                  onClick={handleSaveIntegration}
-                  className="text-xs font-bold text-white bg-[#0066FF] hover:bg-blue-600 px-4 py-2 rounded-xl transition-all shadow-xs cursor-pointer disabled:opacity-50"
-                >
-                  {isSubmitting ? 'Connecting...' : 'Save & Connect'}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setActiveModalItem(null)}
+                    className="text-xs font-semibold text-gray-600 hover:text-gray-900 px-3.5 py-2 rounded-xl transition-colors cursor-pointer"
+                  >
+                    Close
+                  </button>
+                  {!(tenantIntegrations.some((ti) => ti.provider === 'whatsapp' && ti.status === 'connected') || wa.status === 'connected') && (
+                    <button
+                      type="button"
+                      onClick={() => wa.connect()}
+                      disabled={wa.status === 'connecting' || wa.status === 'loading'}
+                      className="text-xs font-bold text-white bg-[#0066FF] hover:bg-blue-600 px-4 py-2 rounded-xl transition-all shadow-xs cursor-pointer disabled:opacity-50"
+                    >
+                      {wa.status === 'connecting' ? 'Connecting…' : 'Connect with Meta'}
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="pt-3 border-t border-gray-100 flex items-center justify-between gap-2">
+                {tenantIntegrations.some((ti) => ti.provider === activeModalItem.providerKey && ti.status === 'connected') ? (
+                  <button
+                    type="button"
+                    onClick={() => handleDisconnect(activeModalItem.providerKey)}
+                    className="text-xs font-bold text-rose-600 hover:text-rose-700 px-3 py-2 rounded-xl transition-colors cursor-pointer"
+                  >
+                    Disconnect
+                  </button>
+                ) : <div />}
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setActiveModalItem(null)}
+                    className="text-xs font-semibold text-gray-600 hover:text-gray-900 px-3.5 py-2 rounded-xl transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={handleSaveIntegration}
+                    className="text-xs font-bold text-white bg-[#0066FF] hover:bg-blue-600 px-4 py-2 rounded-xl transition-all shadow-xs cursor-pointer disabled:opacity-50"
+                  >
+                    {isSubmitting ? 'Connecting...' : 'Save & Connect'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

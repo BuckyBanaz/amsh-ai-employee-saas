@@ -136,11 +136,15 @@ export function useWhatsappEmbeddedSignup() {
   };
 
   const connect = useCallback(() => {
-    if (!window.FB) return;
+    if (!window.FB) {
+      setStatus('error');
+      setError('Meta Facebook SDK is still loading. If you have an ad-blocker or Brave Shields enabled, please allow scripts on this page and refresh.');
+      return;
+    }
     // Facebook refuses FB.login on http pages, even on localhost
     if (window.location.protocol !== 'https:') {
       setStatus('error');
-      setError(`WhatsApp connect needs HTTPS — Facebook blocks its login popup on http pages. Restart the app with \`npm run dev\` and open https://${window.location.host}${window.location.pathname}.`);
+      setError(`WhatsApp connect needs HTTPS — Facebook blocks its login popup on http pages. Open https://${window.location.host}${window.location.pathname}.`);
       return;
     }
     setError('');
