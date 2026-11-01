@@ -24,7 +24,7 @@ DEMONYMS = {
     "indian": "india", "nepali": "nepal", "nepalese": "nepal", "bangladeshi": "bangladesh", "nigerian": "nigeria",
     "sri lankan": "sri lanka", "srilankan": "sri lanka", "pakistani": "pakistan", "bhutanese": "bhutan", "afghan": "afghanistan",
     "kenyan": "kenya", "ghanaian": "ghana", "ugandan": "uganda", "tanzanian": "tanzania", "ethiopian": "ethiopia",
-    "british": "united kingdom", "english": "united kingdom", "american": "united states", "canadian": "canada",
+    "british": "united kingdom", "american": "united states", "canadian": "canada",
     "australian": "australia", "emirati": "uae", "saudi": "saudi arabia", "chinese": "china", "japanese": "japan",
     "vietnamese": "vietnam", "thai": "thailand", "indonesian": "indonesia", "malaysian": "malaysia", "filipino": "philippines",
     "zambian": "zambia", "zimbabwean": "zimbabwe", "sudanese": "sudan", "egyptian": "egypt", "iraqi": "iraq",

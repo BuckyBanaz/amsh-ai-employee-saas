@@ -458,6 +458,45 @@ class CrawlerSafety(unittest.TestCase):
         self.assertIn("Private", str(e.exception))
         self.assertEqual(calls, ["https://public.example/", "http://169.254.169.254/latest/meta-data"])
 
+    def test_a_redirect_that_adds_a_trailing_slash_is_followed(self):
+        # Many sites (WordPress) answer /contact-us with 301 -> /contact-us/; the normalized form drops that slash again.
+        seen = []
+
+        class FakeStream:
+            def __init__(self, url):
+                self.url = url
+                done = url.endswith("/")
+                self.status_code = 200 if done else 301
+                self.headers = {"content-type": "text/html"} if done else {"location": url + "/"}
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def iter_bytes(self):
+                yield b"<html><body><p>Contact</p></body></html>"
+
+        class FakeClient:
+            def __init__(self, *a, **kw):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def stream(self, method, url):
+                seen.append(url)
+                return FakeStream(url)
+
+        with patch.object(crawler, "check_url_safe", lambda url, resolve=None: None), patch("httpx.Client", FakeClient):
+            resp = crawler.safe_fetch("https://public.example/contact-us")
+        self.assertEqual(resp.status, 200)
+        self.assertEqual(seen, ["https://public.example/contact-us", "https://public.example/contact-us/"])
+
     def test_html_extraction_drops_navigation_and_keeps_structure(self):
         page = crawler.parse_html(
             "<html><body><header>Top banner</header><div class='cookie-banner'>We use cookies</div><nav>Home About</nav>"
@@ -914,6 +953,16 @@ class EducationSlots(unittest.TestCase):
         self.assertEqual(parse("من نيجيريا 2026-2027"), {"country": "Nigeria", "academic_year": "2026-27"})
         self.assertEqual(parse("Ik kom uit Bangladesh, sessie 2026"), {"country": "Bangladesh", "academic_year": "2026"})
         self.assertEqual(parse("what are the fees for us?"), {})
+
+    def test_a_language_is_not_a_country(self):
+        # A live call: "I'm not probably good in the English" was saved on the lead as United Kingdom.
+        from backend.ai.workflows.caller_slots import parse
+
+        for said in ("Can we speak in हिंदी? I'm not probably good in the English.", "english mein baat karo", "can you speak German"):
+            self.assertEqual(parse(said), {}, said)
+        self.assertEqual(parse("I'm a British student"), {"country": "United Kingdom"})
+        self.assertEqual(parse("I am German"), {"country": "Germany"})
+        self.assertEqual(parse("I am from Nigeria, can you talk in English?"), {"country": "Nigeria"})
 
     def test_earlier_answers_carry_into_later_fee_questions_and_the_lead(self):
         from backend.ai.evals.test_agent_core import ScriptedBackend, call, reply

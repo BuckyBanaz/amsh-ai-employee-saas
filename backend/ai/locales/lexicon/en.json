@@ -283,5 +283,9 @@
   "minute",
   "min",
   "moment"
+ ],
+ "language_talk_patterns": [
+  "\\b(?:speak|speaking|talk|talking|understand|know|reply|answer|explain|good|weak|fluent|comfortable)\\s+(?:\\w+\\s+){0,3}?(?:in\\s+)?(?:the\\s+)?(?:english|german|french|dutch|spanish|arabic|hindi|nepali|chinese|japanese|thai|vietnamese|indonesian|burmese|filipino|somali)\\b",
+  "\\b(?:english|german|french|dutch|spanish|arabic|hindi|nepali|chinese|japanese|thai|vietnamese|indonesian|burmese|filipino|somali)\\s+(?:language|medium|speaking|speaker)\\b"
  ]
 }

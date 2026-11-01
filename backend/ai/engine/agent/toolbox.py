@@ -668,12 +668,42 @@ class AgentToolbox:
             if k not in details and context.get(k):
                 details[k] = str(context[k]).strip()[:120]
         email = str(args.get("email") or "").strip()[:255] or None
+        notes = str(args.get("notes") or "").strip()[:1000] or None
+
+        # "Add that to my enquiry": a second save on the same call for the same caller updates the first, so the team gets one
+        # lead per caller per call. A plain enquiry that becomes a demo or callback request takes the more specific kind.
+        same_call = None
+        if self.call_id:
+            same_call = (
+                db.query(Enquiry)
+                .filter(Enquiry.business_id == self.business_id, Enquiry.call_id == self.call_id,
+                        Enquiry.contact_phone_key == phone_key, Enquiry.status != "closed")
+                .order_by(Enquiry.created_at.desc())
+                .first()
+            )
+        if same_call is not None:
+            if kind != "enquiry":
+                same_call.kind = kind
+            if subject:
+                same_call.subject = subject
+            if notes and notes not in (same_call.notes or ""):
+                same_call.notes = (f"{same_call.notes}\n{notes}" if same_call.notes else notes)[:1000]
+            same_call.details = {**(same_call.details or {}), **details}
+            same_call.contact_name = name[:255]
+            same_call.contact_email = email or same_call.contact_email
+            if args.get("department"):
+                same_call.department_key = str(args["department"]).strip()[:50]
+            if same_call.kind in ("callback", "support") and same_call.follow_up_due_at is None:
+                same_call.follow_up_due_at = now + timedelta(days=1)
+            db.commit()
+            self.succeeded.add("enquiry")
+            return {"ok": True, "code": "updated", "ref": same_call.id[:8], "message": self._m("toolbox.capture_enquiry.updated")}
         row = Enquiry(
             business_id=self.business_id, call_id=self.call_id, source="ai", kind=kind,
             topic=str(args.get("topic") or "").strip()[:50] or None, subject=subject,
             contact_name=name[:255], contact_phone=("+" + digits) if len(digits) > 10 else digits, contact_phone_key=phone_key,
             contact_email=email, details=details, department_key=str(args.get("department") or "").strip()[:50] or None,
-            notes=str(args.get("notes") or "").strip()[:1000] or None, idempotency_key=idem,
+            notes=notes, idempotency_key=idem,
             follow_up_due_at=now + timedelta(days=1) if kind in ("callback", "support") else None,
         )
         db.add(row)

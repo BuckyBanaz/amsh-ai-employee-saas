@@ -13,6 +13,7 @@ import re
 from typing import Dict
 
 from backend.ai.engine.rag import languages, structured
+from backend.ai.lexicon import lexicon_languages, load_lexicon
 
 # English country names documents and callers use (the vocabulary in languages.py maps other languages to these).
 _COUNTRIES = {
@@ -27,6 +28,7 @@ _COUNTRIES |= set(structured.DEMONYMS.values())
 _ALIASES = {"usa": "united states", "us": None, "uk": "united kingdom", "england": "united kingdom", "britain": "united kingdom",
             "america": "united states", "emirates": "uae", "dubai": "uae"}
 _DISPLAY = {"uae": "UAE", "usa": "USA"}
+_LANGUAGE_TALK = [re.compile(p, re.IGNORECASE) for code in lexicon_languages() for p in load_lexicon(code).get("language_talk_patterns", [])]
 
 _RANGE = re.compile(r"\b(20[2-4]\d)\s*[-/–—]\s*(?:20)?(\d\d)\b")
 _KEYWORD_YEAR = re.compile(
@@ -38,8 +40,16 @@ def _title(country: str) -> str:
     return _DISPLAY.get(country) or " ".join(w.capitalize() for w in country.split())
 
 
+def _without_language_talk(text: str) -> str:
+    """Drop "speak in German", "good in the English", "hindi mein": a language named as a language is not where the caller is
+    from. Phrases are data in each language's pack (`language_talk_patterns`)."""
+    for pattern in _LANGUAGE_TALK:
+        text = pattern.sub(" ", text)
+    return text
+
+
 def country_in(utterance: str) -> str | None:
-    english = f" {languages.to_english(utterance)} "
+    english = f" {_without_language_talk(languages.to_english(utterance))} "
     for word, country in structured.DEMONYMS.items():  # "Nepali", "Nigerian"
         if f" {word} " in english:
             english += f" {country} "

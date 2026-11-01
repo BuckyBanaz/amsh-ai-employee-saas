@@ -65,8 +65,9 @@ export const ApiService = {
       const data = isJson ? await response.json() : await response.text();
       
       if (!response.ok) {
-        if (response.status === 401) {
-          // Token expired or invalid on server: clear all session storage and redirect to login
+        if (response.status === 401 && requireAuth) {
+          // Token expired or invalid on server: clear all session storage and redirect to login.
+          // Not for sign-in and other public calls: their 401 means wrong credentials, and its message must be shown.
           handleSessionExpired();
           throw new Error('Session expired. Redirecting to login...');
         }

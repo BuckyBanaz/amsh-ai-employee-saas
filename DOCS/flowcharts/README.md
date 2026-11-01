@@ -8,6 +8,9 @@ Here are the visual representations of the core flows in the system.
 > 2026-10-25: multi-vertical diagrams (onboarding per vertical, workflow engine, university / school / coaching / EdTech, salon,
 > spa, department transfers and fallback, tenant isolation, activation, testing) are in [`verticals/README.md`](verticals/README.md).
 > Section 2 below shows the healthcare onboarding; other verticals add or rename steps (see `verticals/02_signup_dynamic_onboarding.mmd`).
+> 
+> 🌟 **Full Multi-Vertical Flowcharts & High-Resolution Image Infographics Guide:**
+> See [`../34_AMSh_Vertical_Flowcharts_Visual_Guide.md`](../34_AMSh_Vertical_Flowcharts_Visual_Guide.md) and [`images/`](images/) for complete illustrated infographics for **University Admissions, Healthcare Clinics, Salons & Beauty, and Luxury Spas**.
 
 ## 1. Login & Auth Flow
 

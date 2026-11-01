@@ -1,0 +1,14 @@
+{
+  "enabled": true,
+  "is_free": true,
+  "price": 0.0,
+  "currency": "USD",
+  "duration_days": 14,
+  "voice_minutes": 50,
+  "messages": 100,
+  "card_required": false,
+  "banner_headline": "{days}-Day Free Trial is Active ({days_left} days remaining)",
+  "banner_description": "You have full access to automated patient call handling and calendar sync. Choose any subscription plan below to upgrade anytime!",
+  "badge_text": "{days}-DAY TRIAL",
+  "upgrade_button_text": "Upgrade to Paid Plan"
+}

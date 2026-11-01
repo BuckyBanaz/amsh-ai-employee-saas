@@ -232,6 +232,19 @@ class LeadCapture(unittest.TestCase):
         self.assertEqual(self.capture(confirmed_by_caller=True)["code"], "duplicate")
         self.assertEqual(self.rows(), [("admission", "9876500011", "JEE course", self.biz)])
 
+    def test_a_second_request_on_the_same_call_updates_the_first(self):
+        # A live call: "add the campus visit to my enquiry" made a second lead for the same caller.
+        self.tb.gate.turn += 1
+        self.assertEqual(self.capture(confirmed_by_caller=False)["code"], "needs_confirmation")
+        self.tb.gate.turn += 1
+        self.assertEqual(self.capture(confirmed_by_caller=True)["code"], "saved")
+        more = {"kind": "demo_request", "subject": "JEE course and a campus visit", "notes": "Wants to see the labs"}
+        self.tb.gate.turn += 1
+        self.assertEqual(self.capture(confirmed_by_caller=False, **more)["code"], "needs_confirmation")
+        self.tb.gate.turn += 1
+        self.assertEqual(self.capture(confirmed_by_caller=True, **more)["code"], "updated")
+        self.assertEqual(self.rows(), [("demo_request", "9876500011", "JEE course and a campus visit", self.biz)])
+
     def test_a_number_the_caller_never_gave_is_refused(self):
         r = run(self.tb.execute("capture_enquiry", {"name": "Ravi Kumar", "phone_number": "9999999999", "confirmed_by_caller": True}))
         self.assertEqual(r["code"], "bad_phone")

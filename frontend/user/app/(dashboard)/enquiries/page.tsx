@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { VerticalController } from '../../../controllers/vertical.controller';
 import { DataState, PageHeader, SecondaryButton, StatusChip } from '../../../components/verticals/PageBits';
 import type { Enquiry, EnquiryStatus } from '../../../verticals/types';
+import ConversationPreview from '../../../components/verticals/ConversationPreview';
 
 const TABS: { key: EnquiryStatus | ''; label: string }[] = [
   { key: 'new', label: 'New' }, { key: 'contacted', label: 'Contacted' }, { key: 'closed', label: 'Closed' }, { key: '', label: 'All' },
@@ -68,9 +69,17 @@ export default function EnquiriesPage() {
                 <tr key={e.id} className="border-b border-gray-50 last:border-0 align-top">
                   <td className="p-3 text-gray-600 whitespace-nowrap">{e.created_at ? new Date(e.created_at).toLocaleString() : '—'}<div className="text-[10px] text-gray-400">{e.source === 'ai' ? 'AI receptionist' : 'Staff'}</div></td>
                   <td className="p-3"><div className="font-semibold text-gray-900">{e.contact_name}</div><div className="text-gray-500">{e.contact_phone}</div>{e.contact_email && <div className="text-gray-500">{e.contact_email}</div>}</td>
-                  <td className="p-3 text-gray-700">{e.subject || e.topic || '—'}
-                    {Object.keys(e.details || {}).length > 0 && <div className="text-[10px] text-gray-400 mt-0.5">{Object.entries(e.details).map(([k, v]) => `${k.replace(/_/g, ' ')}: ${v}`).join(' · ')}</div>}
-                    {e.notes && <div className="text-[10px] text-gray-500 mt-0.5">{e.notes}</div>}
+                  <td className="p-3 text-gray-700">
+                    {(() => {
+                      const about = (
+                        <>
+                          {e.subject || e.topic || '—'}
+                          {Object.keys(e.details || {}).length > 0 && <div className="text-[10px] text-gray-400 mt-0.5">{Object.entries(e.details).map(([k, v]) => `${k.replace(/_/g, ' ')}: ${v}`).join(' · ')}</div>}
+                          {e.notes && <div className="text-[10px] text-gray-500 mt-0.5">{e.notes}</div>}
+                        </>
+                      );
+                      return e.call_id ? <ConversationPreview callId={e.call_id} callerName={e.contact_name}>{about}</ConversationPreview> : about;
+                    })()}
                   </td>
                   <td className="p-3 text-gray-600">{KIND_LABEL[e.kind] || e.kind}</td>
                   <td className="p-3 text-gray-600">{e.department_key ? e.department_key.replace(/_/g, ' ') : '—'}</td>

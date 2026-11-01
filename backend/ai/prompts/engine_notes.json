@@ -60,6 +60,7 @@
    "capture_enquiry.read_back": "Read the name, number and what the enquiry is about back to the caller and ask if it is right. Do not say it is saved yet.",
    "capture_enquiry.saved": "Saved. Tell the caller the team will get back to them, without promising a time you were not given.",
    "capture_enquiry.duplicate": "This enquiry is already with the team. Tell the caller it is noted and they will hear back; do not save it again.",
+   "capture_enquiry.updated": "Added to the enquiry already saved on this call (one lead per caller per call). Tell the caller it is updated and the team will get back to them.",
    "book_appointment.no_room": "Every room for that treatment is taken at that time. Offer another time (check availability first).",
    "transfer.unreachable_callback": "Nobody from that team can take the call right now (closed or not reachable). Do not say you are connecting them. Offer to take their name and number so the team calls back, and save it with capture_enquiry (kind callback) once they agree and have confirmed the details.",
    "transfer.unreachable_message": "Nobody from that team can take the call right now (closed or not reachable). Do not say you are connecting them. Tell the caller the team sees every call and will follow up, and keep helping with what you can.",

@@ -131,8 +131,10 @@ def safe_fetch(url: str, timeout: float = 10.0) -> Response:
             try:
                 with client.stream("GET", current) as resp:
                     if resp.status_code in (301, 302, 303, 307, 308) and resp.headers.get("location"):
-                        nxt = normalize_url(resp.headers["location"], current)
-                        if not nxt:
+                        # Follow the address exactly as given: normalize_url drops the trailing slash, so a site that
+                        # redirects /page to /page/ would be sent back to /page until the redirect limit.
+                        nxt = urljoin(current, resp.headers["location"]).split("#", 1)[0]
+                        if urlsplit(nxt).scheme.lower() not in ("http", "https"):
                             raise FetchError("redirected to an unsupported address")
                         current = nxt
                         continue

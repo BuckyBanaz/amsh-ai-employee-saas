@@ -6,6 +6,16 @@ Running log of what Claude changes, plans, or reviews in this repo. Newest entry
 
 Status legend: `DONE` / `IN PROGRESS` / `PLANNED` / `BLOCKED`
 
+### Entry 128 - Multi-Vertical Visual Flowcharts & Guide (2026-11-01) - DONE
+- **Created Comprehensive Multi-Vertical Flowchart Guide**: [`DOCS/34_AMSh_Vertical_Flowcharts_Visual_Guide.md`](file:///c:/Users/Parikshit/Desktop/saas/DOCS/34_AMSh_Vertical_Flowcharts_Visual_Guide.md).
+- **Generated 5 High-Resolution Flowchart Infographics** in `DOCS/flowcharts/images/`:
+  1. `01_universal_onboarding_flow.jpg`: Master SaaS user auth (JWT) and dynamic vertical onboarding wizard.
+  2. `02_university_ai_flowchart.jpg`: University admissions, intent classification, RAG retrieval, multi-department transfers, and campus tour bookings.
+  3. `03_clinic_ai_flowchart.jpg`: Clinic & dental patient booking, emergency triage protocol, EHR sync, and WhatsApp confirmation slip.
+  4. `04_salon_ai_flowchart.jpg`: Salon service selection, stylist availability, dynamic pricing, deposit links, and calendar locks.
+  5. `05_spa_wellness_flowchart.jpg`: Luxury spa & wellness health contraindication check, therapist assignment, and treatment room resource lock.
+- **Updated Flowchart Hub**: Updated [`DOCS/flowcharts/README.md`](file:///c:/Users/Parikshit/Desktop/saas/DOCS/flowcharts/README.md) to cross-link the new guide and high-res infographics.
+
 ### Entry 127 - Live call review (Hindi, Demo clinic) and capacity audit (2026-10-26) - DONE (findings only, nothing fixed)
 - **Call `0c3bd206` (12:22 IST):** the AI said "Maaf kijiye, mujhe abhi thodi dikkat aa rahi hai…" 4 times, read the phone number back wrong
   ("+91 918901414107"), forgot the agreed time and switched to English, and booked nothing. The repeated line is the empty-reply fallback,

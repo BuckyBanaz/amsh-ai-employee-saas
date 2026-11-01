@@ -515,5 +515,9 @@
   "na",
   "matlab",
   "yaar"
+ ],
+ "language_talk_patterns": [
+  "\\b(?:english|german|french|dutch|spanish|arabic|hindi|nepali|chinese|japanese|thai|vietnamese|indonesian|burmese|filipino|somali)\\s+(?:mein|me|mai|main|में|मे)\\b",
+  "(?:अंग्रेजी|अंग्रेज़ी|हिंदी|हिन्दी)\\s*(?:में|मे|भाषा)"
  ]
 }
