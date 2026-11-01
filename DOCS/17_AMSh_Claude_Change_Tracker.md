@@ -14,7 +14,7 @@ Status legend: `DONE` / `IN PROGRESS` / `PLANNED` / `BLOCKED`
   3. `03_clinic_ai_flowchart.jpg`: Clinic & dental patient booking, emergency triage protocol, EHR sync, and WhatsApp confirmation slip.
   4. `04_salon_ai_flowchart.jpg`: Salon service selection, stylist availability, dynamic pricing, deposit links, and calendar locks.
   5. `05_spa_wellness_flowchart.jpg`: Luxury spa & wellness health contraindication check, therapist assignment, and treatment room resource lock.
-- **Updated Flowchart Hub**: Updated [`DOCS/flowcharts/README.md`](file:///c:/Users/Parikshit/Desktop/saas/DOCS/flowcharts/README.md) to cross-link the new guide and high-res infographics.
+- **Updated Flowchart Hub & Root README**: Updated [`DOCS/flowcharts/README.md`](file:///c:/Users/Parikshit/Desktop/saas/DOCS/flowcharts/README.md) and [`README.md`](file:///c:/Users/Parikshit/Desktop/saas/README.md) with multi-vertical scope, visual flowchart infographics table, and documentation links.
 
 ### Entry 127 - Live call review (Hindi, Demo clinic) and capacity audit (2026-10-26) - DONE (findings only, nothing fixed)
 - **Call `0c3bd206` (12:22 IST):** the AI said "Maaf kijiye, mujhe abhi thodi dikkat aa rahi hai…" 4 times, read the phone number back wrong
